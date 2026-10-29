@@ -34,11 +34,35 @@ only kind of moment the machine model treats as significant. Internal state evol
 value changes are not crossings.
 _Avoid_: event, interrupt, edge, bus transaction
 
+### Oscillator
+
+The single physical frequency source from which every clock in the modelled machine is derived.
+_Avoid_: crystal, master clock, clock source
+
+### Clock
+
+A frequency derived from the oscillator and distributed to the virtual chips. A clock is not a
+timeline: it gives its chips a common phase, nothing more.
+_Avoid_: clock rate, frequency, timebase
+
+### Clock domain
+
+The virtual chips that share one clock's edges, and so keep a fixed phase relationship with each
+other. The machine has two — the main tree and the sound path — whose frequencies hold a constant
+ratio; a clock domain never gets a timeline of its own.
+_Avoid_: domain, sync group, clock island
+
 ### Machine time
 
-The single monotonic timeline the whole emulated machine runs on, derived from the 32 MHz clock.
-Every crossing is placed on it at a definite instant.
+The single monotonic timeline the whole emulated machine runs on, measured in ticks of the 32 MHz
+oscillator. Every crossing is placed on it at a definite instant.
 _Avoid_: emulated time, cycle count, timestamp
+
+### Time domain
+
+A timeline whose events are ordered against one another. The machine has exactly one, machine time;
+clock domains are frequencies inside it, never timelines beside it.
+_Avoid_: clock domain, timebase, timescale
 
 ### Host time
 
