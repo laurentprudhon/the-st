@@ -1,0 +1,13 @@
+; AHCC project file
+;
+; Program name starts with the seconds value to help it being first
+; one to be run from AUTO-folder (GEMDOS HD provides entries in
+; alphabetical order for "unsorted"). Number of seconds to sleep
+; is read from program name start.
+
+.C [-iinclude]
+4s_sleep.prg
+=
+ahcstart.o
+sleep.c
+ahccstdi.lib

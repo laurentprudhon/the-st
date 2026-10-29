@@ -67,3 +67,9 @@ tests/build/
 
 ## Kilo agent manager state
 .kilo/agent-manager.json
+
+## Vendored upstream sources (hatari/, neost/) keep their own upstream tree layout.
+## The build-artifact patterns above must not hide their source directories.
+!hatari/src/cpu/jit/arm/
+!hatari/src/cpu/jit/x86/
+!hatari/src/debug/

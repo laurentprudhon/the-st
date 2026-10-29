@@ -1,0 +1,274 @@
+# =============================================================================
+#  Tests — ce que les jobs de PACKAGING ne couvrent pas.
+#
+#  ⚠ MISE À JOUR 2026-08-26 (chantier A1) — le palier PIXEL garde désormais le push.
+#  `release.yml` lançait bien `run_all.py --tier full`, mais SEULEMENT à la
+#  publication : une régression de rendu partait donc sur `main` et n'était vue que
+#  des semaines plus tard. Le job `pixel` ci-dessous le lance à chaque push et
+#  pull_request. Le palier `fast` des deux autres jobs ne compare AUCUN pixel — il
+#  ne remplace pas celui-ci, il couvre autre chose (slirp compilé, sanitizers).
+#
+#  `release.yml` ne compile QUE ce que la release livre, en Release, sans libslirp.
+#  Deux zones restaient donc hors CI :
+#
+#   1. `slirp`      — `src/net/SlirpBackend.cpp` ne se compilait NULLE PART :
+#                     absent de la CI (libslirp-dev jamais installé, donc coquille
+#                     vide) et cassé sur toute machine en libslirp 4.7 (Debian 12
+#                     bookworm = Raspberry Pi OS, Ubuntu 24.04). Ce job installe
+#                     la bibliothèque, force NEOST_WITH_SLIRP=ON — la configuration
+#                     ÉCHOUE si elle manque, plus de repli silencieux — et exécute
+#                     l'auto-test hors ligne (ARP + DHCP + compteurs).
+#
+#   2. `sanitizers` — aucun build Debug n'existait dans le projet, donc les quatre
+#                     `assert()` du dépôt (cache O(1) de Scheduler, chemin rapide
+#                     MMU de Bus — les deux optimisations dont PERFORMANCE.md dit
+#                     que la désynchronisation est « la seule faute possible de ce
+#                     montage ») étaient retirés par NDEBUG et n'ont JAMAIS tourné.
+#                     Ce job les active, et ajoute ASan+UBSan sur le palier fast :
+#                     les campagnes de durcissement mémoire étaient jusqu'ici des
+#                     passes manuelles dont rien ne restait.
+#
+#  Volontairement séparé de `release.yml` : le casser n'empêche pas de publier, et
+#  un contributeur voit un job qui s'appelle « tests ».
+# =============================================================================
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------- libslirp --
+  slirp:
+    name: libslirp (NE2000 vers l'Internet réel)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Dépendances
+        run: |
+          # Dépôt Microsoft de l'image runner : inutile ici, et ses 403 font échouer l'update.
+          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.*
+          sudo apt-get update -o Acquire::Retries=3
+          # ubuntu-24.04 fournit libslirp 4.7.0 : c'est EXACTEMENT la version qui
+          # ne compilait pas, donc c'est la bonne à tester.
+          # libglib2.0-dev n'est PAS un caprice : slirp.pc déclare « Requires: glib-2.0 »,
+          # donc sans les fichiers .pc de glib, pkg-config REFUSE de résoudre slirp — et
+          # le pkg_check_modules du CMakeLists échoue derrière, en erreur fatale puisque
+          # NEOST_WITH_SLIRP=ON. C'est exactement ce qui a fait tomber le premier run.
+          sudo apt-get install -y --no-install-recommends \
+            cmake g++ libglfw3-dev libgl1-mesa-dev libslirp-dev libglib2.0-dev ffmpeg
+          pkg-config --modversion slirp
+
+      - name: Configurer (NEOST_WITH_SLIRP=ON — échoue si la lib manque)
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DNEOST_WITH_SLIRP=ON
+
+      - name: Compiler
+        run: cmake --build build -j"$(nproc)" --target neost-headless neost-selftest neost-stx-test neost-fuzz-disk
+
+      - name: Auto-test SLIRP (hors ligne — ARP, DHCP, compteurs)
+        # La 4ᵉ vérification (sortie DNS réelle) reste opt-in via
+        # NEOST_SLIRP_ONLINE=1 : la règle du projet interdit qu'un test de CI
+        # dépende du réseau.
+        run: ./build/neost-headless roms/etos192us.img --slirp-selftest
+
+      - name: Palier fast (le reste du filet, avec SLIRP compilé)
+        run: python3 tools/run_all.py --tier fast
+
+  # -------------------------------------------------------------------- pixel --
+  pixel:
+    name: Palier PIXEL (--tier full)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Dépendances
+        run: |
+          # Dépôt Microsoft de l'image runner : inutile ici, et ses 403 font échouer l'update.
+          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.*
+          sudo apt-get update -o Acquire::Retries=3
+          sudo apt-get install -y --no-install-recommends \
+            cmake g++ libglfw3-dev libgl1-mesa-dev python3-pil ffmpeg
+          # ⚠ ffmpeg est REQUIS, pas optionnel : compare_screenshot.py s'en sert pour
+          # décoder les références PNG (tous les étalons ref_kind=oracle). Sans lui le
+          # job échoue en « vacuité NON VÉRIFIABLE … illisible » sur 9 étalons, alors
+          # que les références .ppm passent — panne asymétrique et trompeuse.
+          ffmpeg -version | head -1
+
+      - name: Configurer
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Compiler
+        run: cmake --build build -j"$(nproc)" --target neost-headless neost-selftest neost-stx-test neost-fuzz-disk
+
+      # LA raison d'être de ce job (chantier A1, cf. TODO.md § Dette d'architecture).
+      # `--tier fast` ne compare AUCUN pixel : il valide des parseurs et des verdicts.
+      # Tant que le palier pixel n'a tourné QUE dans release.yml, une régression de
+      # RENDU partait sur `main` et n'était vue qu'à la publication suivante.
+      # Deux cas MESURÉS que le fast ne voit pas :
+      #   · NEOST_SYNC_DISPATCH=1 casse `nocooper_greetings` à 98,97 % (113633/114816) ;
+      #   · le chantier BL3/BL4 (base de temps du blitter) serait passé au vert.
+      # Il tourne en ~1-2 min de plus que le fast : le coût est sans commune mesure
+      # avec celui d'une régression de rendu découverte des semaines plus tard.
+      - name: Palier full (étalons PIXEL — le SEUL palier qui compare des images)
+        run: python3 tools/run_all.py --tier full
+
+      # Filet de dernier recours : si les ROM Atari propriétaires quittent le dépôt,
+      # `run_etalons.py` RECENSE les étalons non exécutés au lieu d'échouer
+      # (rom_is_free()). Vert avec une couverture amputée ressemblerait à vert tout
+      # court — on rend donc le décompte VISIBLE dans le journal du job.
+      - name: Contrôle de provenance des références
+        run: python3 tools/run_etalons.py --verify-refs
+
+      - name: Capture des écarts en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: etalons-diff
+          path: tests/out/
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------- gui --
+  gui:
+    name: GUI sous xvfb (boot réel + capture)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      # ⚠ submodules: le GUI compile Dear ImGui depuis extern/imgui — les autres jobs
+      # n'en ont pas besoin et font un checkout nu.
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - name: Dépendances
+        run: |
+          # Dépôt Microsoft de l'image runner : inutile ici, et ses 403 font échouer l'update.
+          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.*
+          sudo apt-get update -o Acquire::Retries=3
+          sudo apt-get install -y --no-install-recommends \
+            cmake g++ libglfw3-dev libgl1-mesa-dev libgl1-mesa-dri xvfb
+
+      - name: Configurer
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      # La cible `neost` (GUI) n'était compilée par AUCUN job de tests — release.yml
+      # la bâtit, mais sans jamais l'EXÉCUTER. Chantier A8, dernière marche.
+      - name: Compiler (GUI + headless)
+        run: cmake --build build -j"$(nproc)" --target neost neost-headless
+
+      # LA raison d'être de ce job : le GUI n'avait jamais TOURNÉ en CI. Grâce à
+      # --run-frames/--shot (2026-08-26), il boote EmuTOS, émule 400 trames, capture
+      # le framebuffer ST et sort seul. xvfb fournit l'écran ; le GL logiciel de Mesa
+      # (llvmpipe) fait le rendu. Sans neost.cfg sur le runner, le GUI part sur ses
+      # défauts (st / 512k / couleur) — le headless est aligné explicitement dessus.
+      - name: Boot GUI sous xvfb (400 trames, capture)
+        run: |
+          xvfb-run -a ./build/neost --run-frames 400 --shot /tmp/gui.ppm roms/etos192fr.img
+          test -s /tmp/gui.ppm
+
+      - name: La capture n'est pas vide (bureau GEM attendu)
+        run: |
+          python3 - <<'EOF'
+          colors = set()
+          with open('/tmp/gui.ppm', 'rb') as f:
+              assert f.readline().strip() == b'P6'
+              w, h = map(int, f.readline().split())
+              f.readline()
+              d = f.read()
+          for i in range(0, w * h * 3, 3):
+              colors.add(d[i:i+3])
+          print(f'{w}x{h}, {len(colors)} couleurs')
+          # Le bureau EmuTOS en couleur fait EXACTEMENT 3 couleurs (fond vert, traits
+          # noirs, fenêtre blanche) — mesuré au premier run de ce job, qui échouait sur
+          # un seuil >= 4 posé de tête. 1-2 couleurs = écran figé/noir, c'est-à-dire un
+          # GUI qui tourne sans émuler — le bug que ce garde-fou attrape. Le vrai juge
+          # est de toute façon l'étape suivante (bit-exact vs headless).
+          assert len(colors) >= 3, f'capture quasi uniforme ({len(colors)} couleurs)'
+          EOF
+
+      # Assertion FORTE : le framebuffer du GUI doit être BIT-IDENTIQUE à celui du
+      # headless au même point (même cœur, même Shifter, mêmes défauts de config).
+      # Si cette comparaison casse, la boucle GUI n'émule pas comme le headless —
+      # exactement la classe de divergence qu'aucun palier ne voyait.
+      - name: Le GUI émule comme le headless (bit-exact, 400 trames)
+        run: |
+          # ⚠ --disk ALIGNÉ : sans positional, le GUI monte disks/diskA.st PAR DÉFAUT
+          # (defDisk dans main.cpp) — sans ce même disque, le headless boote une
+          # timeline différente et la comparaison bit-exacte meurt sur un faux écart.
+          ./build/neost-headless roms/etos192fr.img --machine st --mem 512k \
+            --disk disks/diskA.st --frames 400 --screenshot /tmp/cli.ppm
+          cmp /tmp/gui.ppm /tmp/cli.ppm
+          echo "GUI == headless (bit-exact)"
+
+      - name: Capture en artefact en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gui-shot
+          path: /tmp/*.ppm
+          if-no-files-found: ignore
+
+  # -------------------------------------------------------------- sanitizers --
+  sanitizers:
+    name: Debug + ASan/UBSan (palier fast)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Dépendances
+        run: |
+          # Dépôt Microsoft de l'image runner : inutile ici, et ses 403 font échouer l'update.
+          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.*
+          sudo apt-get update -o Acquire::Retries=3
+          # ffmpeg : requis depuis que trace_odd est une référence ORACLE (PNG, 2026-08-29)
+          # — compare_screenshot.py s'en sert pour lire les PNG ; sans lui le palier fast
+          # de CE job échouait pendant que le job pixel, qui l'installe, restait vert.
+          sudo apt-get install -y --no-install-recommends \
+            cmake g++ libglfw3-dev libgl1-mesa-dev ffmpeg
+
+      - name: Configurer (Debug — les assert() sont ACTIFS ici, et nulle part ailleurs)
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug \
+                -DCMAKE_CXX_FLAGS="-O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined" \
+                -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+
+      - name: Compiler
+        run: cmake --build build -j"$(nproc)" --target neost-headless neost-selftest neost-stx-test neost-fuzz-disk
+
+      # Le palier fast n'exécute quasiment PAS de code invité réel : il valide des
+      # parseurs et des verdicts. Une démo de 300 trames, elle, martèle Shifter,
+      # Blitter, MFP et le cœur 68000 — et coûte 2 s sous ASan. Sans ça, les
+      # sanitizers de la CI ne voyaient jamais l'émulateur travailler.
+      - name: Démos réelles sous sanitizers (code invité, pas des parseurs)
+        env:
+          ASAN_OPTIONS: halt_on_error=1:detect_leaks=0:abort_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          for d in nocooper.msa cuddly_demos.msa closure.msa; do
+            echo "--- $d"
+            # etos192fr et pas un TOS Atari : la purge copyright retire roms/tos* du
+            # dépôt ; les trois démos bootent sous EmuTOS (vérifié, exit 0 sur 300 trames).
+            ./build/neost-headless roms/etos192fr.img --disk "disks/etalons/$d" --frames 300
+          done
+
+      - name: Palier fast sous sanitizers
+        env:
+          # halt_on_error : un dépassement doit FAIRE ÉCHOUER le job, pas se noyer
+          # dans la sortie. detect_leaks=0 : les objets de durée de vie processus
+          # (ma_device, contexte Moira) sont libérés par l'OS et ne sont pas des
+          # fuites utiles — le sujet ici est la corruption mémoire.
+          ASAN_OPTIONS: halt_on_error=1:detect_leaks=0:abort_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: python3 tools/run_all.py --tier fast

@@ -1,0 +1,152 @@
+# =============================================================================
+#  Binaires de la BORNE Raspberry Pi — compilation à la demande.
+#
+#  Pourquoi un workflow séparé de `release.yml` :
+#   · il est déclenché À LA MAIN (workflow_dispatch), quand on prépare une borne,
+#     pas à chaque tag ;
+#   · il produit des binaires compilés pour UN cœur précis (-mcpu=cortex-a72 pour
+#     Pi 4/400), là où la release publie une AppImage aarch64 GÉNÉRIQUE qui doit
+#     tourner du Pi 3 au Pi 5. Deux formats issus du MÊME build, sans
+#     recompilation : une **AppImage** `NeoST-<ver>-pi400-aarch64.AppImage` (Pi OS
+#     avec bureau : un fichier cliquable) et un **tar.gz** `neost-pi400-aarch64`
+#     (borne sans bureau : pas de FUSE, déballé dans /opt/neost) ;
+#   · il compile en DEUX PASSES guidées par profil (PGO) puis avec LTO — mesuré
+#     −34 % de temps d'émulation à code identique. L'entraînement tourne ICI, sur
+#     le runner ARM64, donc le Pi n'en paie rien. Cf. docs/PERFORMANCE.md ;
+#   · il ne touche pas au pipeline de release — le casser n'empêche pas de
+#     publier.
+#
+#  Le build a lieu DANS un conteneur debian:bookworm, pas sur le runner :
+#  Raspberry Pi OS EST bookworm (glibc 2.36), et le runner ubuntu-24.04-arm
+#  estampillerait GLIBC_2.39 — le binaire ne démarrerait sur aucun Pi. Le script
+#  vérifie ce plancher et échoue s'il est dépassé.
+#
+#  Récupérer l'artefact :
+#      gh run download <run-id> -n neost-pi400-aarch64
+# =============================================================================
+name: Borne Raspberry Pi (aarch64, -mcpu natif)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mcpu:
+        description: "Cœur cible : cortex-a72 (Pi 4 / Pi 400) ou cortex-a76 (Pi 5)"
+        required: true
+        default: cortex-a72
+        type: choice
+        options: [cortex-a72, cortex-a76, cortex-a53]
+  # `workflow_dispatch` n'est utilisable QUE si le fichier existe sur la branche
+  # par défaut — or on ne veut pas imposer ce workflow à `main` pour préparer une
+  # borne. D'où ce déclencheur sur la branche de préparation elle-même : y
+  # pousser suffit à obtenir les binaires.
+  push:
+    branches: [borne-raspberry]
+    paths:
+      - 'src/**'
+      - 'extern/**'
+      - 'CMakeLists.txt'
+      - 'packaging/raspberry/**'
+      - '.github/workflows/pi-borne.yml'
+
+jobs:
+  borne:
+    runs-on: ubuntu-24.04-arm
+    # 90 et non 60 : depuis le passage au PGO, le job fait DEUX compilations
+    # complètes (instrumentée puis guidée par profil, cette dernière avec LTO) plus
+    # le parcours d'entraînement entre les deux. Cf. docs/PERFORMANCE.md § 5.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      # Identité du build reportée dans le NOM du paquet et dans `--version`.
+      # Court et rattachable : sans elle, tous les paquets s'appelleraient « dev ».
+      - name: Identité du build
+        id: id
+        run: echo "ver=$(git describe --tags --always 2>/dev/null || git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build dans un conteneur bookworm arm64
+        env:
+          NEOST_MCPU: ${{ inputs.mcpu || 'cortex-a72' }}
+          NEOST_VERSION: ${{ steps.id.outputs.ver }}
+        run: |
+          docker run --rm -v "$PWD":/work -w /work \
+            -e NEOST_MCPU -e NEOST_VERSION \
+            debian:bookworm bash /work/packaging/raspberry/build_in_bookworm_pi.sh
+
+      # Contrôles qui doivent échouer ICI, pas chez l'utilisateur. Le runtime
+      # AppImage aarch64 doit être ELF ET_EXEC : le `continuous` d'AppImageKit est
+      # ET_DYN côté ARM et se fait rejeter en « type -1 » par AppImageLauncher
+      # (make_appimage.sh épingle donc le runtime de la release 12 — on vérifie
+      # que l'épinglage a bien pris).
+      - name: Vérifier l'AppImage + tar.gz (runtime, arch, ROM UK)
+        run: |
+          set -euo pipefail
+          APP=$(ls dist/*.AppImage)
+          TGZ=$(ls dist/neost-pi*-aarch64.tar.gz)
+          echo "Paquet : $APP"
+          TYPE=$(readelf -h "$APP" | awk -F'[ :]+' '/^ *Type/ {print $3; exit}')
+          test "$TYPE" = "EXEC" || { echo "ERREUR : runtime $TYPE ≠ EXEC"; exit 1; }
+          "$APP" --appimage-extract >/dev/null
+          readelf -h squashfs-root/usr/bin/neost | grep -q AArch64
+          # Les TOS Atari ne sont attendus QUE si le paquet a été construit avec eux :
+          # NEOST_PACKAGE_NO_ATARI_TOS=1 produit un paquet 100 % libre (EmuTOS seul), et
+          # cette garde le refusait alors comme un paquet incomplet — le nettoyage
+          # juridique aurait été bloqué par la CI. Cf. packaging/stage_free_data.sh.
+          if [ "${NEOST_PACKAGE_NO_ATARI_TOS:-1}" != "1" ]; then
+            for rom in tos102uk.img tos162uk.img; do
+              test -s "squashfs-root/usr/roms/$rom" \
+                || { echo "ERREUR : $rom absent de l'AppImage"; exit 1; }
+            done
+          fi
+          # Licences : la GPL exige que son texte ACCOMPAGNE le binaire. Aucun paquet
+          # publié n'en contenait avant le 2026-08-19 — rien ne le vérifiait.
+          for lic in GPL-3.0.txt GPL-2.0.txt THIRD-PARTY.txt; do
+            test -s "squashfs-root/usr/licenses/$lic" \
+              || { echo "ERREUR : licence absente du paquet : $lic"; exit 1; }
+          done
+          # Le runner est ARM64 : l'AppImage s'exécute réellement ici.
+          squashfs-root/usr/bin/neost-headless --version
+          rm -rf squashfs-root
+          # tar.gz borne : mêmes ROM (stage_free_data), pas seulement bin/.
+          # ⚠ pas de `tar | grep -q` sous pipefail : grep ferme le pipe tôt →
+          # « tar: stdout: write error » et exit 1 faux négatif.
+          LIST=$(tar tzf "$TGZ")
+          # Les TOS Atari ne sont attendus QUE si le paquet a été construit avec eux :
+          # NEOST_PACKAGE_NO_ATARI_TOS=1 produit un paquet 100 % libre (EmuTOS seul), et
+          # cette garde le refusait alors comme un paquet incomplet — le nettoyage
+          # juridique aurait été bloqué par la CI. Cf. packaging/stage_free_data.sh.
+          if [ "${NEOST_PACKAGE_NO_ATARI_TOS:-1}" != "1" ]; then
+            for rom in tos102uk.img tos162uk.img; do
+              printf '%s\n' "$LIST" | grep -q "roms/$rom" \
+                || { echo "ERREUR : $rom absent du tar.gz"; exit 1; }
+            done
+          fi
+          for lic in GPL-3.0.txt GPL-2.0.txt THIRD-PARTY.txt; do
+            printf '%s\n' "$LIST" | grep -q "licenses/$lic" \
+              || { echo "ERREUR : licence absente du tar.gz : $lic"; exit 1; }
+          done
+          echo "OK : AppImage + tar.gz complets (ROM attendues + licences)"
+
+      - name: Résumé
+        run: |
+          set -euo pipefail
+          TGZ=$(ls dist/neost-pi*-aarch64.tar.gz)
+          APP=$(ls dist/*.AppImage)
+          {
+            echo "### Paquets prêts (PGO + LTO, -mcpu=${{ inputs.mcpu || 'cortex-a72' }})"
+            echo ''
+            echo "| Paquet | Taille | Pour quoi |"
+            echo "|---|---|---|"
+            echo "| \`$(basename "$APP")\` | $(du -h "$APP" | cut -f1) | Pi OS **avec bureau** — un fichier, cliquable |"
+            echo "| \`$(basename "$TGZ")\` | $(du -h "$TGZ" | cut -f1) | borne sans bureau — \`tar -xzf … -C /opt/neost\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: neost-pi400-aarch64
+          path: |
+            dist/neost-pi*-aarch64.tar.gz
+            dist/*.AppImage
+          if-no-files-found: error

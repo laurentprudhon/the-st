@@ -1,0 +1,132 @@
+NeoST — licences of everything inside this package
+==================================================
+
+NeoST itself
+------------
+NeoST is free software under the **GNU General Public License version 3 or later**
+(c) 2026 VERHILLE Arnaud. The full text is in `GPL-3.0.txt`, next to this file.
+
+Complete corresponding source code for the binary in this package:
+
+    https://github.com/habib256/neost
+
+Hardware behaviour is largely ported from Hatari (GPLv2+), to which NeoST owes a great
+deal; GPLv3 is compatible with that port.
+
+Bundled components
+------------------
+| Component                         | Role                     | Licence                 |
+|-----------------------------------|--------------------------|-------------------------|
+| EmuTOS (`roms/etos*.img`)         | free TOS, the default    | **GPLv2** — `GPL-2.0.txt` |
+| Moira (vendored, in the binary)   | cycle-exact 68000 core   | MIT — (c) Dirk W. Hoffmann |
+| Dear ImGui (in the binary)        | interface                | MIT                     |
+| miniaudio (in the binary)         | audio output             | MIT-0 / public domain   |
+| GLFW 3.x (in the binary)          | window, input, GL context| zlib/libpng             |
+| libmt32emu 2.8.3 (Munt, in the binary, **static**) | Roland MT-32 / CM-32L on MIDI OUT | **LGPL 2.1 or later** |
+| stb_image v2.30 (in the binary)   | decodes the keyboard photo | MIT **or** public domain (Unlicense) |
+| TinySoundFont v0.9 (`extern/tsf`, in the binary) | built-in General MIDI synth outside macOS | MIT |
+| TimGM6mb (`roms/gm/TimGM6mb.sf2`, data file, by Tim Brechbill) | General MIDI SoundFont for the built-in synth | GPLv2 — `GPL-2.0.txt` |
+| SDL2 2.30.9 (`lib/*/libSDL2.so`, **Android package only**) | window, GLES, audio, life cycle | zlib |
+| IPF decoder (`src/io/IpfImage.cpp`, in the binary) | reads SPS/CAPS floppy images | BSD-3-Clause — adapted from MAME, (c) Olivier Galibert |
+| DejaVu Sans (`fonts/`)            | UI font                  | DejaVu / Bitstream Vera free licence |
+| Font Awesome Free (`fonts/`)      | UI icons                 | CC BY 4.0 + SIL OFL 1.1 |
+
+GLFW is statically linked on macOS (built from the 3.4 tag) and on Windows (MinGW-w64);
+the Linux AppImage carries `libglfw3.so` next to the binary, together with the system
+libraries it pulls in, each under its own licence. Sources: https://www.glfw.org/
+
+SDL2 replaces GLFW on Android only: https://libsdl.org/ (release-2.30.9).
+
+Optional at build time and **not present in any package**: libslirp >= 4.7
+(BSD-3-Clause, https://gitlab.freedesktop.org/slirp/libslirp), the user-mode NAT behind
+the NE2000's real Internet access. The release builds are made without it.
+
+EmuTOS source: https://emutos.sourceforge.io/ — the exact version shipped here is the
+one named in the ROM's own banner (Options ▸ ROM in the interface, or `--version`).
+Its sources are available from that site; NeoST redistributes the unmodified binary
+images only.
+
+Atari TOS images
+----------------
+⚠ `roms/tos102uk.img` and `roms/tos162uk.img`, when present in this package, are
+**original Atari TOS ROMs**. They are NOT free software and NOT covered by the GPL:
+they remain the property of their rights holders and are included only for the ST /
+STE machine profiles. NeoST does not need them — it boots EmuTOS out of the box.
+
+Since 2026-08-30 packages are built WITHOUT them by default (the repository no longer
+tracks any Atari TOS). A maintainer can re-include local copies for a personal build
+with `NEOST_PACKAGE_NO_ATARI_TOS=0` (see `packaging/stage_free_data.sh`).
+
+Demoscene productions (`disks/`)
+--------------------------------
+Three Atari ST demos ship with NeoST so that the package can show what the emulator
+does without any copyrighted game. They are **not** part of NeoST and are **not**
+covered by the GPL — each remains the work and the property of its authors:
+
+| File                  | Production          | Authors            | Year |
+|-----------------------|---------------------|--------------------|------|
+| `cuddly_demos.msa`    | The Cuddly Demos    | The Carebears (TCB)| 1989 |
+| `nocooper.msa`        | No Cooper           | 1984               | 1989 |
+| `closure.msa`         | Closure             | Sync               |      |
+
+They are included as freely-distributed demoscene works — productions released to be
+copied and shown, and archived as such (Fujiology, Demozoo, pouet.net). NeoST
+redistributes them unmodified and makes no claim on them. **Rights holders who would
+rather not be in this package only have to say so** — open an issue at
+https://github.com/habib256/neost and they will be removed from the next release.
+
+They double as pixel-exact test material: these three are among the references that
+pin NeoST's Shifter (all four borders open, med-res overscan, fine rasters).
+
+Reference emulators
+-------------------
+Hatari (GPLv2+, https://framagit.org/hatari/hatari) and MAME are used as behavioural
+*references* — read as sources, and run as an oracle during development. Apart from the
+IPF decoder below, no part of either is redistributed in this package.
+
+IPF decoder (MAME, BSD-3-Clause)
+--------------------------------
+The first stage of `src/io/IpfImage.cpp` (IPF container → MFM cell stream) is adapted
+from MAME's `src/lib/formats/ipf_dsk.cpp` (https://github.com/mamedev/mame), whose
+licence is reproduced here. NeoST does NOT use the SPS/CAPS library (libcapsimage).
+
+    Copyright (c) Olivier Galibert
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without modification,
+    are permitted provided that the following conditions are met:
+
+    1. Redistributions of source code must retain the above copyright notice, this
+       list of conditions and the following disclaimer.
+    2. Redistributions in binary form must reproduce the above copyright notice, this
+       list of conditions and the following disclaimer in the documentation and/or
+       other materials provided with the distribution.
+    3. Neither the name of the copyright holder nor the names of its contributors may
+       be used to endorse or promote products derived from this software without
+       specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+    ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+    IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+    NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+    PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+    WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
+
+libmt32emu and the LGPL
+-----------------------
+The Munt MT-32/CM-32L emulator (https://github.com/munt/munt, version 2.8.3) is vendored
+under `extern/mt32emu` and linked **statically** into the GUI, which renders the ST's MIDI
+OUT through a Roland MT-32/CM-32L. Upstream code is UNMODIFIED; only the CMake build file
+is NeoST's (see `extern/mt32emu/NEOST_VENDOR.md`). LGPL 2.1 allows static linking as long
+as the recipient can rebuild against a modified library: NeoST ships its full source under
+GPL 3, this copy of Munt included, which satisfies that. Its section 3 also permits the
+switch to the GPL, which settles compatibility with NeoST's GPL 3.
+The Roland ROMs are NOT included: the user provides them (`roms/mt32/`).
+
+stb_image (`extern/stb/stb_image.h`) is stb_image v2.30 by Sean Barrett and contributors,
+dual-licensed MIT or public domain (Unlicense): https://github.com/nothings/stb — the GUI
+uses it to decode the keyboard photo.

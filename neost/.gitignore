@@ -1,0 +1,116 @@
+# Artefacts CMake / build local
+build/
+build-*/
+dist/
+a.out
+_site/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# Binaires et objets
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.dSYM/
+# Ancrés à la RACINE : la règle nue « neost » ignorait AUSSI tout chemin contenant
+# un composant de ce nom — dont packaging/android/.../java/net/gistlabs/neost/,
+# le paquet Java d'Android (piège trouvé au dry-run d'un commit).
+/neost
+/neost-headless
+
+# Fichiers locaux de l'emulateur / GUI
+imgui.ini
+neost.cfg
+neost.cfg.bak
+# Profils de réglages nommés (Configuration → Profiles) : configurations de
+# l'utilisateur, au même format que neost.cfg — donc pas plus suivies que lui.
+profiles/
+*.state
+*.ppm
+!tests/reference/*.ppm
+tests/out/
+
+# ROMs et images disque : tout le contenu de rom/ et disks/ est suivi.
+
+# Disques durs (fenêtre Hard Disks) : les images ACSI pèsent des dizaines de Mo et les
+# lecteurs GEMDOS sont remplis par l'utilisateur — seul le mode d'emploi est suivi.
+hd/*
+!hd/README.md
+
+# OS / editeurs
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Python utilise par les outils
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Hatari (référence, non committé)
+extern/hatari/
+# Moira amont (tools/run_moira_runner.sh, A35) : clone et build hors historique.
+extern/moira-upstream/
+build-moira-runner/
+extern/spsdeclib_*/
+
+# capsimg (licence SPS non-commerciale — non redistribuable, non compilé)
+extern/capsimg/
+
+# SDL2 (couche plateforme Android, cf. packaging/android/fetch_sdl.sh)
+extern/SDL2/
+
+# Assets du paquet Android : copiés depuis roms/ et disks/ par stage_assets.sh
+packaging/android/app/src/main/assets/
+packaging/android/local.properties
+packaging/android/.gradle/
+packaging/android/app/build/
+packaging/android/app/.cxx/
+packaging/android/build/
+
+# Carte SD UltraSatan générée (16 Mo, déterministe) : tools/make_usatan_hd.py la recrée à la demande
+disks/etalons/usatan_sd.img
+
+# Image ACSI de travail CAB/STinG (16 Mo, personnelle) : générée par tools/make_hd_image.py
+disks/cab_hd.img
+
+# ROM Roland MT-32/CM-32L (copyright) : jamais versionnées
+roms/mt32/*.ROM
+roms/mt32/*.rom
+roms/mt32/*.bin
+
+# Bundle WASM : construit par la CI et servi par Pages, plus commité (2026-08-23).
+# Régénération locale : emcmake cmake -B build-web … --target neost-web
+wasm/
+
+# Contenu non redistribuable, conservé LOCALEMENT seulement (purge 2026-08-30).
+# Restauration : tools/private_assets.sh unpack <tarball> (TOS, jeux, cartouches,
+# Cubase Lite, Spectrum 512) et tools/setup_devkits.sh (GODLIB, AGT).
+# Les tests concernés se ré-arment quand ces fichiers sont présents.
+/roms/tos*
+/roms/TOS*
+/disks/st/
+/disks/stx/
+/carts/
+/disks/midi/CUBLITE/
+/disks/tools/spectrum_512_st_format.msa
+/disks/etalons/spectrum_512_auto_diapo.st
+/dev/agt/
+/dev/reservoir-gods/
+
+# Worktrees des agents Claude Code (isolation) : jamais versionnés.
+/.claude/worktrees/
+
+# Froggies Over The Fence : disquettes locales, non versionnées (décision 2026-10-20).
+/disks/etalons/froggies_over_the_fence/

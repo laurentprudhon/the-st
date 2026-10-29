@@ -1,0 +1,72 @@
+{
+ "_comment": "Auto-tests à VERDICT SÉRIE (P1). Chaque ROM (cartouche diagnostic ou secteur de boot) écrit une ou plusieurs lignes 'NEOST-TEST: <nom> PASS|FAIL' sur le port série RS-232 ; run_selftests.py les scanne. Déterministe, sans oracle. Voir docs/TEST_SOFTWARE.md.",
+ "selftests": [
+  {
+   "id": "diag_cart",
+   "name": "Cartouche diagnostic — CPU + timing (verdict série)",
+   "rom": "roms/etos192fr.img",
+   "rom_note": "ROM LIBRE (EmuTOS 192 Ko) le 2026-08-28 — purge § BLOQUANT, pas 2. La cartouche diagnostic ($FA52235F) prend la main AVANT le TOS (état vidéo par défaut du reset, cf. l'en-tête de tools/make_selftest_cart.py) : le TOS ne sert qu'à construire la machine. Vérifié plutôt que supposé — le dump série est IDENTIQUE octet pour octet sous tos102uk (50 Hz), etos192fr (50 Hz) et etos192us (60 Hz) : 4 verdicts PASS, mêmes lignes. etos192fr retenu parce qu'il a la MÊME fréquence de balayage que la ROM qu'il remplace : le remplacement ne change donc rien, même sur les chemins qui ne sont pas exercés ici.",
+   "machine": "st",
+   "mem": "512k",
+   "frames": 40,
+   "cart": "disks/etalons/selftest_cart.bin",
+   "cart_generate": "tools/make_selftest_cart.py",
+   "expect": [
+    "cpu",
+    "timing",
+    "frame",
+    "ipl"
+   ]
+  },
+  {
+   "id": "fpu_cir",
+   "name": "MC68881 CIR (Mega STE) — 54 tests FPU (verdict série)",
+   "rom": "disks/etalons/fpu_testrom.img",
+   "rom_generate": "tools/make_fpu_testrom.py",
+   "machine": "megaste",
+   "mem": "512k",
+   "fpu": true,
+   "frames": 30,
+   "expect": [
+    "fpu"
+   ],
+   "rom_note": "ROM GÉNÉRÉE (tools/make_fpu_testrom.py), aucune dépendance propriétaire. ⚠ L'image est COMMISE et `ensure_rom_asset` ne la régénère que si elle est ABSENTE : toute modification du générateur exige de la RE-COMMETTRE, sinon le palier continue d'exercer l'ancienne. Piège vécu le 2026-09-02 — les tests 10 et 11 ajoutés ce jour-là sont restés invisibles du palier `fast` jusqu'à la régénération."
+  },
+  {
+   "id": "usatan_netusbee",
+   "name": "UltraSatan (C: depuis la carte SD, AUTO\\\\USTEST.PRG, LongRW) + NetUSBee (ISP1160/NE2000) — verdict série",
+   "rom": "roms/etos192us.img",
+   "machine": "st",
+   "mem": "512k",
+   "frames": 600,
+   "ultrasatan": true,
+   "sd1": "disks/etalons/usatan_sd.img",
+   "sd1_generate": "tools/make_usatan_hd.py",
+   "netusbee": true,
+   "expect": [
+    "usfw",
+    "usinq",
+    "usrtc",
+    "uscdrv",
+    "nubid",
+    "nubscr",
+    "nubnic"
+   ]
+  },
+  {
+   "id": "gemdos_irq",
+   "name": "GEMDOS HD — un opcode magique = UN appel hôte, même avec une IRQ à la frontière (C:\\AUTO\\GDIRQ.PRG) — verdict série",
+   "rom": "roms/etos192us.img",
+   "machine": "st",
+   "mem": "512k",
+   "frames": 900,
+   "gemdos_generate": "tools/make_gemdos_irq_test.py",
+   "expect": [
+    "gdwrite",
+    "gdread",
+    "gdforced"
+   ],
+   "rom_note": "Bug du 2026-10-01 (TOSFC, Verify sur C:) : l'appel hôte était servi AVANT execute(), qui prenait alors une IRQ en attente au lieu du NOP — l'opcode magique était rejoué au rte. gdforced rend le cas déterministe (IRQ prenable pile à la frontière de $0008) ; il ÉCHOUE sur l'ancien code."
+  }
+ ]
+}

@@ -1,0 +1,139 @@
+# =============================================================================
+#  Oracle Hatari — la dernière boucle de validation qui restait MANUELLE (A11).
+#
+#  CE QUE LES AUTRES JOBS PROUVENT DÉJÀ, ET CE QUI MANQUAIT.
+#  `tests.yml` (job « pixel ») compare, à chaque push, la capture NeoST aux
+#  références commises. C'est une non-régression : il dit « NeoST rend encore ce
+#  qu'il rendait ». Il ne dit RIEN de la question qui fonde ces références —
+#  est-ce qu'Hatari, la source de vérité matérielle du projet, rend toujours la
+#  même chose ? Cette moitié-là ne tournait que sous les doigts du mainteneur,
+#  quand il y pensait (`run_etalons.py --oracle`), et ce mode ÉCRASE les
+#  références : il ne peut pas servir de contrôle, il efface la preuve.
+#
+#  CE JOB FERME LE TRIANGLE. `--oracle-check` (ajouté pour A11) rejoue Hatari au
+#  pin, retient l'image qui correspond à la capture NeoST du jour, et la
+#  CONFRONTE à la référence commise sans jamais y toucher :
+#
+#      NeoST  ==  référence commise  ==  Hatari (aujourd'hui, au pin)
+#
+#  Une dérive de N'IMPORTE lequel des trois casse le job. En particulier, il
+#  attrape ce qu'aucun autre ne voit : une référence régénérée à la main contre
+#  un oracle non épinglé, un pin déplacé sans repose des références, ou un
+#  ffmpeg dont le décodage bouge.
+#
+#  POURQUOI PAS AU PUSH. Il faut cloner et BÂTIR Hatari (~5 min la première fois,
+#  ensuite en cache), puis rejouer chaque étalon des DEUX côtés et balayer une
+#  fenêtre de trames pour chacun. Mesuré le 2026-09-01 : **5 min 31** pour les
+#  8 étalons re-dérivables sur un poste de dev au repos, et **13 min 43** pour la
+#  première exécution RÉELLE de ce job (runner ubuntu-24.04, cache froid, donc
+#  build complet d'Hatari inclus) — d'où le `timeout-minutes: 60`, large mais pas
+#  fantaisiste. Ce n'est pas au prix
+#  d'un garde-fou de push, et ça n'en a pas besoin : ce qui dérive ici dérive en
+#  semaines, pas en commits. Hebdomadaire, plus déclenchable à la main
+#  (Actions → Oracle Hatari → Run workflow) — le réflexe après un changement de
+#  pin ou une repose de références.
+#
+#  Le périmètre est calculé depuis tools/etalons.json : étalons machine oracle
+#  avec disque. `blitter_timer` en fait partie depuis la clôture BL5 (2026-10-19).
+#  Les ROM Atari absentes sont recensées comme non exécutées (`rom_is_free()`).
+#  Le mécanisme `oracle_check: false` exige une raison ; il a servi à nocooper
+#  et spec512_bands avant leur stabilisation, désormais redérivables.
+#  Le décompte et les noms sont imprimés à chaque exécution : une couverture
+#  réduite doit rester visible dans le journal.
+# =============================================================================
+name: Oracle Hatari
+
+on:
+  schedule:
+    # Lundi 04:00 UTC. Le jour et l'heure n'ont pas d'importance en soi ; ce qui
+    # compte est que ce ne soit PAS au push (cf. l'en-tête).
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oracle-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  oracle:
+    name: Références oracle ↔ Hatari au pin
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Dépendances (NeoST + Hatari + extraction des trames)
+        run: |
+          # Dépôt Microsoft de l'image runner : inutile ici, et ses 403 font échouer l'update.
+          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.*
+          sudo apt-get update -o Acquire::Retries=3
+          # Deux familles à ne pas confondre :
+          #  · NeoST headless      : cmake g++ (pas de GLFW, aucun GUI ici) ;
+          #  · Hatari              : libsdl2-dev est OBLIGATOIRE (son unique
+          #    frontend), zlib et libpng le sont en pratique — sans libpng,
+          #    `--avi-vcodec png` n'existe pas et l'oracle ne peut RIEN extraire ;
+          #  · ffmpeg              : découpe l'AVI en trames PNG (hatari_oracle.sh)
+          #    ET décode les références PNG dans compare_screenshot.py. Requis des
+          #    deux côtés, jamais optionnel.
+          sudo apt-get install -y --no-install-recommends \
+            cmake g++ git ffmpeg \
+            libsdl2-dev zlib1g-dev libpng-dev libreadline-dev
+          ffmpeg -version | head -1
+
+      # Le pin vit dans tools/setup_hatari.sh — on le LIT plutôt que de le
+      # recopier ici : une clé de cache qui répète une constante finit toujours
+      # par mentir sur la version réellement mise en cache.
+      - name: Lire le pin Hatari
+        id: pin
+        run: |
+          PIN=$(grep -m1 '^PIN=' tools/setup_hatari.sh | cut -d= -f2 | awk '{print $1}')
+          test -n "$PIN"
+          echo "pin=$PIN" >> "$GITHUB_OUTPUT"
+          echo "pin Hatari : $PIN"
+
+      # L'arbre complet (source + build) pèse ~136 Mo ; le bâtir prend ~5 min.
+      # La clé porte le PIN et le patch : changer d'oracle ou d'instrumentation
+      # invalide le cache tout seul, ce
+      # qui est exactement le comportement voulu — un cache qui survivrait à un
+      # changement de pin ferait tourner l'ANCIEN Hatari en prétendant valider
+      # le nouveau.
+      - name: Cache de l'oracle bâti
+        uses: actions/cache@v4
+        with:
+          path: extern/hatari
+          key: hatari-${{ runner.os }}-${{ steps.pin.outputs.pin }}-${{ hashFiles('tools/hatari_neost_oracle.patch') }}
+
+      - name: Cloner et bâtir Hatari au pin (idempotent)
+        run: tools/setup_hatari.sh
+
+      - name: Configurer NeoST
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Compiler le headless
+        run: cmake --build build -j"$(nproc)" --target neost-headless
+
+      # LE contrôle. Non destructif par construction : `--oracle-check` écrit ses
+      # captures dans tests/out/ et ne touche jamais à tests/reference/.
+      - name: Oracle régénéré ↔ références commises ↔ NeoST
+        run: python3 tools/run_etalons.py --oracle-check
+
+      - name: Vérifier le comparateur temporel (mutations et traces incomplètes)
+        run: python3 tools/test_timing_oracle.py
+
+      - name: Timings MFP, DMA et blitter ↔ Hatari (comparaison stricte)
+        run: python3 tools/run_timing_oracle.py --oracle-check
+      - name: Bus et cache MegaSTE 16 MHz ↔ Hatari
+        run: python3 tools/run_megaste_bus_oracle.py --oracle-check
+
+      # Sans ça, un échec ne laisse qu'un décompte de pixels : les images des deux
+      # côtés sont ce qu'on veut regarder en premier.
+      - name: Captures des deux côtés en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oracle-diff
+          path: tests/out/
+          if-no-files-found: ignore
