@@ -4,6 +4,30 @@ Status: complete. **Every figure below is derived (analytic), none measured** �
 measurement path was abandoned at minute ~10 of the budget, and §4 quantifies what that costs the
 confidence of the answer. Resolution for wayfinder ticket #18.
 
+> ### Correction — 2026-10-30, owner ruling
+>
+> The owner has ruled on this document's largest uncertainty (§4 caveat 1): **the DMA parts of the
+> video and audio streams live inside the RAM memory subsystem.** They are not crossings between
+> virtual chips — they are memory service traffic internal to the memory subsystem, which is exactly
+> what `GLOSSARY.md`'s *Memory service* already says ("the scheduled use of RAM by a client — video
+> fetch, sound fetch, CPU access, Blitter access — granted by the memory controller").
+>
+> Consequences:
+>
+> - The **4 × 10³ – 1.5 × 10⁴ crossings/frame** headline below is **wrong as a crossing count**. It
+>   is a *memory-service plus crossing* count; between 60 % and 98 % of it is Shifter `LOAD` traffic.
+> - Apply the ruling and the crossing count is the **residual**: VBL, HBL/Timer B, MFP timer expiries,
+>   the DMA-active signal that clocks Timer A, interrupt acknowledge, and bus-arbitration control
+>   (BR / BG / BGACK). That is **order 10² – 10³ per frame, 10³ – 10⁴ per second** — two to three
+>   orders of magnitude below the 10⁵ placeholder the note set out to correct.
+> - The precise residual is the job of the crossing catalogue (#6), not of this document; §2's rows
+>   are left intact as the record of what was derived under the earlier reading, with the `LOAD` and
+>   DMA rows now labelled memory service.
+> - **Nothing in §5's scheduler conclusions weakens**: the 16-cycle lookahead granularity comes from
+>   the hardware, not from the counting convention, and it is unchanged. What changes is that crossings
+>   were never the scheduler's main load — the memory subsystem's fetch deadlines are, and they are
+>   computable in advance from counters.
+
 The number is still needed after the move from browser/WASM to native: it sizes the scheduler (#7) and
 decides how often a chip must suspend on a cross-chip event versus take the synchronous fast path. It
 is no longer a hard 2 ns/event wall-clock budget (the host is now a native process, not a browser
@@ -173,6 +197,11 @@ for a busy raster demo, a realistic ceiling of ~1.5 × 10^4** — i.e. **2 × 10
 crossings/second**. The 10^5/frame figure in `async-runtime-options.md` §0 is a **pessimistic bound
 that is wrong by roughly one order of magnitude**, and §3.4 of that document already suspected as
 much ("realistic totals are closer to 10^4"); this is that suspicion, made arithmetic.
+
+*(Read this paragraph against the correction at the top: with the DMA video and audio streams inside
+the memory subsystem, this 10^4 is a count of memory-service traffic plus crossings. The crossing
+count alone is 10²–10³ per frame. The arithmetic below is kept because it is what establishes that
+the memory-service stream is a counter, not a wait.)*
 
 Why it cannot be much higher, structurally:
 

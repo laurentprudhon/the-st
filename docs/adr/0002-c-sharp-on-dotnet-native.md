@@ -37,13 +37,15 @@ is a native multiplatform application; the browser is not a delivery target.
   number for the real target: it was measured on desktop CoreCLR with the JIT (1e8 awaits of an
   already-completed `Task` in 32 ms, .NET 11 preview 7), which is exactly the configuration this ADR
   ships. The 1.91 ns it replaced is also inside budget, so the decision does not stand or fall on it.
-- **The event rate is now arithmetic rather than a placeholder, and it is ~10⁴, not 10⁵.** Ticket #18
-  derived 4 056 crossings per frame for an idle GEM desktop, 6 314 for a floppy load, 8 518 for a
-  raster demo and 4 421 for a Timer A player — a band of 4 × 10³ to 1.5 × 10⁴ per frame, i.e.
-  2 × 10⁵ to 7.5 × 10⁵ per second (`research/pin-event-rate.md`). Every figure there is derived, not
-  traced; the measurement path was blocked in this environment. Two consequences carry into this ADR:
-  the 2 ns-per-event wall was already not binding, and the rate is not what the language decision
-  rests on — the *ratio* of crossings to chip work is, and it is unchanged by the host.
+- **The event rate rests on a ruling, not on a placeholder.** The 10⁵ crossings/frame the browser
+  research assumed is gone: at ~10⁴ per frame it was already an order of magnitude too high, and the
+  owner's ruling that **the DMA parts of the video and audio streams are internal to the RAM memory
+  subsystem** cuts it again to **10²–10³ crossings per frame** — the residual of interrupts, timer
+  expiries, DMA-active clocking and bus-arbitration control (`research/pin-event-rate.md`, correction
+  at the top; the exact residual is #6's catalogue to fix). Those figures are derived, not traced —
+  the measurement path was blocked in this environment — but their order of magnitude is not in doubt,
+  and the consequence is that **crossing density is not what constrains this design at all**. What
+  does is the memory subsystem's fetch deadlines, which are computable in advance from counters.
 
 ## Decision
 
@@ -90,10 +92,12 @@ is a native multiplatform application; the browser is not a delivery target.
   number the walking skeleton measures in situ rather than a microbenchmark we assume. The
   three-key ordering, the lazy time advance and the coalescing question are unchanged — but the
   "how does a chip's thread wait and advance" sub-question dissolves: there is one thread until
-  T>1 is earned. #18 adds two inputs: at ~10⁴ crossings/frame the suspension budget has ten times
-  the headroom the browser case assumed, so the binding constraint is the *lookahead granularity*
-  (≈16 CPU cycles), not the suspension cost; and crossings and bus transfers must not share a queue
-  — the blitter is 74 % of bus traffic and 0.07 % of crossings.
+  T>1 is earned. The owner's ruling that video and audio DMA are internal to the memory subsystem
+  reshapes what the scheduler is *for*: it orders **crossings**, which are 10²–10³ per frame, while
+  the memory subsystem orders **its own clients** — video fetch, sound fetch, CPU, Blitter — as
+  memory service, internally and from counters. So the scheduler is not a bus arbiter with a
+  two-queue split; it is a small ordered event queue for control signals, and the expensive part of
+  the machine is a chip with its own internal timetable.
 - **#8 (thread topology):** has no browser subject left. It becomes a *native* prototype — cost per
   suspension through the custom context, the share of reads that complete synchronously, and
   topology sensitivity on a pool of 1/2/4/8 threads — and it loses the COOP/COEP question entirely.
