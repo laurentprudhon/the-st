@@ -94,10 +94,12 @@ is a native multiplatform application; the browser is not a delivery target.
   "how does a chip's thread wait and advance" sub-question dissolves: there is one thread until
   T>1 is earned. The owner's ruling that video and audio DMA are internal to the memory subsystem
   reshapes what the scheduler is *for*: it orders **crossings**, which are 10²–10³ per frame, while
-  the memory subsystem orders **its own clients** — video fetch, sound fetch, CPU, Blitter — as
-  memory service, internally and from counters. So the scheduler is not a bus arbiter with a
-  two-queue split; it is a small ordered event queue for control signals, and the expensive part of
-  the machine is a chip with its own internal timetable.
+  the memory subsystem owns **RAM and the video and sound fetch streams** and schedules them
+  internally from counters. Being a *client* of memory service is not membership: the 68000 is a
+  separate virtual chip that the memory subsystem serves, and whether the Blitter sits inside the
+  memory subsystem or beside it is exactly what the partition (#5) has to decide. So the scheduler is
+  not a bus arbiter with a two-queue split; it is a small ordered event queue for control signals,
+  and the machine's expensive timing lives inside one chip, wherever that chip's boundary falls.
 - **#8 (thread topology):** has no browser subject left. It becomes a *native* prototype — cost per
   suspension through the custom context, the share of reads that complete synchronously, and
   topology sensitivity on a pool of 1/2/4/8 threads — and it loses the COOP/COEP question entirely.
