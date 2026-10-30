@@ -4,7 +4,7 @@ Research date: 2026-10-29. Every download below was exercised with `curl` from t
 machine; hashes are of bytes actually received and hashed here. No ROM binary is stored
 in this repository — only hashes, URLs and verification recipes.
 
-Scope: STeemBrowser needs one fixed TOS (1.62) for its test suite and first-run
+Scope: The ST needs one fixed TOS (1.62) for its test suite and first-run
 experience, without committing copyrighted ROMs to a public repo.
 
 **Bottom line**
@@ -70,7 +70,7 @@ would have benefited from it.
 | **EmuTOS** | n/a | Free replacement, GPLv2, "no code written by Atari in EmuTOS" | <https://emutos.sourceforge.io/> |
 
 Note the split: Hatari and NeoST *bundle a free OS* so the emulator is usable out of the
-box; Steem historically assumed the user arrives with a TOS. STeemBrowser needs the
+box; Steem historically assumed the user arrives with a TOS. The ST needs the
 Hatari/NeoST model, because a browser emulator cannot assume anything about the host.
 
 Two sites *do* redistribute TOS images (atariworld.org, Abdess/retrobios). Their
@@ -330,7 +330,7 @@ Numbers for the decision:
 
 ---
 
-## 5. Recommended policy for STeemBrowser
+## 5. Recommended policy for The ST
 
 ### 5.1 What we ship, what we fetch
 

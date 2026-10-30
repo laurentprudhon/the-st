@@ -1,4 +1,4 @@
-# /home/workspace/STeemBrowser/atari-st-hardware/docs/download
+# /home/workspace/the-st/atari-st-hardware/docs/download
 
 ## Successfully Downloaded Documents (14 files, ~50 MB total)
 

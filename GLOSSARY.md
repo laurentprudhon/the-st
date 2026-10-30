@@ -1,4 +1,4 @@
-# STeemBrowser
+# The ST
 
 The emulator being designed in this repository: a single, fixed Atari 1040STE emulated with a
 time-driven, event-ordered model of its chips, delivered as a native multiplatform desktop
