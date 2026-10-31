@@ -140,8 +140,7 @@ Every package on the board that carries an active device, from the Section 7 par
 | U103 | sheet 1 | **C301164-002** IC TOS ROM 1.62 USA LO STE | 32-pin DIP | TOS 1.62 low ROM |
 | U202 | sheet 2 | **C025983** IC YM-2149 SOUND 40P | 40-pin DIP | PSG (3 tone + noise + envelope), 2 × 8-bit I/O ports |
 | U203 | sheet 2 | **C025984** IC 68901 MFP 48P | 48-pin DIP | MFP: timers, USART, interrupt controller, 8-bit GPIO |
-| U200 | sheet 2 | **C025985** IC 6850 ACIA 24P | 24-pin DIP | ACIA — MIDI (out of scope) |
-| U201 | sheet 2 | **C025985** IC 6850 ACIA 24P | 24-pin DIP | ACIA — RS-232 (out of scope) |
+| U200, U201 | sheet 2 | **C025985** IC 6850 ACIA 24P | 24-pin DIP | Two 6850 ACIAs. **One is the keyboard/IKBD link at 7812.5 baud (÷64 of 500 kHz) and is in scope; the other is MIDI at 31250 baud (÷16) and is out of scope.** The parts list labels them "MIDI" and "RS-232", which is wrong on both counts — RS-232 is the MFP's USART, not an ACIA. Which reference is which is unresolved (§6). |
 | U208 | sheet 2 | **C025988** IC PC900 PHOTO COUPLER 6P | 6-pin DIP | MIDI input opto-isolator (out of scope) |
 
 ### 2.2 Standard parts
@@ -821,8 +820,9 @@ Nets: `MFPCS`, `CMPCS`, `DINT`, `FDINT`, `HDINT`, `BINT`, `SINT`, `IPL0–IPL2`,
 `EINT3/EINT5/EINT7`, `CLK8/CLK4/CLK2`, `KHZ500`, `N6850`, `TEST`.
 
 **Out of scope but sharing pins:** `N6850` (U400.48), `CMPCS` (U400.139), `EINT3/5/7`
-(parallel, serial and MIDI interrupt inputs), the cartridge bus on `J103`, and the two
-6850 ACIAs. These are listed only because they occupy in-scope GSTMCU pins.
+(parallel, serial and MIDI interrupt inputs), the cartridge bus on `J103`, and **the MIDI 6850 ACIA** —
+the *keyboard* 6850 shares `N6850` but is in scope, since the machine cannot be typed on without it.
+These are listed only because they occupy in-scope GSTMCU pins.
 
 ---
 
@@ -877,6 +877,16 @@ Nets: `MFPCS`, `CMPCS`, `DINT`, `FDINT`, `HDINT`, `BINT`, `SINT`, `IPL0–IPL2`,
     "Stuffed in PAL systems only" note. For the French Peritel target the 32.084988 MHz
     oscillator is fitted and the 32.215905 MHz NTSC one is not. Parts-list quantities
     cannot distinguish the two variants.
-12. **LM556 assignment is uncertain.** U513/U514 appear on sheet 3 (disk) region and on
-    sheet 5 in the audio/controller area; the two sheets show them in different contexts
+12. **LM556 assignment is uncertain.** U513/U514 appear on sheet 3 (disk) region and on sheet 5
+    in the audio/controller area; the two sheets show them in different contexts
     and I could not determine which subsystem each half serves.
+13. **The two 6850 ACIAs are mislabelled in the 1991 parts list, and resolved here from external
+    evidence.** The list calls one "MIDI" and the other "RS-232"; the machine's own register map puts
+    the **keyboard ACIA at `$FFFC00`/`$FFFC02`** and the **MIDI ACIA at `$FFFC04`/`$FFFC06`**, both
+    clocked from 500 kHz with the keyboard dividing by 64 (7812.5 baud) and MIDI by 16 (31250 baud)
+    — so one of the two ACIAs is the IKBD link and **is in scope**. RS-232 is the MFP 68901 USART
+    (`$FFFA29` control, `$FFFA2F` data) through the MC1488/1489 drivers U206/U207, and involves no
+    ACIA at all. Sources: the ST/STe hardware register listing (AtariForumWiki) and an MC6850
+    implementation cross-checked against Hatari's `acia.c`. **Still unresolved:** which of U200/U201
+    is the keyboard, because neither the redraw's symbol rows nor the parts list distinguish them
+    (§6.4).

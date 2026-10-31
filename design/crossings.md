@@ -16,7 +16,7 @@ Three classes, because "crossing" cannot mean "any net with two ends on it":
 2. **Completion** — a signal that only *answers a request the same exchange already made*: `DTACK`,
    `BERR`, `RDY`, `DCYC`, `ACK`. The receiving chip's wait has a *computed* duration, so the answer is
    a latency inside the memory subsystem, taken on the fast path (ADR 0002), not an event in the
-   global queue.
+   global queue. **Confirmed by the owner, 2026-10-30.**
 3. **Clock / phase** — a signal whose job is to give two chips a common phase: `CLK`, `CLK8/CLK4/CLK2`,
    `FCLK`, `SCLK`, `KHZ500`. `GLOSSARY.md` already says a clock "is not a timeline: it gives its chips
    a common phase, nothing more" — so a clock is never counted, however high its frequency.
@@ -45,14 +45,25 @@ browser research warned about, reproduced one level down. `GLOSSARY.md`'s *Signa
 | `A1–A6`, `CS`, `LD`, `HD`, `R/W` | CPU → Video | 1 event | ~10/frame idle, up to 939/frame in a demo | Shifter register writes; a raster demo writes ~3 per line (313 × 3) |
 | `MWE`, `MWD`, `MWK` | Video ← Memory (Super Hi-Res write path) | 1 event | ~0 at Level 1 | only Super Hi-Res writes |
 
-## 3. Video ↔ Memory — *no crossings at all*
+## 3. Video ↔ Memory — data plus one handshake, no per-fetch event
+
+The owner's ruling splits this pair by responsibility (the Agnus/Denise line): **Memory supplies the
+byte stream, Video interprets it.** Memory holds the beam counter, `LINEWID`, the scroll registers and
+the fetch cadence; the Shifter holds the shift registers and the palette.
 
 | Signal | Dir | Class | Rate | Basis |
 |---|---|---|---|---|
-| `MD0–MD15` | Memory → Video | 2 data / memory service | 6 260 words/frame (low-res), up to 25 040 (full overscan) | the fetch stream is Memory's internal schedule (owner's ruling) |
-| `SREQ` / `SLOAD` | Shifter ↔ timing generator | **internal to Video** | 20/line = 6 260/frame | dissolved by the partition: both ends are in Video |
+| `MD0–MD15` | Memory → Video | 2 data / memory service | 6 260 words/frame (low-res), up to 25 040 (full overscan) | the fetch is Memory's internal schedule |
+| `DE` | Memory → Video | 1 event | 313/frame | display enable; now generated in Memory, consumed in Video |
+| `BLANK` | Memory → Video | 1 event | 313/frame | per-line blanking |
+| `SREQ` | Video → Memory | 2 completion *(proposed)* | 6 260/frame | the Shifter asking for a fetch slot — but the slot is already scheduled, so this is a handshake, not a decision |
+| `SLOAD` | Memory → Video | 2 completion *(proposed)* | 6 260/frame | the answer to that request |
+| `LATCH` | Memory → palette latch | 1 event | up to 939/frame | palette reload during raster effects |
 
-That is the partition's main payoff: the busiest "crossing" in the earlier arithmetic is not one.
+**The open point**: `SREQ`/`SLOAD` at 6 260/frame would dominate the count if they were class 1. Under
+the supply-a-stream model they are the handshake of a transaction whose timing Memory has already
+computed — class 2 — which keeps the crossing count in the 10²–10³ band. That classification needs the
+owner's confirmation; it is the last thing standing between the catalogue and a fixed number.
 
 ## 4. Video → host (not a virtual chip)
 

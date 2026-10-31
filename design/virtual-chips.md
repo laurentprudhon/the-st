@@ -35,29 +35,35 @@ The CPU never reaches into another chip: it asks, and either gets an answer (`DT
 
 ### 2. Memory — U400 memory half + DRAM + SIMMs + U101 Blitter + U300 fetch engine
 
-Owns RAM and everything that decides who gets it:
+Owns RAM, **everything needed to supply a stream of bytes to another chip**, and the arbitration
+that decides who gets the bus. Its side of the video and audio divide is the *supply* side — the
+Agnus role.
 
 - `U400.MAD0–MAD9`, `RAS0/RAS1`, `CAS0H/CAS0L/CAS1H/CAS1L`, `WE` — the multiplexed DRAM interface;
 - the refresh counter (`U400.MAL0–MAL9`), whose period the redraw leaves unresolved;
 - `U400.AS/LDS/UDS/R/W/FC0–2 → DTACK/BERR` — the bus cycle it completes;
 - `U400.BR/BG/BGACK` — bus arbitration, granted to the Blitter, the FDC DMA and the sound DMA;
-- the **video and sound fetch streams**, scheduled internally from counters (owner's ruling — they
-  are memory service, not crossings);
+- **the video beam counter, `LINEWID` and the scroll registers, and the fetch cadence derived from
+  them** — one counter decides both where the beam is and when the next group is fetched, so it
+  cannot be split across two chips;
+- **the audio DMA counters and the sample-rate divider** (`$FF8901–$FF890D`), which decide when the
+  next sample byte is due;
+- `U400.HSYNC`, `VSYNC`, `DE`, `BLANK`, `LATCH` — generated here, where the beam is;
 - `U101` Blitter in full: `A1–A23`, `D0–D15`, `AS/LDS/UDS`, `R/W`, `DTACK`, `BERR`, `FC0–2`,
   `BR/BG/BGACK`, `VMA/VPA`;
 - `U300`'s bus-master half: `FCS`, `RDY`, `DCYC`, `HDCS/HDRQ/ACK`.
 
-### 3. Video — U400 video-timing half + U401 Shifter
+### 3. Video — U401 Shifter
 
-The one chip that generates time for the machine, and the one that renders it:
+The *interpretation* side — the Denise role. It receives a stream of bitplane words and turns them
+into pixels and colours; it does not decide when a fetch happens.
 
-- timing generator: `HSYNC`, `VSYNC`, `DE`, `BLANK`, `LATCH`, `CLK8/CLK4/CLK2`, and the video counter,
-  `LINEWID` and scroll registers that decide when each fetch happens;
-- `SREQ` (`U401.36 → U400.107`) and `SLOAD` (`U400.106 → U401.37`) — **internal to this chip**, which
-  is the direct consequence of absorbing the timing half: the fetch handshake never leaves Video;
 - `U401`: `MD0–MD15` (fetched words arrive from Memory), `PD0–PD15` (palette/pixel path),
   `MWE`/`MWD`/`MWK` (Super Hi-Res write path), `R0–R3`/`G0–G3`/`B0–B3` (12-bit RGB out),
-  `MONO`/`COLOR`, `SCLK`, `FCLK`, `CLK`, `A1–A6`/`CS`/`LD`/`HD`/`R/W` (register interface).
+  `MONO`/`COLOR`, `SCLK`, `FCLK`, `CLK`, `A1–A6`/`CS`/`LD`/`HD`/`R/W` (register interface);
+- `DE` and `BLANK` arrive as inputs that gate display;
+- `SREQ` leaves the chip and `SLOAD` arrives — this handshake now crosses the Memory/Video boundary,
+  because the timing that answers it is Memory's.
 
 Analog tail excluded: the RGB outputs stop at the chip boundary; `U403`/`U405` are the host's
 video encoder, not the machine's.
