@@ -38,6 +38,12 @@ Two banks (odd/even), each with 8 × 414616 chips.
 
 ## DRAM Refresh
 
+> **This section describes a 1 Mbit part, not the part fitted to this machine.** A 1040STE is populated
+> with 16 × `C0101743-002`, 256K×1 (41256-class: **512 rows × 512 columns**, per
+> `04-dram-chip-41256-414616.md` §3 and `design/board-inventory.md` §2.3). With 512 rows the refresh
+> period is **7.8 µs per row**, not 3.9 µs, i.e. ≈8.2 slots per 512-clock PAL line at one slot each.
+> The figures below are kept for the 1 Mbit case (Mega STE / TT). See `research/memory-bus-slots.md` §4.
+
 The Glue chip (ST/STe) and GST MCU (STe) autonomously refresh DRAM without CPU involvement:
 
 ### Refresh Timing
