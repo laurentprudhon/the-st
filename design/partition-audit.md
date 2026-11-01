@@ -18,7 +18,7 @@ bucket is a hole in the partition, not a detail.
 | TOS ROM high/low | U102, U103 | **UNASSIGNED — finding 1** |
 | YM2149 | U202 | **split**: Sound (PSG) + Controllers (I/O ports) |
 | MFP 68901 | U203 | **Timers and interrupts** |
-| 6850 ACIA ×2 | U200, U201 | one → **Controllers** (keyboard); one → **out of scope** (MIDI); which is which unresolved (§6.13) |
+| 6850 ACIA ×2 | U200, U201 | **U201 → Controllers** (keyboard, 7812.5 baud); **U200 → out of scope** (MIDI). Resolved from the service manual's keyboard procedure; see `research/schematic-evidence.md` §4 |
 | MIDI opto-coupler | U208 | excluded, out of scope |
 | WD1772 | U301 | **Disk** |
 | LMC1992 | U508 | **Sound** |
@@ -28,7 +28,7 @@ bucket is a hole in the partition, not a detail.
 | MC1377 encoder | U403 | excluded — analog tail |
 | 74S257 mux | U405 | excluded — analog/glue between shifter and encoder |
 | 555 timer | U104 | **UNASSIGNED — finding 3** |
-| LM556 ×2 | U513, U514 | **UNASSIGNED — finding 2** |
+| LM556 ×2 | U513, U514 | paddle half → **Controllers** (documented: the pulse width is measured by the GSTMCU); floppy/ACSI half → Disk **probable, not documented** |
 | TL497A regulators | U204, U205 | excluded — power, not modelled |
 | 7406 open-collector ×2 | U210, U305 | excluded — drive stage |
 | 74LS86, 74LS04 | U209, U211 | excluded — decode/combine glue |
@@ -41,8 +41,9 @@ bucket is a hole in the partition, not a detail.
 | Resistor packs | P100–P105, P500–P502, P600 | excluded |
 | Reset switch | S100 | excluded — host input |
 
-**Result: 26 of 29 active packages assigned or excluded with a reason; three are unassigned**, and one
-part appears to be missing from the parts list altogether (finding 4).
+**Result: 27 of 29 active packages assigned or excluded with a reason; two remain unresolved** (the 555,
+and the second LM556 half). The suspected missing RTC was **withdrawn** — this machine has none
+(`research/schematic-evidence.md` §6).
 
 ## 2. Registers
 
@@ -91,10 +92,11 @@ only function is to return the bytes at an address, which is a data structure, n
 `U513`/`U514` are dual timers appearing on sheet 3 (disk/ACSI region) and on sheet 5 (audio/controller
 region); the inventory (§6.12) could not decide which half serves what.
 
-**Recommendation: split by function, not by package.** Whichever half generates the floppy/ACSI timing →
-Disk; the half that times the mouse/joystick/paddle sampling → Controllers. This needs the schematic
-resolved first; until then, both halves stay unassigned **on purpose**, because guessing would put a
-timer in the wrong chip and the model would inherit the error.
+**Partially resolved (2026-11-01).** The service manual's paddle test settles one half: "This current
+charges the RC network on the STE, varying the output pulse of the LM556. The pulse width is measured by
+the GSTMCU" — so the paddle/mouse half belongs to **Controllers** (`research/schematic-evidence.md` §5).
+The remaining half most likely serves floppy/ACSI timing and would belong to **Disk**; that stays
+**probable, not documented**, and it is the only LM556 question still open.
 
 ### Finding 3 — the 555 reset timer is unassigned
 
@@ -105,15 +107,12 @@ delay models nothing the emulator needs: machine time starts at zero on reset, a
 a single edge. If it ever needs modelling (e.g. for a reset that must race something), it becomes a
 Memory-adjacent detail, not a chip.
 
-### Finding 4 — a part appears to be missing from the parts list
+### Finding 4 — WITHDRAWN: this machine has no real-time clock
 
-A 1040STE carries a **battery-backed real-time clock** (a SmartWatch-type device, typically socketed
-under a ROM). No such part appears in the inventory's IC list, and TOS reads the clock at boot, so the
-walking skeleton will not keep time without it.
-
-**Status: to verify against a photographic scan and against TOS's RTC access path.** If it exists, it is
-a ninth device: read/write registers, battery-backed state, no timeline — the same argument as the ROMs
-puts it in Memory, or it is an ordinary memory-mapped peripheral with its own three or four registers.
+**Withdrawn 2026-11-01.** The parts list contains no clock chip and no battery, and the machine's own
+documentation never mentions one. The RTC belongs to the Mega ST, Mega STE and TT (the Mega STE's is a
+Tadiran TL-5242/W). TOS returning a default date on this machine is correct behaviour, not a missing
+part. See `research/schematic-evidence.md` §6.
 
 ### Finding 5 — `$FF8260` is genuinely duplicated, so one register has two owners
 
@@ -138,3 +137,8 @@ Yes, on three tests:
 
 **What is not yet validated:** the per-line slot allocation (`research/memory-bus-slots.md`, in progress),
 and the pin-level truth of `SREQ`/`SLOAD`/`DCYC` (inventory §6.14).
+
+
+## Revision — 2026-11-01
+
+Schematic and service-manual evidence (`research/schematic-evidence.md`) resolved the ACIA identity and one LM556 half, withdrew the suspected RTC, and confirmed that `DCYC` fans out to the Shifter. The partition itself did not change: the open items are behavioural (slot placement), not topological.

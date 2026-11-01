@@ -879,7 +879,10 @@ These are listed only because they occupy in-scope GSTMCU pins.
     cannot distinguish the two variants.
 12. **LM556 assignment is uncertain.** U513/U514 appear on sheet 3 (disk) region and on sheet 5
     in the audio/controller area; the two sheets show them in different contexts
-    and I could not determine which subsystem each half serves.
+    and I could not determine which subsystem each half serves. **Partially resolved 2026-11-01: the
+    paddle half is documented** — the service manual's J7 paddle test states that the RC network
+    "varies the output pulse of the LM556" and that "the pulse width is measured by the GSTMCU",
+    so it belongs to the controller path. The other half is still unattributed.
 13. **The two 6850 ACIAs are mislabelled in the 1991 parts list, and resolved here from external
     evidence.** The list calls one "MIDI" and the other "RS-232"; the machine's own register map puts
     the **keyboard ACIA at `$FFFC00`/`$FFFC02`** and the **MIDI ACIA at `$FFFC04`/`$FFFC06`**, both
@@ -889,12 +892,17 @@ These are listed only because they occupy in-scope GSTMCU pins.
     ACIA at all. Sources: the ST/STe hardware register listing (AtariForumWiki) and an MC6850
     implementation cross-checked against Hatari's `acia.c`. **Still unresolved:** which of U200/U201
     is the keyboard, because neither the redraw's symbol rows nor the parts list distinguish them
-    (§6.4).
+    (§6.4). **Resolved 2026-11-01: U201 is the keyboard ACIA** — the service manual's "Keyboard Not
+    Responding" procedure says to verify that pin 3 of U201 carries 500 kHz, and pin 3 of a 6850 is the
+    receive clock. U200 is therefore MIDI. See `research/schematic-evidence.md` §4.
 14. **Two video/sound handshake labels conflict with the STE hardware article.** The redraw shows
     `SLOAD` (`U400.106`) → `U401.37`, labelled `LOAD`, and `SREQ` (`U401.36`) → `U400.107`; it draws
     `DCYC` (`U400.138`) only towards `U300`. The ST Magazine 44 (1990) STE article describes
     **`SREQ`/`*SLOAD` as the *sound* DMA handshake** (`*SLOAD` being "the counterpart of `*LOAD` used for
     the video") and `*DCYC` as the signal telling the Shifter that fetched video data are available.
     Either the redraw collapsed the two handshakes onto one pair of pins, or it mislabelled them. This
-    must be settled from a photographic scan before any pin-level model is built. See
-    `research/bus-arbitration.md`.
+    must be settled from a photographic scan before any pin-level model is built. **Half resolved
+    2026-11-01:** the service manual §2.9.4 states that "DCYC strobes data from the display memory
+    into the Video Shifter", so `DCYC` is the video strobe and the redraw's single-ended net is
+    incomplete: it must fan out to the Shifter as well as to `U300`. `SREQ`/`*SLOAD` remain the
+    sound handshake per the ST Magazine article. See `research/schematic-evidence.md` §1.
