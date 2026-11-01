@@ -890,3 +890,11 @@ These are listed only because they occupy in-scope GSTMCU pins.
     implementation cross-checked against Hatari's `acia.c`. **Still unresolved:** which of U200/U201
     is the keyboard, because neither the redraw's symbol rows nor the parts list distinguish them
     (§6.4).
+14. **Two video/sound handshake labels conflict with the STE hardware article.** The redraw shows
+    `SLOAD` (`U400.106`) → `U401.37`, labelled `LOAD`, and `SREQ` (`U401.36`) → `U400.107`; it draws
+    `DCYC` (`U400.138`) only towards `U300`. The ST Magazine 44 (1990) STE article describes
+    **`SREQ`/`*SLOAD` as the *sound* DMA handshake** (`*SLOAD` being "the counterpart of `*LOAD` used for
+    the video") and `*DCYC` as the signal telling the Shifter that fetched video data are available.
+    Either the redraw collapsed the two handshakes onto one pair of pins, or it mislabelled them. This
+    must be settled from a photographic scan before any pin-level model is built. See
+    `research/bus-arbitration.md`.
