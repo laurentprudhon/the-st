@@ -119,3 +119,36 @@ What would settle them, in order of cost:
   "resolved by the machine's own manual".
 - The scheduling questions that remain are **behavioural, not topological**, which means the partition is
   settled and only #7's internals stay open.
+
+
+## Visual pass over the six sheets (2026-11-01)
+
+The schematic PDF was rendered to images and read as pictures. The PDF embeds a **300 dpi raster per
+sheet** (3832 × 2574 for sheet 4); rendering above 300 dpi only interpolates, so 300 dpi is the ceiling
+for any reading.
+
+**Sheet map established visually:** sheet 4 (PDF page index 3) carries both large customs — **GSIMCU
+(U400, 144 pins)** upper-centre-left with the CPU-bus signals on its left edge and the video/control
+signals on its right, and **GSTSHF (U401, the Shifter)** to its right. The title block marks the drawing
+as the non-modulator (RGB/monitor) STE variant.
+
+**Net names read off the 1989 factory drawing** (original Atari naming, `X` prefix = active low), which
+differ from the 2017 redraw's labels in the inventory:
+
+- bus and arbitration: `XAS`, `XLDS`, `XUDS`, `R/W`, `XDTACK`, `XBERR`, `XBR`, `XBGK`, `XBLIT`(read as
+  `XBLTG`), `XVMA`, `XVPA`, `XIACK`, `XIPL0`/`XIPL1`/`XIPL2`, `FC0`/`FC1`/`FC2`, `SCLK`
+- video: `DE`, `HSYNC`, `VSYNC`, `BLANK`
+- chip selects and peripherals: `XFCS`, `XMFECS`, `SNDCS` (read as `SNOCS`), `SNDIR` (read as `SNOIB`),
+  `XROM2`/`XROM3`/`XROM4`, `RDY`, `XDISKINT`, `XMFPINT` (read as `XMEPINT`)
+- controllers: `XPAD0X`, `XPAD0Y`, `XPAD1X`, `XPAD1Y`, `XPEN`
+- clocks: `CLK8`, `CLK4`
+
+These corroborate the inventory's signal set and give the *original* names, which is useful because the
+redraw renamed several (`XAS` → `AS`, `XBGK` → `BGACK`, `XMFECS` → `MFPCS`).
+
+**Pin numbers: NOT resolved, and this pass does not claim otherwise.** They are marginally legible at
+300 dpi, but the visual reads were unreliable — one attempt returned `D15—15`, `D14—14`, `D13—13`, which
+is exactly the sequence-guessing the prompt forbade, and two other crops timed out. Resolving U400's
+bottom edge (`D0–D15`, `A1–A23`, `AS`/`LDS`/`UDS`, `R/W`, `DTACK`, `BERR`, `RESET`, `VMA`, `PEN`,
+`PAD0X–PAD1Y`, `FDINT`, `HDINT`, `BINT`, `SINT`) needs either a strip-by-strip pass at native resolution
+with a human or a better OCR, or a photographic scan. Inventory §6.2 stands open.
