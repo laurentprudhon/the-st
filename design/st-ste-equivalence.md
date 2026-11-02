@@ -164,7 +164,10 @@ They make the **STE half** of the equivalence `documented`; the ST half remains 
   Schematic (Rev N)" at the Atari Document Archive (`docs.dev-docs.org`); its `download.php` endpoint
   returns `service not available` to scripted POSTs and needs a real browser. `Atari ST Internals`
   carries printed GLUE/MMU pin tables as a text-side fallback. Until one of those is read, every ST-side
-  name here stays `unconfirmed`.
+  name here stays `unconfirmed`. The 520/1040ST Field Service Manual we hold does not help either: its
+  "Schematics and Silkscreens" section is present as a divider, but the text-layer edition only carries
+  the PSU and keyboard-connector drawings — its `GLUE`/`SHIFTER` hits are diagnostic flow charts
+  (§6.3–6.5) and the glossary.
 - **The STE side is now the strong half.** The GSTMCU pin numbers listed under §3 are `documented` from
   the 600 dpi scan (`board-inventory.md` §3.4b), so a future ST read only has to fill one column and can
   be checked pin-for-pin against the other.
