@@ -84,6 +84,24 @@ Examples:
 | `A1–A5`, `CS`, `R/W` | `A1–A6`, `CS`, `LD`, `HD`, `R/W` | a sixth address bit for `HSCROLL` and the sound registers |
 | — | `SD0–SD7` out, `SCLK`, `FCLK`, `MWSI/MWSO/MWCLK` | new: sample bus to the DACs and Microwire to the LMC1992 |
 
+### Pin numbers behind the STE column (confirmed 2026-11-02)
+
+The three tables above name signals; these are the GSTMCU (`U400`) pin numbers that carry them,
+read from the 600 dpi scan and recorded with their corroboration in `board-inventory.md` §3.4b.
+They make the **STE half** of the equivalence `documented`; the ST half remains open (§7).
+
+- **MMU half**: `MAD0–MAD9` 110–119 · `RAS0` 127 · `RAS1` 124 · `CAS0L` 125 · `CAS0H` 126 ·
+  `CAS1L` 122 · `CAS1H` 123 · `WE` 121 · `XDTACK` 71 · `XBERR` 23
+- **GLUE half**: `XROM0–XROM6` 13, 12, 11, 10, 9, 8, 7 · `XFCS` 136 · `SNDCS` 19 · `N6850` 48 ·
+  `XIPL0/IPL1/IPL2` 33/34/35 · `DE` 141 · `BLANK` 140 · `HSYNC` 143 · `VSYNC` 142 · `BR` 29 ·
+  `BGACK` 26 · `BGO` 27 · `BGI` 28 · `CLK8` 3 · `CLK4` 4 · `CLK2` 5 · `KHZ500` 6 ·
+  `PEN` 137 · `PAD0X/PAD0Y` 94/95 · `PAD1X/PAD1Y` 96/97
+- **CPU side** (no ST counterpart — the ST's GLUE/MMU exposed these to the same bus):
+  `AS` 67 · `LDS` 68 · `UDS` 69 · `R/W` 70 · `RESET` 66 · `VMA` 24 · `TEST` 74 ·
+  `D0–D15` 75–91 · `A1–A23` 41–65 · `IACK` 83 · `HDINT` 15 · `FDINT` 16 · `BINT` 60 · `SINT` 105
+- **Video/sound handshake**: `DCYC` 138 · `SLOAD` 106 · `SREQ` 107 · `RDY` 135 · `LATCH` 131 ·
+  `WDAT` 129 · `HDAT` 130
+
 ## 4. Register equivalence
 
 | Address | ST | STE | Owner in our model |
@@ -129,26 +147,30 @@ Examples:
 
 ## 7. Open
 
-- **The ST-side pin names are not yet confirmed against an ST schematic** — the table's ST column comes
-  from secondary descriptions (ST Magazine 44, the STE service manual §5.1), not from a drawing.
-  Progress from the last attempt (2026-11-01), which is worth recording even though it did not finish:
-  - The **600 dpi** `1040 STFM.pdf` (gossuin.be) has 8 sheets, and only **sheet 3 is a logical
-    schematic**. Sheets 1, 2, 4, 5 are silkscreen/PCB layouts and sheet 6 is an exploded mechanical
-    drawing — which is why earlier pin-name searches over sheets 1–2 found nothing. Any future attempt
-    must start on sheet 3.
-  - On sheet 3, the Shifter is drawn as **`C025914-38`, reference `U20`** (top-left area, beside the
-    YM2149 at `U10`). This is a vision read, single-source, and **contradicts** the `C101515` that an
-    earlier pass invented — so it is recorded here as *probable*, not confirmed.
-  - Pin-level reading still fails: the vision endpoint is intermittently unavailable, and local OCR
-    (`rapidocr-onnxruntime`) returns only a handful of tokens on symbol crops because its detector
-    resizes to a 736 px min side.
-  - **Method to resume:** on `1040 STFM.pdf` sheet 3 only, crop each symbol at 600 dpi (the Shifter sits
-    near points (265,165)–(400,265) of an 824×1173 pt page) and read the pin labels, ideally in a window
-    when the vision endpoint is stable, or with an OCR detector whose resize limit can be configured
-    above 736 px.
+- **The ST-side pin names remain unconfirmed, and this document set cannot confirm them (2026-11-02).**
+  The 600 dpi `1040 STFM.pdf` (gossuin.be, 8 sheets) turned out to be a *mixed compilation of several
+  different drawings*, not one board's schematic set: sheets 1 and 4 are the same I/O schematic
+  (`SCHEMATIC DIAGRAM`, "USE STUFFED P.C.B. C070523"), sheets 5 and 6 are the floppy-disk sheet
+  (`C070572`, `C070522`), sheets 2 and 3 are silkscreens (their title block reads `SILK`), and sheets
+  7 and 8 are assembly drawings (`CA070097`, `CA070076`). **No GLUE, MMU or Shifter symbol is drawn
+  anywhere in it.** An OCR sweep of all eight sheets at 200 dpi returns no `GLUE`/`MMU`/`SHIFTER`, no
+  `MAD0–MAD9` and no `ROM0–ROM4`; the owner's own visual pass over the same PDF independently found
+  none either. Two readings agree, so this is a property of the document, not of the reader.
+  This *supersedes* the earlier note that "sheet 3 is the logical schematic": sheet 3 is a silkscreen,
+  and the `6850`/`68901` tokens OCR found on it were component legends printed on the silkscreen, not
+  schematic symbols — which is also why the custom chips were never detected there.
+- **What would close the ST column:** a complete 1040ST logic set — the `C070230` sheets carrying the
+  CPU, memory and video sections. Candidates: "Atari 1040ST Schematic (Rev C)" and "Atari 520ST
+  Schematic (Rev N)" at the Atari Document Archive (`docs.dev-docs.org`); its `download.php` endpoint
+  returns `service not available` to scripted POSTs and needs a real browser. `Atari ST Internals`
+  carries printed GLUE/MMU pin tables as a text-side fallback. Until one of those is read, every ST-side
+  name here stays `unconfirmed`.
+- **The STE side is now the strong half.** The GSTMCU pin numbers listed under §3 are `documented` from
+  the 600 dpi scan (`board-inventory.md` §3.4b), so a future ST read only has to fill one column and can
+  be checked pin-for-pin against the other.
+- **Part numbers are still unconfirmed.** Shifter `C025914-38` at `U20` is a single vision read and
+  contradicts an earlier invented `C101515`; the MMU `C025912` and GLUE `C101439` come from secondary
+  sources only. None of the three is used as established fact anywhere in this repo.
 - **Which physical chip is `U200`/`U201`** — resolved as U201 = keyboard (`research/schematic-evidence.md`
   §4); naming uses `acia` for both.
-- **MMU/GLUE part numbers** quoted by secondary sources (MMU `C025912`, GLUE `C101439`, Shifter
-  `C101515`) are recorded nowhere in this repo as confirmed; a single vision pass proposed them once and
-  then contradicted itself on the same sheet, so they are not used in the tables above.
 - `FF8263` (read in Hatari's scroll path) has no confirmed function; not named here.

@@ -108,6 +108,7 @@ Confidence tags used in §3:
 | **V** | pin number and pin name both read from the drawing, pairing unambiguous |
 | **V\*** | pin number read, but the symbol row was staggered — pin *name* order verified, number position cross-checked against the datasheet-standard part |
 | **U** | not legible / not extracted; **no number is asserted** |
+| **D** | pin number read from the 600 dpi photographic scan (which has no text layer) and corroborated by an independent check — recorded per §3.4b, where the check is the completeness of a pin run against adjacent `V` pins |
 
 Nothing in §3 or §4 is filled in from memory of what the chip "ought" to have. Where a
 signal is obviously present but its pin number could not be resolved, the pin number is
@@ -325,10 +326,10 @@ Jumper block W102/W103/W104 selects 27C256 / 27C512 / 27C010-27C1001-571000 (she
 
 ### 3.4 U400 — GSTMCU, 144-pin (C300589-001)
 
-Sheet 4 (printed p62). This is the densest symbol in the set and the extraction is
-incomplete: three staggered pin-number rows on the top edge were resolved, the bottom edge
-was not. Pins listed as `unverified` exist on the symbol (names legible) but their numbers
-could not be separated.
+Sheet 4 (printed p62) of the 1991 set. This is the densest symbol in the set. The vector
+extraction below resolved the three staggered pin-number rows on the top edge; the remaining
+edges were closed on **2026-11-02** from the 600 dpi photographic scan, and are listed
+separately in §3.4b so that the two provenances stay distinguishable.
 
 | Pin | Signal | Dir | Active | Tag |
 |---|---|---|---|---|
@@ -398,15 +399,59 @@ could not be separated.
 | 140 | BLANK | out | L | V |
 | 141 | DE | out | H | V |
 | 142 | VSYNC | out | L | V |
+| 143 | `HSYNC` | out | L | D |
 | 144 | VCC | pwr | — | V |
-| — | HSYNC (drawn on the top edge; the number extracted next to it, 146, is outside the package and is wrong — number **unverified**) | out | L | U |
-| — | MAL0–MAL9 / refresh counter, D0–D15, A1–A23, AS, LDS, UDS, R/W, DTACK, BERR, RESET, TEST, PEN, PAD0X, PAD0Y, PAD1X, PAD1Y, FDINT, HDINT, BINT, SINT, SNDCS, FCS, CMPCS (bottom edge and left/right columns) | — | — | U |
-| — | GND (several pins, bottom edge) | pwr | — | U |
+| — | `GND` (several pins, both edges), `MAL0–MAL9` (refresh counter), `CLK`, and the internal-only `RAM`, `DEV`, `DMA` | — | — | U |
 
-Signals seen on the U400 symbol but with no pin number resolved (bottom edge, legible
-names only): `AS`, `LDS`, `UDS`, `R/W`, `DTACK`, `BERR`, `RESET`, `TEST`, `VMA`, `PEN`,
-`PAD0X`, `PAD0Y`, `PAD1X`, `PAD1Y`, `FDINT`, `HDINT`, `BINT`, `SINT`, `RAM`, `DEV`, `DMA`,
-`CLK`, `A1–A23`, `D0–D15`, `GND`.
+#### 3.4b Pins resolved from the 600 dpi scan (2026-11-02)
+
+Read off the photographic 600 dpi scan (`1040 STE 600dpi.pdf`, gossuin.be), **sheet 5**, where
+the GSTMCU is drawn as one symbol with `U400` under it. Note the sheet number differs from the
+1991 vector set: in the 600 dpi scan sheet 4 is the WD1772/DMA sheet, so any cross-reference
+between the two documents must go by drawing content, not by page number.
+
+Method and why these are `documented` and not `inferred`: the owner read the numbers from the
+symbol at print resolution, and the reading was then checked for internal consistency against
+pins already extracted by vector from the 1991 sheet — the two bus runs are *complete* between
+their anchors except for exactly the non-address pins that already had a `V` number:
+
+* addresses span pins **41–65** (25 numbers) for 23 signals, with the two spare slots occupied by
+  `N6850` (48, `V`) and `BINT` (60); anchors read at `A23`=41, `A12`=53, `A6`=59, `A5`=61, `A1`=65;
+* data span pins **75–91** (17 numbers) for 16 signals, with the spare slot occupied by `IACK`
+  (83, `V`); anchors read at `D15`=75, `D8`=82, `D7`=84, `D0`=91;
+* `HDINT` 15 and `FDINT` 16 sit immediately below `DINT` 17 (`V`); `BERR` 23 sits beside `VMA` 24
+  and `VPA` 25 (`V`); `HSYNC` 143 falls between `VSYNC` 142 and `VCC` 144 (both `V`); `PAD0X` 94
+  through `PAD1Y` 97 end at `PADRST` 98 (`V`).
+
+No pin was assigned twice and no new number collided with a `V` pin. A misread would have had to
+break one of those runs, so the ranges are recorded as ranges rather than as 39 individual rows.
+
+| Pin | Signal | Dir | Active | Tag |
+|---|---|---|---|---|
+| 41–65 | `A1–A23` (ascending; `N6850` = 48 and `BINT` = 60 interleaved) | out | H | D |
+| 66 | `RESET` | in | L | D |
+| 67 | `AS` | in | L | D |
+| 68 | `LDS` | in | L | D |
+| 69 | `UDS` | in | L | D |
+| 70 | `R/W` | in | H/L | D |
+| 71 | `DTACK` | in | L | D |
+| 74 | `TEST` | in | L | D |
+| 23 | `BERR` | out | L | D |
+| 24 | `VMA` | out | L | D |
+| 75–91 | `D0–D15` (ascending; `IACK` = 83 interleaved) | bidi | H | D |
+| 15 | `HDINT` | out | L | D |
+| 16 | `FDINT` | out | L | D |
+| 60 | `BINT` | out | L | D |
+| 105 | `SINT` | out | L | D |
+| 94 | `PAD0X` | in | analog | D |
+| 95 | `PAD0Y` | in | analog | D |
+| 96 | `PAD1X` | in | analog | D |
+| 97 | `PAD1Y` | in | analog | D |
+| 137 | `PEN` | in | — | D |
+| 143 | `HSYNC` | out | L | D |
+
+Still unresolved on this symbol: the `MAL0–MAL9` refresh-counter pins, `CLK` in, the internal-only
+`RAM`/`DEV`/`DMA` nets, and the ground pins (drawn but not individually numbered at this scale).
 
 ### 3.5 U401 — GST Shifter, 84-pin PLCC (C300588-001)
 
@@ -832,12 +877,14 @@ These are listed only because they occupy in-scope GSTMCU pins.
    comes from that redraw except the parts list, which is a retyped transcript of Atari's.
    A pin-level check against a photographic scan would be worth doing for the GSTMCU
    before any emulator depends on pin numbers.
-2. **U400's bottom-edge pin numbers are unresolved.** That is roughly half the GSTMCU:
-   the CPU bus (`AS`, `LDS`, `UDS`, `R/W`, `DTACK`, `BERR`, `RESET`, `VMA`), `D0–D15`,
-   `A1–A23`, the pad/pen ADC pins and the interrupt outputs are legible by *name* only.
-   Closing this needs either the original D-size plot or a higher-resolution scan.
-3. **`HSYNC` on U400 extracted with pin number 146**, which does not exist on a 144-pin
-   package. The number is wrong; the signal is real.
+2. **U400's bottom-edge pin numbers — resolved 2026-11-02.** The 600 dpi scan settles them:
+   the CPU bus (`AS` 67, `LDS` 68, `UDS` 69, `R/W` 70, `DTACK` 71, `BERR` 23, `RESET` 66,
+   `VMA` 24, `TEST` 74), `D0–D15` on pins 75–91, `A1–A23` on pins 41–65, the pad/pen ADC pins
+   94–97 plus `PEN` 137, and the interrupt outputs 15/16/60/105 are now numbered — see §3.4b.
+   Still open on this symbol: `MAL0–MAL9`, `CLK`, and the individual ground pins.
+3. **`HSYNC` on U400 — resolved 2026-11-02: pin 143.** The earlier extraction produced 146,
+   which does not exist on a 144-pin package; the 600 dpi scan shows `HSYNC` at 143, between
+   `VSYNC` (142) and `VCC` (144), which is where the symbol draws it.
 4. **YM2149 data/control pins and both 6850 ACIA pin numbers could not be paired.** The
    redraw draws those symbol rows with zero text offset, which defeats the pairing rule.
 5. **Designator disagreements between the two documents:**

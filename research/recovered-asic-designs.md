@@ -112,6 +112,15 @@ in `$HERMES_HOME/config.yaml`. A fresh session guarantees it takes effect.
   constructor kwargs — passing `det_limit_side_len` raises `KeyError: 'model_path'`), so
   schematic-sized text is lost, and full-page OCR at 300 dpi is **OOM-killed** (exit 137).
 
+**2026-11-02 — vision fabricates, so it is not a locator.** With the endpoint healthy again, three
+separate reads invented content on real Atari sheets: a title block "Star's Corporation / CXD870-001",
+another "ATARI GAMES CORPORATION / C030322", and, asked for reference designators, a tidy
+`U400/U401/U500/U600` sequence that does not exist in the drawing. What it does get right is
+transcription of a crop that is already legible. So the division of labour that works: **OCR finds**
+(reference designators, `SCHEMATIC DIAGRAM`, `SILK`, sheet structure — 200 dpi full-sheet sweep, then
+tight crops), **a human reads** the pin numbers, and vision is only ever a second opinion that must
+agree with one of those. A read with no corroboration is not evidence, however plausible it looks.
+
 
 
 
