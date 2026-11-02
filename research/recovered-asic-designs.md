@@ -79,26 +79,39 @@ it is a transcription, and only a hardware test or a careful gate trace would ra
 
 ## Note on the visual tooling (corrected 2026-11-01)
 
-**The first diagnosis was wrong, and it is corrected here.** The vision endpoint's timeouts are *not*
-about crop size, density or aspect ratio. Evidence: a 49 KB single tile failed, then the *same class* of
-tile succeeded minutes later; a 75 KB contact sheet was read instantly while a 136 KB page failed; a
-950×350 strip failed where a 1900×1400 crop had succeeded. Across ~15 calls the outcome correlates only
-with **when the call was made**, not with what was sent — it is intermittent upstream capacity, the same
-failure class as the `503 capacity limits` seen in other subagents. Retry later rather than re-tuning
-the image.
+**Root cause found: it is a 30-second client-side deadline, not the endpoint.** Vision runs as an
+*auxiliary* task, and auxiliary tasks default to `_DEFAULT_AUX_TIMEOUT = 30.0 s`
+(`/opt/hermes/agent/auxiliary_client.py:6243`); the timeout is read from `auxiliary.<task>.timeout` at
+call time (`_get_task_timeout`, line 6346). `/opt/data/config.yaml` has **no `auxiliary:` block**, so
+vision inherits 30 s, and any cloud round-trip that exceeds it raises `httpx.ReadTimeout` →
+`openai.APITimeoutError` → "Error analyzing image: Request timed out." Image size is irrelevant, which
+is why a 49 KB tile failed and a 75 KB sheet succeeded minutes later.
 
-What *does* hold:
-- The board schematic PDFs embed a fixed 300 dpi raster per sheet, so rendering above 300 dpi only
-  interpolates. The **600 dpi variants published elsewhere** (`1040 STFM.pdf`, `1040 STE 600dpi.pdf`
-  from gossuin.be) are genuinely higher resolution: 6870 × 9774 per sheet, and are the right source for
-  pin numbers.
-- Small pre-composed greyscale contact sheets still work well *when the endpoint is up*, and are the
-  cheapest way to identify sheets or title blocks.
+Two upstream issues describe the same failure class: **#2107** (closed; "vision_analyze … will timeout
+due to default 30s timeout", with that exact traceback) and **#8120** (still open, P2, `tool/vision`:
+"~50% failure rate … the same model works fine in other AI applications"). The documented lever is
+`auxiliary.vision.timeout`.
+
+**The fix (user-side, because the agent cannot write `config.yaml`):**
+
+```yaml
+auxiliary:
+  vision:
+    timeout: 120
+```
+
+in `$HERMES_HOME/config.yaml`. A fresh session guarantees it takes effect.
+
+**What also holds:**
+- The 300 dpi board-schematic PDFs embed a fixed raster, so rendering above 300 dpi only interpolates.
+  The **600 dpi** variants (`1040 STFM.pdf`, `1040 STE 600dpi.pdf`, gossuin.be; 6870 × 9774 per sheet)
+  are the right source for pin numbers.
+- Small pre-composed greyscale contact sheets are the cheapest way to identify sheets or title blocks.
 - **Local OCR is available but not sufficient for schematics**: `rapidocr-onnxruntime` is installed, yet
   its detector downsamples to a 736 px min side (configurable only through a JSON config file, not via
-  the constructor kwargs — passing `det_limit_side_len` raises `KeyError: 'model_path'`), so
-  schematic-sized text is lost, and full-page OCR at 300 dpi is **OOM-killed** (exit 137). Tiling helps
-  memory but not resolution.
+  constructor kwargs — passing `det_limit_side_len` raises `KeyError: 'model_path'`), so
+  schematic-sized text is lost, and full-page OCR at 300 dpi is **OOM-killed** (exit 137).
+
 
 
 
