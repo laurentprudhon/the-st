@@ -77,14 +77,29 @@ it is a transcription, and only a hardware test or a careful gate trace would ra
 - **A gate trace** of the `ADDRSEL` block in `ST4081S` (p20–p24, p47) is the only way to settle whether
   refresh really outranks video in the hardware, as opposed to in the transcription.
 
-## Note on the visual tooling (for future sessions)
+## Note on the visual tooling (corrected 2026-11-01)
 
-Rendering the board schematic at >300 dpi is pointless: the PDF embeds a 300 dpi raster per sheet.
-`vision_analyze` with a `region` crop timed out repeatedly on **dense, text-heavy crops** (950×1050,
-270×900, 950×350) — reproduced three times, so not purely transient — while a **pre-rendered, downscaled
-tile sheet** (905×700 per tile, 75 KB total, 2×2 grid) was read instantly and accurately. Working rule:
-compose your own small greyscale contact sheets in PIL and pass the file path; do not hand large crops
-to the tool and hope.
+**The first diagnosis was wrong, and it is corrected here.** The vision endpoint's timeouts are *not*
+about crop size, density or aspect ratio. Evidence: a 49 KB single tile failed, then the *same class* of
+tile succeeded minutes later; a 75 KB contact sheet was read instantly while a 136 KB page failed; a
+950×350 strip failed where a 1900×1400 crop had succeeded. Across ~15 calls the outcome correlates only
+with **when the call was made**, not with what was sent — it is intermittent upstream capacity, the same
+failure class as the `503 capacity limits` seen in other subagents. Retry later rather than re-tuning
+the image.
+
+What *does* hold:
+- The board schematic PDFs embed a fixed 300 dpi raster per sheet, so rendering above 300 dpi only
+  interpolates. The **600 dpi variants published elsewhere** (`1040 STFM.pdf`, `1040 STE 600dpi.pdf`
+  from gossuin.be) are genuinely higher resolution: 6870 × 9774 per sheet, and are the right source for
+  pin numbers.
+- Small pre-composed greyscale contact sheets still work well *when the endpoint is up*, and are the
+  cheapest way to identify sheets or title blocks.
+- **Local OCR is available but not sufficient for schematics**: `rapidocr-onnxruntime` is installed, yet
+  its detector downsamples to a 736 px min side (configurable only through a JSON config file, not via
+  the constructor kwargs — passing `det_limit_side_len` raises `KeyError: 'model_path'`), so
+  schematic-sized text is lost, and full-page OCR at 300 dpi is **OOM-killed** (exit 137). Tiling helps
+  memory but not resolution.
+
 
 
 ---

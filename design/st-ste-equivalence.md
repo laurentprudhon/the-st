@@ -129,10 +129,19 @@ Examples:
 
 ## 7. Open
 
+- **The ST-side pin names are not yet confirmed against an ST schematic** — the table's ST column comes
+  from secondary descriptions (ST Magazine 44, the STE service manual §5.1), not from a drawing. Status
+  of the attempt (2026-11-01): suitable **600 dpi** sources were located — `1040 STFM.pdf` and
+  `1040 STE 600dpi.pdf` (gossuin.be), 8 and 7 sheets, 6870 × 9774 rasters per sheet, no text layer — but
+  the reading itself is blocked: the vision endpoint is intermittently unavailable, and local OCR
+  (`rapidocr-onnxruntime`) downsamples to a 736 px detector limit that schematic pin text does not
+  survive (see `research/recovered-asic-designs.md`'s tooling note). **Method to resume:** with the
+  endpoint up, crop each target symbol at 600 dpi (≤ ~1200 px square) and read its pin labels; the MMU
+  and GLUE symbols sit on the dense 1040STFM sheets 1–2 (drawing `C070230`), which OCR at low resolution
+  already identifies as the main-board sheets.
 - **Which physical chip is `U200`/`U201`** — resolved as U201 = keyboard (`research/schematic-evidence.md`
   §4); naming uses `acia` for both.
-- **Exact ST-era pin names** for the original MMU/GLUE symbols are quoted here from secondary
-  descriptions (ST Magazine, service manual), not from an ST schematic — this repo has no ST (non-E)
-  drawing. Any pin name marked kept/renamed above should be confirmed against one before being treated
-  as authoritative.
+- **MMU/GLUE part numbers** quoted by secondary sources (MMU `C025912`, GLUE `C101439`, Shifter
+  `C101515`) are recorded nowhere in this repo as confirmed; a single vision pass proposed them once and
+  then contradicted itself on the same sheet, so they are not used in the tables above.
 - `FF8263` (read in Hatari's scroll path) has no confirmed function; not named here.
