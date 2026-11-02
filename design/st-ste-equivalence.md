@@ -130,15 +130,22 @@ Examples:
 ## 7. Open
 
 - **The ST-side pin names are not yet confirmed against an ST schematic** — the table's ST column comes
-  from secondary descriptions (ST Magazine 44, the STE service manual §5.1), not from a drawing. Status
-  of the attempt (2026-11-01): suitable **600 dpi** sources were located — `1040 STFM.pdf` and
-  `1040 STE 600dpi.pdf` (gossuin.be), 8 and 7 sheets, 6870 × 9774 rasters per sheet, no text layer — but
-  the reading itself is blocked: the vision endpoint is intermittently unavailable, and local OCR
-  (`rapidocr-onnxruntime`) downsamples to a 736 px detector limit that schematic pin text does not
-  survive (see `research/recovered-asic-designs.md`'s tooling note). **Method to resume:** with the
-  endpoint up, crop each target symbol at 600 dpi (≤ ~1200 px square) and read its pin labels; the MMU
-  and GLUE symbols sit on the dense 1040STFM sheets 1–2 (drawing `C070230`), which OCR at low resolution
-  already identifies as the main-board sheets.
+  from secondary descriptions (ST Magazine 44, the STE service manual §5.1), not from a drawing.
+  Progress from the last attempt (2026-11-01), which is worth recording even though it did not finish:
+  - The **600 dpi** `1040 STFM.pdf` (gossuin.be) has 8 sheets, and only **sheet 3 is a logical
+    schematic**. Sheets 1, 2, 4, 5 are silkscreen/PCB layouts and sheet 6 is an exploded mechanical
+    drawing — which is why earlier pin-name searches over sheets 1–2 found nothing. Any future attempt
+    must start on sheet 3.
+  - On sheet 3, the Shifter is drawn as **`C025914-38`, reference `U20`** (top-left area, beside the
+    YM2149 at `U10`). This is a vision read, single-source, and **contradicts** the `C101515` that an
+    earlier pass invented — so it is recorded here as *probable*, not confirmed.
+  - Pin-level reading still fails: the vision endpoint is intermittently unavailable, and local OCR
+    (`rapidocr-onnxruntime`) returns only a handful of tokens on symbol crops because its detector
+    resizes to a 736 px min side.
+  - **Method to resume:** on `1040 STFM.pdf` sheet 3 only, crop each symbol at 600 dpi (the Shifter sits
+    near points (265,165)–(400,265) of an 824×1173 pt page) and read the pin labels, ideally in a window
+    when the vision endpoint is stable, or with an OCR detector whose resize limit can be configured
+    above 736 px.
 - **Which physical chip is `U200`/`U201`** — resolved as U201 = keyboard (`research/schematic-evidence.md`
   §4); naming uses `acia` for both.
 - **MMU/GLUE part numbers** quoted by secondary sources (MMU `C025912`, GLUE `C101439`, Shifter
