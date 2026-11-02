@@ -179,3 +179,23 @@ The archive also contains **CAD netlists** — `4081/PIN/4081.PIN` (138 KB) and
 `4081.ORG/PIN/TA4081.PIN` (232 KB) — in P-CAD `PINLIST` format: `(SYM,n … DATA,2,<pad> … PIN,<name>,<net>,…`
 records. That is machine-readable connectivity for the GSTMCU, and a far better basis for a gate-level
 trace than the PDF text tokens. No equivalent exists for the Blitter.
+
+
+### OCR recipe that works on these schematics (2026-11-01)
+
+Local OCR is viable after all, but only with two corrections that took several attempts to find:
+
+1. **The sheets are drawn rotated 90°.** OCR without rotation returns almost nothing; with
+   `Image.rotate(90, expand=True)` it reads real labels (`6850`, `68901`, `74LS02`, `U56`, `U70`, `SND`,
+   `DE`, `TATA`/`TIDATA`).
+2. **The detector's resize limit must be raised from the 736 px default.** It cannot be set through
+   `RapidOCR(...)` kwargs (that raises `KeyError: 'model_path'`); copy the packaged
+   `rapidocr_onnxruntime/config.yaml` to a working file, set `Det.limit_side_len: 2000` and
+   `Det.limit_type: max`, then `RapidOCR(config_path='rcfg.yaml')`. With that, a sweep of a 600 dpi sheet
+   in 2000 px tiles returns 10–20 tokens per tile instead of zero, and runs at ~26 s per sheet.
+
+What this still does **not** achieve: the words `GLUE`, `MMU` and `SHIFTER` are not detected on any of the
+eight sheets (`1040 STFM.pdf`), even with the corrected recipe — so the custom-chip symbols cannot be
+located by OCR alone. Sheet 3, which the earlier vision pass called the logic sheet, OCRs as the
+**peripheral** section (6850 ACIAs, 68901 MFP, 74LS02 glue). Locating MMU/GLUE still needs a vision pass,
+which needs `auxiliary.vision.timeout` raised above the 30 s default.
