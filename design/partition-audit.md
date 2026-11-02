@@ -125,9 +125,9 @@ property of the hardware, not of the partition. Both chips hold a copy; a write 
 
 Yes, on three tests:
 
-1. **Every chip has one timeline.** CPU executes; Memory schedules DRAM; Video generates beam and shifts;
-   Sound counts PSG tones; Disk turns a platter; Timers count down; Controllers sample devices; Blitter
-   runs a blit. No chip owns two clocks.
+1. **Every chip has one timeline.** CPU executes; Memory schedules DRAM and keeps the beam; Video
+   shifts the words into pixels; Sound counts PSG tones; Disk turns a platter; Timers count down;
+   Controllers sample devices; Blitter runs a blit. No chip owns two clocks.
 2. **The two-DMA rule is applied without exception.** Continuous streams (video fetch, sound DMA) are in
    Memory with their counters; bursts (disk DMA, Blitter) are in the chips that produce them and negotiate
    the CPU bus.
