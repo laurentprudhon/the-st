@@ -85,3 +85,69 @@ Rendering the board schematic at >300 dpi is pointless: the PDF embeds a 300 dpi
 tile sheet** (905×700 per tile, 75 KB total, 2×2 grid) was read instantly and accurately. Working rule:
 compose your own small greyscale contact sheets in PIL and pass the file path; do not hand large crops
 to the tool and hope.
+
+
+---
+
+## Follow-up 1 — the `ADDRSEL` priority, settled from the design itself
+
+**Done, and it is decisive.** Page 22 of `ST4081S.PDF` — sheet *"MEMORY ADDR MUX 1 OF 3"* — carries
+Atari's own decode table printed on the drawing:
+
+```
+                        IXDMAB  SADSEL  REF  ADDRSELB        selects
+  (X X 1 1)  REF          X       X      1      1            REFRESH
+  (X 1 0 1)  SOUND        X       1      0      1            SOUND DMA
+  (X 0 0 1)  VIDEO        X       0      0      1            VIDEO
+  (1 X X 0)  CPU          1       X      X      0            CPU
+  (0 X X 0)  DMA          0       X      X      0            DMA
+```
+
+Read off it directly:
+
+- **`ADDRSELB = 1` is the internal slot.** Within it, **`REF = 1` selects refresh regardless of
+  `SADSEL`** — refresh outranks both other clients. Then `SADSEL = 1` selects sound DMA, else video.
+  So the internal priority is **refresh → sound → video**, from Atari's sheet, not from anyone's
+  transcription.
+- **`ADDRSELB = 0` is the external slot**, and `IXDMAB = 1` selects the CPU while `0` selects the DMA
+  controller. So within the external half, **CPU outranks the DMA chip** — which is the one ordering
+  detail the RTL expressed as `4'b00??`/`4'b01??` and that nothing else documented.
+- **Nothing ranks internal against external**: that is `ADDRSELB` alone, i.e. the phase. Cwik's "no
+  priority of any kind" is exactly right *between the classes*, and the priority lives *within* them.
+
+Corroborating sheet: page 47, *"ST TIMING / TIMING GENERATOR"*, lists `TIME0`–`TIME7`, `CYCSEL`,
+`ADDRSEL`, `SLOAD`, `DCYC`, `LATCH`, `ROW`, `COL/ CAS`, `CPU`, `VIDEO/REF`, `RAS` against `MHZ8`/`MHZ16`
+dividers — the 8-phase generator that produces `ADDRSELB`, and a second confirmation that the slot
+period is a phase decode rather than a scheduler.
+
+**Consequence:** the RTL's priority order is no longer "transcription agreeing with its source". It is
+confirmed by the design. The remaining weak link is only the *refresh period*, whose row counter is
+stubbed in the RTL (`ADDR = 0`) and which the design states structurally but not numerically here.
+
+## Follow-up 2 — the Blitter's non-HOG timeout: **not** confirmable from the design
+
+Attempted, and the honest answer is that this archive cannot do it:
+
+- **ST-4082 "BLT CELL"** (21 sheets) is image-only CAD output — no text layer, no netlist. The only
+  machine-readable artefact in the whole blitter directory is `4082.LST`, a **gate-type and count list**
+  (`BIT 364 × 12`, `DPR 7 × 24`, …) with no connectivity at all.
+- **`BLTCELL.pdf`** is archive-damaged — its own first page says *"Archive damage, most sheets are
+  missing"* — five sheets, fragmentary.
+- Visual reads of the surviving sheets returned only the title block ("BLT CELL") repeated; the gate
+  content is too dense at this resolution for reliable net-name reading, and no OCR tool is available in
+  this container.
+
+**So the 64-cycle non-HOG timeout rests on one source, but a better one than expected:**
+`rtl/stBlitter.sv` in the MiSTer core is **"FX ST Blitter, Copyright (c) 2019,2021 by Jorge Cwik"** — an
+independent reconstruction, *not* derived from Zietz's recovered design. Its comment already flags the
+behaviour as a buglet, so the claim has an author who reverse-engineered the chip and documented the
+quirk. That is decent evidence; it is still not a hardware measurement, and the way to settle it is a
+test: run a non-HOG blit whose transfers exceed 64 bus cycles and observe whether `BUSY` clears and the
+bus is released early.
+
+## A route for a real gate trace, if ever needed
+
+The archive also contains **CAD netlists** — `4081/PIN/4081.PIN` (138 KB) and
+`4081.ORG/PIN/TA4081.PIN` (232 KB) — in P-CAD `PINLIST` format: `(SYM,n … DATA,2,<pad> … PIN,<name>,<net>,…`
+records. That is machine-readable connectivity for the GSTMCU, and a far better basis for a gate-level
+trace than the PDF text tokens. No equivalent exists for the Blitter.
