@@ -693,7 +693,7 @@ without a pin (`U400.HSYNC`).
 | DTACK | U100.27 · U400.DTACK · U101.10 | |
 | BERR | U100.38 · U400.BERR · U101.24 | |
 | FC0/FC1/FC2 | U100.45, .44, .43 · U400.FC0–2 · U101.30, .29, .28 | function-code lines, decode to `CMPCS`/`FCS` |
-| IPL0/IPL1/IPL2 | U400.33, .34, .35 · U100 (unverified pin) | interrupt priority, driven by MFP + GSTMCU |
+| IPL0/IPL1/IPL2 | U400.33, .34, .35 · U100.28, .29, .30 | interrupt priority, **driven by the GSTMCU alone**. The MFP has no IPL pins: it raises `IRQ` (U203.32) into the GSTMCU, which combines it with VBL (level 4) and HBL (level 2) and drives the highest asserted level (MFP = 6). Corrected 2026-11-05 from the 68901 pin table (§3.8, pin 32 `IRQ`, 33 `IEO`, 34 `IEI`, 45 `IACK`) — the earlier note "driven by MFP + GSTMCU" was wrong |
 | IACK | U400.83 · U203.45 · U200/U201 | interrupt acknowledge chain |
 | VPA / VMA | U400.25 · U100 · U101.23, .21 | MFP auto-vector / 6800 peripheral cycle |
 | BR / BG / BGACK | U400.29, .28, .27, .26 · U100 (unverified pins) · U101.13, .11 | bus arbitration for DMA and blitter |

@@ -36,7 +36,7 @@ Examples:
 | `video.gstshifter.shifter.R0` | red bit 0, GST Shifter, the ST's Shifter line extended |
 | `disk.gstmcu.mmu.FF8609` | disk DMA address register — owned by **Disk**, physically in the GSTMCU (§5.1) |
 | `sound.gstshifter.shifter.SREQ` | sound DMA request — pin on the **Shifter**, service owned by Memory (§5.2) |
-| `timers.mfp.none.IPL2` | interrupt priority 2 — the MFP is unchanged from the ST |
+| `timers.mfp.none.IRQ` | the MFP's single interrupt request (pin 32) into the GSTMCU — the MFP has no `IPL` pins, so the level it gets is the level the GSTMCU drives (6) |
 
 ## 2. Chip equivalence
 

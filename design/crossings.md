@@ -52,7 +52,8 @@ browser research warned about, reproduced one level down. `GLOSSARY.md`'s *Signa
 | `DTACK` | Memory → CPU | 2 completion | same as above | computed latency, not an event |
 | `BERR` | Memory → CPU | 2 completion | ~0 | bus error; should never fire on valid TOS software |
 | `BR`, `BG`, `BGACK` | requester ↔ CPU (GSTMCU relays `RDY`→`BR` for disk) | 1 event | 2 per Blit + 1 per disk-DMA burst | a temporary burst taking the bus: acquire and release. The Blitter asks the CPU directly; Disk DMA asks through the GSTMCU. Sound DMA is *not* here — it is memory service, never a bus master |
-| `IPL0–IPL2` | Interrupts → CPU | 1 event | 1 + 313 + 160 + 61 per frame (idle→busy) | VBL, HBL/Timer B, MFP Timer A at 8 kHz, FDC sector-complete |
+| `IPL0–IPL2` | Memory → CPU (one driver, three lanes) | 1 event | 1 + 313 + one per MFP assertion | the GSTMCU drives the level it has arbitrated: VBL 4, HBL 2 (its own counters), MFP request 6. The CPU wakes when the resolved level changes |
+| `IRQ` (U203.32) | Timers → Memory | 1 event | one per MFP interrupt assertion | the MFP asks; the GSTMCU decides what appears on `IPL`. Corrected 2026-11-05 — the MFP has no `IPL` pins |
 | `VMA` / `VPA` | Memory/CPU | 2 completion | per MFP access | 6800 peripheral cycle for the MFP |
 | `RESET` | reset network → CPU | 1 event | 1 per boot | — |
 
