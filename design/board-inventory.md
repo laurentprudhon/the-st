@@ -713,7 +713,7 @@ without a pin (`U400.HSYNC`).
 | WE | U400.121 → SIMM sockets | write enable, common to both banks |
 | MWE / MWD / MWK | U401.29, .30, .31 ← U400 | shifter memory write path for Super Hi-Res |
 | MD0–MD15 | U401.56–71 | video data from RAM to shifter (16-bit fetch) |
-| DE | U400.141 → U401.54 | display enable, gates the video fetch slot |
+| DE | U400.141 → U401.54 | display enable, gates the video fetch slot. **Also reaches the MFP's `TBI` (U203.20)** per documentation, not per this redraw — see §6.15 |
 | BLANK | U400.140 → U403 / video output stage | blanking |
 | HSYNC / VSYNC | U400.142 (VSYNC, V) · U400.HSYNC (U) → U403 and J600 | off-board at J600 |
 | LATCH | U400.131 → U511 (74LS373) / palette latch | |
@@ -953,3 +953,18 @@ These are listed only because they occupy in-scope GSTMCU pins.
     into the Video Shifter", so `DCYC` is the video strobe and the redraw's single-ended net is
     incomplete: it must fan out to the Shifter as well as to `U300`. `SREQ`/`*SLOAD` remain the
     sound handshake per the ST Magazine article. See `research/schematic-evidence.md` §1.
+15. **`DE` reaches the MFP's Timer B input, but this redraw does not draw the net.** *Atari ST
+    Internals* (Abacus, §1.4) states it plainly: "Timer B is used for counting screen lines in
+    conjunction with `DE` (Display Enable)". Hatari's MFP pin diagram records the same wiring for every
+    machine it models — `TBI : connected to video DE` (ST, STE, TT). The connection list in §4.2 has
+    `DE` (`U400.141`) going only to `U401.54`, so either the CAD redraw dropped the MFP branch or it is
+    routed under a label the extraction did not pair. **Status: documented at the signal level,
+    unverified at the pin level** (the MFP's `TBI` is pin 20, §3.8). Consequence for the model: one
+    `Memory → Timers` crossing per display line, which is how the machine counts scanlines.
+16. **Two 74LS164 stories do not fit one part.** The 1991 parts list has a single 74LS164 at `U900`
+    ("keyboard/MIDI serialisation"), while the STE hardware article describes a 74LS164 **added on
+    production boards to delay `*SINT` before it reaches the MFP's `TAI`** (a four-microsecond delay so
+    the timer sees an edge the MFP can count). Either one part serves both paths, or the added delay
+    part is fitted separately and is not in this parts list. Affects only the timing of the
+    sound-frame-end → Timer A path, so it is a Level-2 detail — but it decides whether `TAI`'s edge is
+    the `*SINT` edge or a delayed copy.
