@@ -35,6 +35,33 @@ only kind of moment the machine model treats as significant. Internal state evol
 value changes are not crossings.
 _Avoid_: event, interrupt, edge, bus transaction
 
+### Wire
+
+The modelled connection between virtual chips: a port group — one control signal, or every lane of a
+bus — carrying a resolution of the values its drivers impose. A wire is not a timeline and not a
+schedule; it is the place values meet.
+_Avoid_: net, connection, channel, signal line
+
+### Wire event
+
+One record in a wire's append-only log: an instant, the driver that wrote, the lanes it changed and
+the value it imposed, `Z` for a release. A wire event is not a signal crossing — most wire events
+provoke nothing in any other chip and wake nothing.
+_Avoid_: signal crossing, pin toggle, transition, edge
+
+### Driver
+
+The virtual chip that imposes a value on a wire at an instant. Several drivers may exist on one wire;
+at most one drives a tristate bus at a time, and any number may pull an open-collector line.
+_Avoid_: writer, source, owner
+
+### Resolver
+
+The rule that turns the drivers' current values into a wire's value: single-driver, wired-AND/OR for
+open-collector nets, or tristate with a reported conflict. It is a property of the wire type, decided
+from the schematic, never chosen per access.
+_Avoid_: logic level, arbitration, priority
+
 ### Oscillator
 
 The single physical frequency source from which every clock in the modelled machine is derived.
