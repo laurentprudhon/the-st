@@ -38,7 +38,9 @@ of triggers.
 | `ApplyWrite(wire, t, driver, mask, value)` | a write dated in the future | append this record at `t` and fire subscriptions |
 
 A write dated "now" is applied inline (log append + subscription drain) rather than queued; only
-future-dated writes occupy the queue.
+future-dated writes occupy the queue. The one exception is an **awaited** write, `await WriteAndWait`:
+it appends inline and then pushes the writer's own `Resume` at the same instant, so the writer's next
+instruction runs behind its record's receivers (ADR 0008 §2).
 
 ### Two read shapes
 
@@ -61,18 +63,20 @@ while Q not empty:
       ApplyWrite: log.append(wire, t, driver, mask, value)
                   for s in subs[wire] where s.from <= t:      # each fires once
                       subs[wire].remove(s)
-                      Q.push((t, s.chip.priority, seq++), Resume(s.cont, s.chip))
+                      Q.push((t, seq++), Resume(s.cont, s.chip))
       Resume:     chip.clock = t
                   run chip until it suspends (one `Read`) or finishes an iteration
 ```
 
 ### Ordering, stated once
 
-The queue is totally ordered by `(instant, chip priority, emitter sequence)`; `seq` is a monotonic
-counter assigned at insertion. A chip that writes "now" while running at instant *t* lands behind the
-entry that resumed it and ahead of a lower-priority chip already queued at *t* — which is the same-tick
-rule, no barrier and no participant count. Subscriptions fired by one write are pushed in reader
-priority order, so a double firing is stable too.
+The queue is totally ordered by `(instant, emitter sequence)`; `seq` is a monotonic counter assigned at
+insertion (the chip-priority field is gone — ADR 0007: the machine has no priority table). A chip that
+writes "now" while running at instant *t* lands after the records it appended before suspending, because
+those were applied inline — which is the same-tick rule, no barrier and no participant count.
+Subscriptions fired by one write are pushed in registration order, so a double firing is stable too.
+The only same-instant ordering chip code can express deliberately is `await WriteAndWait`, which appends
+a record and pushes the writer's own `Resume` behind its receivers (ADR 0008 §2).
 
 ### What a crossing is, now
 
@@ -96,12 +100,14 @@ priority order, so a double firing is stable too.
 2. Every queue entry is a `Resume` or an `ApplyWrite`.
 3. A suspended coroutine has exactly one pending read, hence at most one subscription.
 4. A record fires every subscription with `from <= instant`, each exactly once.
-5. Order is total: `(instant, chip priority, seq)`; a chip's newly created same-instant entries follow
-   their creator.
+5. Order is total: `(instant, seq)`; a chip's newly created same-instant entries follow their creator.
 6. A chip's clock advances only to an instant it was resumed at, or by its own `advance`.
 7. No chip waits on another chip's *progress*: a subscription is answered by a record, never by a
    handshake, a watermark or a count of participants.
 8. A read never returns a value that a later record would change (ADR 0004, invariant 5).
+9. Every coroutine iteration suspends at least once — on a read, or on an awaited write when the
+   iteration has no read — so a chip's clock runs ahead of machine time only to its next read or write,
+   and the scheduler always regains control (ADR 0008 §3).
 
 ## Consequences
 
@@ -144,3 +150,19 @@ priority order, so a double firing is stable too.
 4. If the measured pop count per frame is much above the catalogue's class-1 rate plus ~4 per bus
    cycle, some wire is carrying a subscription the catalogue does not know about — fix the catalogue,
    not the loop.
+
+## Revision — 2026-11-06
+
+Ticket #7 completed this loop's contract without changing its mechanism:
+
+1. **The ordering key lost its middle field**: `(instant, seq)`; the machine has no priority table
+   (ADR 0007). The pseudocode, the "ordering, stated once" paragraph and invariant 5 are amended in
+   place.
+2. **A second write shape joins the first**: `Write` (append, continue) and `await WriteAndWait`
+   (append, then resume behind the record's receivers). Value resolution and ordering are identical in
+   both; only the writer's resume point differs, which makes it a local coroutine detail rather than a
+   model change (ADR 0008 §2).
+3. **A progress invariant is added** (invariant 9): every iteration suspends at least once, which is
+   what bounds a chip's run-ahead horizon and keeps the scheduler in control.
+4. **The store, the batching rule, the obligation list and the digest** are specified in ADR 0008; the
+   implementable shape is `design/scheduler.md`.

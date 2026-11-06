@@ -172,8 +172,12 @@ traffic, which is the property the design actually needs.
    confirm it.
 5. **The sound refill's exact slot** — during display every internal slot is spoken for by video, so the
    refill must land in blanking; which slot is #20's timetable.
-6. **Same-tick ordering** between the three `IPL` sources and between two bus masters is #7's priority
-   table, not a property of this catalogue.
+6. **Same-tick ordering — answered by #7, and there is no table** (ADR 0007). The three `IPL` sources
+   never reach the queue as three events: Memory resolves them into one three-lane record by taking the
+   highest asserting level (6 > 4 > 2). Two bus masters on `BR` produce one identical wired-OR record,
+   and the grant follows request order (earliest assertion, `seq` breaking a same-instant tie), with a
+   simultaneous `BGACK` double drive reported as a conflict. A video group and a CPU cycle never share
+   an instant: they occupy an internal and an external slot, 8 ticks apart.
 
 ## 12. Revision history
 

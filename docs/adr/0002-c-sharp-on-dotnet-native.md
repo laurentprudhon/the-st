@@ -69,10 +69,10 @@ is a native multiplatform application; the browser is not a delivery target.
   trip. A read at `t > now` suspends the chip and registers a wake-up at `t`. This is what makes the
   architecture affordable, and it is the one line of the design every later ticket must preserve.
 - **Continuations are dispatched by a scheduler-owned `SynchronizationContext`, never the default
-  `ThreadPool`.** The context orders continuations by `(machine time, hardware priority, emitter
-  sequence)` — the three keys settled by the prior-art survey — so two continuations stamped with
-  the same instant always run in the hardware's order, not the runtime's. Determinism is a
-  consequence of the queue's ordering, not of luck in thread scheduling.
+  `ThreadPool`.** The context orders continuations by `(machine time, emitter sequence)` — two keys, the
+  third having been removed on 2026-11-06 (ADR 0007: the machine has no hardware priority table) — so two
+  continuations stamped with the same instant always run in the model's order, not the runtime's.
+  Determinism is a consequence of the queue's ordering, not of luck in thread scheduling.
 - **One scheduler thread; T=1 ships first.** No thread per chip; worker threads are added only once
   the determinism tests are green, as a fixed pool executing compute-in-parallel / commit-in-order.
 - **Delivery: native multiplatform.** Windows x64, Linux x64 and macOS arm64, published as
@@ -185,3 +185,10 @@ Two different failures, kept separate on purpose:
   for this decision.
 - Ticket #2 cited a ticket *"Zero-cost suspensions"* that was never filed. The concept is the
   synchronous fast path, and it was folded into #17's resolution; no separate ticket is created.
+
+## Revision — 2026-11-06
+
+Ticket #7 removed the third ordering key. Continuations are ordered by `(machine time, emitter
+sequence)`; there is no hardware priority to order by, because the machine has none (ADR 0007). The
+sentence above is amended in place; nothing else in this ADR changed — the fast path, the
+`SynchronizationContext`, one scheduler thread and the delivery targets stand as written.

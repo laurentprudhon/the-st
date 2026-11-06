@@ -58,10 +58,11 @@ every timestamp and every ordering unchanged, so it can be added without touchin
   It may not change a timestamp, an ordering or a release instant, and no other chip may know it
   exists. Acceptance: the trace with the leaf on and off is identical except for the decimated
   display records.
-- **Same-instant arbitration is resolved by the priority key**, never by one chip waiting for the
-  other (ADR 0003, invariant 6). This is the one place in the machine where a genuine circular wait
+- **Same-instant coupling is resolved inside the firing of an instant**, never by one chip waiting for
+  the other (ADR 0003, invariant 6). This is the one place in the machine where a genuine circular wait
   could be built, and the design forbids it by construction: a grant is decided inside the firing of
-  an instant, not by a suspension.
+  an instant, not by a suspension. There is no priority key to decide it with (ADR 0007): the resolved
+  interrupt level is a `max()`, the slot choice is a phase, and a contested bus is a reported conflict.
 - **Memory's internal schedule is the slot alternation, not a priority table.** Two internal slots and
   two external slots alternate, with no precedence of any kind; the internal ones carry display fetch,
   refresh and audio DMA, the external ones the CPU and any bus master. Modelling it as priorities
@@ -71,7 +72,8 @@ every timestamp and every ordering unchanged, so it can be added without touchin
 
 1. No chip has a private calling convention into another; a bus cycle is wire records and samples.
 2. Memory owns its own clock and its own slot schedule; nobody reads its state directly.
-3. A completion's delay is a computed instant the answering chip drives at, not a queue entry.
+3. A completion's delay is a computed instant the answering chip drives at. Its record costs a queue
+   entry (ADR 0006) — the entry starts no new work, which is what keeps it inlinable.
 4. Video and sound fetch stay inside Memory; only their control signals cross.
 5. A fast path may change the number of instructions, never an instant, an order or a visible value.
 
@@ -111,3 +113,24 @@ every timestamp and every ordering unchanged, so it can be added without touchin
 - If enabling the leaf moves a single timestamp or ordering, the leaf is wrong.
 - If a chip ever wants a private handle on RAM (invariant 1 broken "just here"), the model has started
   to fork and this ADR is the place to reopen, not a code review to lose.
+
+## Revision — 2026-11-06
+
+Two sentences above were corrected by later rulings, and the leaf gained the boundary it was missing.
+
+1. **"Same-instant arbitration is resolved by the priority key"** is deleted as written: the machine has
+   no priority table (ADR 0007). What resolves a same-instant coupling is a wire resolver (`IPL` as a
+   maximum over asserting levels), the memory slot's phase, or a reported tristate conflict — never a
+   rank the engine imposes.
+2. **Invariant 3** ("not a queue entry") is amended: ADR 0006 established that a completion's record
+   costs a queue entry like any other, and that it starts no new work. That distinction, not the entry
+   count, is what keeps the leaf a substitution.
+3. **The leaf's scheduler boundary** is now stated as seven conditions (ADR 0008 §7): one closed
+   exchange; both clocks land at the answering instant, Memory's included; every record and the `Z`
+   release survive; class-2 exchanges only, where Memory computes the instant alone; no other chip's
+   subscription touched; digest stream identical but for declared display decimation; T=1 only and off
+   by default.
+
+The owner's position on ever turning it on, recorded because it binds later sessions: *"i hope we will
+not need it, it should only be a very last resort, because it would really cripple the cpu and memory
+coroutines logic and readability."*

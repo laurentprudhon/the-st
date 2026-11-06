@@ -43,9 +43,10 @@ makes "wait until every writer has caught up with this instant" a primitive the 
 - **Every instant a chip names is computed by the chip** — a bus cycle is `now + 16` ticks, a timer
   expiry is `now + count × period`. A read whose instant is already reached returns on the stack
   (ADR 0002's fast path, which is the invariant that keeps this affordable).
-- **One scheduler thread, one ordered queue, key `(machine time, chip priority, emitter sequence)`.**
-  It fires the earliest pending instant; it never advances an instant with nothing to do.
-- **Same-instant coupling is resolved inside the firing of that instant, by the priority key** — never
+- **One scheduler thread, one ordered queue, key `(machine time, emitter sequence)`.**
+  It fires the earliest pending instant; it never advances an instant with nothing to do. There is no
+  chip-priority field: the machine has no priority table (ADR 0007).
+- **Same-instant coupling is resolved inside the firing of that instant, by the ordering key** — never
   by one chip waiting for another. This is the only place the model is allowed to say "these two
   happened at the same moment", and it says it once: `GLOSSARY.md`'s *Same-tick ordering*.
 - **A resumed chip sets its clock to the instant it was resumed at.** Nothing may read an instant
@@ -65,8 +66,8 @@ makes "wait until every writer has caught up with this instant" a primitive the 
 4. Chip code knows only `Read` and `Write`; the scheduler is invisible to it.
 5. Every `Read` and every `Write` names the earliest instant it will accept — `ReadAt` exactly, as the
    `from` of a subscription — never earlier than the issuing chip's clock (ADR 0006).
-6. The scheduler fires the earliest pending instant. Ties break on `(chip priority, emitter
-   sequence)`, both assigned by the model.
+6. The scheduler fires the earliest pending instant. Ties break on the emitter sequence, assigned by
+   the model (the chip-priority key was removed by ADR 0007).
 7. A chip resumed at instant *t* continues with its clock at *t*. Machine time is non-decreasing.
 8. Host time is confined to the host adapter; no chip and no wire may consult it.
 
@@ -94,9 +95,9 @@ unit test, not a protocol.
 
 ## Consequences
 
-- **#7 (scheduler)** is a min-heap keyed by the triple, plus the priority table. There is no barrier,
-  no participant count, no futex and no `SynchronizationContext` tuning beyond dispatching
-  continuations in queue order.
+- **#7 (scheduler)** is a min-heap keyed by `(instant, seq)` — the priority table it was expected to
+  carry turned out not to exist (ADR 0007). There is no barrier, no participant count, no futex and no
+  `SynchronizationContext` tuning beyond dispatching continuations in queue order.
 - **#6 (crossing catalogue)** becomes the table of subscriptions the queue is filled from. The class
   distinction survives intact — class-1 signals are crossings, class-2 completions are answers inside
   an exchange already open, class-3 clocks are phase — but the mechanical claim is corrected by ADR
@@ -158,3 +159,20 @@ chip with the oldest timestamp, is a wake still a concept?":
    start new work, which is what keeps it inlinable.
 
 Nothing else here changed: the queue, the key, the clock ownership and the no-deadlock argument stand.
+
+## Revision — 2026-11-06
+
+Ticket #7 filled in the ordering key this ADR left open, and found that the third field has no content:
+
+1. **The key is `(machine time, emitter sequence)`.** The chip-priority field is gone (ADR 0007). The
+   machine has no priority table: every precedence it really has is a resolver on a wire (an interrupt
+   level taken as a maximum, a wired-OR line, a conflict report), the slot phase Memory decodes for
+   itself, or the 68000's own mask comparison. A static rank would have had to be invented.
+2. **Invariant 6** is amended accordingly; the Decision bullet and the Consequences line follow.
+3. **Invariant 5's "earliest instant"** now has a second shape in the chip-facing API — an awaited write
+   whose resume point is the record's instant (ADR 0008 §2) — and a bound: a chip's clock runs ahead of
+   machine time only to its next read or write (the run-ahead horizon, ADR 0008 §3).
+
+Nothing else here changed: the queue, the clock ownership and the no-deadlock argument stand as written.
+The obligation paragraph ("any time-driven obligation must be registered as a wake instant") now reads
+as ADR 0008 §5: **an obligation is a pending read**, with a debug assertion that catches a forgotten one.

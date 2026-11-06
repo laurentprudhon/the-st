@@ -64,6 +64,22 @@ open-collector nets, or tristate with a reported conflict. It is a property of t
 from the schematic, never chosen per access.
 _Avoid_: logic level, arbitration, priority
 
+### WriteAndWait
+
+The awaited write: the coroutine appends its wire record and then suspends, so its next instruction
+runs at that record's instant, behind whatever the record set running. Its counterpart, `Write`,
+appends and continues at the chip's own clock. The pair changes nothing about a record's value or its
+ordering; the difference is only when the writer's next line runs, and it is how a chip expresses a
+hardware phase locally instead of through a global rule.
+_Avoid_: async write, deferred write, commit
+
+### Run-ahead horizon
+
+How far a chip's clock may sit ahead of machine time: to its next read, or — in an iteration with no
+read — to an awaited write. It is bounded by the chip's own logic, never by a global quantum, and it
+is what keeps lazy advance from becoming a tick table.
+_Avoid_: lookahead, quantum, budget, slack
+
 ### Subscription
 
 A chip's pending read on a wire for an instant it does not decide: "resume me when this wire next
@@ -110,10 +126,13 @@ _Avoid_: real time, wall time
 
 ### Same-tick ordering
 
-The rule that decides which of two crossings placed at the same instant of machine time happens
-first. It is derived from hardware priority, never from the order in which the emulator happens to
-run its parts.
-_Avoid_: tie-break, race, ordering hack
+The rule that decides which of two wire events or continuations placed at the same instant of machine
+time happens first: **arrival order at that instant**, i.e. the order in which the engine's ordered
+queue holds them (ADR 0007). The machine has no priority table — a hardware precedence is expressed by
+the wire's resolver (an interrupt level as a maximum, an open-collector line as an OR, a contested bus
+as a reported conflict), by the memory slot's phase, or by a chip asking to be resumed behind the
+receivers of its own write.
+_Avoid_: tie-break, race, ordering hack, priority
 
 ### Bus ownership
 
@@ -127,6 +146,36 @@ The scheduled use of RAM by a client — video fetch, sound fetch, CPU access, B
 granted by the memory controller inside the machine's timing. Distinct from bus ownership: a client
 can be served without ever owning the bus.
 _Avoid_: DMA, bus access, memory access
+
+### Memory leaf
+
+The deferred fast path inside the Memory chip that serves a CPU bus cycle with a direct call instead of
+the queue round trips, appending the same records at the same instants. A last resort, off by default:
+it may remove pops and stack frames, never a clock movement, a record, another chip's subscription, or
+an instant.
+_Avoid_: fast path, shortcut, special case, bypass
+
+### Internal register log
+
+A virtual chip's own state — registers, counters, flags — kept as an append-only log of successive
+values stamped with the chip's own clock, exactly like a wire's log but with one driver and no resolver.
+It never enters the queue, has no subscriber and cannot be backdated, so it can be neither a crossing
+nor an ordering question. A counting register logs anchors (reload, expiry, a software write) and its
+value between them is arithmetic.
+_Avoid_: state dump, snapshot, trace, variable
+
+### Batch
+
+One instant of machine time, fully drained: every queue entry stamped with it, including those born
+while draining it. The unit of the determinism digest.
+_Avoid_: step, slice, quantum
+
+### Digest
+
+The incrementally folded fingerprint of one batch's records — wire events and internal register writes
+alike, in append order. Two runs of one image must produce identical digest streams; the first batch
+where they part names the instant and the record where the model read something host-side.
+_Avoid_: hash, checksum, snapshot
 
 ### TOS image
 
