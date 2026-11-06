@@ -30,8 +30,8 @@ every timestamp and every ordering unchanged, so it can be added without touchin
     (`design/crossings.md`, correction of 2026-11-02).
   - **Completions are answers, not crossings** (`design/crossings.md` §"The classification rule"):
     `DTACK`, `BERR`, `RDY`, `DCYC` answer a request the same exchange already made. Under this ADR
-    they are ordinary wire records — but they are *not* reasons for another chip to wake, which is
-    what keeps the crossing rate where the catalogue puts it.
+    they are ordinary wire records — and although the answering record does resume the waiting chip, it
+    starts nothing new there, which is what keeps the crossing rate where the catalogue puts it.
 
 ## Decision
 
@@ -48,10 +48,11 @@ every timestamp and every ordering unchanged, so it can be added without touchin
   correctness.
 - **The bill, stated.** ≤ 40 000 CPU bus cycles/frame (`design/crossings.md` §1), each ~4 wire
   operations (one address/control record, one data record or read, one `DTACK` record, one read) →
-  ~8 × 10⁶ wire operations per second of emulated time. At a conservative 50 ns each, that is ~8 ms
-  of a 20 ms frame: **~40 % of the budget before the CPU executes an instruction.** The Blitter,
-  when it is added, roughly doubles it. This figure is the acceptance test of #10, and the reason the
-  fast path exists as a planned option rather than as an improvisation.
+  ~8 × 10⁶ wire operations per second of emulated time. Under ADR 0006 those four operations are four
+  queue entries, which is why this is a scheduler cost and not only a logging cost. At a conservative
+  50 ns each, that is ~8 ms of a 20 ms frame: **~40 % of the budget before the CPU executes an
+  instruction.** The Blitter, when it is added, roughly doubles it. This figure is the acceptance test
+  of #10, and the reason the fast path exists as a planned option rather than as an improvisation.
 - **The deferred fast path is a leaf inside Memory, not an exception in the model.** It may inline
   the wires of the memory bus, serve a bus cycle from a direct call, and decimate its own display log.
   It may not change a timestamp, an ordering or a release instant, and no other chip may know it

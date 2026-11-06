@@ -30,7 +30,8 @@ draws.
   draw graphs of a wire's value history. That makes the log a deliverable, not a debug facility.
 - `GLOSSARY.md` already separates *signal crossing* from a mere pin-value change, and "bus
   transaction" is on its avoid-list. A wire record is therefore **not** a crossing: a hundred records
-  may pass with no chip waking up, and only the class-1 ones in `design/crossings.md` cause a wake.
+  may pass with no chip being resumed, and only the class-1 ones in `design/crossings.md` are crossings
+  (ADR 0006 separates the two: class 2 resumes a chip that opened the exchange, and starts nothing).
 
 ## Decision
 
@@ -53,9 +54,10 @@ draws.
 - **No coalescing of repeated identical writes in v1.** A repeated write is observable in a graph and
   costs nothing to resolve. If it ever matters, it is an optimisation inside one wire type.
 - **Retention is semantic: a record may be discarded only when no reader can still ask for an instant
-  at or before it.** In practice that is one publication number from the scheduler (the oldest instant
-  any suspended read and any UI subscription still references). A count cap may be used as a
-  secondary guard, and when it fires in a debug build it is a defect, not a shrink.
+  at or before it.** In practice that is one publication number from the scheduler — under ADR 0006 it
+  is exactly the oldest `from` among the open subscriptions, plus the oldest instant a UI graph still
+  references. A count cap may be used as a secondary guard, and when it fires in a debug build it is a
+  defect, not a shrink.
 - **The display history is a separate, decimated copy.** The engine wants microseconds of records;
   the graph wants seconds. Decimating for the screen is required; decimating for the machine is
   forbidden.
@@ -71,7 +73,8 @@ draws.
 5. A sample at τ returns exactly what the resolver would have returned at that instant — the answer
    never changes because of anything that happens later.
 6. A record is discarded only when no reader can ask for its instant or earlier.
-7. A wire record is not a crossing; it wakes another chip only if it is a class-1 signal.
+7. A wire record is not a crossing. It resumes another chip only by firing a subscription, and it is a
+   crossing only if that subscription starts new work there (class 1, ADR 0006).
 8. Conflicting simultaneous drivers on a tristate wire are reported, never resolved by guess.
 
 ## Consequences

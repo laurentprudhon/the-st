@@ -32,7 +32,9 @@ _Avoid_: device, module, component, peripheral
 
 An output control signal of one virtual chip that provokes a behaviour in another virtual chip: the
 only kind of moment the machine model treats as significant. Internal state evolution and mere pin
-value changes are not crossings.
+value changes are not crossings. In the engine's terms it is a **subscription whose firing starts new
+work** in the receiving chip (ADR 0006); an answer inside an exchange the receiver itself opened is
+not a crossing.
 _Avoid_: event, interrupt, edge, bus transaction
 
 ### Wire
@@ -61,6 +63,14 @@ The rule that turns the drivers' current values into a wire's value: single-driv
 open-collector nets, or tristate with a reported conflict. It is a property of the wire type, decided
 from the schematic, never chosen per access.
 _Avoid_: logic level, arbitration, priority
+
+### Subscription
+
+A chip's pending read on a wire for an instant it does not decide: "resume me when this wire next
+changes, at or after now". It is the only way one chip's output makes another chip run, and the
+crossing catalogue is the table of the subscriptions the machine is allowed to have. A chip's own
+registered obligation — a timer expiry, a slot boundary, a buffer deadline — is not a subscription.
+_Avoid_: wake, trigger, callback, listener, event handler
 
 ### Oscillator
 

@@ -24,8 +24,8 @@ service manual), Hatari's I/O dispatch tables (`ioMemTabSTE.c`) for register own
 |---|---|---|---|---|
 | **CPU** | U100 MC68000 `C398061-001`, PLCC68 | instruction execution; exception and interrupt vectoring; bus-cycle sequencing; **bus arbitration** — the grant sequence, 4-cycle acquire and release | *externally accessible*: none — the CPU owns no memory-mapped state. *internal*: D0–D7/A0–A7, SR, PC, prefetch queue, arbitration state machine | `D0–D15`, `A1–A23`, `AS`, `LDS`, `UDS`, `R/W`, `FC0–FC2`, `VMA`/`VPA`, `DTACK`, `BERR`, `IPL0–IPL2`, `BR`, `BG`, `BGACK`, `CLK`, `RESET` |
 | **Memory** | U400 memory half `C300589-001` (144-pin) + 16 × DRAM `C0101743-002` + SIMM sockets U600–U603 | DRAM mux and strobes; refresh; **video address counters and fetch machinery** (`VBASE`, `VCOUNT`, `LINEWIDTH`, the 16 000-addresses-per-frame schedule); **sound DMA counters and fetch machinery** (`FBASE`, `FCOUNT`, `FEND`); `DTACK`/`BERR`; chip-select decode; **sync generation** (`HSYNC`, `VSYNC`, `DE`, `*BLANK`, `*DCYC`) — a GLUE function on this machine | *externally accessible*: `$FF8001` MMU config; `$FF8201`/`$FF8203`/`$FF820D` video base; `$FF8205`/`$FF8207`/`$FF8209` video counter; `$FF820A` sync/frequency; `$FF820F` line width; `$FF8900` sound control, `$FF8903`–`$FF8913` frame pointers, `$FF8921` sound mode; **a second copy of `$FF8260`** (GSTMCU side). *internal*: refresh counter, DRAM address latch, video address counter, sound address counter, fetch scheduler, decode PLA | `MAD0–MAD9`, `RAS0`, `RAS1`, `CAS0H`, `CAS0L`, `CAS1H`, `CAS1L`, `WE`, `AS`/`LDS`/`UDS`, `R/W`, `FC0–FC2`, `DTACK`, `BERR`, `BR`, `BG`, `BGACK`, `MD0–MD15`, `SREQ`, `SLOAD`, `DCYC`, `HSYNC`, `VSYNC`, `DE`, `BLANK`, `LATCH`, `FCS`, `MFPCS`, `SNDCS`, `ROM0–ROM6` |
-| **Video** | U401 GST Shifter `C300588-001`, PLCC84 | bitplane shift (4 planes → 16 colours, 2 → 4, 1 → mono); palette lookup; DE/BLANK gating; fine scroll; **the Shifter's copy of the resolution register**; Super Hi-Res interpretation; **the Microwire controller driving the LMC1992**; the sound-DMA byte split (`SD0–SD7`, two bytes per fetched word) | *externally accessible*: `$FF8240–$FF825F` palette (16 words); `$FF8260` (Shifter copy); `$FF8261`; `$FF8264`/`$FF8265` fine scroll; `$FF8922`/`$FF8924` Microwire data/mask. *internal*: shift registers, palette latch, pixel pipeline, Microwire shift register, sample byte latch | `MD0–MD15` (in), `PD0–PD15`, `R0–R3`/`G0–G3`/`B0–B3` (out), `MONO`, `COLOR`, `DE`, `BLANK`, `LATCH`, `SCLK`, `FCLK`, `CLK`, `SREQ` (out), `SLOAD`, `MWE`, `MWD`, `MWK`, `SD0–SD7` (out), `A1–A6`, `CS`, `LD`, `HD`, `R/W` |
-| **Sound** | U202 YM2149 `C025983`, DIP40 + U508 LMC1992 `C398058-001`, DIP28 | PSG: 3 tone channels, noise, envelope; LMC1992 volume/bass/treble/mixing. The DMA sample path does not pass through this chip — the Shifter feeds the DACs directly | *externally accessible*: `$FF8800` PSG select, `$FF8802` PSG data. *internal*: PSG tone counters, envelope state, noise LFSR | `SD0–SD7` (via the DACs), `ACC`, `SNDCS`, `SNDIR`; `IOA0–IOA7`, `IOB0–IOB3` (owned by Controllers) |
+| **Video** | U401 GST Shifter `C300588-001`, PLCC84 | bitplane shift (4 planes → 16 colours, 2 → 4, 1 → mono); palette lookup; DE/BLANK gating; fine scroll; **the Shifter's copy of the resolution register**; Super Hi-Res interpretation; **the Microwire controller driving the LMC1992**. The sound-DMA requester side (`SREQ`, the 4-word FIFO, the byte split, `SD0–SD7`) is **Sound's**, although those pins are physically on this chip (owner's ruling, 2026-11-05) | *externally accessible*: `$FF8240–$FF825F` palette (16 words); `$FF8260` (Shifter copy); `$FF8261`; `$FF8264`/`$FF8265` fine scroll; `$FF8922`/`$FF8924` Microwire data/mask. *internal*: shift registers, palette latch, pixel pipeline, Microwire shift register, sample byte latch | `MD0–MD15` (in), `PD0–PD15`, `R0–R3`/`G0–G3`/`B0–B3` (out), `MONO`, `COLOR`, `DE`, `BLANK`, `LATCH`, `SCLK`, `FCLK`, `CLK`, `SREQ` (out), `SLOAD`, `MWE`, `MWD`, `MWK`, `SD0–SD7` (out), `A1–A6`, `CS`, `LD`, `HD`, `R/W` |
+| **Sound** | U202 YM2149 `C025983`, DIP40 + U508 LMC1992 `C398058-001`, DIP28 | PSG: 3 tone channels, noise, envelope; LMC1992 volume/bass/treble/mixing; **the sound-DMA requester side** — the 4-word sample FIFO, `SREQ`, and the split of each fetched word into two bytes on `SD0–SD7` (physically on the Shifter, owned here) | *externally accessible*: `$FF8800` PSG select, `$FF8802` PSG data. *internal*: PSG tone counters, envelope state, noise LFSR | `SD0–SD7` (via the DACs), `ACC`, `SNDCS`, `SNDIR`; `IOA0–IOA7`, `IOB0–IOB3` (owned by Controllers) |
 | **Disk** | U301 WD1772 `C026028-002`, DIP28 + U300 DMA controller `C398739-001`, DIP40 | MFM encode/decode; sector search; stepping and drive control; **disk DMA as a bus-mastering burst** — `*RDY` to the GSTMCU, `*BR` relayed to the CPU, `*BGACK` held for the burst; ACSI | *externally accessible*: `$FF8604` FDC command/status, `$FF8606` DMA mode control, `$FF8609`/`$FF860B`/`$FF860D` DMA address. *internal*: MFM shift register, CRC, sector counter, DMA word counter, drive phase | `FDCS`, `FDRQ`, `CD0–CD7`, `CR/W`, `CA1`, `CA2`, `STEP`, `DIRC`, `WG`, `WD`, `MO`, `RD`, `DDEN`, `TR00`, `WPRT`, `IP`, `MR`, `FCS`, `RDY`, `DCYC`, `HDCS`, `HDRQ`, `ACK` |
 | **Timers and interrupts** | U203 MFP 68901 `C025984`, DIP48 | timers A–D; interrupt priority encoder and vectoring; GPIP edge detection (HBL/VBL side channels); USART (RS-232, out of scope but pins occupied) | *externally accessible*: `$FFFA01` GPIP, `$FFFA03` AER, `$FFFA05` DDR, `$FFFA07`–`$FFFA15` IERA/B, IPRA/B, ISRA/B, IMRA/B, `$FFFA17` vector, `$FFFA19`/`1B`/`1D` timer control, `$FFFA1F`/`21`/`23`/`25` timer data, `$FFFA27`–`$FFFA2F` USART. *internal*: four countdown timers with prescalers, pending/in-service latches, USART shift registers | `MFPCS`, `IACK`, `IPL0–IPL2`, `DINT`, `FDINT`, `HDINT`, `BINT`, `SINT`, `KHZ500`, `EINT3`, `EINT5`, `EINT7`, USART pins (out of scope) |
 | **Controllers** | U400 pad/pen ADC and port logic + U202 I/O ports + U900 74LS164 `C101611-164` + the keyboard 6850 ACIA `C025985` (U200 or U201 — unresolved) | paddle/pen ADC; joystick, button and joypad ports; keyboard matrix ports; **IKBD serial link** at 7812.5 baud | *externally accessible*: `$FF9200`/`$FF9202` joypad, `$FF9211`/`13`/`15`/`17` analog pads, `$FF9220`/`$FF9222` light pen, `$FFFC00`/`$FFFC02` keyboard ACIA, PSG ports A/B via `$FF8800`/`$FF8802`. *internal*: ADC conversion state, port latches, ACIA transmit/receive registers and framing counters | `JOYAH`, `JOYAL`, `JOYWE`, `JOYWL`, `BUTTON`, `PEN`, `PAD0X`, `PAD0Y`, `PAD1X`, `PAD1Y`, `PADRST`, `IOA0–IOA7`, `IOB0–IOB3`, `N6850`, serial data and clock to the keyboard |
@@ -38,39 +38,23 @@ and glue (`U302`, `U307`, `U509`, `U510`, `U512`, `U632`, `U304`, `U306`, `U511`
 
 ## 2. Signals that cross
 
-**E** = event (counted), **C** = completion or acknowledgement (not counted), **K** = clock.
-Rates per frame at 50 Hz.
+**This section is superseded.** The authoritative table is [`design/crossings.md`](crossings.md), which
+is the subscription table under ADR 0006 and carries, per row, the wire, the driver, the subscriber, the
+resolver, the class and the rate. What remains here is the vocabulary, because the partition table above
+uses it:
 
-| Between | Signal | Class | Rate |
-|---|---|---|---|
-| CPU ↔ Memory | `AS`, `LDS`, `UDS`, `R/W`, `FC0–FC2` | C (request) | up to 40 000 |
-| | `DTACK` | **C ack** | same |
-| | `BERR` | **C ack** | ~0 |
-| | `VMA`/`VPA` (MFP cycle) | C | per MFP access |
-| | `RESET` | E | 1 per boot |
-| | `CLK` | K | 8 MHz |
-| CPU ↔ Blitter | `BR` (Blitter asks), `BG` (CPU grants), `BGACK` (Blitter holds) | E | 2 per blit — acquire and release, 4 cycles each |
-| CPU ↔ Disk | `BR`/`BG`/`BGACK` relayed by the GSTMCU, one handshake per DMA burst | E | 1 per burst, not per word |
-| CPU ↔ Timers | `IPL0–IPL2` | E | 1 + 313 + 160 + 61 |
-| | `IACK` | **C ack** | one per acknowledge |
-| | `KHZ500` | K | 500 kHz |
-| CPU ↔ Video | `A1–A6`, `CS`, `LD`, `HD`, `R/W` | E | ~10 idle, up to 939 in a demo |
-| Memory ↔ Video | `MD0–MD15` | data | 16 000 words |
-| | `DCYC` (video data available) | E | 4 000 groups |
-| | `SREQ` (Shifter asks for a **sound** sample) | E | 125 / 250 / 500 / 1 000 |
-| | `SLOAD` (sample word available) | **C ack** | same |
-| | `DE`, `BLANK`, `LATCH` | E | 313 / 313 / up to 939 |
-| | `MWE`, `MWD`, `MWK` | E | ~0 at Level 1 |
-| Memory ↔ Disk | `FCS`, `RDY` | E | tens / per burst |
-| | `DCYC` | **C ack** | per DMA word |
-| Video → DACs | `SD0–SD7` | data | 2 bytes per fetched word |
-| Video → Sound | Microwire clock/data (LMC1992 control) | E | on volume/mix change only |
-| Memory → Sound | `SNDCS`, `SNDIR` | E | 160–1 000 |
-| Memory → Timers | DMA-active → Timer A | E | 160–1 000 |
-| Video → host | `HSYNC`, `DE`, `BLANK` | E | 313 each |
-| | `VSYNC` | E | 1 |
-| | `R0–R3`, `G0–G3`, `B0–B3`, `MONO`, `COLOR` | data | continuous |
-| Controllers → CPU | `N6850` decode, ACIA data | E | per input event |
+- **Class 1 — a crossing.** A subscription whose firing starts new work in the receiver. Rate set by the
+  writer, unbounded.
+- **Class 2 — an answer inside an open exchange.** A subscription that only completes a bus or DMA
+  cycle the subscriber itself opened. Bounded, and inlinable later (ADR 0005).
+- **Class 3 — phase.** A clock is not a wire: arithmetic on machine time. No records, no subscriptions.
+- **Data.** Address and data buses carry records and no class-1 subscription. A subscriber needing a
+  value samples the data wire at the instant of the control record that woke it.
+
+Four things the earlier draft of this table got wrong, all corrected in `crossings.md`: `SREQ`/`*SLOAD`
+are the sound path and `DCYC`/`*LOAD` the video path; the FDC↔DMA handshake (`FDCS`/`FDRQ`) is internal
+to Disk; the video delivery is one crossing per four words, not per word; and the CPU's own bus cycle is
+a class-2 exchange whose cost is the queue's, not the catalogue's.
 
 ---
 

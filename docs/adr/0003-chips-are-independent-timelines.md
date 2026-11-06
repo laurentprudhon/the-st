@@ -63,7 +63,8 @@ makes "wait until every writer has caught up with this instant" a primitive the 
    tick.
 3. A chip's clock is its own, advanced by its logic, monotonic, and never derived from host time.
 4. Chip code knows only `Read` and `Write`; the scheduler is invisible to it.
-5. Every `Read` and every `Write` names an instant ≥ the issuing chip's clock.
+5. Every `Read` and every `Write` names the earliest instant it will accept — `ReadAt` exactly, as the
+   `from` of a subscription — never earlier than the issuing chip's clock (ADR 0006).
 6. The scheduler fires the earliest pending instant. Ties break on `(chip priority, emitter
    sequence)`, both assigned by the model.
 7. A chip resumed at instant *t* continues with its clock at *t*. Machine time is non-decreasing.
@@ -96,10 +97,11 @@ unit test, not a protocol.
 - **#7 (scheduler)** is a min-heap keyed by the triple, plus the priority table. There is no barrier,
   no participant count, no futex and no `SynchronizationContext` tuning beyond dispatching
   continuations in queue order.
-- **#6 (crossing catalogue)** becomes the queue's insertion rate, and the catalogue's class
-  distinction survives intact: only class-1 signals are crossings, class-2 completions are answers on
-  the same exchange and class-3 clocks are phase. Under ADR 0005 they are all wire records, but only
-  class 1 is a reason for another chip to run.
+- **#6 (crossing catalogue)** becomes the table of subscriptions the queue is filled from. The class
+  distinction survives intact — class-1 signals are crossings, class-2 completions are answers inside
+  an exchange already open, class-3 clocks are phase — but the mechanical claim is corrected by ADR
+  0006: a class-2 answer *does* cost a queue entry, it simply starts no new work, which is why it can
+  be inlined later without changing an instant.
 - **#11 (determinism)** is testable as the research prescribes: a state hash per fired batch, twice
   from the same image, byte-identical. Randomised delay injection in debug builds catches any place
   where the model leaks host order.
@@ -141,3 +143,18 @@ unit test, not a protocol.
 3. If a chip's logic ever *needs* to read an instant behind its own clock, there is a latent causality
    bug in the partition: record it as an open question. Do not add a retroactive-read mechanism; at
    that point the machine has two timelines, which is what ADR 0001 exists to prevent.
+
+## Revision — 2026-11-05
+
+Two sentences above were corrected by ADR 0006, which answers the owner's question "if we always run the
+chip with the oldest timestamp, is a wake still a concept?":
+
+1. **Invariant 5** said a read names *an* instant; it must name the *earliest* instant the chip will
+   accept, or a chip can never wait for a decision another chip makes (a Shifter's group, a CPU's
+   `DTACK`, a grant) without polling on a grid. The undated read — the subscription — is now a
+   primitive.
+2. **The Consequences line "only class 1 is a reason for another chip to run"** is false for class 2:
+   the 68000 cannot date `DTACK`, so a completion does cost a queue entry. What class 2 does not do is
+   start new work, which is what keeps it inlinable.
+
+Nothing else here changed: the queue, the key, the clock ownership and the no-deadlock argument stand.

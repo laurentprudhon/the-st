@@ -83,8 +83,10 @@ into pixels and colours; it does not decide when a fetch happens.
   `MWE`/`MWD`/`MWK` (Super Hi-Res write path), `R0–R3`/`G0–G3`/`B0–B3` (12-bit RGB out),
   `MONO`/`COLOR`, `SCLK`, `FCLK`, `CLK`, `A1–A6`/`CS`/`LD`/`HD`/`R/W` (register interface);
 - `DCYC` arrives with the fetched word and `LOAD` latches it — **this is the video handshake**;
-- `SREQ` leaves the chip and `SLOAD` arrives — **this is the sound-DMA handshake**: the Shifter asks
-  for a sample word and emits it as two bytes on `SD0–SD7` to the DACs (`research/bus-arbitration.md`);
+- `SREQ` leaves the chip and `SLOAD` arrives — **this is the sound-DMA handshake**, and although both
+  pins are drawn on this chip, the requester side belongs to **Sound** (the 4-word FIFO and the byte
+  split, owner's ruling 2026-11-05). The Shifter is where the wire physically sits:
+  `sound.gstshifter.shifter.SREQ`;
 - `DE` and `BLANK` arrive as inputs that gate display.
 
 Analog tail excluded: the RGB outputs stop at the chip boundary; `U403`/`U405` are the host's video
@@ -92,11 +94,14 @@ encoder, not the machine's.
 
 ### 4. Sound — U202 YM2149 `C025983` + U508 LMC1992
 
-- `U202`: `SD0–SD7` (sample bus, arriving from the Shifter), register interface `$FF8800`/`$FF8802`,
+- `U202`: `SD0–SD7` (the sample bus to the DACs, 8 lanes), register interface `$FF8800`/`$FF8802`,
   `ACC` (paddle A/D input), and its own 2 MHz clock derived from `SCLK/4`;
 - `U508`: volume, bass, treble and mixing, driven over Microwire **from the Shifter**;
-- the sample words themselves are Memory's business; this chip consumes them. The DMA sample path does
-  not pass through the PSG — the Shifter feeds the DACs directly.
+- **the sound-DMA requester side: the 4-word sample FIFO, `SREQ`, and the split of each fetched word
+  into two bytes on `SD0–SD7`.** The pins are physically on the Shifter, the demand is this chip's —
+  the sample clock is Sound's timeline, which is why Sound initiates the refill exchange and Memory
+  answers it (`design/crossings.md` §2);
+- the fetched words themselves are Memory's business; this chip consumes them.
 
 ### 5. Disk — U300 DMA controller `C398739-001` + U301 WD1772 + drive buffers
 
