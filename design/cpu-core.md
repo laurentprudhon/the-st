@@ -215,11 +215,12 @@ read/write counts disagree for an instruction, one of them is wrong and the asse
 That is the falsifier this table needs, and it is why the table is evidence rather than design: the
 teachable rule stays "4 clocks per bus cycle, plus declared internal clocks".
 
+**Settled** (owner's answer): rows verbatim, residue computed, the one assertion, `MicroOp` the only
+remaining table. `InstrCost` and `EntryCost` are struck from `core-comparison.md` §5.3's proposal —
+the first is dissolved by arithmetic, the second by the entry script.
+
 ## 9. Still open in this ticket
 
-- **The cost representation's confirmation** — §8's proposal (manual rows verbatim, residue computed,
-  one assertion holding the two accounts together) is awaiting the owner's answer, and with it the
-  retirement of `InstrCost`/`EntryCost` from `core-comparison.md` §5.3.
 - **The dispatch falsifier's threshold**, to be fixed with #8's measurement.
 - Whether `SampleWithInstant(wire, t)` belongs on the wire's log API or on the scheduler's.
 - Which CPU state is an anchor is fixed in §6 but not yet re-read against the tables of §8 (a residue
