@@ -131,6 +131,20 @@ Two sentences above were corrected by later rulings, and the leaf gained the bou
    subscription touched; digest stream identical but for declared display decimation; T=1 only and off
    by default.
 
+## Revision — 2026-11-07 (ticket #9)
+
+**The read sentence in §Decision is superseded.** It said "a read is `await Read(t_response, dataWire)`",
+which presumes the CPU knows the instant Memory will answer. It cannot: only Memory computes that instant
+from its slot schedule. The cycle is instead one masked control record, one subscription to the answer
+(`ReadNext`), a data sample that resolves on the stack, and the CPU's own release record; the CPU's clock
+advance to the answering instant is still the wait-state model, exactly as written above. See
+[ADR 0009](0009-the-68000-core-on-the-bus-contract.md) §1.
+
+The rest of this ADR stands unchanged, including the uniformity argument, the bill, and the memory leaf's
+boundary. The 4-clock figure in "wait state" language now has its precise home: the cycle's *minimum*, with
+the answer instant (slot phase, overscan, bus grant) deciding the actual value — which is why the CPU's
+cost is elapsed time and never a returned number.
+
 The owner's position on ever turning it on, recorded because it binds later sessions: *"i hope we will
 not need it, it should only be a very last resort, because it would really cripple the cpu and memory
 coroutines logic and readability."*

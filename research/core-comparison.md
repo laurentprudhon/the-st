@@ -399,6 +399,22 @@ It is fine at Level 1 and fatal at Level 2, where a device must observe the stac
 
 ### 5.3 Do differently
 
+> ### Correction — 2026-11-07, owner ruling (ticket #9)
+>
+> The `Access`/`Result` interface below is superseded as a *calling convention* and `Result.cycles` is
+> **withdrawn**. The CPU cannot know when Memory will answer, so a bus cycle is a masked control record
+> plus a subscription to the answer plus a data sample that resolves on the stack (ADR 0009 §1). The
+> cycle's cost is the elapsed machine time, `t_answer − t_assert`, and no function returns a number.
+> `Access`/`Result` survive only as a CPU-internal description of the bundle.
+>
+> Of §5.3's three tables, **`InstrCost` and `EntryCost` are retired**: the M68000UM chapter 7 already
+> reports `periods (read cycles / write cycles)`, so external cost is `4 × bus cycles` and only a small
+> **internal residue** remains as data; exception entry's cost is its script's bus cycles plus its
+> internal clocks. `MicroOp` remains, and is the only table left.
+>
+> The derivation below is left intact: it is what established that cost must be data rather than
+> generated code shape, and that the Level-1/Level-2 line matters at all.
+
 **Bus interface that returns cost.** One call shape, no globals, no virtual-per-byte:
 
 ```

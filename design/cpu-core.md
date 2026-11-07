@@ -223,10 +223,17 @@ teachable rule stays "4 clocks per bus cycle, plus declared internal clocks".
 remaining table. `InstrCost` and `EntryCost` are struck from `core-comparison.md` §5.3's proposal —
 the first is dissolved by arithmetic, the second by the entry script.
 
-## 9. Still open in this ticket
+## 9. Handed over
 
-- **The dispatch falsifier's measurement** — the threshold is fixed (1 CPU clock per instruction, §2);
-  #8 supplies the number.
-- Whether `SampleWithInstant(wire, t)` belongs on the wire's log API or on the scheduler's.
-- Which CPU state is an anchor is fixed in §6 but not yet re-read against the tables of §8 (a residue
-  that varies with *data*, e.g. `MULU`, is the one place a logged anchor could lie about a cost).
+Every question this ticket owns is settled in [ADR 0009](../docs/adr/0009-the-68000-core-on-the-bus-contract.md).
+What each dependent ticket inherits:
+
+- **#10 (walking skeleton)** — this core shape: three machines, the bus leaf, the reset and prefetch
+  rules, the entry script, and the two debug assertions (manual-row agreement, nested-entry budget).
+- **#8 (suspension cost)** — one measurement beyond ADR 0008's two: the per-instruction cost of the three
+  nested entries, against the **1 CPU clock (4 ticks)** threshold in §2.
+- **#11 (determinism)** — no new surface: `SampleWithInstant` reads records the log already holds, and the
+  observer stream is host-side and off in release.
+- **#20 (memory)** — the answering-instant contract: Memory chooses `t_answer` from its slot schedule, and
+  the CPU's wait state is that choice. The 4-clock cycle is a minimum, not a constant (slot phase,
+  overscan, bus grant).

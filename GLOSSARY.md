@@ -134,6 +134,15 @@ as a reported conflict), by the memory slot's phase, or by a chip asking to be r
 receivers of its own write.
 _Avoid_: tie-break, race, ordering hack, priority
 
+### Bus cycle
+
+One exchange between a bus master and the memory controller: the master's masked control record (AS,
+R/W, function codes, address, and data if a write), the controller's answer record at an instant the
+controller computes from its own slot schedule, the master's sample of the data, and the master's
+release record. Its duration is the difference between those two instants — never a declared number,
+which is why the CPU's wait state is simply its clock standing at the answer.
+_Avoid_: bus access, bus transaction, memory cycle
+
 ### Bus ownership
 
 The right to drive the machine's system bus, granted and released through the 68000's arbitration
@@ -163,6 +172,27 @@ It never enters the queue, has no subscriber and cannot be backdated, so it can 
 nor an ordering question. A counting register logs anchors (reload, expiry, a software write) and its
 value between them is arithmetic.
 _Avoid_: state dump, snapshot, trace, variable
+
+### Prefetch class
+
+The documented placement of an instruction's last instruction-stream fetch relative to its write: before
+it (class 0), after it (class 1), or two fetches after (class 2). It changes no cycle count — only which
+of two accesses reaches an address first, which is the whole of what self-modifying code observes.
+_Avoid_: pipeline, prefetch depth, fetch order flag
+
+### Internal residue
+
+The clock periods an instruction spends that its own bus cycles do not account for:
+`periods − 4 × (read cycles + write cycles)`, taken from the timing tables of the processor's user's
+manual. It is the only cycle-cost datum the core keeps as data.
+_Avoid_: internal cycles, overhead, penalty, wait states
+
+### Entry script
+
+The ordered steps of exception entry — internal clocks, frame writes, the interrupt acknowledge, the
+vector fetch — held as data, so the functional level sums them and the cycle-aware level walks them from
+the same array.
+_Avoid_: exception sequence, handler prologue, trap path
 
 ### Batch
 

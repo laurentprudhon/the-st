@@ -114,3 +114,17 @@ draws.
   net — the most likely cause is an open-collector net modelled as tristate.
 - If record retention ever needs a hard count bound to stay inside memory, the engine is producing
   far more records than the crossing catalogue predicts: fix the model, not the buffer.
+
+## Revision — 2026-11-07 (ticket #9)
+
+**Retention is bounded by live readers, not only by subscribers.** A reader may sample a wire at an
+instant later than the record it needs — the CPU asks the `IPL` wire for its *last change at or before*
+the end of an instruction, because it has no subscription to spend on that net (one pending read, spent
+on the bus answer). So the semantic bound this ADR demands is:
+
+> a wire's log must retain back to the earliest instant a live reader may still sample, and the
+> retention watermark is the minimum over **subscribers and live sampling windows**.
+
+Nothing else changes: the record shape, the resolver taxonomy and the no-deletion rule stand. The
+sampling form is `SampleWithInstant(wire, t) -> (value, changedAt)` and lives on the wire's log, not on
+the scheduler — the scheduler holds the queue and subscriptions and answers no value questions.
