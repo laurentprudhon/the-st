@@ -1,0 +1,1705 @@
+# etos256ro.src - where each line of etos256ro.sym is defined in the EmuTOS 1.4 source tree.
+# Line N here describes line N of the .sym: <address> <type> <name> <file>:<line> <source text>
+#   file:line  from the compiler's line info (the build used -g; -g does not change one byte
+#              of the linked ROM image, so these bytes are the shipped bytes)
+#  ~file:line  located by source search: a.out stabs carry line info for code only, so data and
+#              BSS symbols are found in the one source file the object was built from, and only
+#              when the name matches exactly once there
+#  -           no source location: linker-provided symbols (__text, __etext) and the object-name
+#              markers map2sym emits (e.g. 'startup.o')
+# Paths are relative to the EmuTOS 1.4 source root.
+0x00000380   D _proc_lives                            ~tosvars.ld:23             _proc_lives     = 0x380;        /* validates system crash page, if 0x12345678 */
+0x00000384   D _proc_dregs                            ~tosvars.ld:24             _proc_dregs     = 0x384;        /* saved registers d0-d7 */
+0x000003a4   D _proc_aregs                            ~tosvars.ld:25             _proc_aregs     = 0x3a4;        /* saved registers a0-a7 */
+0x000003c4   D _proc_enum                             ~tosvars.ld:26             _proc_enum      = 0x3c4;        /* vector number of crash exception */
+0x000003c8   D _proc_usp                              ~tosvars.ld:27             _proc_usp       = 0x3c8;        /* saved user stackpointer */
+0x000003cc   D _proc_stk                              ~tosvars.ld:28             _proc_stk       = 0x3cc;        /* 16 words from exception stack */
+0x00000400   D _etv_timer                             ~tosvars.ld:33             _etv_timer      = 0x400;        /* GEM event timer vector */
+0x00000400   D sysvars_start                          ~tosvars.ld:31             sysvars_start   = 0x400;
+0x00000404   D _etv_critic                            ~tosvars.ld:34             _etv_critic     = 0x404;        /* GEM critical error handler */
+0x00000408   D _etv_term                              ~tosvars.ld:35             _etv_term       = 0x408;        /* GEM program termination vector */
+0x0000040c   D _etv_xtra                              ~tosvars.ld:36             _etv_xtra       = 0x40c;        /* GEM additional vectors (unused) */
+0x00000420   D _memvalid                              ~tosvars.ld:37             _memvalid       = 0x420;        /* memory conf valid, if 0x752019f3 */
+0x00000420   D memvalid                               ~tosvars.ld:38             memvalid        = _memvalid;
+0x00000424   D memctrl                                ~tosvars.ld:39             memctrl         = 0x424;        /* copy of contents of 0xffff8001 */
+0x00000426   D resvalid                               ~tosvars.ld:40             resvalid        = 0x426;        /* validates resvector, if 0x31415926 */
+0x0000042a   D resvector                              ~tosvars.ld:41             resvector       = 0x42a;        /* reset vector */
+0x0000042e   D _phystop                               ~tosvars.ld:42             _phystop        = 0x42e;        /* physical top of RAM */
+0x00000432   D _membot                                ~tosvars.ld:43             _membot         = 0x432;        /* start of TPA (user memory) */
+0x00000436   D _memtop                                ~tosvars.ld:44             _memtop         = 0x436;        /* end of TPA (user memory) */
+0x0000043a   D _memval2                               ~tosvars.ld:45             _memval2        = 0x43a;        /* validates memcntrl/memconf, if 0x237698aa */
+0x0000043a   D memval2                                ~tosvars.ld:46             memval2         = _memval2;
+0x0000043e   D _flock                                 ~tosvars.ld:47             _flock          = 0x43e;        /* if != 0, VBL floppy routine is disabled */
+0x00000440   D _seekrate                              ~tosvars.ld:48             _seekrate       = 0x440;        /* floppy seek rate */
+0x00000442   D _timer_ms                              ~tosvars.ld:49             _timer_ms       = 0x442;        /* time between timer calls in ms */
+0x00000444   D _fverify                               ~tosvars.ld:50             _fverify        = 0x444;        /* if != 0, verify floppy writes */
+0x00000446   D _bootdev                               ~tosvars.ld:51             _bootdev        = 0x446;        /* default boot drive */
+0x00000448   D _palmode                               ~tosvars.ld:52             _palmode        = 0x448;        /* 0 = NTSC, else PAL */
+0x0000044a   D _defshiftmod                           ~tosvars.ld:53             _defshiftmod    = 0x44a;        /* default video resolution */
+0x0000044c   D _sshiftmod                             ~tosvars.ld:54             _sshiftmod      = 0x44c;        /* copy of contents of 0xffff8260 */
+0x0000044e   D _v_bas_ad                              ~tosvars.ld:55             _v_bas_ad       = 0x44e;        /* screen base address */
+0x00000452   D _vblsem                                ~tosvars.ld:56             _vblsem         = 0x452;        /* if > 0, the VBL routine is executed */
+0x00000454   D _nvbls                                 ~tosvars.ld:57             _nvbls          = 0x454;        /* number of VBL routines */
+0x00000456   D _vblqueue                              ~tosvars.ld:58             _vblqueue       = 0x456;        /* pointer to list of VBL routines */
+0x0000045a   D _colorptr                              ~tosvars.ld:59             _colorptr       = 0x45a;        /* pointer to color palette to be loaded */
+0x0000045e   D _screenpt                              ~tosvars.ld:60             _screenpt       = 0x45e;        /* pointer to video RAM for next VBL */
+0x00000462   D _vbclock                               ~tosvars.ld:61             _vbclock        = 0x462;        /* number of VBL routines executed */
+0x00000466   D _frclock                               ~tosvars.ld:62             _frclock        = 0x466;        /* number of VBL routines processed */
+0x0000046a   D _hdv_init                              ~tosvars.ld:63             _hdv_init       = 0x46a;        /* vector for hard disk initialization */
+0x0000046e   D _swv_vec                               ~tosvars.ld:64             _swv_vec        = 0x46e;        /* vector for resolution change */
+0x00000472   D _hdv_bpb                               ~tosvars.ld:65             _hdv_bpb        = 0x472;        /* vector for getbpb for harddisk */
+0x00000476   D _hdv_rw                                ~tosvars.ld:66             _hdv_rw         = 0x476;        /* vector for read/write for harddisk */
+0x0000047a   D _hdv_boot                              ~tosvars.ld:67             _hdv_boot       = 0x47a;        /* vector for hard disk boot */
+0x0000047e   D _hdv_mediach                           ~tosvars.ld:68             _hdv_mediach    = 0x47e;        /* vector for hard disk media change */
+0x00000482   D _cmdload                               ~tosvars.ld:69             _cmdload        = 0x482;        /* if not 0, load command.prg after boot */
+0x00000484   D _conterm                               ~tosvars.ld:70             _conterm        = 0x484;        /* attribute vector for console output */
+0x00000486   D trp14ret                               ~tosvars.ld:71             trp14ret        = 0x486;        /* return address for trap #14 (unused) */
+0x0000048a   D criticret                              ~tosvars.ld:72             criticret       = 0x48a;        /* return address for critical error hndlr */
+0x0000048e   D _themd                                 ~tosvars.ld:73             _themd          = 0x48e;        /* first memory descriptor block */
+0x0000049e   D ____md                                 ~tosvars.ld:74             ____md          = 0x49e;        /* space for additional memory descriptors */
+0x000004a2   D _savptr                                ~tosvars.ld:75             _savptr         = 0x4a2;        /* pointer to BIOS save register block */
+0x000004a6   D _nflops                                ~tosvars.ld:76             _nflops         = 0x4a6;        /* number of connected floppy drives */
+0x000004a8   D _con_state                             ~tosvars.ld:77             _con_state      = 0x4a8;        /* vector for screen output */
+0x000004ac   D _save_row                              ~tosvars.ld:78             _save_row       = 0x4ac;        /* temporary storage for cursor line pos. */
+0x000004ae   D sav_context                            ~tosvars.ld:79             sav_context     = 0x4ae;        /* ptr to save area for exception processing */
+0x000004b2   D _bufl                                  ~tosvars.ld:80             _bufl           = 0x4b2;        /* pointers to buffer ctrl blocks for GEMDOS */
+0x000004ba   D _hz_200                                ~tosvars.ld:81             _hz_200         = 0x4ba;        /* counter for 200 Hz system clock */
+0x000004be   D the_env                                ~tosvars.ld:82             the_env         = 0x4be;        /* pointer to default environment string */
+0x000004c2   D _drvbits                               ~tosvars.ld:83             _drvbits        = 0x4c2;        /* bit allocation for physical drives */
+0x000004c6   D _dskbufp                               ~tosvars.ld:84             _dskbufp        = 0x4c6;        /* pointer to disk buffer */
+0x000004ca   D _autopath                              ~tosvars.ld:85             _autopath       = 0x4ca;        /* pointer to auto-execute path */
+0x000004ce   D _vbl_list                              ~tosvars.ld:86             _vbl_list       = 0x4ce;        /* pointers to 8 VBL routines */
+0x000004ee   D _dumpflg                               ~tosvars.ld:87             _dumpflg        = 0x4ee;        /* flag for screen dump */
+0x000004f0   D _prtabt                                ~tosvars.ld:88             _prtabt         = 0x4f0;        /* printer abort flag */
+0x000004f2   D _sysbase                               ~tosvars.ld:89             _sysbase        = 0x4f2;        /* pointer to start of OS */
+0x000004f6   D _shell_p                               ~tosvars.ld:90             _shell_p        = 0x4f6;        /* pointer to shell */
+0x000004fa   D _end_os                                ~tosvars.ld:91             _end_os         = 0x4fa;        /* pointer to end of OS */
+0x000004fe   D _exec_os                               ~tosvars.ld:92             _exec_os        = 0x4fe;        /* pointer to entry point of OS */
+0x00000502   D _dump_vec                              ~tosvars.ld:93             _dump_vec       = 0x502;        /* pointer to screen dump routine */
+0x00000506   D _prt_stat                              ~tosvars.ld:94             _prt_stat       = 0x506;        /* pointer to prv_lsto */
+0x0000050a   D _prt_vec                               ~tosvars.ld:95             _prt_vec        = 0x50a;        /* pointer to prv_lst */
+0x0000050e   D _aux_stat                              ~tosvars.ld:96             _aux_stat       = 0x50e;        /* pointer to prv_auxo */
+0x00000512   D _aux_vec                               ~tosvars.ld:97             _aux_vec        = 0x512;        /* pointer to prv_aux */
+0x00000516   D _pun_ptr                               ~tosvars.ld:98             _pun_ptr        = 0x516;        /* if AHDI, pointer to pun_info */
+0x0000051a   D _memval3                               ~tosvars.ld:99             _memval3        = 0x51a;        /* memory conf valid if = $5555aaaa */
+0x0000051a   D memval3                                ~tosvars.ld:100            memval3         = _memval3;
+0x0000051e   D _bconstat_vec                          ~tosvars.ld:101            _bconstat_vec   = 0x51e;        /* 8 pointers to input-status routines */
+0x0000053e   D _bconin_vec                            ~tosvars.ld:102            _bconin_vec     = 0x53e;        /* 8 pointers to input routines */
+0x0000055e   D _bcostat_vec                           ~tosvars.ld:103            _bcostat_vec    = 0x55e;        /* 8 pointers to output-status routines */
+0x0000057e   D _bconout_vec                           ~tosvars.ld:104            _bconout_vec    = 0x57e;        /* 8 pointers to output routines */
+0x0000059e   D _longframe                             ~tosvars.ld:105            _longframe      = 0x59e;        /* if not 0, then not 68000 - use long stack frames */
+0x000005a0   D _p_cookies                             ~tosvars.ld:106            _p_cookies      = 0x5a0;        /* pointer to cookie jar */
+0x000005a4   D _ramtop                                ~tosvars.ld:107            _ramtop         = 0x5a4;        /* top of TT-RAM, or NULL if no TT-RAM is present */
+0x000005a8   D _ramvalid                              ~tosvars.ld:108            _ramvalid       = 0x5a8;        /* if equal to RAMVALID_MAGIC, then ramtop is valid */
+0x000005ac   D _bell_hook                             ~tosvars.ld:109            _bell_hook      = 0x5ac;        /* pointer to routine for system bell */
+0x000005b0   D _kcl_hook                              ~tosvars.ld:110            _kcl_hook       = 0x5b0;        /* pointer to routine for system keyclick */
+0x00000700   D _pmmutree                              ~tosvars.ld:128            _pmmutree       = 0x700;        /* for pmmu tree on 68030 */
+0x00000800   B _stkbot                                ~emutos.ld:94              _stkbot = .;
+0x00000800   D sysvars_end                            ~emutos.ld:78              sysvars_end = .;
+0x00001000   B __low_stram_start                      ~emutos.ld:106             __low_stram_start = .;
+0x00001000   B _shifty                                ~bios/lowstram.c:53        UBYTE shifty; /* reflects the status up/down of mode keys */
+0x00001000   B _stktop                                ~emutos.ld:96              _stktop = .;
+0x00001000   B lowstram.o                             -
+0x00001001   B _dskbuf_alignment                      ~bios/lowstram.c:52        UBYTE dskbuf_alignment[3]; /* FIXME: Unsafe hack to align dskbuf on 4 bytes */
+0x00001004   B _dskbuf                                ~bios/lowstram.c:40        UBYTE dskbuf[DSKBUF_SIZE] __attribute__ ((aligned (2)));
+0x00001c04   B _phys_work                             ~bios/lowstram.c:26        Vwk phys_work;
+0x00001d38   B lineavars.o                            -
+0x00001d3c   B _CUR_FONT                              ~bios/lineavars.S:100      _CUR_FONT:      .ds.l   1       // -906 current VDI font
+0x00001d6e   B _m_pos_hx                              ~bios/lineavars.S:105      _m_pos_hx:       .ds.w   1       // -856 (cdb+0) Mouse hot spot - x coord
+0x00001d6e   B _mouse_cdb                             ~bios/lineavars.S:104      _mouse_cdb:
+0x00001d70   B _m_pos_hy                              ~bios/lineavars.S:106      _m_pos_hy:       .ds.w   1       // -854 (cdb+2) Mouse hot spot - y coord
+0x00001d74   B _m_cdb_bg                              ~bios/lineavars.S:108      _m_cdb_bg:       .ds.w   1       // -850 (cdb+6) Mouse background color as pel value
+0x00001d76   B _m_cdb_fg                              ~bios/lineavars.S:109      _m_cdb_fg:       .ds.w   1       // -848 (cdb+8) Mouse foreground color as pel value
+0x00001d78   B _mask_form                             ~bios/lineavars.S:110      _mask_form:      .ds.w   32      // -846 (cdb+10) Storage for mouse mask and cursor
+0x00001db8   B _INQ_TAB                               ~bios/lineavars.S:114      _INQ_TAB:
+0x00001e12   B _DEV_TAB                               ~bios/lineavars.S:118      _DEV_TAB:
+0x00001e6c   B _GCURX                                 ~bios/lineavars.S:123      _GCURX:         .ds.w   1       // -602 mouse X position
+0x00001e6c   B _mdata                                 ~bios/lineavars.S:122      _mdata:                         // Block of mouse pointer data
+0x00001e6e   B _GCURY                                 ~bios/lineavars.S:124      _GCURY:         .ds.w   1       // -600 mouse Y position
+0x00001e70   B _HIDE_CNT                              ~bios/lineavars.S:125      _HIDE_CNT:      .ds.w   1       // -598 Number of levels the mouse is hidden
+0x00001e72   B _MOUSE_BT                              ~bios/lineavars.S:126      _MOUSE_BT:      .ds.w   1       // -596 mouse button state
+0x00001e74   B _REQ_COL                               ~bios/lineavars.S:129      _REQ_COL:       .ds.w   48      // -594 48 WORDs of RGB data (color registers)
+0x00001ed4   B _SIZ_TAB                               ~bios/lineavars.S:132      _SIZ_TAB:       .ds.w   15      // -498 size table
+0x00001ef2   B _TERM_CH                               ~bios/lineavars.S:134      _TERM_CH:       .ds.w   1       // -468 pressed key, aciii + scancode
+0x00001ef4   B _chc_mode                              ~bios/lineavars.S:135      _chc_mode:      .ds.w   1       // -466 input mode choice
+0x00001ef6   B _CUR_WORK                              ~bios/lineavars.S:136      _CUR_WORK:      .ds.l   1       // -464 parameter block of current workst.
+0x00001efa   B _def_font                              ~bios/lineavars.S:137      _def_font:      .ds.l   1       // -460 default font
+0x00001efe   B _font_ring                             ~bios/lineavars.S:138      _font_ring:     .ds.l   4       // -456 see lineavars.h for full description
+0x00001f0e   B _font_count                            ~bios/lineavars.S:139      _font_count:    .ds.w   1       // -440 number of font ids in _font_ring
+0x00001f10   B _line_cw                               ~bios/lineavars.S:141      _line_cw:       .ds.w   1       // -438 Width associated with q_circle data
+0x00001f12   B _loc_mode                              ~bios/lineavars.S:142      _loc_mode:      .ds.w   1       // -436 input mode, locator
+0x00001f64   B _num_qc_lines                          ~bios/lineavars.S:144      _num_qc_lines:  .ds.w   1       // -354 Number of lines making up wide line - not sure if right here
+0x00001f66   B _str_mode                              ~bios/lineavars.S:146      _str_mode:      .ds.w   1       // -352 input mode, string
+0x00001f68   B _val_mode                              ~bios/lineavars.S:147      _val_mode:      .ds.w   1       // -350 input mode, valuator
+0x00001f6a   B _cur_ms_stat                           ~bios/lineavars.S:148      _cur_ms_stat:   .ds.b   1       // -348 current mouse status
+0x00001f6c   B _disab_cnt                             ~bios/lineavars.S:150      _disab_cnt:     .ds.w   1       // -346 disable depth count. (>0 => disabled)
+0x00001f6e   B _newx                                  ~bios/lineavars.S:151      _newx:          .ds.w   1       // -344 new mouse x&y position
+0x00001f70   B _newy                                  ~bios/lineavars.S:152      _newy:          .ds.w   1
+0x00001f72   B _draw_flag                             ~bios/lineavars.S:153      _draw_flag:     .ds.b   1       // -340 non-zero means draw mouse form on vblank
+0x00001f73   B _mouse_flag                            ~bios/lineavars.S:154      _mouse_flag:    .ds.b   1       // -339 non-zero while mouse cursor is being modified
+0x00001f74   B _sav_cur_x                             ~bios/lineavars.S:156      _sav_cur_x:     .ds.w   1       // -338 save area for cursor cell coords.
+0x00001f76   B _sav_cur_y                             ~bios/lineavars.S:157      _sav_cur_y:     .ds.w   1       // -336 save area for cursor cell coords.
+0x00001f78   B retsav                                 ~bios/lineavars.S:158      retsav:         .ds.l   1       // -334 I'm not sure if this is right here
+0x00001f7c   B _mouse_cursor_save                     ~bios/lineavars.S:160      _mouse_cursor_save:             // covers the following five items; note that
+0x00002084   B _tim_addr                              ~bios/lineavars.S:169      _tim_addr:      .ds.l   1       // -66  timer interrupt vector
+0x00002088   B _tim_chain                             ~bios/lineavars.S:170      _tim_chain:     .ds.l   1       // -62  timer interrupt vector save
+0x0000208c   B _user_but                              ~bios/lineavars.S:171      _user_but:      .ds.l   1       // -58  user button vector
+0x00002090   B _user_cur                              ~bios/lineavars.S:172      _user_cur:      .ds.l   1       // -54  user cursor vector
+0x00002094   B _user_mot                              ~bios/lineavars.S:173      _user_mot:      .ds.l   1       // -50  user motion vector
+0x00002098   B _v_cel_ht                              ~bios/lineavars.S:176      _v_cel_ht:      .ds.w   1       // -46  cell height (width is 8)
+0x0000209a   B _v_cel_mx                              ~bios/lineavars.S:177      _v_cel_mx:      .ds.w   1       // -44  columns on the screen minus 1
+0x0000209c   B _v_cel_my                              ~bios/lineavars.S:178      _v_cel_my:      .ds.w   1       // -42  rows on the screen minus 1
+0x0000209e   B _v_cel_wr                              ~bios/lineavars.S:179      _v_cel_wr:      .ds.w   1       // -40  length (in bytes) of a line of characters
+0x000020a0   B _v_col_bg                              ~bios/lineavars.S:180      _v_col_bg:      .ds.w   1       // -38  current background color
+0x000020a2   B _v_col_fg                              ~bios/lineavars.S:181      _v_col_fg:      .ds.w   1       // -36  current foreground color
+0x000020a4   B _v_cur_ad                              ~bios/lineavars.S:182      _v_cur_ad:      .ds.l   1       // -34  current cursor address
+0x000020a8   B _v_cur_of                              ~bios/lineavars.S:183      _v_cur_of:      .ds.w   1       // -30  offset from begin of screen
+0x000020aa   B _v_cur_cx                              ~bios/lineavars.S:184      _v_cur_cx:      .ds.w   1       // -28  current cursor column
+0x000020ac   B _v_cur_cy                              ~bios/lineavars.S:185      _v_cur_cy:      .ds.w   1       // -26  current cursor row
+0x000020ae   B _v_period                              ~bios/lineavars.S:186      _v_period:      .ds.b   1       // -24  cursor blink rate
+0x000020af   B _v_cur_tim                             ~bios/lineavars.S:187      _v_cur_tim:     .ds.b   1       // -23  cursor blink timer.
+0x000020b0   B _v_fnt_ad                              ~bios/lineavars.S:188      _v_fnt_ad:      .ds.l   1       // -22  pointer to current monospace font
+0x000020b4   B _v_fnt_nd                              ~bios/lineavars.S:189      _v_fnt_nd:      .ds.w   1       // -18  ascii code of last cell in font
+0x000020b6   B _v_fnt_st                              ~bios/lineavars.S:190      _v_fnt_st:      .ds.w   1       // -16  ascii code of first cell in font
+0x000020b8   B _v_fnt_wr                              ~bios/lineavars.S:191      _v_fnt_wr:      .ds.w   1       // -14  font cell wrap
+0x000020ba   B _V_REZ_HZ                              ~bios/lineavars.S:192      _V_REZ_HZ:      .ds.w   1       // -12  horizontal resolution in pixels
+0x000020bc   B _v_off_ad                              ~bios/lineavars.S:193      _v_off_ad:      .ds.l   1       // -10  pointer to font offset table
+0x000020c0   B _v_stat_0                              ~bios/lineavars.S:194      _v_stat_0:      .ds.b   1       // -6   video cell system status (was in words)
+0x000020c2   B _V_REZ_VT                              ~bios/lineavars.S:196      _V_REZ_VT:      .ds.w   1       // -4   vertical resolution in pixels
+0x000020c4   B _BYTES_LIN                             ~bios/lineavars.S:197      _BYTES_LIN:     .ds.w   1       // -2   byte per screen line
+0x000020c6   B _v_planes                              ~bios/lineavars.S:268      _v_planes:      .ds.w   1               // +0   number of video planes.
+0x000020c6   B line_a_vars                            ~bios/lineavars.S:266      line_a_vars:                            // This is the base line-a pointer
+0x000020c8   B _v_lin_wr                              ~bios/lineavars.S:269      _v_lin_wr:      .ds.w   1               // +2   number of bytes/video line.
+0x000020ca   B _CONTRL                                ~bios/lineavars.S:272      _CONTRL:        .ds.l   1               // +4   ptr to the CONTRL array.
+0x000020ca   B _local_pb                              ~bios/lineavars.S:271      _local_pb:
+0x000020ce   B _INTIN                                 ~bios/lineavars.S:273      _INTIN:         .ds.l   1               // +8   ptr to the INTIN array.
+0x000020d2   B _PTSIN                                 ~bios/lineavars.S:274      _PTSIN:         .ds.l   1               // +12  ptr to the PTSIN array.
+0x000020d6   B _INTOUT                                ~bios/lineavars.S:275      _INTOUT:        .ds.l   1               // +16  ptr to the INTOUT array.
+0x000020da   B _PTSOUT                                ~bios/lineavars.S:276      _PTSOUT:        .ds.l   1               // +20  ptr to the PTSOUT array.
+0x000020de   B _COLBIT0                               ~bios/lineavars.S:283      _COLBIT0:       .ds.w   1               // colour bit value for plane 0
+0x000020e0   B _COLBIT1                               ~bios/lineavars.S:284      _COLBIT1:       .ds.w   1               // colour bit value for plane 1
+0x000020e2   B _COLBIT2                               ~bios/lineavars.S:285      _COLBIT2:       .ds.w   1               // colour bit value for plane 2
+0x000020e4   B _COLBIT3                               ~bios/lineavars.S:286      _COLBIT3:       .ds.w   1               // colour bit value for plane 3
+0x000020e6   B _LSTLIN                                ~bios/lineavars.S:288      _LSTLIN:        .ds.w   1               // 0 => not last line of polyline.
+0x000020e8   B _LN_MASK                               ~bios/lineavars.S:289      _LN_MASK:       .ds.w   1               // line style mask.
+0x000020ea   B _WRT_MODE                              ~bios/lineavars.S:290      _WRT_MODE:      .ds.w   1               // writing mode.
+0x000020ec   B _X1                                    ~bios/lineavars.S:293      _X1:            .ds.w   1               // _X1 coordinate for squares
+0x000020ee   B _Y1                                    ~bios/lineavars.S:294      _Y1:            .ds.w   1               // _Y1 coordinate for squares
+0x000020f0   B _X2                                    ~bios/lineavars.S:295      _X2:            .ds.w   1               // _X2 coordinate for squares
+0x000020f2   B _Y2                                    ~bios/lineavars.S:296      _Y2:            .ds.w   1               // _Y2 coordinate for squares
+0x000020f4   B _PATPTR                                ~bios/lineavars.S:297      _PATPTR:        .ds.l   1               // fill pattern pointer
+0x000020f8   B _PATMSK                                ~bios/lineavars.S:298      _PATMSK:        .ds.w   1               // fill pattern "mask" (line count)
+0x000020fa   B _MFILL                                 ~bios/lineavars.S:299      _MFILL:         .ds.w   1               // multi-plane fill flag. (0 => 1 plane)
+0x000020fc   B _CLIP                                  ~bios/lineavars.S:301      _CLIP:          .ds.w   1               // clipping flag.
+0x000020fe   B _XMINCL                                ~bios/lineavars.S:302      _XMINCL:        .ds.w   1               // x minimum clipping value.
+0x00002100   B _YMINCL                                ~bios/lineavars.S:303      _YMINCL:        .ds.w   1               // y minimum clipping value.
+0x00002102   B _XMAXCL                                ~bios/lineavars.S:304      _XMAXCL:        .ds.w   1               // x maximum clipping value.
+0x00002104   B _YMAXCL                                ~bios/lineavars.S:305      _YMAXCL:        .ds.w   1               // y maximum clipping value.
+0x00002106   B _XDDA                                  ~bios/lineavars.S:307      _XDDA:          .ds.w   1               // accumulator for x DDA
+0x00002108   B _DDAINC                                ~bios/lineavars.S:308      _DDAINC:        .ds.w   1               // the fraction to be added to the DDA
+0x0000210a   B _SCALDIR                               ~bios/lineavars.S:309      _SCALDIR:       .ds.w   1               // scale up or down flag.
+0x0000210c   B _MONO                                  ~bios/lineavars.S:310      _MONO:          .ds.w   1               // non-zero - cur font is monospaced
+0x0000210e   B _SOURCEX                               ~bios/lineavars.S:311      _SOURCEX:       .ds.w   1
+0x00002110   B _SOURCEY                               ~bios/lineavars.S:312      _SOURCEY:       .ds.w   1               // upper left of character in font file
+0x00002112   B _DESTX                                 ~bios/lineavars.S:313      _DESTX:         .ds.w   1
+0x00002114   B _DESTY                                 ~bios/lineavars.S:314      _DESTY:         .ds.w   1               // upper left of destination on screen
+0x00002116   B _DELX                                  ~bios/lineavars.S:315      _DELX:          .ds.w   1
+0x00002118   B _DELY                                  ~bios/lineavars.S:316      _DELY:          .ds.w   1               // width and height of character
+0x0000211a   B _FBASE                                 ~bios/lineavars.S:317      _FBASE:         .ds.l   1               // pointer to font data
+0x0000211e   B _FWIDTH                                ~bios/lineavars.S:318      _FWIDTH:        .ds.w   1               // width of font form (in bytes)
+0x00002120   B _STYLE                                 ~bios/lineavars.S:319      _STYLE:         .ds.w   1               // special effects
+0x00002122   B _LITEMASK                              ~bios/lineavars.S:320      _LITEMASK:      .ds.w   1               // special effects
+0x00002124   B _SKEWMASK                              ~bios/lineavars.S:321      _SKEWMASK:      .ds.w   1               // special effects
+0x00002126   B _WEIGHT                                ~bios/lineavars.S:322      _WEIGHT:        .ds.w   1               // special effects
+0x00002128   B _ROFF                                  ~bios/lineavars.S:323      _ROFF:          .ds.w   1
+0x0000212a   B _LOFF                                  ~bios/lineavars.S:324      _LOFF:          .ds.w   1               // skew above and below baseline
+0x0000212c   B _SCALE                                 ~bios/lineavars.S:325      _SCALE:         .ds.w   1               // scale character
+0x0000212e   B _CHUP                                  ~bios/lineavars.S:326      _CHUP:          .ds.w   1               // character rotation vector
+0x00002130   B _TEXTFG                                ~bios/lineavars.S:327      _TEXTFG:        .ds.w   1               // text foreground color
+0x00002132   B _SCRTCHP                               ~bios/lineavars.S:328      _SCRTCHP:       .ds.l   1               // pointer to base of scratch buffer
+0x00002136   B _SCRPT2                                ~bios/lineavars.S:329      _SCRPT2:        .ds.w   1               // large buffer base offset
+0x0000213a   B _COPYTRAN                              ~bios/lineavars.S:331      _COPYTRAN:      .ds.w   1               // Flag for Copy-raster-form (<>0 = Transparent)
+0x0000213c   B _SEEDABORT                             ~bios/lineavars.S:332      _SEEDABORT:     .ds.l   1               // Address of Routine for testing break out of lineA contourfill function
+0x00002140   B __bss                                  ~emutos.ld:148             __bss = .;
+0x00002140   B __low_stram_end                        ~emutos.ld:109             __low_stram_end = .;
+0x00002140   B _mcpu                                  bios/processor.S:65        movem.l  d2/a2-a3,-(sp)
+0x00002140   B processor.o                            -
+0x00002146   B _fputype                               bios/processor.S:69        move.l  (0x10).w,a1     // save exception vectors: illegal instruction
+0x00002154   B vectors.o                              -
+0x000023e4   B _trap_save_area                        bios/vectors.S:766         jbsr    _scc_tx_interrupt_handler
+0x000023e4   B aciavecs.o                             -
+0x00002564   B _ikbdiorec                             bios/aciavecs.S:413        move.l  kbdvec,-(sp)    // push vector onto stack
+0x00002572   B _midiiorec                             bios/aciavecs.S:427        move.w  #1,kbdindex     // next position in buffer is byte number 1
+0x00002580   B _mousexvec                             bios/aciavecs.S:429        move.b  ikbdstate_table(pc,d0),ikbdstate
+0x00002588   B _kbdvecs                               bios/aciavecs.S:430        move.b  kbdlength_table(pc,d0),kbdlength
+0x000025bc   B _bootflags                             ~bios/bios.tr.c:86         UBYTE bootflags;
+0x000025bc   B bios.o                                 -
+0x000025be   B _boot_status                           ~bios/bios.tr.c:83         WORD boot_status;
+0x000025d4   B xbios.o                                -
+0x000025d8   B acsi.o                                 -
+0x000025e0   B _blkdev                                ~bios/blkdev.c:50          BLKDEV blkdev[BLKDEVNUM];
+0x000025e0   B blkdev.o                               -
+0x00002b30   B _has_megartc                           ~bios/clock.c:554          int has_megartc;
+0x00002b30   B clock.o                                -
+0x00002b32   B _has_monster_rtc                       ~bios/clock.c:510          int has_monster_rtc;
+0x00002b34   B _has_icdrtc                            ~bios/clock.c:97           int has_icdrtc;
+0x00002b48   B _cookie_akp                            ~bios/country.c:57         ULONG cookie_akp;
+0x00002b48   B country.o                              -
+0x00002b4c   B _cookie_idt                            ~bios/country.c:56         ULONG cookie_idt;
+0x00002b50   B _physsect2                             -
+0x00002b50   B disk.o                                 -
+0x00002d50   B _physsect                              ~bios/disk.c:448           PHYSSECT physsect, physsect2;
+0x00002f50   B _drvrem                                ~bios/disk.c:167           LONG    drvrem;
+0x00002f54   B _ultrasatan_id                         ~bios/disk.c:57            int ultrasatan_id;
+0x00002f56   B _has_ultrasatan_clock                  ~bios/disk.c:56            int has_ultrasatan_clock;
+0x00002f58   B _units                                 ~bios/disk.c:53            UNIT units[UNITSNUM];
+0x0000312c   B _has_falcon_dmasound                   ~bios/dmasound.c:115       int has_falcon_dmasound;
+0x0000312c   B dmasound.o                             -
+0x0000312e   B _has_microwire                         ~bios/dmasound.c:114       int has_microwire;
+0x00003130   B _has_dmasound                          ~bios/dmasound.c:113       int has_dmasound;
+0x00003138   B floppy.o                               -
+0x00003178   B _sysfonts                              ~bios/font.c:28            const Fonthead *sysfonts[4];    /* all three fonts and NULL */
+0x00003178   B font.o                                 -
+0x00003188   B _fon6x6                                ~bios/font.c:25            Fonthead fon6x6;
+0x000031e2   B _fon8x8                                ~bios/font.c:24            Fonthead fon8x8;
+0x0000323c   B _fon8x16                               ~bios/font.c:23            Fonthead fon8x16;
+0x00003298   B ide.o                                  -
+0x00003540   B _mouse_packet                          ~bios/ikbd.c:110           SBYTE mouse_packet[3];                  /* passed to mousevec() */
+0x00003540   B ikbd.o                                 -
+0x00003580   B initinfo.o                             -
+0x00003584   B linea.o                                -
+0x00003594   B _v_planes_shift                        ~bios/lineainit.c:32       UBYTE v_planes_shift;
+0x00003594   B lineainit.o                            -
+0x00003598   B _has_dip_switches                      ~bios/machine.c:328        int has_dip_switches;
+0x00003598   B machine.o                              -
+0x0000359a   B _blitter_is_enabled                    ~bios/machine.c:301        int blitter_is_enabled;
+0x0000359c   B _has_blitter                           ~bios/machine.c:300        int has_blitter;
+0x0000359e   B _has_magnum                            ~bios/machine.c:246        int has_magnum;
+0x000035a0   B _has_monster                           ~bios/machine.c:225        int has_monster;
+0x000035a2   B _has_vme                               ~bios/machine.c:202        int has_vme;
+0x000035a4   B _has_scc                               ~bios/machine.c:184        int has_scc;
+0x000035a6   B _has_modectl                           ~bios/machine.c:78         int has_modectl;
+0x000035a8   B _has_ste_shifter                       ~bios/machine.c:67         int has_ste_shifter;
+0x000035aa   B _cookie_swi                            ~bios/machine.c:59         ULONG cookie_swi;
+0x000035ae   B _cookie_mch                            ~bios/machine.c:57         ULONG cookie_mch;
+0x000035b2   B _cookie_snd                            ~bios/machine.c:56         ULONG cookie_snd;
+0x000035b6   B _cookie_fdc                            ~bios/machine.c:54         ULONG cookie_fdc;
+0x000035ba   B _cookie_vdo                            ~bios/machine.c:52         ULONG cookie_vdo;
+0x000035be   B _detected_busses                       ~bios/machine.c:50         ULONG detected_busses;  /* bitmap of i/o busses detected */
+0x000035c2   B _is_bus32                              ~bios/machine.c:47         UBYTE is_bus32; /* 1 if address bus is 32-bit, 0 if it is 24-bit */
+0x000035c4   B _timer_c_sieve                         ~bios/mfp.c:191            WORD timer_c_sieve;
+0x000035c4   B mfp.o                                  -
+0x000035c8   B _rel_pblock                            ~bios/mouse.c:31           struct param rel_pblock;        /* mouse parameter block */
+0x000035c8   B mouse.o                                -
+0x000035d4   B natfeats.o                             -
+0x000035f0   B parport.o                              -
+0x000035fc   B screen.o                               -
+0x00003600   B _recovery_loops                        ~bios/serport.c:102        ULONG recovery_loops;
+0x00003600   B serport.o                              -
+0x00003604   B _bconmap_root                          ~bios/serport.c:78         BCONMAP bconmap_root;
+0x0000360c   B _rs232iorecptr                         ~bios/serport.c:75         EXT_IOREC *rs232iorecptr;
+0x00003610   B _rsconfptr                             -
+0x00003d18   B sound.o                                -
+0x00003d20   B xhdi.o                                 -
+0x00003d28   B _loopcount_1_msec                      ~bios/delay.c:39           ULONG loopcount_1_msec;
+0x00003d28   B delay.o                                -
+0x00003d2c   B delayasm.o                             -
+0x00003d34   B _meminit_flags                         ~bios/memory2.c:31         UBYTE meminit_flags;
+0x00003d34   B memory2.o                              -
+0x00003d38   B _has_nova                              ~bios/nova.c:34            int has_nova;
+0x00003d38   B nova.o                                 -
+0x00003d4c   B _scsidriv_root                         ~bios/scsidriv.c:80        SCSIRoot scsidriv_root;         /* in RAM so it can be modified */
+0x00003d4c   B scsidriv.o                             -
+0x00003e44   B _old_trap2                             ~bdos/bdosmain.c:46        PFVOID old_trap2; /* Old trap #2 handler, also used by rwa.S */
+0x00003e44   B bdosmain.o                             -
+0x00003f4c   B console.o                              -
+0x00004174   B fsdir.o                                -
+0x0000417c   B _drvsel                                ~bdos/fsdrive.c:59         LONG    drvsel;
+0x0000417c   B fsdrive.o                              -
+0x00004180   B _dirtbl                                ~bdos/fsdrive.c:54         DIRTBL_ENTRY dirtbl[NCURDIR];
+0x00004270   B _errbuf                                ~bdos/fsglob.c:48          jmp_buf errbuf;
+0x00004270   B fsglob.o                               -
+0x000042a4   B _errdrv                                ~bdos/fsglob.c:47          int errdrv;
+0x000042a6   B _errcode                               ~bdos/fsglob.c:41          long errcode;
+0x000042aa   B _rwerr                                 ~bdos/fsglob.c:40          long rwerr;
+0x000042ae   B _sft                                   ~bdos/fsglob.c:34          FTAB sft[OPNFILES];
+0x0000459c   B _drvtbl                                ~bdos/fsglob.c:28          DMD *drvtbl[BLKDEVNUM];
+0x00004604   B _root                                  ~bdos/osmem.tr.c:43        WORD *root[MAXQUICK];
+0x00004604   B osmem.o                                -
+0x0000649c   B _run                                   ~bdos/proc.c:52            PD      *run;           /* ptr to PD for current process */
+0x0000649c   B proc.o                                 -
+0x00006cdc   B rwa.o                                  -
+0x000074b0   B _current_date                          -
+0x000074b0   B time.o                                 -
+0x000074b2   B _current_time                          ~bdos/time.c:53            UWORD current_time, current_date;
+0x000074b8   B _malloc_align_stram                    ~bdos/umem.c:40            ULONG malloc_align_stram;
+0x000074b8   B umem.o                                 -
+0x000074bc   B _has_alt_ram                           ~bdos/umem.c:38            int has_alt_ram;
+0x000074be   B _pmdalt                                ~bdos/umem.c:37            MPB pmdalt;
+0x000074ca   B _pmd                                   ~bdos/umem.c:35            MPB pmd;
+0x000074e0   B cookie.o                               -
+0x00007580   B miscasm.o                              -
+0x0000758c   B string.o                               -
+0x00007594   B _REV_MAP_COL                           ~vdi/vdi_col.c:26          WORD REV_MAP_COL[MAXCOLOURS];   /* maps hardware register -> vdi pen */
+0x00007594   B vdi_col.o                              -
+0x000075b4   B _MAP_COL                               ~vdi/vdi_col.c:25          WORD MAP_COL[MAXCOLOURS];       /* maps vdi pen -> hardware register */
+0x000075d4   B _mcs_ptr                               ~vdi/vdi_control.c:41      MCS *mcs_ptr;
+0x000075d4   B vdi_control.o                          -
+0x000077e4   B _vdishare                              ~vdi/vdi_fill.c:46         VDISHARE vdishare;
+0x000077e4   B vdi_fill.o                             -
+0x000083f4   B vdi_gdp.o                              -
+0x00008404   B vdi_line.o                             -
+0x00008464   B _flip_y                                ~vdi/vdi_main.c:20         WORD flip_y;                    /* True if magnitudes being returned */
+0x00008464   B vdi_main.o                             -
+0x00008468   B vdi_misc.o                             -
+0x0000846c   B _old_statvec                           ~vdi/vdi_mouse.c:64        PFVOID old_statvec; /* original IKBD status packet routine */
+0x0000846c   B vdi_mouse.o                            -
+0x00008470   B _user_wheel                            ~vdi/vdi_mouse.c:63        PFVOID user_wheel;  /* user mouse wheel vector provided by vdi_vex_wheelv() */
+0x00008474   B vdi_raster.o                           -
+0x000084c4   B __endvdibss                            ~vdi/endvdi.S:16           __endvdibss:
+0x000084c4   B endvdi.o                               -
+0x000084c4   B gemasm.o                               -
+0x0000874c   B gemstart.o                             -
+0x00008854   B gemdosif.o                             -
+0x0000885e   B _drwaddr                               aes/gemdosif.S:73          rts
+0x0000886a   B _tiksav                                aes/gemdosif.S:99          move.l  #_aestrap,0x88
+0x0000886e   B _NUM_TICK                              aes/gemdosif.S:99          move.l  #_aestrap,0x88
+0x00008872   B _CMP_TICK                              aes/gemdosif.S:101         move.l  #criterr_handler,d0
+0x00008876   B _enable_ceh                            aes/gemdosif.S:103         move.l  d0,-(sp)
+0x00008f08   B _gl_rbuf                               ~aes/gemaplib.c:48         FPD      *gl_rbuf;
+0x00008f08   B gemaplib.o                             -
+0x00008f0c   B _gl_rlen                               ~aes/gemaplib.c:47         WORD     gl_rlen;
+0x00008f0e   B _gl_recd                               ~aes/gemaplib.c:46         BOOL     gl_recd;
+0x00008f10   B _gl_play                               ~aes/gemaplib.c:45         BOOL     gl_play;
+0x00008f14   B _appl_msg                              ~aes/gemctrl.c:52          WORD    appl_msg[8];
+0x00008f14   B gemctrl.o                              -
+0x00008f24   B _gl_ctmown                             ~aes/gemctrl.c:50          BOOL    gl_ctmown;
+0x00008f26   B _gl_ctwait                             ~aes/gemctrl.c:48          MOBLK   gl_ctwait;      /* MOBLK telling if menu bar is waiting */
+0x00008f34   B _gl_ticktime                           ~aes/gemevlib.c:36         WORD    gl_ticktime;
+0x00008f34   B gemevlib.o                             -
+0x00008f36   B _gl_dclick                             ~aes/gemevlib.c:35         WORD    gl_dclick;  /* # of ticks to wait to see if a second click will occur */
+0x00008f3c   B _ml_ocnt                               ~aes/gemfmlib.c:52         WORD     ml_ocnt;    /* Needs to be 0 initially! */
+0x00008f3c   B gemfmlib.o                             -
+0x00009054   B gemfslib.o                             -
+0x0000906c   B _gl_rmenu                              ~aes/gemgraf.c:66          GLOBAL GRECT    gl_rmenu;       /* the menu bar */
+0x0000906c   B gemgraf.o                              -
+0x00009074   B _gl_rcenter                            ~aes/gemgraf.c:65          GLOBAL GRECT    gl_rcenter;     /* a box centered in the 'gl_rfull' area */
+0x0000907c   B _gl_rzero                              ~aes/gemgraf.c:64          GLOBAL GRECT    gl_rzero;       /* 0,0,0,0 */
+0x00009084   B _gl_rfull                              ~aes/gemgraf.c:63          GLOBAL GRECT    gl_rfull;       /* the screen except the menu bar */
+0x0000908c   B _gl_rscreen                            ~aes/gemgraf.c:62          GLOBAL GRECT    gl_rscreen;     /* the entire screen */
+0x00009094   B _ptsin                                 ~aes/gemgraf.c:60          GLOBAL WORD     ptsin[20];
+0x000090bc   B _intin                                 ~aes/gemgraf.c:59          GLOBAL WORD     intin[128];
+0x000091bc   B _contrl                                ~aes/gemgraf.c:58          GLOBAL WORD     contrl[12];
+0x000091d4   B _gl_ws                                 ~aes/gemgraf.c:57          GLOBAL WS       gl_ws;          /* work_out[] for physical workstation */
+0x00009246   B _gl_dst                                ~aes/gemgraf.c:55          GLOBAL FDB      gl_dst;
+0x0000925a   B _gl_src                                ~aes/gemgraf.c:54          GLOBAL FDB      gl_src;
+0x0000926e   B _gl_handle                             ~aes/gemgraf.c:52          GLOBAL WORD     gl_handle;      /* physical workstation handle */
+0x00009270   B _gl_nplanes                            ~aes/gemgraf.c:51          GLOBAL WORD     gl_nplanes;     /* number of bit planes */
+0x00009272   B _gl_clip                               ~aes/gemgraf.c:49          GLOBAL GRECT    gl_clip;        /* global clipping rectangle */
+0x0000927a   B _gl_hbox                               ~aes/gemgraf.c:47          GLOBAL WORD     gl_hbox;        /* box height */
+0x0000927c   B _gl_wbox                               ~aes/gemgraf.c:46          GLOBAL WORD     gl_wbox;        /* box width */
+0x0000927e   B _gl_hschar                             ~aes/gemgraf.c:44          GLOBAL WORD     gl_hschar;      /* height of character cell (small font) */
+0x00009280   B _gl_wschar                             ~aes/gemgraf.c:43          GLOBAL WORD     gl_wschar;      /* width of character cell (small font) */
+0x00009282   B _gl_hchar                              ~aes/gemgraf.c:41          GLOBAL WORD     gl_hchar;       /* height of character cell (normal font) */
+0x00009284   B _gl_wchar                              ~aes/gemgraf.c:40          GLOBAL WORD     gl_wchar;       /* width of character cell (normal font) */
+0x00009286   B _gl_height                             ~aes/gemgraf.c:38          GLOBAL WORD     gl_height;      /* screen height */
+0x00009288   B _gl_width                              ~aes/gemgraf.c:37          GLOBAL WORD     gl_width;       /* screen width */
+0x000092a0   B _gl_moff                               ~aes/gemgsxif.c:76         GLOBAL WORD  gl_moff;                /* counting semaphore   */
+0x000092a0   B gemgsxif.o                             -
+0x000092a2   B _ptsout                                ~aes/gemgsxif.c:75         GLOBAL WORD  ptsout[12];
+0x000092ba   B _intout                                ~aes/gemgsxif.c:74         GLOBAL WORD  intout[45];
+0x00009340   B _D                                     ~aes/geminit.c:141         GLOBAL THEGLO   D;
+0x00009340   B geminit.o                              -
+0x0000c78a   B _curpid                                ~aes/geminit.c:139         GLOBAL WORD     curpid;
+0x0000c78c   B _wind_spb                              ~aes/geminit.c:138         GLOBAL SPB      wind_spb;
+0x0000c796   B _fpcnt                                 -
+0x0000c798   B _fph                                   -
+0x0000c79a   B _fpt                                   ~aes/geminit.c:136         GLOBAL WORD     fpt, fph, fpcnt;                /* forkq tail, head,    */
+0x0000c79c   B _indisp                                ~aes/geminit.c:134         GLOBAL UBYTE    indisp;
+0x0000c79e   B _zlr                                   -
+0x0000c7a2   B _dlr                                   -
+0x0000c7a6   B _eul                                   ~aes/geminit.c:132         GLOBAL EVB      *eul, *dlr, *zlr;
+0x0000c7aa   B _nrl                                   -
+0x0000c7ae   B _drl                                   -
+0x0000c7b2   B _rlr                                   ~aes/geminit.c:131         GLOBAL AESPD    *rlr, *drl, *nrl;
+0x0000c7b6   B _gl_prevmouse                          ~aes/geminit.c:128         GLOBAL MFORM    gl_prevmouse;           /* previous AES  mouse form */
+0x0000c800   B _gl_mouse                              ~aes/geminit.c:126         GLOBAL MFORM    gl_mouse;
+0x0000c84a   B _mouse_cursor                          ~aes/geminit.c:124         GLOBAL MFORM    *mouse_cursor[NUM_MOUSE_CURSORS];
+0x0000c86a   B _ad_envrn                              ~aes/geminit.c:122         GLOBAL char     *ad_envrn;              /* initialized in GEMSTART      */
+0x0000c86e   B _num_accs                              ~aes/geminit.c:120         GLOBAL WORD     num_accs;
+0x0000c870   B _totpds                                ~aes/geminit.c:119         GLOBAL WORD     totpds;
+0x0000ca20   B _gl_bdely                              ~aes/geminput.c:59         GLOBAL WORD     gl_bdely;       /* the current amount of time before the */
+0x0000ca20   B geminput.o                             -
+0x0000ca22   B _gl_btrue                              ~aes/geminput.c:58         GLOBAL WORD     gl_btrue;       /* the current true button state     */
+0x0000ca24   B _gl_bdesired                           ~aes/geminput.c:57         GLOBAL WORD     gl_bdesired;    /* the current desired button state  */
+0x0000ca26   B _gl_bclick                             ~aes/geminput.c:56         GLOBAL WORD     gl_bclick;      /* # of times into the desired button state */
+0x0000ca28   B _ctl_pd                                ~aes/geminput.c:53         GLOBAL AESPD    *ctl_pd;        /* screen manager process that controls the mouse */
+0x0000ca2c   B _gl_mowner                             ~aes/geminput.c:52         GLOBAL AESPD    *gl_mowner;     /* current mouse/keybd owner            */
+0x0000ca30   B _pr_mclick                             -
+0x0000ca32   B _pr_yrat                               -
+0x0000ca34   B _pr_xrat                               -
+0x0000ca36   B _pr_button                             ~aes/geminput.c:50         GLOBAL WORD     pr_button, pr_xrat, pr_yrat, pr_mclick;
+0x0000ca38   B _mtrans                                -
+0x0000ca3a   B _mclick                                -
+0x0000ca3c   B _kstate                                -
+0x0000ca3e   B _yrat                                  -
+0x0000ca40   B _xrat                                  -
+0x0000ca42   B _button                                ~aes/geminput.c:49         GLOBAL WORD     button, xrat, yrat, kstate, mclick, mtrans;
+0x0000ca58   B _gl_dafirst                            ~aes/gemmnlib.c:68         GLOBAL WORD     gl_dafirst;     /* object # of first DA entry */
+0x0000ca58   B gemmnlib.o                             -
+0x0000ca5a   B _gl_mnppd                              ~aes/gemmnlib.c:63         GLOBAL AESPD    *gl_mnppd;
+0x0000ca5e   B _gl_mntree                             ~aes/gemmnlib.c:62         GLOBAL OBJECT   *gl_mntree;
+0x0000ca90   B gemobed.o                              -
+0x0000cab0   B gemrslib.o                             -
+0x0000cb38   B _gl_nextrez                            ~aes/gemshlib.c:99         GLOBAL WORD gl_nextrez;
+0x0000cb38   B gemshlib.o                             -
+0x0000cb3a   B _gl_changerez                          ~aes/gemshlib.c:98         GLOBAL WORD gl_changerez;
+0x0000cb3c   B _ad_stail                              ~aes/gemshlib.c:89         GLOBAL char *ad_stail;
+0x0000cc40   B gemsuper.o                             -
+0x0000cc44   B _gl_awind                              ~aes/gemwmlib.c:52         GLOBAL OBJECT   *gl_awind;
+0x0000cc44   B gemwmlib.o                             -
+0x0000cc48   B _gl_wtop                               ~aes/gemwmlib.c:51         GLOBAL WORD     gl_wtop;
+0x0000cf84   B gemwrect.o                             -
+0x0000cf9c   B _vdipb                                 ~aes/gsx2.c:18             VDIPB vdipb;
+0x0000cf9c   B gsx2.o                                 -
+0x0000cfb0   B _rs_obj                                ~aes/gem_rsc.tr.c:150      OBJECT rs_obj[RS_NOBS];
+0x0000cfb0   B gem_rsc.o                              -
+0x0000d5e0   B _rs_tedinfo                            ~aes/gem_rsc.tr.c:16       TEDINFO rs_tedinfo[RS_NTED];
+0x0000d908   B deskstart.o                            -
+0x0000e308   B _menu_shortcuts                        ~desk/deskmain.c:119       GLOBAL UBYTE    menu_shortcuts[NUM_SHORTCUTS];
+0x0000e308   B deskmain.o                             -
+0x0000e32a   B _gl_apid                               ~desk/deskmain.c:112       GLOBAL WORD     gl_apid;
+0x0000e32c   B _gl_pmstr                              ~desk/deskmain.c:110       GLOBAL char     gl_pmstr[4];
+0x0000e330   B _gl_amstr                              ~desk/deskmain.c:109       GLOBAL char     gl_amstr[4];
+0x0000e388   B _global                                ~desk/gembind.c:66         GLOBAL UWORD            global[G_SIZE];
+0x0000e388   B gembind.o                              -
+0x0000e408   B deskapp.o                              -
+0x0000e410   B deskdir.o                              -
+0x0000e420   B deskfun.o                              -
+0x0000e42c   B _G                                     ~desk/deskglob.c:25        GLOBAL GLOBES           G;
+0x0000e42c   B deskglob.o                             -
+0x0000e778   B deskinf.o                              -
+0x0000e77c   B deskins.o                              -
+0x0000e7a4   B desksupp.o                             -
+0x0000e7ac   B _desk_rs_trees                         ~desk/desk_rsc.tr.c:2184   OBJECT * desk_rs_trees[RS_NTREE];
+0x0000e7ac   B desk_rsc.o                             -
+0x0000e7f4   B _desk_rs_obj                           ~desk/desk_rsc.tr.c:228    OBJECT * desk_rs_obj;
+0x0000e7f8   B _desk_rs_tedinfo                       ~desk/desk_rsc.tr.c:23     TEDINFO desk_rs_tedinfo[RS_NTED];
+0x0000ed54   B _environment                           cli/cmdasm.S:26            move.l  4(sp),a5                // a5 -> basepage
+0x0000ed54   B cmdasm.o                               -
+0x0000fd64   B _redir_handle                          ~cli/cmdmain.tr.c:15       LONG redir_handle;
+0x0000fd64   B cmdmain.o                              -
+0x0000fd68   B _user_path                             ~cli/cmdmain.tr.c:14       char user_path[MAXPATHLEN];
+0x0000fde8   B _dta                                   ~cli/cmdmain.tr.c:13       DTA *dta;
+0x0000fdec   B _nflops_copy                           ~cli/cmdmain.tr.c:12       WORD nflops_copy;
+0x0000fdee   B _linewrap                              ~cli/cmdmain.tr.c:11       WORD linewrap;
+0x0000fdf0   B _requested_res                         -
+0x0000fdf2   B _current_res                           ~cli/cmdmain.tr.c:10       WORD current_res, requested_res;
+0x0000fdf4   B _screen_rows                           -
+0x0000fdf6   B _screen_cols                           ~cli/cmdmain.tr.c:9        UWORD screen_cols, screen_rows;
+0x0000fdf8   B _idt_value                             ~cli/cmdmain.tr.c:8        LONG idt_value;
+0x0000ffc4   B cmdedit.o                              -
+0x00010074   B cmdexec.o                              -
+0x00010078   B cmdint.o                               -
+0x0001007c   B __ebss                                 ~emutos.ld:150             __ebss = .;
+0x0001007c   B endrom.o                               -
+0x0001007c   D __end_os_stram                         ~emutos.ld:160             __end_os_stram = .;
+0x00e00000   T __text                                 ~emutos.ld:121             __text = .;
+0x00e00000   T _os_header                             bios/startup.S:79          bra.s   _main       // branch to _main
+0x00e00000   T startup.o                              -
+0x00e00030   T _main                                  bios/startup.S:116         bra.w   _realmain   // MUST be 4 bytes long
+0x00e0004c   T _osxhbootdelay                         bios/startup.S:116         bra.w   _realmain   // MUST be 4 bytes long
+0x00e00116   T memdone                                bios/startup.S:535         jmp     _biosmain
+0x00e0011c   T _run_cartridge_applications            bios/startup.S:546         move.w  4(sp),d0                // application bit number
+0x00e00158   T meminit                                bios/memory.S:74           moveq   #0, d7                  // _meminit_flags = 0
+0x00e00158   T memory.o                               -
+0x00e00308   T _detect_32bit_address_bus              bios/memory.S:644          movem.l d2/a2-a4,-(sp)          // Save registers
+0x00e00364   T processor.o                            -
+0x00e00472   T _processor_init                        bios/processor.S:252       jbsr    _detect_cpu
+0x00e0054e   T _instruction_cache_kludge              bios/processor.S:407       cmpi.b  #20,_mcpu+3
+0x00e0054e   T _invalidate_instruction_cache          bios/processor.S:407       cmpi.b  #20,_mcpu+3
+0x00e0058c   T _flush_data_cache                      bios/processor.S:457       cmpi.b  #40,_mcpu+3
+0x00e0059e   T _invalidate_data_cache                 bios/processor.S:485       cmpi.b  #30,_mcpu+3
+0x00e005d2   T _cache_exists                          bios/processor.S:579       moveq.l #0,d0               // assume 68000, 68010
+0x00e005e2   T _set_cache                             bios/processor.S:587       jbsr    _cache_exists
+0x00e00634   T _init_exc_vec                          bios/vectors.S:104         lea     deflt_vec_table, a0
+0x00e00634   T vectors.o                              -
+0x00e00648   T _init_user_vec                         bios/vectors.S:126         lea     user_vec, a0
+0x00e00748   T _int_hbl                               bios/vectors.S:304         move.w  d0, -(sp)       // save d0
+0x00e0075e   T _int_vbl                               bios/vectors.S:330         addq.l  #1, _frclock.w          // increase num of happened ints
+0x00e00808   T _int_timerc                            bios/vectors.S:503         addq.l  #1, _hz_200.w           // increment 200 Hz counter
+0x00e0083c   T _mfp_rs232_rx_interrupt                bios/vectors.S:590         movem.l d0-d1/a0-a1,-(sp)
+0x00e0084c   T _mfp_rs232_tx_interrupt                bios/vectors.S:607         movem.l d0-d1/a0-a1,-(sp)
+0x00e0085c   T _scca_rx_interrupt                     bios/vectors.S:682         movem.l d0-d1/a0-a1,-(sp)
+0x00e00874   T _scca_tx_interrupt                     bios/vectors.S:702         movem.l d0-d1/a0-a1,-(sp)
+0x00e0088c   T _scca_es_interrupt                     bios/vectors.S:722         movem.l d0-d1/a0-a1,-(sp)
+0x00e008a4   T _sccb_rx_interrupt                     bios/vectors.S:742         movem.l d0-d1/a0-a1,-(sp)
+0x00e008bc   T _sccb_tx_interrupt                     bios/vectors.S:762         movem.l d0-d1/a0-a1,-(sp)
+0x00e008d4   T _sccb_es_interrupt                     bios/vectors.S:782         movem.l d0-d1/a0-a1,-(sp)
+0x00e008ec   T _call_etv_critic                       bios/vectors.S:808         move.l  4(sp),d0            // d0 is error code || device
+0x00e00906   T _default_etv_critic                    bios/vectors.S:824         move.w  4(sp),d0            // get error code
+0x00e0090e   T _int_illegal                           bios/vectors.S:838         movem.l d0/a0,-(sp)             // saving d0 and a0 while we test
+0x00e00934   T _int_priv                              bios/vectors.S:860         movem.l d0/a0,-(sp)             // saving d0 and a0 while we test
+0x00e00996   T _int_unimpint                          bios/vectors.S:955         move.l  a0,-(sp)                    // save a0 temporarily
+0x00e00bb2   T _biostrap                              bios/vectors.S:1269        move.w  _bios_ent,d1
+0x00e00bc0   T _xbiostrap                             bios/vectors.S:1276        move.w  _xbios_ent,d1
+0x00e00c1a   T _just_rte                              bios/vectors.S:1359        rte                     // return with return value in D0
+0x00e00c1c   T _xbios_unimpl                          bios/vectors.S:1367        move.w   d0,-(sp)
+0x00e00c28   T _supexec                               bios/vectors.S:1377        movea.l 4(a7),a0
+0x00e00c2e   T _check_read_byte                       bios/vectors.S:1390        move.l  sp,d1
+0x00e00c58   T _keyclick                              bios/vectors.S:1431        move.w   4(sp),d0
+0x00e00c6c   T _init_acia_vecs                        bios/aciavecs.S:148        lea     just_rts,a0             // dummy vector
+0x00e00c6c   T aciavecs.o                             -
+0x00e00d14   T _int_acia                              bios/aciavecs.S:259        movem.l d0-d3/a0-a3,-(sp)
+0x00e00dd8   T ikbdraw                                bios/aciavecs.S:408        tst.b   ikbdstate       // inside a multi-byte packet?
+0x00e00ec6   T _call_mousevec                         bios/aciavecs.S:539        move.l  4(sp),a0
+0x00e00edc   T _setexc                                bios/bios.tr.c:933         LONG setexc(WORD num, LONG vector) {
+0x00e00edc   T bios.o                                 -
+0x00e00ef8   T _tickcal                               bios/bios.tr.c:960         }
+0x00e00efc   T _drvmap                                bios/bios.tr.c:1038        return blkdev_drvmap();
+0x00e00f02   T _mediach                               bios/bios.tr.c:1024        return protect_w(hdv_mediach, drv);
+0x00e00f16   T _getbpb                                bios/bios.tr.c:974         return protect_w(hdv_bpb, drive);
+0x00e00f2a   T _lrwabs                                bios/bios.tr.c:911         return protect_wlwwwl((PFLONG)hdv_rw, r_w, (LONG)adr, numb, first, drive, lfirst);
+0x00e00f54   T _bcostat                               bios/bios.tr.c:990         LONG bcostat(WORD handle) {
+0x00e00fb0   T _bconin                                bios/bios.tr.c:839         LONG bconin(WORD handle) {
+0x00e0100c   T _bconstat                              bios/bios.tr.c:808         LONG bconstat(WORD handle) {
+0x00e01068   T _bconout                               bios/bios.tr.c:870         LONG bconout(WORD handle, WORD what) {
+0x00e010d0   T _can_shutdown                          bios/bios.tr.c:686         if (has_nf_shutdown())
+0x00e01122   T _biosmain                              bios/bios.tr.c:706         void biosmain(void) {
+0x00e01724   T _is_text_pointer                       bios/bios.tr.c:1087        BOOL is_text_pointer(const void *p) {
+0x00e01742   T _bios_ent                              bios/bios.tr.c:1090        }
+0x00e01744   T _bios_vecs                             bios/bios.tr.c:1090        }
+0x00e01774   T xbios.o                                -
+0x00e01836   T _xbios_do_unimpl                       bios/xbios.c:1257          }
+0x00e0183e   T _xbios_ent                             bios/xbios.c:1257          }
+0x00e01840   T _xbios_vecs                            bios/xbios.c:1257          }
+0x00e01a78   T acsi.o                                 -
+0x00e01abc   T _detect_acsi                           bios/acsi.c:111            }
+0x00e01ac0   T _acsi_init                             bios/acsi.c:120            loopcount_delay = 15 * loopcount_1_msec / 1000;
+0x00e01aee   T _send_command                          bios/acsi.c:449            int send_command(WORD dev,ACSICMD *cmd) {
+0x00e01cfc   T _acsi_request_sense                    bios/acsi.c:261            LONG acsi_request_sense(WORD dev, UBYTE *buffer) {
+0x00e01e08   T _acsi_ioctl                            bios/acsi.c:189            LONG acsi_ioctl(UWORD dev, UWORD ctrl, void *arg) {
+0x00e02016   T _acsi_rw                               bios/acsi.c:126            LONG acsi_rw(WORD rw, LONG sector, WORD count, UBYTE *buf, WORD dev) {
+0x00e02130   T _bmem_init                             bios/biosmem.c:66          end_os = _end_os_stram;
+0x00e02130   T biosmem.o                              -
+0x00e02176   T _balloc_stram                          bios/biosmem.c:107         size = (size + 3) & ~3;
+0x00e021c2   T _getmpb                                bios/biosmem.c:135         void getmpb(MPB * mpb) {
+0x00e021f8   T blkdev.o                               -
+0x00e025d8   T _blkdev_getbpb                         bios/blkdev.c:574          LONG blkdev_getbpb(WORD dev) {
+0x00e02888   T _compute_cksum                         bios/blkdev.c:80           const UWORD *p = buf;
+0x00e02934   T _blkdev_init                           bios/blkdev.c:96           void blkdev_init(void) {
+0x00e02a84   T _blkdev_boot                           bios/blkdev.c:238          if (bootflags & BOOTFLAG_SKIP_HDD_BOOT)
+0x00e02ab6   T _add_partition                         bios/blkdev.c:359          int add_partition(UWORD unit, LONG *devices_available, char id[], ULONG start, ULONG size) {
+0x00e02b8a   T _get_shift                             bios/blkdev.c:555          WORD get_shift(ULONG blocksize) {
+0x00e02ba4   T _blkdev_drvmap                         bios/blkdev.c:840          }
+0x00e02bac   T _blkdev_avail                          bios/blkdev.c:852          return((1L << dev) & drvbits);
+0x00e02bc0   T _char_dummy                            bios/chardev.c:53          }
+0x00e02bc0   T chardev.o                              -
+0x00e02bc4   T _charout_dummy                         bios/chardev.c:58          }
+0x00e02bc8   T _bcostat2                              bios/chardev.c:118         }
+0x00e02bcc   T _bconout5                              bios/chardev.c:104         ascii_out(LOBYTE(ch));
+0x00e02be0   T _bconout2                              bios/chardev.c:93          cputc(b);
+0x00e02bf0   T _chardev_init                          bios/chardev.c:64          void chardev_init(void) {
+0x00e02cf4   T clock.o                                -
+0x00e0312c   T _detect_icdrtc                         bios/clock.c:151           has_icdrtc = 0;
+0x00e03170   T _detect_monster_rtc                    bios/clock.c:513           void detect_monster_rtc(void) {
+0x00e031e2   T _detect_megartc                        bios/clock.c:643           has_megartc = 0;
+0x00e0325a   T _clockvec                              bios/clock.c:973           memmove(b, buf, 6);
+0x00e0327c   T _clock_init                            bios/clock.c:1146          if (has_icdrtc)
+0x00e032ba   T _settime                               bios/clock.c:1219          void settime(LONG time) {
+0x00e0363c   T _gettime                               bios/clock.c:1267          LONG gettime(void) {
+0x00e039e0   T conout.o                               -
+0x00e03a80   T _invert_cell                           bios/conout.c:400          neg_cell(cell_addr(x, y));
+0x00e03a94   T _move_cursor                           bios/conout.c:417          void move_cursor(int x, int y) {
+0x00e03b6c   T _blank_out                             bios/conout.c:599          void blank_out(int topx, int topy, int botx, int boty) {
+0x00e03c78   T _scroll_up                             bios/conout.c:707          void scroll_up(UWORD top_line) {
+0x00e03cca   T _ascii_out                             bios/conout.c:483          void ascii_out(int ch) {
+0x00e03e8a   T _scroll_down                           bios/conout.c:734          void scroll_down(UWORD start_line) {
+0x00e03ed4   T _detect_akp                            bios/country.c:62          if (os_header.os_conf == OS_CONF_MULTILANG)
+0x00e03ed4   T country.o                              -
+0x00e03efe   T _detect_idt                            bios/country.c:186         cookie_idt = CONF_IDT;
+0x00e03f0a   T _get_keytbl                            bios/country.c:202         }
+0x00e03f12   T _get_fonts                             bios/country.c:219         *f6x6 = font_sets[j].f6x6;
+0x00e040d0   T disk.o                                 -
+0x00e0423e   T _disk_inquire                          bios/disk.c:852            LONG disk_inquire(UWORD unit, ULONG *blocksize, ULONG *deviceflags, char *productname, UWORD stringlen) {
+0x00e04294   T _disk_get_capacity                     bios/disk.c:865            LONG disk_get_capacity(UWORD unit, ULONG *blocks, ULONG *blocksize) {
+0x00e04360   T _disk_rw                               bios/disk.c:930            LONG disk_rw(UWORD unit, UWORD rw, ULONG sector, UWORD count, UBYTE *buf) {
+0x00e04cc6   T _disk_rescan                           bios/disk.c:322            void disk_rescan(UWORD unit) {
+0x00e04d1e   T _disk_mediach                          bios/disk.c:261            LONG disk_mediach(UWORD unit) {
+0x00e04db2   T _disk_init_all                         bios/disk.c:176            void disk_init_all(void) {
+0x00e04e68   T _DMAread                               bios/disk.c:994            LONG DMAread(LONG sector, WORD count, UBYTE *buf, WORD major) {
+0x00e04ec6   T _DMAwrite                              bios/disk.c:1010           return disk_rw(unit, RW_WRITE, sector, count, CONST_CAST(UBYTE *, buf));
+0x00e04f28   T _set_dma_addr                          bios/dma.c:17              DMA->addr_low = b[3];
+0x00e04f28   T dma.o                                  -
+0x00e04f3c   T dmasound.o                             -
+0x00e04f52   T _detect_dmasound                       bios/dmasound.c:129        void detect_dmasound(void) {
+0x00e04fa0   T _locksnd                               bios/dmasound.c:218        return 0x80;    /* unimplemented xbios call: return function # */
+0x00e04fc4   T _unlocksnd                             bios/dmasound.c:233        return 0x81;    /* unimplemented xbios call: return function # */
+0x00e04fe6   T _soundcmd                              bios/dmasound.c:343        LONG soundcmd(WORD mode, WORD data) {
+0x00e051b0   T _setbuffer                             bios/dmasound.c:370        LONG setbuffer(UWORD mode, ULONG startaddr, ULONG endaddr) {
+0x00e05234   T _setsndmode                            bios/dmasound.c:402        LONG setsndmode(UWORD mode) {
+0x00e05274   T _settracks                             bios/dmasound.c:425        LONG settracks(UWORD playtracks, UWORD rectracks) {
+0x00e052ba   T _setmontracks                          bios/dmasound.c:442        LONG setmontracks(UWORD montrack) {
+0x00e052f6   T _setinterrupt                          bios/dmasound.c:458        LONG setinterrupt(UWORD mode, WORD cause) {
+0x00e0534e   T _buffoper                              bios/dmasound.c:500        LONG buffoper(WORD mode) {
+0x00e0539a   T _dsptristate                           bios/dmasound.c:524        return 0x89;    /* unimplemented xbios call: return function # */
+0x00e053ee   T _gpio                                  bios/dmasound.c:546        LONG gpio(UWORD mode, UWORD data) {
+0x00e0543e   T _devconnect                            bios/dmasound.c:722        LONG devconnect(WORD source, WORD dest, WORD clk, WORD prescale, WORD protocol) {
+0x00e05608   T _dmasound_init                         bios/dmasound.c:201        void dmasound_init(void) {
+0x00e056a8   T _sndstatus                             bios/dmasound.c:754        return 0x8c;    /* unimplemented xbios call: return function # */
+0x00e056f0   T _buffptr                               bios/dmasound.c:773        LONG buffptr(LONG ptr) {
+0x00e05774   T floppy.o                               -
+0x00e05e0c   T _flop_hdv_init                         bios/floppy.c:306          void flop_hdv_init(void) {
+0x00e05ea4   T _flop_boot_read                        bios/floppy.c:352          return flopio(dskbufp,RW_READ,bootdev,1,0,0,1);
+0x00e05ec8   T _flop_checksum                         bios/floppy.c:443          void flop_checksum(int floppy, UBYTE *buf) {
+0x00e05f0e   T _flop_mediach                          bios/floppy.c:455          LONG flop_mediach(WORD dev) {
+0x00e0600e   T _protobt                               bios/floppy.c:691          void protobt(UBYTE *buf, LONG serial, WORD type, WORD exec) {
+0x00e060c4   T _floprd                                bios/floppy.c:745          return flopio(buf, RW_READ, dev, sect, track, side, count);
+0x00e060ea   T _flopwr                                bios/floppy.c:752          return flopio(CONST_CAST(UBYTE *, buf), RW_WRITE, dev, sect, track, side, count);
+0x00e06112   T _flopver                               bios/floppy.c:799          WORD sect, WORD track, WORD side, WORD count) {
+0x00e062c4   T _floppy_rw                             bios/floppy.c:557          WORD sides, WORD dev) {
+0x00e063fe   T _flopfmt                               bios/floppy.c:901          ULONG magic, WORD virgin) {
+0x00e066d6   T _floprate                              bios/floppy.c:1040         LONG floprate(WORD dev, WORD rate) {
+0x00e06758   T _flopvbl                               bios/floppy.c:1338         void flopvbl(void) {
+0x00e068b4   T _font_init                             bios/font.c:35             void font_init(void) {
+0x00e068b4   T font.o                                 -
+0x00e06944   T _font_set_default                      bios/font.c:73             void font_set_default(void) {
+0x00e069d0   T ide.o                                  -
+0x00e0741e   T _detect_ide                            bios/ide.c:551             BOOL detect_ide(void) {
+0x00e074aa   T _ide_init                              bios/ide.c:606             void ide_init(void) {
+0x00e07938   T _ide_rw                                bios/ide.c:1337            LONG ide_rw(WORD rw,ULONG sector,UWORD count,UBYTE *buf,WORD dev,BOOL need_byteswap) {
+0x00e07c28   T _ide_ioctl                             bios/ide.c:1520            LONG ide_ioctl(WORD dev,UWORD ctrl,void *arg) {
+0x00e07d18   T _send_ide_command                      bios/ide.c:1974            LONG send_ide_command(WORD dev, IDECmd *cmd) {
+0x00e081ec   T _ide_request_sense                     bios/ide.c:2061            LONG ide_request_sense(WORD dev, WORD buflen, UBYTE *buffer) {
+0x00e08280   T ikbd.o                                 -
+0x00e086c4   T _keytbl                                bios/ikbd.c:123            LONG keytbl(const UBYTE* norm, const UBYTE* shft, const UBYTE* caps) {
+0x00e08700   T _bioskeys                              bios/ikbd.c:139            current_keytbl = *get_keytbl();
+0x00e0871e   T _kbshift                               bios/ikbd.c:146            LONG kbshift(WORD flag) {
+0x00e08738   T _bconstat2                             bios/ikbd.c:242            if (ikbdiorec.head == ikbdiorec.tail) {
+0x00e0874e   T _bconin2                               bios/ikbd.c:251            LONG bconin2(void) {
+0x00e087ba   T _kbrate                                bios/ikbd.c:440            WORD kbrate(WORD initial, WORD repeat) {
+0x00e087fc   T _kb_timerc_int                         bios/ikbd.c:453            if (kb_ticks > 0 && kbdvecs.ikbdsys != kb_last_ikbdsys)
+0x00e088ca   T _kbd_int                               bios/ikbd.c:726            void kbd_int(UBYTE scancode) {
+0x00e08b7e   T _bcostat4                              bios/ikbd.c:919            if (ikbd_acia.ctrl & ACIA_TDRE) {
+0x00e08b8e   T _ikbd_writeb                           bios/ikbd.c:958            void ikbd_writeb(UBYTE b) {
+0x00e08baa   T _ikbdws                                bios/ikbd.c:949            void ikbdws(WORD cnt, const UBYTE *ptr) {
+0x00e08bce   T _bconout4                              bios/ikbd.c:935            ikbd_writeb((UBYTE)c);
+0x00e08be0   T _ikbd_writew                           bios/ikbd.c:973            void ikbd_writew(WORD w) {
+0x00e08bfe   T _kbd_init                              bios/ikbd.c:1063           void kbd_init(void) {
+0x00e08c98   T initinfo.o                             -
+0x00e08f8e   T _initinfo                              bios/initinfo.tr.c:231     WORD initinfo(ULONG *pshiftbits) {
+0x00e092f6   T _display_startup_msg                   bios/initinfo.tr.c:431     cprintf(""\
+0x00e093bc   T kprint.o                               -
+0x00e09448   T _cprintf                               bios/kprint.tr.c:57        int cprintf(const char *RESTRICT fmt, ...) {
+0x00e09466   T _kprintf                               bios/kprint.tr.c:237       int kprintf(const char *RESTRICT fmt, ...) {
+0x00e09492   T _kcprintf                              bios/kprint.tr.c:255       int kcprintf(const char *RESTRICT fmt, ...) {
+0x00e096a8   T _dopanic                               bios/kprint.tr.c:286       void dopanic(const char *fmt, ...) {
+0x00e09b8c   T _int_linea                             bios/linea.S:57            movem.l d0/d1/a0/a2,linea_save
+0x00e09b8c   T linea.o                                -
+0x00e09c50   T _set_screen_shift                      bios/lineainit.c:44        v_planes_shift = (v_planes > 4) ? 0 : shift_offset[v_planes];
+0x00e09c50   T lineainit.o                            -
+0x00e09c76   T _linea_init                            bios/lineainit.c:52        screen_get_current_mode_info(&v_planes, &V_REZ_HZ, &V_REZ_VT);
+0x00e09ca4   T _machine_detect                        bios/machine.c:548         void machine_detect(void) {
+0x00e09ca4   T machine.o                              -
+0x00e09e40   T _machine_init                          bios/machine.c:663         }
+0x00e09e42   T _fill_cookie_jar                       bios/machine.c:666         void fill_cookie_jar(void) {
+0x00e0a094   T _machine_name                          bios/machine.c:807         switch(cookie_mch) {
+0x00e0a0fc   T _mfp_init                              bios/mfp.c:35              for (p = &mfp->gpip; p <= &mfp->tsr; p += 2)
+0x00e0a0fc   T mfp.o                                  -
+0x00e0a116   T _jdisint                               bios/mfp.c:43              num &= 0x0F;
+0x00e0a16a   T _jenabint                              bios/mfp.c:63              num &= 0x0F;
+0x00e0a1b2   T _mfpint                                bios/mfp.c:115             void mfpint(WORD num, LONG vector) {
+0x00e0a1e0   T _setup_timer                           bios/mfp.c:134             void setup_timer(MFP *mfp, WORD timer, WORD control, WORD data) {
+0x00e0a26a   T _xbtimer                               bios/mfp.c:164             void xbtimer(WORD timer, WORD control, WORD data, LONG vector) {
+0x00e0a2b8   T _timeout_gpip                          bios/mfp.c:175             LONG next = hz_200 + delay;
+0x00e0a2e0   T _init_system_timer                     bios/mfp.c:196             timer_ms = 20;
+0x00e0a30c   T _bconstat3                             bios/midi.c:25             if (midiiorec.head == midiiorec.tail)
+0x00e0a30c   T midi.o                                 -
+0x00e0a322   T _bconin3                               bios/midi.c:36             LONG bconin3(void) {
+0x00e0a37a   T _bcostat3                              bios/midi.c:69             if (midi_acia.ctrl & ACIA_TDRE)
+0x00e0a38a   T _bconout3                              bios/midi.c:85             LONG bconout3(WORD dev, WORD c) {
+0x00e0a3a2   T _midiws                                bios/midi.c:105            void midiws(WORD cnt, const UBYTE *ptr) {
+0x00e0a3ca   T _midi_init                             bios/midi.c:121            midi_acia.ctrl = ACIA_RESET;    /* master reset */
+0x00e0a3d8   T _Initmous                              bios/mouse.c:41            void Initmous(WORD type, struct param *param, PFVOID newvec) {
+0x00e0a3d8   T mouse.o                                -
+0x00e0a534   T _detect_native_features                bios/natfeat.S:40          moveq   #0,d0               // assume no NatFeats available
+0x00e0a534   T natfeat.o                              -
+0x00e0a566   T _natfeat_cookie                        bios/natfeat.S:59          rts
+0x00e0a57e   T _xhdi_vec                              bios/natfeat.S:102         movem.l d1/a0-a1,-(sp)
+0x00e0a594   T natfeats.o                             -
+0x00e0a5cc   T _natfeat_init                          bios/natfeats.c:34         hasNF = detect_native_features();
+0x00e0a672   T _has_natfeats                          bios/natfeats.c:57         }
+0x00e0a67a   T _nfGetFullName                         bios/natfeats.c:60         long nfGetFullName(char *buffer, long size) {
+0x00e0a6ac   T _is_nfStdErr                           bios/natfeats.c:74         return nfid_stderr > 0;
+0x00e0a6ba   T _nfStdErr                              bios/natfeats.c:79         if (nfid_stderr) {
+0x00e0a6d8   T _get_xhdi_nfid                         bios/natfeats.c:90         }
+0x00e0a6fc   T _nf_shutdown                           bios/natfeats.c:95         if(nfid_shutdown) {
+0x00e0a71e   T _has_nf_shutdown                       bios/natfeats.c:105        return nfid_shutdown > 0;
+0x00e0a74e   T _nf_bootstrap                          bios/natfeats.c:111        if(hasNF) {
+0x00e0a78a   T _nf_getbootdrive                       bios/natfeats.c:124        if(hasNF) {
+0x00e0a7c0   T _nf_getbootstrap_args                  bios/natfeats.c:137        if(hasNF) {
+0x00e0a81a   T _mmu_is_emulated                       bios/natfeats.c:156        if(hasNF) {
+0x00e0a856   T _nf_setlinea                           bios/natfeats.c:173        if(hasNF) {
+0x00e0a890   T _panic                                 bios/panicasm.S:45         move.w  #0x2700,sr
+0x00e0a890   T panicasm.o                             -
+0x00e0a8bc   T _halt                                  bios/panicasm.S:87         stop    #0x2700
+0x00e0a8c2   T _kill_program                          bios/panicasm.S:97         move.w  #-1,-(sp)               // error code for program killed by OS
+0x00e0a8cc   T _warm_reset                            bios/panicasm.S:106        jsr     _flush_data_cache
+0x00e0a8d8   T _cold_reset                            bios/panicasm.S:115        clr.l   resvalid.w      // Don't allow jump to reset vector in startup.S
+0x00e0a8f0   T _setprt                                bios/parport.c:50          WORD setprt(WORD config) {
+0x00e0a8f0   T parport.o                              -
+0x00e0a908   T _parport_init                          bios/parport.c:112         ongibit(GI_STROBE);
+0x00e0a93a   T _bconin0                               bios/parport.c:127         }
+0x00e0a93e   T _bcostat0                              bios/parport.c:134         if(mfp->gpip & 1) {
+0x00e0a94e   T _bconout0                              bios/parport.c:145         LONG bconout0(WORD dev, WORD c) {
+0x00e0aa1c   T screen.o                               -
+0x00e0aa40   T _initialise_palette_registers          bios/screen.c:432          void initialise_palette_registers(WORD rez,WORD mode) {
+0x00e0aa8c   T _set_rez_hacked                        bios/screen.c:669          rez_was_hacked = TRUE;
+0x00e0aaa0   T _rez_changeable                        bios/screen.c:681          int rez_changeable(void) {
+0x00e0aac8   T _check_moderez                         bios/screen.c:407          WORD check_moderez(WORD moderez) {
+0x00e0ab02   T _get_monitor_type                      bios/screen.c:123          if (*gpip & 0x80)
+0x00e0ab0e   T _calc_vram_size                        bios/screen.c:755          vram_size = (ULONG)BYTES_LIN * V_REZ_VT;
+0x00e0ab28   T _screen_init_address                   bios/screen.c:644          vram_size = calc_vram_size();
+0x00e0ab4a   T _screen_get_current_mode_info          bios/screen.c:777          vmode = (sshiftmod & 7);            /* Get video mode from copy of hardware */
+0x00e0ab7e   T _get_palette                           bios/screen.c:838          switch(sshiftmod) {
+0x00e0abac   T _get_pixel_size                        bios/screen.c:882          void get_pixel_size(WORD *width,WORD *height) {
+0x00e0abf6   T _physbase                              bios/screen.c:908          if (HAS_NOVA && rez_was_hacked) {
+0x00e0ac30   T _logbase                               bios/screen.c:1060         }
+0x00e0ac38   T _getrez                                bios/screen.c:970          rez = *(volatile UBYTE *)ST_SHIFTER & 0x03;
+0x00e0ac42   T _setpalette                            bios/screen.c:1168         colorptr = palettePtr;
+0x00e0ac4c   T _setcolor                              bios/screen.c:1179         WORD setcolor(WORD colorNum, WORD color) {
+0x00e0ac80   T _vsync                                 bios/screen.c:1192         void vsync(void) {
+0x00e0acae   T _setscreen                             bios/screen.c:1089         WORD setscreen(UBYTE *logLoc, const UBYTE *physLoc, WORD rez, WORD videlmode) {
+0x00e0ad20   T _screen_init_mode                      bios/screen.c:487          void screen_init_mode(void) {
+0x00e0ada4   T _detect_monitor_change                 bios/screen.c:1225         void detect_monitor_change(void) {
+0x00e0ae60   T serport.o                              -
+0x00e0aedc   T _bconstat1                             bios/serport.c:194         if (iorec->in.head == iorec->in.tail) {
+0x00e0aef2   T _bconin1                               bios/serport.c:262         return bconin_iorec(&iorec1);
+0x00e0af00   T _bcostat1                              bios/serport.c:272         LONG bcostat1(void) {
+0x00e0af28   T _bconout1                              bios/serport.c:290         LONG bconout1(WORD dev, WORD b) {
+0x00e0b068   T _bconoutB                              bios/serport.c:586         LONG bconoutB(WORD dev, WORD b) {
+0x00e0b2b0   T _rsconf1                               bios/serport.c:387         ULONG rsconf1(WORD baud, WORD ctrl, WORD ucr, WORD rsr, WORD tsr, WORD scr) {
+0x00e0b374   T _push_serial_iorec                     bios/serport.c:332         void push_serial_iorec(UBYTE data) {
+0x00e0b3ac   T _mfp_rs232_rx_interrupt_handler        bios/serport.c:352         if (MFP_BASE->rsr & 0x80) {
+0x00e0b3ca   T _mfp_rs232_tx_interrupt_handler        bios/serport.c:374         if (out->head != out->tail) {
+0x00e0b414   T _scc_rx_interrupt_handler              bios/serport.c:648         void scc_rx_interrupt_handler(WORD portnum) {
+0x00e0b4a4   T _scc_tx_interrupt_handler              bios/serport.c:688         void scc_tx_interrupt_handler(WORD portnum) {
+0x00e0b534   T _scc_es_interrupt_handler              bios/serport.c:739         port = (portnum==0) ? &scc->portA : &scc->portB;
+0x00e0b564   T _scc_init                              bios/serport.c:906         void scc_init(void) {
+0x00e0b60e   T _init_serport                          bios/serport.c:1012        void init_serport(void) {
+0x00e0b8be   T _bconmap                               bios/serport.c:1083        LONG bconmap(WORD dev) {
+0x00e0ba7c   T _snd_init                              bios/sound.c:74            if (HAS_LAN_PORT)
+0x00e0ba7c   T sound.o                                -
+0x00e0baca   T _giaccess                              bios/sound.c:95            LONG giaccess(WORD data, WORD reg) {
+0x00e0bafc   T _ongibit                               bios/sound.c:116           void ongibit(WORD data) {
+0x00e0bb24   T _offgibit                              bios/sound.c:131           void offgibit(WORD data) {
+0x00e0bb4c   T _dosound                               bios/sound.c:146           LONG dosound(const UBYTE *table) {
+0x00e0bb80   T _sndirq                                bios/sound.c:164           void sndirq(void) {
+0x00e0bc24   T _bell                                  bios/sound.c:253           protect_v((PFLONG) bell_hook);
+0x00e0bc6c   T vt52.o                                 -
+0x00e0c1ee   T _cputc                                 bios/vt52.c:143            void cputc(WORD ch) {
+0x00e0c20a   T _blink                                 bios/vt52.c:850            void blink(void) {
+0x00e0c268   T _cursconf                              bios/vt52.c:894            WORD cursconf(WORD function, WORD operand) {
+0x00e0c2c8   T _vt52_init                             bios/vt52.c:924            font_set_default();
+0x00e0c400   T xhdi.o                                 -
+0x00e0c566   T _init_XHDI_drvmap                      bios/xhdi.c:43             XHDI_drvmap = blkdev_drvmap() & ~0x03UL;
+0x00e0c58e   T _xhdi_handler                          bios/xhdi.c:451            long xhdi_handler(UWORD *stack) {
+0x00e0cbb8   T _setup_68030_pmmu                      bios/pmmu030.c:152         memcpy(&pmmutree, &mmutable_rom, sizeof mmutable_rom);
+0x00e0cbb8   T pmmu030.o                              -
+0x00e0ccd4   T _init_delay                            bios/delay.c:73            switch((int)mcpu) {
+0x00e0ccd4   T delay.o                                -
+0x00e0cd12   T _calibrate_delay                       bios/delay.c:100           void calibrate_delay(void) {
+0x00e0cd94   T _run_calibration                       bios/delayasm.S:31         clr.l   intcount            //initialise interrupt count
+0x00e0cd94   T delayasm.o                             -
+0x00e0ce1c   T _ttram_detect                          bios/memory2.c:80          void ttram_detect(void) {
+0x00e0ce1c   T memory2.o                              -
+0x00e0cefe   T _altram_init                           bios/memory2.c:137         if (ramtop != NULL)
+0x00e0cfe4   T _build_rw_command                      bios/scsi.c:1421           int build_rw_command(UBYTE *cdb, UWORD rw, ULONG sector, UWORD count) {
+0x00e0cfe4   T scsi.o                                 -
+0x00e0d07c   T nova.o                                 -
+0x00e0d122   T _detect_nova                           bios/nova.c:203            void detect_nova(void) {
+0x00e0d24c   T _init_nova                             bios/nova.c:576            int init_nova(void) {
+0x00e0da9e   T _get_novamembase                       bios/nova.c:633            }
+0x00e0daf4   T scsidriv.o                             -
+0x00e0e07a   T _scsidriv_init                         bios/scsidriv.c:117        void scsidriv_init(void) {
+0x00e0e0e0   T _scsidriv_root_init                    bios/scsidriv.c:136        }
+0x00e0e114   T bdosmain.o                             -
+0x00e0e178   T _osinit_before_xmaddalt                bdos/bdosmain.c:318        void osinit_before_xmaddalt(void) {
+0x00e0e1bc   T _osinit_after_xmaddalt                 bdos/bdosmain.c:339        run = &initial_basepage;
+0x00e0e1e4   T _osif                                  bdos/bdosmain.c:410        long osif(short *pw) {
+0x00e0e9a8   T console.o                              -
+0x00e0ebfe   T _stdhdl_init                           bdos/console.c:108         void stdhdl_init(void) {
+0x00e0ec5a   T _get_default_handle                    bdos/console.c:134         return default_handle[stdh];
+0x00e0ec68   T _xconstat                              bdos/console.c:161         return constat(HXFORM(run->p_uft[0]));
+0x00e0ec8e   T _xconostat                             bdos/console.c:169         long xconostat(void) {
+0x00e0ecb0   T _xprtostat                             bdos/console.c:178         long xprtostat(void) {
+0x00e0ecd2   T _xauxistat                             bdos/console.c:188         return constat(HXFORM(run->p_uft[2]));
+0x00e0ecf8   T _xauxostat                             bdos/console.c:196         long xauxostat(void) {
+0x00e0ed1a   T _tabout                                bdos/console.c:293         void tabout(int h, int ch) {
+0x00e0edac   T _xconout                               bdos/console.c:281         tabout(HXFORM(run->p_uft[1]),ch);
+0x00e0edca   T _xauxout                               bdos/console.c:332         long xauxout(int ch) {
+0x00e0edf2   T _xprtout                               bdos/console.c:341         long xprtout(int ch) {
+0x00e0ee1a   T _xrawcin                               bdos/console.c:377         return getch(HXFORM(run->p_uft[0]));
+0x00e0ee32   T _conin                                 bdos/console.c:385         long conin(int h) {
+0x00e0ee5c   T _xconin                                bdos/console.c:397         long xconin(void) {
+0x00e0ee8e   T _xnecin                                bdos/console.c:415         long xnecin(void) {
+0x00e0eec0   T _xauxin                                bdos/console.c:433         long xauxin(void) {
+0x00e0eee2   T _xrawio                                bdos/console.c:442         long xrawio(int parm) {
+0x00e0ef3c   T _xconws                                bdos/console.c:460         void xconws(char *p) {
+0x00e0ef6e   T _cgets                                 bdos/console.c:541         int cgets(int h, int maxlen, char *buf) {
+0x00e0f092   T _xconrs                                bdos/console.c:534         void xconrs(char *p) {
+0x00e0f0c8   T fsbuf.o                                -
+0x00e0f136   T _bufl_init                             bdos/fsbuf.c:57            void bufl_init(void) {
+0x00e0f194   T _flush                                 bdos/fsbuf.c:86            void flush(BCB *b) {
+0x00e0f2ae   T _getbcb                                bdos/fsbuf.c:115           BCB *getbcb(DMD *dmd,WORD buftype,RECNO recnum) {
+0x00e0f426   T _getrec                                bdos/fsbuf.c:210           UBYTE *getrec(RECNO recn, OFD *of, int wrtflg) {
+0x00e0f46c   T fsdir.o                                -
+0x00e0f812   T _xgsdtof                               bdos/fsdir.c:685           long xgsdtof(DOSTIME *buf, int h, int wrt) {
+0x00e0f870   T _builds                                bdos/fsdir.c:738           void builds(const char *s1, char *s2) {
+0x00e0f95e   T _xsnext                                bdos/fsdir.c:655           long xsnext(void) {
+0x00e0fb42   T _incr_curdir_usage                     bdos/fsdir.c:1165          int incr_curdir_usage(DND *dnd) {
+0x00e0fb88   T _decr_curdir_usage                     bdos/fsdir.c:1195          void decr_curdir_usage(int n) {
+0x00e0fbc2   T _xgetdir                               bdos/fsdir.c:1230          long xgetdir(char *buf, int drv) {
+0x00e0fc4c   T _dirinit                               bdos/fsdir.c:1258          FCB *dirinit(DND *dn) {
+0x00e0fcc8   T _makofd                                bdos/fsdir.c:1921          OFD *makofd(DND *p) {
+0x00e0fd30   T _scan                                  bdos/fsdir.c:1526          FCB *scan(DND *dnd, const char *n, WORD att, LONG *posp) {
+0x00e0fe62   T _findit                                bdos/fsdir.c:1408          DND *findit(char *name, const char **sp, int dflag) {
+0x00e0fff2   T _xchdir                                bdos/fsdir.c:1114          long xchdir(char *p) {
+0x00e10078   T _ixsfirst                              bdos/fsdir.c:453           long ixsfirst(char *name, WORD att, DTAINFO *addr) {
+0x00e10170   T _xsfirst                               bdos/fsdir.c:524           long xsfirst(char *name, int att) {
+0x00e101b6   T _xrename                               bdos/fsdir.c:896           long xrename(int n, char *p1, char *p2) {
+0x00e1054a   T _xchmod                                bdos/fsdir.c:403           long xchmod(char *p, int wrt, UBYTE mod) {
+0x00e10612   T _xrmdir                                bdos/fsdir.c:298           long xrmdir(char *p) {
+0x00e10714   T _xmkdir                                bdos/fsdir.c:202           long xmkdir(char *s) {
+0x00e108ca   T _free_available_dnds                   bdos/fsdir.c:2054          WORD free_available_dnds(void) {
+0x00e1092c   T _log_media                             bdos/fsdrive.c:185         WORD log_media(BPB *b, int drv) {
+0x00e1092c   T fsdrive.o                              -
+0x00e10aac   T _ckdrv                                 bdos/fsdrive.c:78          WORD ckdrv(int d, BOOL checkrem) {
+0x00e10bac   T _cl2rec                                bdos/fsfat.c:25            return((RECNO)(cl-2) << dm->m_clrlog);
+0x00e10bac   T fsfat.o                                -
+0x00e10bc6   T _clfix                                 bdos/fsfat.c:37            void clfix(CLNO cl, CLNO link, DMD *dm) {
+0x00e10ce0   T _getrealcl                             bdos/fsfat.c:108           CLNO getrealcl(CLNO cl, DMD *dm) {
+0x00e10d92   T _getclnum                              bdos/fsfat.c:161           CLNO getclnum(CLNO cl, OFD *of) {
+0x00e10db2   T _nextcl                                bdos/fsfat.c:248           int nextcl(OFD *p, int wrtflg) {
+0x00e10f0a   T _xgetfree                              bdos/fsfat.c:338           long xgetfree(long *buf, int drv) {
+0x00e11004   T _ixforce                               bdos/fshand.c:47           long ixforce(int std, int h, PD *p) {
+0x00e11004   T fshand.o                               -
+0x00e11076   T _xforce                                bdos/fshand.c:34           return ixforce(std,h,run);
+0x00e1108c   T _xdup                                  bdos/fshand.c:94           long xdup(int h) {
+0x00e1112c   T fsio.o                                 -
+0x00e11498   T _eof                                   bdos/fsio.c:298            f = getofd(h);
+0x00e114c4   T _ixlseek                               bdos/fsio.c:355            long ixlseek(OFD *p,long n) {
+0x00e11596   T _xlseek                                bdos/fsio.c:322            long xlseek(long n, int h, int flg) {
+0x00e115f0   T _ixgetfcb                              bdos/fsio.c:463            FCB *ixgetfcb(OFD *p) {
+0x00e11666   T _ixread                                bdos/fsio.c:499            long ixread(OFD *p, long len, void *ubufr) {
+0x00e1169c   T _xread                                 bdos/fsio.c:445            p = getofd(h);
+0x00e116c4   T _ixwrite                               bdos/fsio.c:556            return(xrw(1,p,len,ubufr));
+0x00e116de   T _xwrite                                bdos/fsio.c:533            p = getofd(h);
+0x00e11708   T _xgetdta                               bdos/fsmain.c:397          }
+0x00e11708   T fsmain.o                               -
+0x00e11714   T _xsetdta                               bdos/fsmain.c:405          run->p_xdta = (DTA *)addr;
+0x00e11722   T _xsetdrv                               bdos/fsmain.c:421          long xsetdrv(int drv) {
+0x00e11748   T _xgetdrv                               bdos/fsmain.c:441          }
+0x00e11756   T _getofd                                bdos/fsmain.c:475          OFD *getofd(int h) {
+0x00e117a0   T fsopnclo.o                             -
+0x00e11896   T _xopen                                 bdos/fsopnclo.c:222        long xopen(char *name, int mod) {
+0x00e11906   T _ixclose                               bdos/fsopnclo.c:512        {                                   /*  M01.01.03                   */
+0x00e11a1a   T _xclose                                bdos/fsopnclo.c:427        long xclose(int h) {
+0x00e11b3e   T _ixdel                                 bdos/fsopnclo.c:653        long ixdel(DND *dn, FCB *f, long pos) {
+0x00e11c12   T _xunlink                               bdos/fsopnclo.c:624        long xunlink(char *name) {
+0x00e11c8e   T _contains_illegal_characters           bdos/fsopnclo.c:709        BOOL contains_illegal_characters(const char *test) {
+0x00e11cb8   T _ixcreat                               bdos/fsopnclo.c:100        long ixcreat(char *name, UBYTE attr) {
+0x00e11ee8   T _xcreat                                bdos/fsopnclo.c:85         rc = ixcreat(name, attr & ~FA_SUBDIR);
+0x00e11efc   T _ffit                                  bdos/iumem.c:36            MD *ffit(long amount, MPB *mp) {
+0x00e11efc   T iumem.o                                -
+0x00e11fb2   T _freeit                                bdos/iumem.c:145           void freeit(MD *m, MPB *mp) {
+0x00e1206a   T _shrinkit                              bdos/iumem.c:229           WORD shrinkit(MD *m, MPB *mp, LONG newlen) {
+0x00e120bc   T kpgmld.o                               -
+0x00e12118   T _kpgmhdrld                             bdos/kpgmld.c:41           LONG kpgmhdrld(FH h, PGMHDR01 *hd) {
+0x00e12178   T _kpgmld                                bdos/kpgmld.c:80           LONG kpgmld(PD *p, FH h, PGMHDR01 *hd) {
+0x00e122ee   T _kpgm_relocate                         bdos/kpgmld.c:280          LONG kpgm_relocate(PD *p, long length) {
+0x00e123f4   T osmem.o                                -
+0x00e1248c   T _xmgetblk                              bdos/osmem.tr.c:217        void *xmgetblk(WORD memtype) {
+0x00e1254a   T _xmgetmd                               bdos/osmem.tr.c:105        MD *xmgetmd(void) {
+0x00e125da   T _xmfreblk                              bdos/osmem.tr.c:274        void xmfreblk(void *m) {
+0x00e125fc   T _xmfremd                               bdos/osmem.tr.c:164        void xmfremd(MD *md) {
+0x00e1266c   T _osmem_init                            bdos/osmem.tr.c:305        osmlen = LENOSM;
+0x00e12690   T proc.o                                 -
+0x00e128fe   T _xexec                                 bdos/proc.c:180            long xexec(WORD flag, char *path, char *tail, char *env) {
+0x00e12bdc   T _xterm                                 bdos/proc.c:602            void xterm(UWORD rc) {
+0x00e12ce4   T _x0term                                bdos/proc.c:590            xterm(0);
+0x00e12cea   T _xtermres                              bdos/proc.c:625            WORD xtermres(long blkln, WORD rc) {
+0x00e12d34   T _bdos_trap2                            bdos/rwa.S:146             tst.w   d0
+0x00e12d34   T rwa.o                                  -
+0x00e12d50   T _enter                                 bdos/rwa.S:160             jbsr    fix_trap
+0x00e12dce   T _gouser                                bdos/rwa.S:235             move.l  _run,a5         // a5 -> current basepage
+0x00e12e04   T _termuser                              bdos/rwa.S:266             move.l  _run,a5
+0x00e12eac   T time.o                                 -
+0x00e12f86   T _xgetdate                              bdos/time.c:102            }
+0x00e12f90   T _xsetdate                              bdos/time.c:109            long xsetdate(UWORD d) {
+0x00e12ff4   T _xgettime                              bdos/time.c:135            }
+0x00e12ffe   T _xsettime                              bdos/time.c:143            long xsettime(UWORD t) {
+0x00e1304e   T _time_init                             bdos/time.c:161            void time_init(void) {
+0x00e13098   T umem.o                                 -
+0x00e130c6   T _xmfree                                bdos/umem.c:136            long xmfree(void *addr) {
+0x00e13106   T _xsetblk                               bdos/umem.c:171            long xsetblk(int n, void *blk, long len) {
+0x00e1319c   T _xmxalloc                              bdos/umem.c:235            void *xmxalloc(long amount, int mode) {
+0x00e13290   T _xmalloc                               bdos/umem.c:117            void *xmalloc(long amount) {
+0x00e132bc   T _xmaddalt                              bdos/umem.c:456            long xmaddalt(UBYTE *start, LONG size) {
+0x00e13378   T _total_alt_ram                         bdos/umem.c:531            for(md = pmdalt.mp_mfl; md; md = md->m_link)
+0x00e133a4   T _umem_init                             bdos/umem.c:550            void umem_init(void) {
+0x00e133e4   T _set_owner                             bdos/umem.c:588            void set_owner(void *addr, PD *p) {
+0x00e13418   T _cookie_init                           util/cookie.c:28           dflt_jar[0].tag = 0;
+0x00e13418   T cookie.o                               -
+0x00e13430   T _cookie_add                            util/cookie.c:37           struct cookie *jar = p_cookies;
+0x00e13462   T _cookie_get                            util/cookie.c:65           BOOL cookie_get(ULONG tag, ULONG *pvalue) {
+0x00e13486   T _get_idt_cookie                        util/cookie.c:84           ULONG get_idt_cookie(void) {
+0x00e134ae   T _get_frb_cookie                        util/cookie.c:99           UBYTE *get_frb_cookie(void) {
+0x00e134d2   T _get_floppy_type                       util/cookie.c:116          WORD get_floppy_type(void) {
+0x00e134f8   T _nvdi_cookie_present                   util/cookie.c:131          BOOL nvdi_cookie_present(void) {
+0x00e13510   T doprintf.o                             -
+0x00e135b4   T _doprintf                              util/doprintf.c:79         int doprintf(void (*outc)(int), const char *RESTRICT fmt, va_list ap) {
+0x00e138d4   T _Isqrt                                 util/intmath.c:19          ULONG Isqrt(ULONG a) {
+0x00e138d4   T intmath.o                              -
+0x00e13928   T _memcpy                                util/memmove.S:71          move.l   8(sp),a0        // load source pointer
+0x00e13928   T memmove.o                              -
+0x00e1394a   T _memmove                               util/memmove.S:85          move.l   8(sp),a0        // load source pointer
+0x00e13b9c   T _bzero_nobuiltin                       util/memset.S:33           move.l   4(sp),a0
+0x00e13b9c   T memset.o                               -
+0x00e13baa   T _memset                                util/memset.S:43           move.l   4(sp),a0
+0x00e13c68   T _trap1                                 util/miscasm.S:22          move.l  (sp)+,t1spsav   // save return address
+0x00e13c68   T miscasm.o                              -
+0x00e13c88   T _trap1_pexec                           util/miscasm.S:55          movem.l d2/a2,-(sp)
+0x00e13cac   T _stop_until_interrupt                  util/miscasm.S:80          move.w  sr,d0
+0x00e13cf8   T _just_rts                              util/miscasm.S:148         rts
+0x00e13cfa   T _mul_div_round                         util/miscasm.S:183         move.w  6(sp),d0        // d0 = mult2
+0x00e13d16   T _protect_v                             util/miscasm.S:214         move.l   4(sp),a0
+0x00e13d26   T _protect_w                             util/miscasm.S:226         move.l   4(sp),a0
+0x00e13d3e   T _protect_ww                            util/miscasm.S:241         move.l   4(sp),a0
+0x00e13d56   T _protect_wlwwwl                        util/miscasm.S:256         movem.l  8(sp),d0-d1/a0-a1
+0x00e13d74   T _setjmp                                util/setjmp.S:30           move.l  4(sp),a0                // jmp_buf
+0x00e13d74   T setjmp.o                               -
+0x00e13d82   T _longjmp                               util/setjmp.S:37           move.l  4(sp),a0                // jmp_buf
+0x00e13d98   T string.o                               -
+0x00e13dae   T _strlcpy                               util/string.c:67           size_t strlcpy(char *RESTRICT dest,const char *RESTRICT src,size_t count) {
+0x00e13de6   T _strlen                                util/string.c:88           size_t strlen(const char *s) {
+0x00e13df6   T _strcat                                util/string.c:96           char *strcat(char *RESTRICT dest, const char *RESTRICT src) {
+0x00e13e14   T _strcmp                                util/string.c:107          int strcmp(const char *a, const char *b) {
+0x00e13e38   T _memcmp                                util/string.c:123          int memcmp(const void * aa, const void * bb, size_t n) {
+0x00e13e68   T _strncmp                               util/string.c:139          int strncmp(const char *a, const char *b, size_t n) {
+0x00e13e9c   T _toupper                               util/string.c:171          int toupper(int c) {
+0x00e13eb2   T _strncasecmp                           util/string.c:155          int strncasecmp(const char *a, const char *b, size_t n) {
+0x00e13f00   T _sprintf                               util/string.c:194          int sprintf(char *RESTRICT str, const char *RESTRICT fmt, ...) {
+0x00e13f40   T _build_root_path                       util/miscutil.c:17         void build_root_path(char *path, char drive) {
+0x00e13f40   T miscutil.o                             -
+0x00e13f5a   T _extract_drive_number                  util/miscutil.c:35         WORD extract_drive_number(const char *path) {
+0x00e13f96   T _set_all_files                         include/string.h:40        register char *tmp = dest;
+0x00e13fa8   T gemdos.o                               -
+0x00e13faa   T _pgmld                                 util/gemdos.c:34           ret = Pexec(PE_LOAD, pname, "", NULL);
+0x00e13ffc   T _dos_setdt                             util/gemdos.c:50           WORD dos_setdt(UWORD h, UWORD time, UWORD date) {
+0x00e14032   T _dos_label                             util/gemdos.c:60           WORD dos_label(char drive, char *plabel) {
+0x00e14096   T _dos_space                             util/gemdos.c:78           void dos_space(WORD drv, LONG *ptotal, LONG *pavail) {
+0x00e140f8   T _dos_alloc_stram                       util/gemdos.c:96           return (void *)Mxalloc(nbytes,MX_STRAM);
+0x00e1410c   T _dos_avail_stram                       util/gemdos.c:103          return Mxalloc(-1L,MX_STRAM);
+0x00e14120   T _dos_avail_altram                      util/gemdos.c:111          return Mxalloc(-1L,MX_TTRAM);
+0x00e14136   T _dos_alloc_anyram                      util/gemdos.c:119          return (void *)Mxalloc(nbytes,MX_PREFTTRAM);
+0x00e1414c   T _dos_avail_anyram                      util/gemdos.c:126          return Mxalloc(-1L,MX_PREFTTRAM);
+0x00e14162   T _dos_free                              util/gemdos.c:132          return Mfree(maddr);
+0x00e14174   T _dos_shrink                            util/gemdos.c:138          return Mshrink(maddr,length);
+0x00e1418e   T _dos_load_file                         util/gemdos.c:149          LONG dos_load_file(char *filename, LONG count, char *buf) {
+0x00e141d4   T _fmt_str                               util/optimize.c:44         void fmt_str(const char *instr, char *outstr) {
+0x00e141d4   T optimize.o                             -
+0x00e14230   T _unfmt_str                             util/optimize.c:78         void unfmt_str(const char *instr, char *outstr) {
+0x00e1426c   T _inf_sset                              util/optimize.c:107        OBJECT  *objptr = tree + obj;
+0x00e14298   T _inf_sget                              util/optimize.c:122        OBJECT  *objptr = tree + obj;
+0x00e142ba   T _inf_gindex                            util/optimize.c:135        WORD inf_gindex(OBJECT *tree, WORD baseobj, WORD numobj) {
+0x00e142ea   T _inf_what                              util/optimize.c:158        WORD inf_what(OBJECT *tree, WORD ok) {
+0x00e1432a   T _scan_2                                util/optimize.c:214        temp = -1;
+0x00e14380   T _filename_start                        util/optimize.c:228        char *start = path;
+0x00e14394   T _wildcmp                               util/optimize.c:245        WORD wildcmp(const char *pattern,const char *filename) {
+0x00e14408   T _scasb                                 util/optimopt.S:28         move.l  4(sp),a0
+0x00e14408   T optimopt.o                             -
+0x00e1441e   T _expand_string                         util/optimopt.S:50         movea.l 8(sp),a0        // a0 -> source
+0x00e14438   T _inside                                util/rectfunc.c:20         BOOL inside(WORD x, WORD y, const GRECT *pt) {
+0x00e14438   T rectfunc.o                             -
+0x00e14470   T _rc_constrain                          util/rectfunc.c:33         void rc_constrain(const GRECT *pc, GRECT *pt) {
+0x00e144c6   T _rc_equal                              util/rectfunc.c:49         WORD rc_equal(const GRECT *p1, const GRECT *p2) {
+0x00e144e8   T _rc_intersect                          util/rectfunc.c:64         WORD rc_intersect(const GRECT *p1, GRECT *p2) {
+0x00e1455c   T _rc_union                              util/rectfunc.c:85         void rc_union(const GRECT *p1, GRECT *p2) {
+0x00e145bc   T _strlencpy                             util/stringasm.S:24        movea.l 8(sp),a0
+0x00e145bc   T stringasm.o                            -
+0x00e145d0   T _strchr                                util/stringasm.S:49        move.l  4(sp),a0
+0x00e145ec   D _off_6x6_table                         ~bios/fnt_off_6x6.c:14     const UWORD off_6x6_table[] =
+0x00e145ec   D fnt_off_6x6.o                          -
+0x00e147f0   D _off_8x8_table                         ~bios/fnt_off_8x8.c:14     const UWORD off_8x8_table[] =
+0x00e147f0   D fnt_off_8x8.o                          -
+0x00e149f4   T _fnt_l2_6x6                            -
+0x00e149f4   T fnt_l2_6x6.o                           -
+0x00e14ed0   T _fnt_l2_8x8                            -
+0x00e14ed0   T fnt_l2_8x8.o                           -
+0x00e1572c   T _fnt_l2_8x16                           -
+0x00e1572c   T fnt_l2_8x16.o                          -
+0x00e16788   T _version                               -
+0x00e16788   T version.o                              -
+0x00e1678c   T ___mulsi3                              -
+0x00e1678c   T _mulsi3.o                              -
+0x00e167b0   T ___udivsi3                             -
+0x00e167b0   T _udivsi3.o                             -
+0x00e1680c   T _vditrap                               vdi/vdi_asm.S:35           cmp.w   #0x73,d0                // VDI call?
+0x00e1680c   T vdi_asm.o                              -
+0x00e16828   T _GSX_ENTRY                             vdi/vdi_asm.S:69           movem.l d1-d7/a0-a6,-(sp)       //Save the callers registers
+0x00e168ac   T _mouse_int                             vdi/vdi_asm.S:236          movem.l d0-d7/a0-a6, -(sp)      // save registers used
+0x00e16964   T _wheel_int                             vdi/vdi_asm.S:396          movem.l d0-d1/a0-a1,-(sp)        // Save only necessary registers
+0x00e169bc   T _mov_cur                               vdi/vdi_asm.S:497          tst.w   _HIDE_CNT       // is the cursor hidden?
+0x00e169e2   T _call_user_but                         vdi/vdi_asm.S:541          move.w  4(sp),d0
+0x00e169ee   T _call_user_wheel                       vdi/vdi_asm.S:549          move.w  4(sp),d0
+0x00e16a00   T vdi_col.o                              -
+0x00e16b16   T _vdi_vs_color                          vdi/vdi_col.c:657          void vdi_vs_color(Vwk *vwk) {
+0x00e16b94   T _init_colors                           vdi/vdi_col.c:709          void init_colors(void) {
+0x00e16c1e   T _vdi_vq_color                          vdi/vdi_col.c:846          void vdi_vq_color(Vwk *vwk) {
+0x00e16dc0   T vdi_control.o                          -
+0x00e16de6   T _get_vwk_by_handle                     vdi/vdi_control.c:179      Vwk * get_vwk_by_handle(WORD handle) {
+0x00e16e0a   T _update_rez_dependent                  vdi/vdi_control.c:195      BYTES_LIN = v_lin_wr = V_REZ_HZ / 8 * v_planes;
+0x00e16ec2   T _validate_color_index                  vdi/vdi_control.c:225      WORD validate_color_index(WORD colnum) {
+0x00e17060   T _vdi_vs_clip                           vdi/vdi_control.c:236      void vdi_vs_clip(Vwk * vwk) {
+0x00e170ee   T _vdi_vswr_mode                         vdi/vdi_control.c:260      CONTRL[4] = 1;
+0x00e17122   T _vdi_v_opnvwk                          vdi/vdi_control.c:408      void vdi_v_opnvwk(Vwk * vwk) {
+0x00e171a2   T _vdi_v_clsvwk                          vdi/vdi_control.c:463      void vdi_v_clsvwk(Vwk * vwk) {
+0x00e171ea   T _vdi_v_opnwk                           vdi/vdi_control.c:497      void vdi_v_opnwk(Vwk * vwk) {
+0x00e172d4   T _vdi_v_clswk                           vdi/vdi_control.c:574      void vdi_v_clswk(Vwk * vwk) {
+0x00e17326   T _vdi_v_clrwk                           vdi/vdi_control.c:618      memset(v_bas_ad, fill, size);
+0x00e17348   T _vdi_vq_extnd                          vdi/vdi_control.c:627      void vdi_vq_extnd(Vwk * vwk) {
+0x00e17490   T vdi_esc.o                              -
+0x00e17668   T _vdi_v_escape                          vdi/vdi_esc.c:336          UWORD escfun = CONTRL[5];
+0x00e17692   T _esc_init                              vdi/vdi_esc.c:83           bios_conws("\033H\033f\033E");  /* home, hide alpha cursor, then clear-and-home */
+0x00e1769e   T _esc_exit                              vdi/vdi_esc.c:95           bios_conws("\033E\033e\015");   /* clear-and-home, then show alpha cursor */
+0x00e176fc   T vdi_fill.o                             -
+0x00e17958   T _vdi_vsf_udpat                         vdi/vdi_fill.c:150         void vdi_vsf_udpat(Vwk * vwk) {
+0x00e1799c   T _vdi_vsf_color                         vdi/vdi_fill.c:207         void vdi_vsf_color(Vwk * vwk) {
+0x00e179ce   T _vdi_vsf_perimeter                     vdi/vdi_fill.c:220         void vdi_vsf_perimeter(Vwk * vwk) {
+0x00e179fa   T _vdi_vr_recfl                          vdi/vdi_fill.c:294         void vdi_vr_recfl(Vwk * vwk) {
+0x00e17a9e   T _vdi_vqf_attributes                    vdi/vdi_fill.c:322         void vdi_vqf_attributes(Vwk * vwk) {
+0x00e17ae2   T _st_fl_ptr                             vdi/vdi_fill.c:340         st_fl_ptr(Vwk * vwk) {
+0x00e17b7c   T _vdi_vsf_style                         vdi/vdi_fill.c:187         void vdi_vsf_style(Vwk * vwk) {
+0x00e17bba   T _vdi_vsf_interior                      vdi/vdi_fill.c:174         void vdi_vsf_interior(Vwk * vwk) {
+0x00e17be0   T _clc_flit                              vdi/vdi_fill.c:435         void clc_flit(const VwkAttrib *attr, const VwkClip *clipper, const Point *point, WORD vectors, WORD start, WORD end) {
+0x00e17cf6   T _polygon                               vdi/vdi_fill.c:561         polygon(Vwk * vwk, Point * ptsin, int count) {
+0x00e17dca   T _vdi_v_fillarea                        vdi/vdi_fill.c:620         int count = CONTRL[1];
+0x00e17de8   T _contourfill                           vdi/vdi_fill.c:949         void contourfill(const VwkAttrib * attr, const VwkClip *clip) {
+0x00e1805a   T _vdi_v_contourfill                     vdi/vdi_fill.c:1085        void vdi_v_contourfill(Vwk * vwk) {
+0x00e1809a   T _vdi_v_get_pixel                       vdi/vdi_fill.c:1096        void vdi_v_get_pixel(Vwk * vwk) {
+0x00e180ca   T _get_pix                               vdi/vdi_fill.c:1132        return pixelread(PTSIN[0], PTSIN[1]);
+0x00e180de   T _put_pix                               vdi/vdi_fill.c:1159        put_pix(void) {
+0x00e18154   T _SOLID                                 vdi/vdi_fill.c:1200        }
+0x00e18156   T _HOLLOW                                vdi/vdi_fill.c:1200        }
+0x00e18158   T _ROM_UD_PATRN                          vdi/vdi_fill.c:1200        }
+0x00e183d8   T vdi_gdp.o                              -
+0x00e186a8   T _vdi_v_gdp                             vdi/vdi_gdp.c:427          void vdi_v_gdp(Vwk * vwk) {
+0x00e18a98   T vdi_input.o                            -
+0x00e18ad4   T _vdi_v_choice                          vdi/vdi_input.c:201        TERM_CH = 1;                /* 16 bit char info */
+0x00e18ae8   T _vdi_v_string                          vdi/vdi_input.c:80         void vdi_v_string(Vwk * vwk) {
+0x00e18ba0   T _vdi_vq_key_s                          vdi/vdi_input.c:111        void vdi_vq_key_s(Vwk * vwk) {
+0x00e18bc2   T _vdi_vsin_mode                         vdi/vdi_input.c:122        INTOUT[0] = i = INTIN[1];
+0x00e18c16   T _vdi_vqin_mode                         vdi/vdi_input.c:158        int_out = INTOUT;
+0x00e18c64   T vdi_line.o                             -
+0x00e18f02   T _vdi_vsl_udsty                         vdi/vdi_line.c:83          vwk->ud_ls = INTIN[0];
+0x00e18f12   T _vdi_vsl_type                          vdi/vdi_line.c:94          li = ((INTIN[0]<MIN_LINE_STYLE) || (INTIN[0]>MAX_LINE_STYLE)) ? DEF_LINE_STYLE : INTIN[0];
+0x00e18f3a   T _vdi_vsl_width                         vdi/vdi_line.c:109         w = PTSIN[0];
+0x00e18f72   T _vdi_vsl_ends                          vdi/vdi_line.c:129         void vdi_vsl_ends(Vwk * vwk) {
+0x00e18fb0   T _vdi_vsl_color                         vdi/vdi_line.c:144         void vdi_vsl_color(Vwk * vwk) {
+0x00e18fe2   T _vdi_vql_attributes                    vdi/vdi_line.c:157         void vdi_vql_attributes(Vwk * vwk) {
+0x00e19028   T _draw_rect_common                      vdi/vdi_line.c:793         void draw_rect_common(const VwkAttrib *attr, const Rect *rect) {
+0x00e19548   T _Vwk2Attrib                            vdi/vdi_line.c:818         void Vwk2Attrib(const Vwk *vwk, VwkAttrib *attr, const UWORD color) {
+0x00e19574   T _draw_rect                             vdi/vdi_line.c:835         void draw_rect(const Vwk * vwk, Rect * rect, const UWORD fillcolor) {
+0x00e195a2   T _linea_rect                            vdi/vdi_line.c:904         void linea_rect(void) {
+0x00e19648   T _linea_hline                           vdi/vdi_line.c:933         void linea_hline(void) {
+0x00e19694   T _linea_polygon                         vdi/vdi_line.c:952         void linea_polygon(void) {
+0x00e19710   T _linea_fill                            vdi/vdi_line.c:976         void linea_fill(void) {
+0x00e19784   T _clip_line                             vdi/vdi_line.c:1058        BOOL clip_line(Vwk * vwk, Line * line) {
+0x00e1996c   T _arrow                                 vdi/vdi_line.c:1598        void arrow(Vwk * vwk, Point * point, int count) {
+0x00e19a2c   T _wideline                              vdi/vdi_line.c:1390        void wideline(Vwk * vwk, Point * point, int count) {
+0x00e19e56   T _abline                                vdi/vdi_line.c:2267        void abline(const Line *line, const WORD wrt_mode, UWORD color) {
+0x00e1a520   T _polyline                              vdi/vdi_line.c:1102        void polyline(Vwk * vwk, Point * point, int count, WORD color) {
+0x00e1a5a8   T _linea_line                            vdi/vdi_line.c:2368        void linea_line(void) {
+0x00e1a5e6   T _set_LN_MASK                           vdi/vdi_line.c:2385        void set_LN_MASK(Vwk *vwk) {
+0x00e1a610   T _vdi_v_pline                           vdi/vdi_line.c:1001        void vdi_v_pline(Vwk * vwk) {
+0x00e1a678   T _LINE_STYLE                            vdi/vdi_line.c:1021        }
+0x00e1a684   T _op_nodraw                             vdi/vdi_line.c:1021        }
+0x00e1a688   T _op_draw                               vdi/vdi_line.c:1021        }
+0x00e1a68c   T _screen                                vdi/vdi_main.c:122         void screen(void) {
+0x00e1a68c   T vdi_main.o                             -
+0x00e1a954   T _vdi_vsm_height                        vdi/vdi_marker.c:31        void vdi_vsm_height(Vwk * vwk) {
+0x00e1a954   T vdi_marker.o                           -
+0x00e1a9c0   T _vdi_vsm_type                          vdi/vdi_marker.c:61        mk = ((INTIN[0]<MIN_MARK_STYLE) || (INTIN[0]>MAX_MARK_STYLE)) ? DEF_MARK_STYLE : INTIN[0];
+0x00e1a9ea   T _vdi_vsm_color                         vdi/vdi_marker.c:73        void vdi_vsm_color(Vwk * vwk) {
+0x00e1aa1c   T _vdi_v_pmarker                         vdi/vdi_marker.c:87        void vdi_v_pmarker(Vwk * vwk) {
+0x00e1ab42   T _vdi_vqm_attributes                    vdi/vdi_marker.c:170       void vdi_vqm_attributes(Vwk * vwk) {
+0x00e1ac2c   T vdi_misc.o                             -
+0x00e1ac62   T _arb_corner                            vdi/vdi_misc.c:31          void arb_corner(Rect * rect) {
+0x00e1ac8c   T _arb_line                              vdi/vdi_misc.c:55          void arb_line(Line * line) {
+0x00e1acb6   T _vdi_vex_timv                          vdi/vdi_misc.c:101         void vdi_vex_timv(Vwk * vwk) {
+0x00e1acf0   T _timer_init                            vdi/vdi_misc.c:122         void timer_init(void) {
+0x00e1ad2c   T _timer_exit                            vdi/vdi_misc.c:145         void timer_exit(void) {
+0x00e1ad54   T _get_start_addr                        vdi/vdi_misc.c:169         WORD x2 = x & 0xfff0;   /* ensure that value to be shifted remains signed! */
+0x00e1ad80   T vdi_mouse.o                            -
+0x00e1af54   T _vdi_vq_mouse                          vdi/vdi_mouse.c:345        old_sr = set_sr(0x2700);    /* disable interrupts */
+0x00e1af80   T _vdi_vex_butv                          vdi/vdi_mouse.c:372        ULONG_AT(&CONTRL[9]) = (ULONG) user_but;
+0x00e1af98   T _vdi_vex_motv                          vdi/vdi_mouse.c:393        ULONG_AT(&CONTRL[9]) = (ULONG) user_mot;
+0x00e1afb0   T _vdi_vex_curv                          vdi/vdi_mouse.c:416        ULONG_AT(&CONTRL[9]) = (ULONG) user_cur;
+0x00e1afc8   T _vdi_vex_wheelv                        vdi/vdi_mouse.c:440        ULONG_AT(&CONTRL[9]) = (ULONG) user_wheel;
+0x00e1afe0   T _vdimouse_init                         vdi/vdi_mouse.c:566        void vdimouse_init(void) {
+0x00e1b0d8   T _vdimouse_exit                         vdi/vdi_mouse.c:623        void vdimouse_exit(void) {
+0x00e1b142   T _cur_display                           vdi/vdi_mouse.c:878        void cur_display (Mcdb *sprite, MCS *mcs, WORD x, WORD y) {
+0x00e1b3ee   T _cur_replace                           vdi/vdi_mouse.c:1067       void cur_replace (MCS *mcs) {
+0x00e1b4d8   T _vdi_v_locator                         vdi/vdi_mouse.c:281        void vdi_v_locator(Vwk * vwk) {
+0x00e1b590   T _vdi_v_hide_c                          vdi/vdi_mouse.c:1135       hide_cur();
+0x00e1b5fa   T _linea_show_mouse                      vdi/vdi_mouse.c:1127       if (!INTIN[0] && HIDE_CNT)
+0x00e1b618   T _vdi_v_show_c                          vdi/vdi_mouse.c:323        linea_show_mouse();
+0x00e1b61a   T _linea_hide_mouse                      vdi/vdi_mouse.c:1135       hide_cur();
+0x00e1b61e   T _linea_transform_mouse                 vdi/vdi_mouse.c:1140       set_mouse_form((const MFORM *)INTIN, &mouse_cdb);
+0x00e1b62c   T _vdi_vsc_form                          vdi/vdi_mouse.c:515        linea_transform_mouse();
+0x00e1b634   T vdi_raster.o                           -
+0x00e1bbec   T _vdi_vr_trnfm                          vdi/vdi_raster.c:270       void vdi_vr_trnfm(Vwk * vwk) {
+0x00e1bcbe   T _vdi_vro_cpyfm                         vdi/vdi_raster.c:1472      vdi_vro_cpyfm(Vwk * vwk) {
+0x00e1bcf4   T _vdi_vrt_cpyfm                         vdi/vdi_raster.c:1494      vdi_vrt_cpyfm(Vwk * vwk) {
+0x00e1bd2c   T _linea_raster                          vdi/vdi_raster.c:1509      void linea_raster(void) {
+0x00e1bd56   T _linea_blit                            vdi/vdi_raster.c:1522      void linea_blit(struct blit_frame *info) {
+0x00e1bdb0   T vdi_text.o                             -
+0x00e1c59a   T _vdi_v_gtext                           vdi/vdi_text.c:548         output_text(vwk, CONTRL[3], INTIN, -1, NULL);
+0x00e1c5be   T _text_init2                            vdi/vdi_text.c:574         void text_init2(Vwk * vwk) {
+0x00e1c60a   T _text_init                             vdi/vdi_text.c:593         void text_init(void) {
+0x00e1c73a   T _vdi_vst_height                        vdi/vdi_text.c:682         void vdi_vst_height(Vwk * vwk) {
+0x00e1c7ea   T _vdi_vst_point                         vdi/vdi_text.c:821         void vdi_vst_point(Vwk * vwk) {
+0x00e1c8a4   T _vdi_vst_effects                       vdi/vdi_text.c:883         INTOUT[0] = vwk->style = INTIN[0] & INQ_TAB[2];
+0x00e1c8c4   T _vdi_vst_alignment                     vdi/vdi_text.c:888         void vdi_vst_alignment(Vwk * vwk) {
+0x00e1c902   T _vdi_vst_rotation                      vdi/vdi_text.c:926         WORD angle = INTIN[0];
+0x00e1c93e   T _vdi_vst_font                          vdi/vdi_text.c:940         void vdi_vst_font(Vwk * vwk) {
+0x00e1c9f2   T _vdi_vst_color                         vdi/vdi_text.c:989         void vdi_vst_color(Vwk * vwk) {
+0x00e1ca24   T _vdi_vqt_attributes                    vdi/vdi_text.c:1000        void vdi_vqt_attributes(Vwk * vwk) {
+0x00e1ca96   T _vdi_vqt_extent                        vdi/vdi_text.c:1025        void vdi_vqt_extent(Vwk * vwk) {
+0x00e1cb50   T _vdi_vqt_width                         vdi/vdi_text.c:1063        void vdi_vqt_width(Vwk * vwk) {
+0x00e1cbf8   T _vdi_vqt_name                          vdi/vdi_text.c:1101        void vdi_vqt_name(Vwk * vwk) {
+0x00e1cc62   T _vdi_vqt_fontinfo                      vdi/vdi_text.c:1138        void vdi_vqt_fontinfo(Vwk * vwk) {
+0x00e1ccf4   T _gdp_justified                         vdi/vdi_text.c:1178        void gdp_justified(Vwk * vwk) {
+0x00e1ce7e   T _vdi_vst_load_fonts                    vdi/vdi_text.c:1293        void vdi_vst_load_fonts(Vwk * vwk) {
+0x00e1cf10   T _vdi_vst_unload_fonts                  vdi/vdi_text.c:1354        void vdi_vst_unload_fonts(Vwk * vwk) {
+0x00e1cf38   T vdi_textblit.o                         -
+0x00e1d00e   T _outline                               vdi/vdi_textblit.c:267     void outline(LOCALVARS *vars) {
+0x00e1d104   T _rotate                                vdi/vdi_textblit.c:443     void rotate(LOCALVARS *vars) {
+0x00e1d2e6   T _scale                                 vdi/vdi_textblit.c:673     void scale(LOCALVARS *vars) {
+0x00e1d490   T _direct_screen_blit                    vdi/vdi_textblit.c:850     void direct_screen_blit(WORD count, WORD *str) {
+0x00e1d5ee   T _text_blt                              vdi/vdi_textblit.c:1282    void text_blt(void) {
+0x00e1db1c   T vdi_blit.o                             -
+0x00e1de64   T _fast_bit_blt                          vdi/vdi_blit.S:796         movea.l 4(sp),a0                // a0 -> start of frame
+0x00e1e268   T _normal_blit                           vdi/vdi_tblit.S:244        movem.l d2-d7/a2-a6,-(sp)       // save registers that GCC expects unchanged
+0x00e1e268   T vdi_tblit.o                            -
+0x00e1ea18   T _psetup                                aes/gemasm.S:55            move    sr,savesr2
+0x00e1ea18   T gemasm.o                               -
+0x00e1ea40   T _gotopgm                               aes/gemasm.S:85            movea.l _rlr,a0
+0x00e1ea64   T _dsptch                                aes/gemasm.S:130           tst.b   _indisp
+0x00e1eaae   T _switchto                              aes/gemasm.S:176           move    sr,savesr0
+0x00e1eadc   T _ui_start                              aes/gemstart.S:48          movea.l sp,a5
+0x00e1eadc   T gemstart.o                             -
+0x00e1eb96   T _accdesk_start                         aes/gemstart.S:140         move.l  4(sp),a5                // a5 -> basepage
+0x00e1ebda   T _dos_exec                              aes/gemstart.S:170         move.l  sp,d1
+0x00e1ec44   T _disable_interrupts                    aes/gemdosif.S:70          move    sr,savesr
+0x00e1ec44   T gemdosif.o                             -
+0x00e1ec50   T _enable_interrupts                     aes/gemdosif.S:83          move    savesr,sr
+0x00e1ec58   T _retake                                aes/gemdosif.S:99          move.l  #_aestrap,0x88
+0x00e1ec76   T _giveerr                               aes/gemdosif.S:117         move.l  save_etv_critic,d0
+0x00e1ec7e   T _takeerr                               aes/gemdosif.S:126         moveq   #0,d0
+0x00e1ed98   T _unset_aestrap                         aes/gemdosif.S:292         move.l  savetrap2,0x88
+0x00e1eda2   T _set_aestrap                           aes/gemdosif.S:301         move.l  0x88,savetrap2
+0x00e1edb4   T _far_bcha                              aes/gemdosif.S:307         move.l  sp,gstksave
+0x00e1edda   T _far_mcha                              aes/gemdosif.S:328         move.l  sp,gstksave
+0x00e1ee08   T _aes_wheel                             aes/gemdosif.S:354         move.l  sp,gstksave
+0x00e1ee36   T _drawrat                               aes/gemdosif.S:384         move.w  4(sp),d0
+0x00e1ee46   T _tikcod                                aes/gemdosif.S:390         move.l  sp,tstksave
+0x00e1eeb4   T _ap_init                               aes/gemaplib.c:58          pid = rlr->p_pid;
+0x00e1eeb4   T gemaplib.o                             -
+0x00e1eec6   T _ap_rdwr                               aes/gemaplib.c:70          WORD ap_rdwr(WORD code, AESPD *p, WORD length, WORD *pbuff) {
+0x00e1ef34   T _ap_find                               aes/gemaplib.c:96          WORD ap_find(char *pname) {
+0x00e1ef5a   T _ap_tplay                              aes/gemaplib.c:120         void ap_tplay(const EVNTREC *pbuff,WORD length,WORD scale) {
+0x00e1f0a0   T _ap_trecd                              aes/gemaplib.c:190         WORD ap_trecd(EVNTREC *pbuff,WORD length) {
+0x00e1f150   T _ap_exit                               aes/gemaplib.c:253         wm_update(BEG_UPDATE);
+0x00e1f1ac   T _azombie                               aes/gemasync.c:65          void azombie(EVB *e, UWORD ret) {
+0x00e1f1ac   T gemasync.o                             -
+0x00e1f258   T _evinsert                              aes/gemasync.c:82          void evinsert(EVB *e, EVB **root) {
+0x00e1f280   T _mwait                                 aes/gemasync.c:118         EVSPEC mwait(EVSPEC mask) {
+0x00e1f2c4   T _iasync                                aes/gemasync.c:131         EVSPEC iasync(WORD afunc, LONG aparm) {
+0x00e1f3ac   T _apret                                 aes/gemasync.c:183         UWORD apret(EVSPEC mask) {
+0x00e1f412   T _acancel                               aes/gemasync.c:218         EVSPEC acancel(EVSPEC m) {
+0x00e1f494   T gemctrl.o                              -
+0x00e1f562   T _ct_chgown                             aes/gemctrl.c:393          void ct_chgown(AESPD *mpd, GRECT *pr) {
+0x00e1f58c   T _ct_mouse                              aes/gemctrl.c:402          if (grabit)
+0x00e1f5e2   T _ctlmgr                                aes/gemctrl.c:428          void ctlmgr(void) {
+0x00e1fa58   T _forkq                                 aes/gemdisp.c:56           if (fpcnt < NFORKS)
+0x00e1fa58   T gemdisp.o                              -
+0x00e1faa8   T _forker                                aes/gemdisp.c:102          void forker(void) {
+0x00e1fbae   T _chkkbd                                aes/gemdisp.c:159          void chkkbd(void) {
+0x00e1fc12   T _disp                                  aes/gemdisp.c:222          void disp(void) {
+0x00e1fccc   T gemevlib.o                             -
+0x00e1fd18   T _ev_block                              aes/gemevlib.c:65          WORD ev_block(WORD code, LONG lvalue) {
+0x00e1fd40   T _ev_button                             aes/gemevlib.c:85          UWORD ev_button(WORD bflgclks, UWORD bmask, UWORD bstate, WORD rets[]) {
+0x00e1fd7a   T _ev_mesag                              aes/gemevlib.c:101         void ev_mesag(WORD *mebuff) {
+0x00e1fdd6   T _ev_mouse                              aes/gemevlib.c:124         void ev_mouse(MOBLK *pmo, WORD rets[]) {
+0x00e1fdfe   T _ev_timer                              aes/gemevlib.c:136         ev_block(MU_TIMER, (ULONG)count/gl_ticktime);
+0x00e1fe20   T _ev_multi                              aes/gemevlib.c:158         #endif {
+0x00e2008c   T _ev_dclick                             aes/gemevlib.c:301         WORD ev_dclick(WORD rate, WORD setit) {
+0x00e200c8   T _tchange                               aes/gemflag.c:33           void tchange(LONG c)            /* c=number of ticks that have gone by  */ {
+0x00e200c8   T gemflag.o                              -
+0x00e20130   T _tak_flag                              aes/gemflag.c:72           WORD tak_flag(SPB *sy) {
+0x00e20166   T _amutex                                aes/gemflag.c:90           void amutex(EVB *e, LONG ls) {
+0x00e201a4   T _unsync                                aes/gemflag.c:106          void unsync(SPB *sy) {
+0x00e201e8   T gemfmalt.o                             -
+0x00e202b4   T _fm_alert                              aes/gemfmalt.c:320         WORD fm_alert(WORD defbut, char *palstr) {
+0x00e20630   T gemfmlib.o                             -
+0x00e206aa   T _fm_own                                aes/gemfmlib.c:84          if (beg_ownit)
+0x00e20742   T _fm_keybd                              aes/gemfmlib.c:164         WORD fm_keybd(OBJECT *tree, WORD obj, WORD *pchar, WORD *pnew_obj) {
+0x00e207d6   T _fm_button                             aes/gemfmlib.c:202         WORD fm_button(OBJECT *tree, WORD new_obj, WORD clks, WORD *pnew_obj) {
+0x00e2092c   T _fm_do                                 aes/gemfmlib.c:279         WORD fm_do(OBJECT *tree, WORD start_fld) {
+0x00e20a90   T _fm_dial                               aes/gemfmlib.c:361         WORD fm_dial(WORD fmd_type, GRECT *pi, GRECT *pt) {
+0x00e20afc   T _fm_show                               aes/gemfmlib.c:390         WORD fm_show(WORD string, WORD *pwd, WORD level) {
+0x00e20b46   T _eralert                               aes/gemfmlib.c:417         WORD eralert(WORD n, WORD d) {
+0x00e20ba2   T _fm_error                              aes/gemfmlib.c:440         if (n > 63)
+0x00e20c1c   T gemfslib.o                             -
+0x00e20eb0   T _fs_start                              aes/gemfslib.c:60          void fs_start(void) {
+0x00e20efe   T _fs_input                              aes/gemfslib.c:610         WORD fs_input(char *pipath, char *pisel, WORD *pbutton, char *pilabel) {
+0x00e21928   T gemgraf.o                              -
+0x00e21a2c   T _gsx_sclip                             aes/gemgraf.c:92           void gsx_sclip(const GRECT *pt) {
+0x00e21aa0   T _gsx_gclip                             aes/gemgraf.c:113          *pt = gl_clip;
+0x00e21ab8   T _gsx_chkclip                           aes/gemgraf.c:122          WORD gsx_chkclip(GRECT *pt) {
+0x00e21b16   T _gsx_pline                             aes/gemgraf.c:171          void gsx_pline(WORD offx, WORD offy, WORD cnt, const Point *pts) {
+0x00e21b5a   T _gsx_cline                             aes/gemgraf.c:189          void gsx_cline(UWORD x1, UWORD y1, UWORD x2, UWORD y2) {
+0x00e21b96   T _gsx_attr                              aes/gemgraf.c:202          void gsx_attr(UWORD text, UWORD mode, UWORD color) {
+0x00e21c3c   T _gsx_xbox                              aes/gemgraf.c:276          gsx_bxpts(pt);
+0x00e21c50   T _gsx_xcbox                             aes/gemgraf.c:286          void gsx_xcbox(GRECT *pt) {
+0x00e21d78   T _gsx_blt                               aes/gemgraf.c:331          WORD rule, WORD fgcolor, WORD bgcolor) {
+0x00e21e8c   T _bb_screen                             aes/gemgraf.c:360          gsx_blt(NULL, scsx, scsy,
+0x00e21ebc   T _gsx_trans                             aes/gemgraf.c:370          void gsx_trans(void *addr, UWORD wb, UWORD h) {
+0x00e21f3c   T _gsx_start                             aes/gemgraf.c:384          void gsx_start(void) {
+0x00e2215e   T _bb_fill                               aes/gemgraf.c:435          void bb_fill(WORD mode, WORD fis, WORD patt, WORD hx, WORD hy, WORD hw, WORD hh) {
+0x00e221f8   T _gsx_tblt                              aes/gemgraf.c:501          void gsx_tblt(WORD tb_f, WORD x, WORD y, WORD tb_nc) {
+0x00e222d0   T _gr_inside                             aes/gemgraf.c:536          void gr_inside(GRECT *pt, WORD th) {
+0x00e222ec   T _gr_rect                               aes/gemgraf.c:548          void gr_rect(UWORD icolor, UWORD ipattern, GRECT *pt) {
+0x00e2233a   T _gr_just                               aes/gemgraf.c:568          WORD gr_just(WORD just, WORD font, char *ptext, WORD w, WORD h, GRECT *pt) {
+0x00e2240a   T _gr_gtext                              aes/gemgraf.c:596          void gr_gtext(WORD just, WORD font, char *ptext, GRECT *pt) {
+0x00e22460   T _gr_crack                              aes/gemgraf.c:613          void gr_crack(UWORD color, WORD *pbc, WORD *ptc, WORD *pip, WORD *pic, WORD *pmd) {
+0x00e224ae   T _gr_gicon                              aes/gemgraf.c:711          void gr_gicon(WORD state, ICONBLK *ib, CICON *cicon) {
+0x00e2273a   T _gr_box                                aes/gemgraf.c:814          void gr_box(WORD x, WORD y, WORD w, WORD h, WORD th) {
+0x00e227c8   T gemgrlib.o                             -
+0x00e22924   T _gr_stepcalc                           aes/gemgrlib.c:116         WORD *pcnt, WORD *pxstep, WORD *pystep) {
+0x00e229d8   T _gr_rubwind                            aes/gemgrlib.c:201         GRECT *poff, WORD *pwend, WORD *phend) {
+0x00e22a70   T _gr_rubbox                             aes/gemgrlib.c:231         gr_rubwind(xorigin, yorigin, wmin, hmin, &gl_rzero, pwend, phend);
+0x00e22a98   T _gr_dragbox                            aes/gemgrlib.c:245         WORD *pdx, WORD *pdy) {
+0x00e22b44   T _gr_2box                               aes/gemgrlib.c:272         void gr_2box(WORD flag1, WORD cnt, GRECT *pt, WORD xstep, WORD ystep, WORD flag2) {
+0x00e22be6   T _gr_movebox                            aes/gemgrlib.c:288         void gr_movebox(WORD w, WORD h, WORD srcx, WORD srcy, WORD dstx, WORD dsty) {
+0x00e22c96   T _gr_growbox                            aes/gemgrlib.c:310         void gr_growbox(GRECT *po, GRECT *pt) {
+0x00e22d12   T _gr_shrinkbox                          aes/gemgrlib.c:327         void gr_shrinkbox(GRECT *po, GRECT *pt) {
+0x00e22d94   T _gr_watchbox                           aes/gemgrlib.c:338         WORD gr_watchbox(OBJECT *tree, WORD obj, WORD instate, WORD outstate) {
+0x00e22e1c   T _gr_slidebox                           aes/gemgrlib.c:359         WORD gr_slidebox(OBJECT *tree, WORD parent, WORD obj, WORD isvert) {
+0x00e22ec2   T _gr_mouse                              aes/gemgrlib.c:420         void gr_mouse(WORD mode, MFORM *maddr) {
+0x00e22f7a   T _gr_mkstate                            aes/gemgrlib.c:460         *pmx = xrat;
+0x00e22fa4   T gemgsxif.o                             -
+0x00e22fcc   T _gsx_mfree                             aes/gemgsxif.c:120         dos_free(gl_tmp.fd_addr);
+0x00e22fdc   T _gsx_mret                              aes/gemgsxif.c:127         *pmaddr = (LONG)gl_tmp.fd_addr;
+0x00e22ff2   T _gsx_0code                             aes/gemgsxif.c:146         gsx_ncode(code, 0, 0);
+0x00e23044   T _gsx_1code                             aes/gemgsxif.c:153         intin[0] = value;
+0x00e2305e   T _gsx_wsclose                           aes/gemgsxif.c:193         gsx_0code(CLOSE_WORKSTATION);
+0x00e2306a   T _gsx_wsclear                           aes/gemgsxif.c:200         gsx_0code(CLEAR_WORKSTATION);
+0x00e23076   T _ratinit                               aes/gemgsxif.c:207         gsx_1code(SHOW_CUR, 0);
+0x00e2308a   T _gsx_graphic                           aes/gemgsxif.c:299         void gsx_graphic(BOOL tographic) {
+0x00e230f4   T _gsx_tick                              aes/gemgsxif.c:399         i_ptr( tcode );
+0x00e23118   T _gsx_mxmy                              aes/gemgsxif.c:426         *pmx = xrat;
+0x00e2312e   T _gsx_kstate                            aes/gemgsxif.c:434         gsx_0code(KEY_STATE);
+0x00e23140   T _gsx_moff                              aes/gemgsxif.c:442         if (!gl_moff)
+0x00e2315a   T _ratexit                               aes/gemgsxif.c:214         gsx_moff();
+0x00e2315c   T _gsx_mon                               aes/gemgsxif.c:452         gl_moff--;
+0x00e2317c   T _gsx_mfset                             aes/gemgsxif.c:408         void gsx_mfset(const MFORM *pmfnew) {
+0x00e231e6   T _gsx_char                              aes/gemgsxif.c:460         WORD gsx_char(void) {
+0x00e2323c   T _gsx_setmousexy                        aes/gemgsxif.c:485         void gsx_setmousexy(WORD x, WORD y) {
+0x00e23282   T _gsx_nplanes                           aes/gemgsxif.c:499         gsx_1code(EXTENDED_INQUIRE, 1);
+0x00e23298   T _gsx_textsize                          aes/gemgsxif.c:507         gsx_0code(INQ_TEXT_ATTRIBUTES);
+0x00e232cc   T _gsx_fix_screen                        aes/gemgsxif.c:519         void gsx_fix_screen(FDB *pfd) {
+0x00e23306   T _gsx_malloc                            aes/gemgsxif.c:109         void gsx_malloc(void) {
+0x00e23362   T _gsx_fix                               aes/gemgsxif.c:533         void gsx_fix(FDB *pfd, void *theaddr, WORD wb, WORD h) {
+0x00e233a8   T _v_pline                               aes/gemgsxif.c:574         void v_pline(WORD count, WORD *pxyarray) {
+0x00e233ce   T _vs_clip                               aes/gemgsxif.c:582         void vs_clip(WORD clip_flag, WORD *pxyarray ) {
+0x00e233fe   T _vst_height                            aes/gemgsxif.c:593         ptsin[0] = 0;
+0x00e23446   T _vr_recfl                              aes/gemgsxif.c:605         void vr_recfl(WORD *pxyarray) {
+0x00e2346c   T _vro_cpyfm                             aes/gemgsxif.c:614         void vro_cpyfm(WORD wr_mode, WORD *pxyarray, FDB *psrcMFDB, FDB *pdesMFDB ) {
+0x00e23612   T _bb_restore                            aes/gemgsxif.c:392         bb_set(FALSE, pr);
+0x00e23620   T _bb_save                               aes/gemgsxif.c:385         bb_set(TRUE, ps);
+0x00e23630   T _vrt_cpyfm                             aes/gemgsxif.c:627         WORD fgcolor, WORD bgcolor) {
+0x00e23680   T _vrn_trnfm                             aes/gemgsxif.c:642         i_ptr( psrcMFDB );
+0x00e2369a   T _vsl_width                             aes/gemgsxif.c:655         ptsin[0] = width;
+0x00e236ba   T _vex_wheelv                            aes/gemgsxif.c:665         i_ptr(new);
+0x00e236d8   T _gsx_init                              aes/gemgsxif.c:268         void gsx_init(void) {
+0x00e237e0   T geminit.o                              -
+0x00e2386a   T _size_theglo                           aes/geminit.c:152          }
+0x00e23872   T _init_p0_stkptr                        aes/geminit.c:165          u->u_spsuper = &u->u_supstk + 1;
+0x00e23884   T _default_mform                         aes/geminit.c:177          }
+0x00e2388c   T _set_mouse_to_arrow                    aes/geminit.c:185          gsx_mfset(mouse_cursor[ARROW]);
+0x00e2389c   T _set_mouse_to_hourglass                aes/geminit.c:194          gsx_mfset(mouse_cursor[HOURGLASS]);
+0x00e238ac   T _all_run                               aes/geminit.c:555          void all_run(void) {
+0x00e238de   T _wait_for_accs                         aes/geminit.c:600          void wait_for_accs(WORD bitmask) {
+0x00e2391c   T _set_aes_background                    aes/geminit.c:640          tree[ROOT].ob_spec |= patcol;
+0x00e23950   T _run_accs_and_desktop                  aes/geminit.c:655          void run_accs_and_desktop(void) {
+0x00e23d9a   T _gem_main                              aes/geminit.c:754          void gem_main(void) {
+0x00e241fc   T _in_mrect                              aes/geminput.c:77          UWORD in_mrect(MOBLK *pmo) {
+0x00e241fc   T geminput.o                             -
+0x00e24226   T _b_click                               aes/geminput.c:115         void b_click(WORD state) {
+0x00e2429c   T _b_delay                               aes/geminput.c:156         void b_delay(WORD amnt) {
+0x00e24324   T _set_ctrl                              include/rectfunc.h:25      *pdbox = *psbox;
+0x00e2433c   T _get_ctrl                              include/rectfunc.h:25      *pdbox = *psbox;
+0x00e24354   T _get_mown                              aes/geminput.c:211         *pmown = gl_mowner;
+0x00e24360   T _dq                                    aes/geminput.c:257         UWORD dq(CQUEUE *qptr) {
+0x00e24388   T _fq                                    aes/geminput.c:273         void fq(void) {
+0x00e243ac   T _evremove                              aes/geminput.c:280         void evremove(EVB *e, UWORD ret) {
+0x00e2446a   T _post_keybd                            aes/geminput.c:300         void post_keybd(CDA *c, UWORD ch) {
+0x00e244b4   T _kchange                               aes/geminput.c:289         void kchange(LONG fdata) {
+0x00e244dc   T _downorup                              aes/geminput.c:349         WORD downorup(WORD new, LONG buparm) {
+0x00e2457a   T _bchange                               aes/geminput.c:329         void bchange(LONG fdata) {
+0x00e24652   T _set_mown                              aes/geminput.c:221         void set_mown(AESPD *mp) {
+0x00e24696   T _mchange                               aes/geminput.c:361         void mchange(LONG fdata) {
+0x00e24758   T _wheel_change                          aes/geminput.c:423         }
+0x00e2475a   T _akbin                                 aes/geminput.c:487         void akbin(EVB *e) {
+0x00e2479a   T _adelay                                aes/geminput.c:497         void adelay(EVB *e, LONG c) {
+0x00e24826   T _abutton                               aes/geminput.c:546         void abutton(EVB *e, LONG p) {
+0x00e24890   T _amouse                                aes/geminput.c:569         void amouse(EVB *e, LONG pmo) {
+0x00e24928   T gemmnlib.o                             -
+0x00e24a3a   T _do_chg                                aes/gemmnlib.c:153         {
+0x00e24adc   T _mn_do                                 aes/gemmnlib.c:519         WORD mn_do(WORD *ptitle, WORD *pitem) {
+0x00e24d9a   T _mn_bar                                aes/gemmnlib.c:704         void mn_bar(OBJECT *tree, WORD showit) {
+0x00e24e74   T _mn_cleanup                            aes/gemmnlib.c:741         void mn_cleanup(void) {
+0x00e24eb4   T _mn_register                           aes/gemmnlib.c:790         WORD mn_register(WORD pid, char *pstr) {
+0x00e24f5a   T _mn_init                               aes/gemmnlib.c:822         void mn_init(void) {
+0x00e24f7a   T _mn_getownid                           aes/gemmnlib.c:839         void mn_getownid(AESPD **owner,WORD *id,WORD item) {
+0x00e24fb0   T gemobed.o                              -
+0x00e25108   T _ob_center                             aes/gemobed.c:68           void ob_center(OBJECT *tree, GRECT *pt) {
+0x00e251d0   T _ins_char                              aes/gemobed.c:118          void ins_char(char *str, WORD pos, char chr, WORD tot_len) {
+0x00e25282   T _ob_edit                               aes/gemobed.c:336          WORD ob_edit(OBJECT *tree, WORD obj, WORD in_char, WORD *idx, WORD kind) {
+0x00e256a8   T _ob_sst                                aes/gemobjop.c:27          WORD *pflags, GRECT *pt, WORD *pth) {
+0x00e256a8   T gemobjop.o                             -
+0x00e25780   T _everyobj                              aes/gemobjop.c:78          WORD startx, WORD starty, WORD maxdep) {
+0x00e25850   T _get_par                               aes/gemobjop.c:146         WORD get_par(OBJECT *tree, WORD obj) {
+0x00e25888   T _ob_offset                             aes/gemoblib.c:286         void ob_offset(OBJECT *tree, WORD obj, WORD *pxoff, WORD *pyoff) {
+0x00e25888   T gemoblib.o                             -
+0x00e258d4   T _ob_relxywh                            aes/gemoblib.c:304         OBJECT *objptr = tree + obj;
+0x00e258fe   T _ob_actxywh                            aes/gemoblib.c:314         void ob_actxywh(OBJECT *tree, WORD obj, GRECT *pt) {
+0x00e25940   T _ob_setxywh                            aes/gemoblib.c:351         OBJECT *objptr = tree + obj;
+0x00e2596a   T _ob_format                             aes/gemoblib.c:362         void ob_format(WORD just, char *raw_str, char *tmpl_str, char *fmt_str) {
+0x00e26118   T _ob_draw                               aes/gemoblib.c:960         void ob_draw(OBJECT *tree, WORD obj, WORD depth) {
+0x00e261a2   T _ob_find                               aes/gemoblib.c:1035        WORD ob_find(OBJECT *tree, WORD currobj, WORD depth, WORD mx, WORD my) {
+0x00e262b8   T _ob_add                                aes/gemoblib.c:1122        void ob_add(OBJECT *tree, WORD parent, WORD child) {
+0x00e26344   T _ob_delete                             aes/gemoblib.c:1148        WORD ob_delete(OBJECT *tree, WORD obj) {
+0x00e263e4   T _ob_order                              aes/gemoblib.c:1202        BOOL ob_order(OBJECT *tree, WORD mov_obj, WORD new_pos) {
+0x00e26488   T _ob_change                             aes/gemoblib.c:1254        void ob_change(OBJECT *tree, WORD obj, UWORD new_state, WORD redraw) {
+0x00e265d4   T _ob_fs                                 aes/gemoblib.c:1429        OBJECT *objptr = tree + obj;
+0x00e265f4   T _pd_index                              aes/gempd.c:33             AESPD *pd_index(WORD i) {
+0x00e265f4   T gempd.o                                -
+0x00e26632   T _fpdnm                                 aes/gempd.c:39             AESPD *fpdnm(char *pname, UWORD pid) {
+0x00e26688   T _p_nameit                              aes/gempd.c:78             void p_nameit(AESPD *p, char *pname) {
+0x00e266c4   T _p_setappdir                           aes/gempd.c:97             for (p = plast = pfilespec; *p; )   /* assume no path separator */
+0x00e266ee   T _pstart                                aes/gempd.c:111            AESPD *pstart(PFVOID pcode, char *pfilespec, LONG ldaddr) {
+0x00e26752   T _insert_process                        aes/gempd.c:135            void insert_process(AESPD *pi, AESPD **root) {
+0x00e26774   T gemqueue.o                             -
+0x00e2687e   T _aqueue                                aes/gemqueue.c:86          void aqueue(WORD isqwrite, EVB *e, LONG lm) {
+0x00e26944   T gemrslib.o                             -
+0x00e26c5a   T _rs_obfix                              aes/gemrslib.c:90          void rs_obfix(OBJECT *tree, WORD curob) {
+0x00e26cc8   T _rs_free                               aes/gemrslib.c:686         WORD rs_free(AESGLOBAL *pglobal) {
+0x00e26d42   T _rs_gaddr                              aes/gemrslib.c:717         rs_sglobe(pglobal);
+0x00e26d6a   T _rs_saddr                              aes/gemrslib.c:732         rs_sglobe(pglobal);
+0x00e26d94   T _rs_fixit                              aes/gemrslib.c:817         void rs_fixit(AESGLOBAL *pglobal) {
+0x00e26e2c   T _rs_load                               aes/gemrslib.c:827         WORD rs_load(AESGLOBAL *pglobal, char *rsfname) {
+0x00e272a0   T _rs_str                                aes/gemrslib.c:856         return (char *)gettext(rs_fstr[stnum]);
+0x00e272b8   T _xlate_obj_array                       aes/gemrslib.c:899         }
+0x00e272bc   T gemsclib.o                             -
+0x00e272ce   T _sc_read                               aes/gemsclib.c:42          strcpy(pscrap, D.g_scrap);
+0x00e272e2   T _sc_write                              aes/gemsclib.c:59          strcpy(D.g_scrap, pscrap);
+0x00e272fe   T _sc_clear                              aes/gemsclib.c:75          WORD sc_clear(void) {
+0x00e2739c   T gemshlib.o                             -
+0x00e274a8   T _sh_read                               aes/gemshlib.c:104         strcpy(pcmd, D.s_cmd);
+0x00e274d8   T _sh_write                              aes/gemshlib.c:158         WORD sh_write(WORD doex, WORD isgem, WORD isover, const char *pcmd, const char *ptail) {
+0x00e2762e   T _sh_get                                aes/gemshlib.c:205         memcpy(pbuffer, D.g_shelbuf, len);
+0x00e2764a   T _sh_put                                aes/gemshlib.c:215         memcpy(D.g_shelbuf, pdata, len);
+0x00e27666   T _sh_tographic                          aes/gemshlib.c:230         disable_interrupts();
+0x00e276a2   T _sh_name                               aes/gemshlib.c:306         char *sh_name(char *ppath) {
+0x00e276c4   T _sh_envrn                              aes/gemshlib.c:328         void sh_envrn(char **ppath, const char *psrch) {
+0x00e2771a   T _sh_find                               aes/gemshlib.c:475         WORD sh_find(char *pspec) {
+0x00e278c4   T _sh_rdef                               aes/gemshlib.c:492         void sh_rdef(char *lpcmd, char *lpdir) {
+0x00e278ec   T _sh_wdef                               aes/gemshlib.c:505         void sh_wdef(const char *lpcmd, const char *lpdir) {
+0x00e27916   T _aes_run_rom_program                   aes/gemshlib.c:575         pd = (PD *) Pexec(PE_BASEPAGEFLAGS, (char*)PF_STANDARD, "", NULL);
+0x00e27948   T _sh_main                               aes/gemshlib.c:693         void sh_main(BOOL isauto, BOOL isgem) {
+0x00e27c64   T _super                                 aes/gemsuper.c:455         LONG super(WORD cx, AESPB *pcrys_blk) {
+0x00e27c64   T gemsuper.o                             -
+0x00e285f0   T gemwmlib.o                             -
+0x00e28916   T _w_getsize                             aes/gemwmlib.c:255         void w_getsize(WORD which, WORD w_handle, GRECT *pt) {
+0x00e28960   T _w_setactive                           aes/gemwmlib.c:322         void w_setactive(void) {
+0x00e289b2   T _w_drawdesk                            aes/gemwmlib.c:346         if (gl_newdesk)
+0x00e289e6   T _w_bldactive                           aes/gemwmlib.c:717         void w_bldactive(WORD w_handle) {
+0x00e29010   T _ap_sendmsg                            aes/gemwmlib.c:853         WORD w3, WORD w4, WORD w5, WORD w6, WORD w7) {
+0x00e29064   T _w_update                              aes/gemwmlib.c:1005        void w_update(WORD bottom, GRECT *pt, WORD top, BOOL moved) {
+0x00e291d4   T _wm_init                               aes/gemwmlib.c:1248        void wm_init(void) {
+0x00e29366   T _wm_start                              aes/gemwmlib.c:1333        void wm_start(void) {
+0x00e2939e   T _wm_create                             aes/gemwmlib.c:1370        WORD wm_create(WORD kind, GRECT *pt) {
+0x00e2940a   T _wm_get                                aes/gemwmlib.c:1506        BOOL wm_get(WORD w_handle, WORD w_field, WORD *poutwds, WORD *pinwds) {
+0x00e2958c   T _wm_find                               aes/gemwmlib.c:1756        return ob_find(gl_wtree, 0, 2, x, y);
+0x00e295ac   T _wm_update                             aes/gemwmlib.c:1766        void wm_update(WORD beg_update) {
+0x00e295fe   T _wm_calc                               aes/gemwmlib.c:1796        WORD *px, WORD *py, WORD *pw, WORD *ph) {
+0x00e29b10   T _wm_set                                aes/gemwmlib.c:1611        BOOL wm_set(WORD w_handle, WORD w_field, WORD *pinwds) {
+0x00e29d6a   T _wm_close                              aes/gemwmlib.c:1439        BOOL wm_close(WORD w_handle) {
+0x00e29dd8   T _wm_delete                             aes/gemwmlib.c:1467        BOOL wm_delete(WORD w_handle) {
+0x00e29e5c   T _wm_open                               aes/gemwmlib.c:1411        BOOL wm_open(WORD w_handle, GRECT *pt) {
+0x00e29ee4   T _wm_new                                aes/gemwmlib.c:1863        void wm_new(void) {
+0x00e29fe0   T _or_start                              aes/gemwrect.c:41          void or_start(void) {
+0x00e29fe0   T gemwrect.o                             -
+0x00e2a014   T _get_orect                             aes/gemwrect.c:57          if ((po = rul) != 0)
+0x00e2a1de   T _newrect                               aes/gemwrect.c:166         void newrect(OBJECT *tree, WORD wh) {
+0x00e2a288   T _gsx2                                  aes/gsx2.c:21              void gsx2(void) {
+0x00e2a288   T gsx2.o                                 -
+0x00e2a2a8   T _gem_rsc_init                          aes/gem_rsc.tr.c:645       void gem_rsc_init(void) {
+0x00e2a2a8   T gem_rsc.o                              -
+0x00e2a2fa   T _gem_rsc_fixit                         aes/gem_rsc.tr.c:659       void gem_rsc_fixit(void) {
+0x00e2a7f8   T _rs_fstr                               aes/gem_rsc.tr.c:663       }
+0x00e2a834   T _rs_trees                              aes/gem_rsc.tr.c:663       }
+0x00e2a840   T _rs_bitblk                             aes/gem_rsc.tr.c:663       }
+0x00e2b200   T _mform_rs_data                         -
+0x00e2b200   T mforms.o                               -
+0x00e2b470   T _deskstart                             desk/deskstart.S:28        movea.l a7,a5
+0x00e2b470   T deskstart.o                            -
+0x00e2b4ac   T deskmain.o                             -
+0x00e2bf32   T _hndl_msg                              desk/deskmain.c:1248       WORD hndl_msg(void) {
+0x00e2c1ce   T _align_title                           desk/deskmain.c:1729       void align_title(OBJECT *root) {
+0x00e2c21c   T _install_shortcuts                     desk/deskmain.c:1823       void install_shortcuts(void) {
+0x00e2c292   T _deskmain                              desk/deskmain.c:1936       BOOL deskmain(void) {
+0x00e2cffe   T _shortcut_mapping                      desk/deskmain.c:1238       done = hndl_menu(title, item);
+0x00e2d0ac   T gembind.o                              -
+0x00e2d112   T _appl_init                             desk/gembind.c:113         gb.gb_pcontrol = control;
+0x00e2d15a   T _appl_exit                             desk/gembind.c:125         return gem_if(AES_CTRL_CODE(APPL_EXIT, 0, 1, 0));
+0x00e2d166   T _evnt_button                           desk/gembind.c:191         B_CLICKS = clicks;
+0x00e2d1b8   T _evnt_timer                            desk/gembind.c:233         T_LOCOUNT = locnt;
+0x00e2d1d2   T _evnt_multi                            desk/gembind.c:244         UWORD *pmb, UWORD *pks, UWORD *pkr, UWORD *pbr) {
+0x00e2d2c4   T _evnt_dclick                           desk/gembind.c:284         EV_DCRATE = rate;
+0x00e2d2de   T _menu_bar                              desk/gembind.c:295         MM_ITREE = (LONG)tree;
+0x00e2d2f8   T _menu_icheck                           desk/gembind.c:303         MM_ITREE = (LONG)tree;
+0x00e2d31a   T _menu_ienable                          desk/gembind.c:312         MM_ITREE = (LONG)tree;
+0x00e2d33c   T _menu_tnormal                          desk/gembind.c:321         MM_ITREE = (LONG)tree;
+0x00e2d35e   T _objc_add                              desk/gembind.c:354         OB_TREE = (LONG)tree;
+0x00e2d380   T _objc_draw                             desk/gembind.c:374         OB_TREE = (LONG)tree;
+0x00e2d3c2   T _objc_find                             desk/gembind.c:387         OB_TREE = (LONG)tree;
+0x00e2d3f4   T _objc_offset                           desk/gembind.c:398         OB_TREE = (LONG)tree;
+0x00e2d42a   T _objc_order                            desk/gembind.c:409         OB_TREE = (LONG)tree;
+0x00e2d44c   T _form_do                               desk/gembind.c:454         FM_FORM = (LONG)form;
+0x00e2d466   T _form_dial                             desk/gembind.c:463         FM_TYPE = dtype;
+0x00e2d4b8   T _form_alert                            desk/gembind.c:478         FM_DEFBUT = defbut;
+0x00e2d4d2   T _form_error                            desk/gembind.c:491         FM_ERRNUM = errnum;
+0x00e2d4e4   T _form_center                           desk/gembind.c:499         FM_FORM = (LONG)tree;
+0x00e2d526   T _graf_rubbox                           desk/gembind.c:544         GR_I1 = xorigin;
+0x00e2d56c   T _graf_growbox_grect                    desk/gembind.c:590         WORD graf_growbox_grect(GRECT *from, GRECT *to) {
+0x00e2d5ba   T _graf_shrinkbox_grect                  desk/gembind.c:604         WORD graf_shrinkbox_grect(GRECT *from, GRECT *to) {
+0x00e2d608   T _graf_handle                           desk/gembind.c:641         gem_if(AES_CTRL_CODE(GRAF_HANDLE, 0, 5, 0));
+0x00e2d642   T _graf_mouse                            desk/gembind.c:652         GR_MNUMBER = m_number;
+0x00e2d65c   T _graf_mkstate                          desk/gembind.c:660         gem_if(AES_CTRL_CODE(GRAF_MKSTATE, 0, 5, 0));
+0x00e2d690   T _fsel_exinput                          desk/gembind.c:704         FS_IPATH = (LONG)pipath;
+0x00e2d6c4   T _wind_create_grect                     desk/gembind.c:718         WORD wind_create_grect(UWORD kind, GRECT *gr) {
+0x00e2d6f8   T _wind_open_grect                       desk/gembind.c:729         WORD wind_open_grect(WORD handle, GRECT *gr) {
+0x00e2d72c   T _wind_close                            desk/gembind.c:741         WM_HANDLE = handle;
+0x00e2d73e   T _wind_delete                           desk/gembind.c:748         WM_HANDLE = handle;
+0x00e2d750   T _wind_get                              desk/gembind.c:755         WM_HANDLE = w_handle;
+0x00e2d79a   T _wind_get_grect                        desk/gembind.c:767         WORD wind_get_grect(WORD w_handle, WORD w_field, GRECT *gr) {
+0x00e2d7be   T _wind_set                              desk/gembind.c:778         WM_HANDLE = w_handle;
+0x00e2d7fa   T _wind_set_grect                        desk/gembind.c:790         WORD wind_set_grect(WORD w_handle, WORD w_field, const GRECT *gr) {
+0x00e2d81e   T _wind_find                             desk/gembind.c:797         WM_MX = mx;
+0x00e2d838   T _wind_update                           desk/gembind.c:805         WM_BEGUP = beg_update;
+0x00e2d84a   T _wind_calc_grect                       desk/gembind.c:811         WORD wind_calc_grect(WORD wctype, UWORD kind, GRECT *in, GRECT *out) {
+0x00e2d8b4   T _wind_new                              desk/gembind.c:830         return gem_if(AES_CTRL_CODE(WIND_NEW, 0, 1, 0));
+0x00e2d8c0   T _rsrc_load                             desk/gembind.c:840         RS_PFNAME = (LONG)rsname;
+0x00e2d8d2   T _rsrc_free                             desk/gembind.c:847         return gem_if(AES_CTRL_CODE(RSRC_FREE, 0, 1, 0));
+0x00e2d8de   T _rsrc_obfix                            desk/gembind.c:879         RS_TREE = (LONG)tree;
+0x00e2d8f8   T _shel_write                            desk/gembind.c:909         SH_DOEX = doex;
+0x00e2d92a   T _shel_get                              desk/gembind.c:920         SH_PBUFFER = (LONG)pbuffer;
+0x00e2d944   T _shel_put                              desk/gembind.c:928         SH_PDATA = (LONG)pdata;
+0x00e2d95e   T _shel_wdef                             desk/gembind.c:965         SH_LPCMD = (LONG)lpcmd;
+0x00e2d978   T deskact.o                              -
+0x00e2dbbe   T _act_chg                               desk/deskact.c:421         BOOL set, BOOL dodraw) {
+0x00e2dc88   T _act_allchg                            desk/deskact.c:482         BOOL set) {
+0x00e2de3e   T _act_bsclick                           desk/deskact.c:568         GRECT *pc, BOOL dclick) {
+0x00e2df2c   T _act_bdown                             desk/deskact.c:611         WORD *keystate, GRECT *pc, WORD *pdobj) {
+0x00e2e524   T deskapp.o                              -
+0x00e2e6b6   T _nomem_alert                           desk/deskapp.c:196         void nomem_alert(void) {
+0x00e2e6cc   T _app_alloc                             desk/deskapp.c:208         ANODE *app_alloc(void) {
+0x00e2e704   T _app_free                              desk/deskapp.c:229         void app_free(ANODE *pa) {
+0x00e2e73c   T _scan_str                              desk/deskapp.c:259         char *scan_str(char *pcurr, char **ppstr) {
+0x00e2e794   T _app_tran                              desk/deskapp.c:443         lb = desk_rs_bitblk[bi_num];
+0x00e2e83e   T _app_start                             desk/deskapp.c:782         void app_start(void) {
+0x00e2f264   T _app_save                              desk/deskapp.c:1107        void app_save(WORD todisk) {
+0x00e2f79a   T _app_blddesk                           desk/deskapp.c:1338        void app_blddesk(void) {
+0x00e2f940   T _app_afind_by_id                       desk/deskapp.c:1411        ANODE *app_afind_by_id(WORD obid) {
+0x00e2f966   T _app_afind_by_name                     desk/deskapp.c:1438        ANODE *app_afind_by_name(WORD atype, WORD ignore, char *pspec, char *pname, BOOL *pisapp) {
+0x00e2fa1e   T _app_afind_viewer                      desk/deskapp.c:1477        for (pa = G.g_ahead; pa; pa = pa->a_next)
+0x00e2fa42   T _app_read_inf                          desk/deskapp.c:1493        BOOL app_read_inf(void) {
+0x00e2fcac   T deskdir.o                              -
+0x00e2fe18   T _draw_dial                             desk/deskdir.c:80          void draw_dial(OBJECT *tree) {
+0x00e2ff1c   T _draw_fld                              desk/deskdir.c:132         void draw_fld(OBJECT *tree, WORD obj) {
+0x00e2ff80   T _add_path                              desk/deskdir.c:147         void add_path(char *path, char *new_name) {
+0x00e2ffb6   T _add_fname                             desk/deskdir.c:178         char *add_fname(char *path, char *new_name) {
+0x00e2ffd6   T _del_fname                             desk/deskdir.c:215         set_all_files(filename_start(pstr));
+0x00e30368   T _illegal_op_msg                        desk/deskdir.c:221         fun_alert(1, STILLOP);
+0x00e303fa   T _d_doop                                desk/deskdir.c:528         WORD d_doop(WORD level, WORD op, char *psrc_path, char *pdst_path, OBJECT *tree, DIRCOUNT *count) {
+0x00e3076c   T _dir_op                                desk/deskdir.c:871         WORD dir_op(WORD op, WORD icontype, PNODE *pspath, char *pdst_path, DIRCOUNT *count) {
+0x00e30c20   T deskfpd.o                              -
+0x00e30c4a   T _pn_close                              desk/deskfpd.c:62          fl_free(thepath);
+0x00e30c4c   T _pn_open                               desk/deskfpd.c:70          PNODE *pn_open(char *pathname, WNODE *pw) {
+0x00e30c98   T _pn_sort                               desk/deskfpd.c:155         FNODE *pn_sort(PNODE *pn) {
+0x00e30e6c   T _pn_active                             desk/deskfpd.c:228         WORD pn_active(PNODE *pn, BOOL include_folders) {
+0x00e30fec   T _pn_clear                              desk/deskfpd.c:308         for (pf = pw->w_pnode.p_flist; pf; pf = pf->f_next)
+0x00e31004   T _pn_selected                           desk/deskfpd.c:323         for (pf = pw->w_pnode.p_flist; pf; pf = pf->f_next)
+0x00e3101e   T _pn_count                              desk/deskfpd.c:340         for (pf = pw->w_pnode.p_flist; pf; pf = pf->f_next)
+0x00e31054   T deskfun.o                              -
+0x00e3118a   T _fun_alert                             desk/deskfun.c:77          return form_alert(defbut, desktop_str_addr(stnum));
+0x00e311a4   T _fun_alert_merge                       desk/deskfun.c:89          WORD fun_alert_merge(WORD defbut, WORD stnum, ...) {
+0x00e311dc   T _fun_msg                               desk/deskfun.c:104         G.g_rmsg[0] = type;
+0x00e3128c   T _fun_mark_for_rebld                    desk/deskfun.c:120         void fun_mark_for_rebld(char *path) {
+0x00e312ca   T _fun_rebld_marked                      desk/deskfun.c:151         void fun_rebld_marked(void) {
+0x00e3130a   T _fun_rebld                             desk/deskfun.c:174         void fun_rebld(char *ptst) {
+0x00e31356   T _add_one_level                         desk/deskfun.c:207         BOOL add_one_level(char *pathname,char *folder) {
+0x00e31574   T _fun_search                            desk/deskfun.c:561         void fun_search(WNODE *pw, WORD curr) {
+0x00e317b4   T _fun_selectall                         desk/deskfun.c:608         void fun_selectall(WNODE *pw) {
+0x00e3183e   T _fun_mask                              desk/deskfun.c:640         void fun_mask(WNODE *pw) {
+0x00e318d4   T _fun_mkdir                             desk/deskfun.c:681         WORD fun_mkdir(WNODE *pw_node) {
+0x00e319f0   T _fun_op                                desk/deskfun.c:783         WORD fun_op(WORD op, WORD icontype, PNODE *pspath, char *pdest) {
+0x00e31a62   T _fun_close                             desk/deskfun.c:863         void fun_close(WNODE *pw, WORD closetype) {
+0x00e31bfc   T _wants_to_delete_files                 desk/deskfun.c:1437        ret = fun_alert(1,STRMVDEL);
+0x00e31c3c   T _fun_del                               desk/deskfun.c:1377        void fun_del(WNODE *pw, WORD sobj) {
+0x00e32184   T _fun_drag                              desk/deskfun.c:1303        BOOL fun_drag(WORD wh, WORD dest_wh, WORD sobj, WORD dobj, WORD mx, WORD my, WORD keystate) {
+0x00e32514   T deskinf.o                              -
+0x00e32908   T _dr_code                               desk/deskinf.tr.c:257      WORD dr_code(PARMBLK *pparms) {
+0x00e32b32   T _start_dialog                          desk/deskinf.tr.c:273      void start_dialog(OBJECT *tree) {
+0x00e32bb8   T _end_dialog                            desk/deskinf.tr.c:285      void end_dialog(OBJECT *tree) {
+0x00e32c64   T _inf_show                              desk/deskinf.tr.c:308      WORD inf_show(OBJECT *tree, WORD start) {
+0x00e32c92   T _inf_numset                            desk/deskinf.tr.c:322      OBJECT  *objptr = tree + obj;
+0x00e32d44   T _set_tedinfo_name                      desk/deskinf.tr.c:333      void set_tedinfo_name(OBJECT *tree, WORD obj, char *str) {
+0x00e32d88   T _inf_file_folder                       desk/deskinf.tr.c:388      WORD inf_file_folder(char *ppath, FNODE *pf) {
+0x00e33044   T _inf_disk                              desk/deskinf.tr.c:520      WORD inf_disk(char dr_id) {
+0x00e3314c   T _inf_pref                              desk/deskinf.tr.c:581      WORD inf_pref(void) {
+0x00e332f6   T _inf_backgrounds                       desk/deskinf.tr.c:671      BOOL inf_backgrounds(void) {
+0x00e334f0   T _inf_conf                              desk/deskinf.tr.c:911      void inf_conf(void) {
+0x00e3389c   T _opn_appl                              desk/deskinf.tr.c:1062     WORD opn_appl(char *papname, char *ptail) {
+0x00e33904   T deskins.o                              -
+0x00e33a3a   T _is_installed                          desk/deskins.c:72          WORD is_installed(ANODE *pa) {
+0x00e33a6a   T _is_viewer                             desk/deskins.c:88          BOOL is_viewer(ANODE *pa) {
+0x00e34046   T _snap_icon                             desk/deskins.c:147         void snap_icon(WORD x, WORD y, WORD *px, WORD *py, WORD sxoff, WORD syoff) {
+0x00e3444a   T _ins_devices                           desk/deskins.c:291         BOOL ins_devices(void) {
+0x00e345c4   T _ins_app                               desk/deskins.c:722         WORD ins_app(void) {
+0x00e3464a   T _is_executable                         desk/deskins.c:990         BOOL is_executable(const char *filename) {
+0x00e34972   T _ins_icon                              desk/deskins.c:1235        WORD ins_icon(WORD sobj) {
+0x00e34a5c   T _rmv_icon                              desk/deskins.c:1318        WORD rmv_icon(WORD sobj) {
+0x00e34ab4   T _ins_shortcut                          desk/deskins.c:1342        void ins_shortcut(WORD wh, WORD mx, WORD my) {
+0x00e34c74   T _obj_init                              desk/deskobj.c:114         void obj_init(void) {
+0x00e34c74   T deskobj.o                              -
+0x00e34db2   T _obj_walloc                            desk/deskobj.c:161         for (ii = DROOT+1, obj = G.g_screen+ii; ii < WOBS_START; ii++, obj++)
+0x00e34df4   T _obj_wfree                             desk/deskobj.c:188         void obj_wfree(WORD obj, WORD x, WORD y, WORD w, WORD h) {
+0x00e34e62   T _obj_ialloc                            desk/deskobj.c:221         WORD obj_ialloc(WORD wparent, WORD x, WORD y, WORD w, WORD h) {
+0x00e34ed0   T _obj_get_obid                          desk/deskobj.c:250         WORD obj_get_obid(WORD drive) {
+0x00e34f50   T _pro_run                               desk/deskpro.c:53          WORD pro_run(WORD isgraf, char *cmd, char *tail, WORD wh, WORD curr) {
+0x00e34f50   T deskpro.o                              -
+0x00e34fc4   T _change_resolution                     desk/deskrez.c:317         int change_resolution(WORD *newres,WORD *newmode) {
+0x00e34fc4   T deskrez.o                              -
+0x00e35000   T _desktop_str_addr                      desk/deskrsrc.c:35         return (char *)gettext(desk_rs_fstr[stnum]);
+0x00e35000   T deskrsrc.o                             -
+0x00e35014   T desksupp.o                             -
+0x00e351b2   T _deselect_all                          desk/desksupp.c:112        OBJECT *obj = tree;
+0x00e351cc   T _desk_clear                            desk/desksupp.c:123        void desk_clear(WORD wh) {
+0x00e35246   T _desk_clear_all                        desk/desksupp.c:161        void desk_clear_all(void) {
+0x00e35278   T _desk_verify                           desk/desksupp.c:176        void desk_verify(WORD wh, WORD changed) {
+0x00e352e0   T _do_wredraw                            desk/desksupp.c:203        void do_wredraw(WORD w_handle, GRECT *gptr) {
+0x00e353c6   T _do_xyfix                              desk/desksupp.c:263        void do_xyfix(WORD *px, WORD *py) {
+0x00e353e6   T _do_wopen                              desk/desksupp.c:295        void do_wopen(WORD new_win, WORD wh, WORD curr, GRECT *pt) {
+0x00e354c6   T _do_wfull                              desk/desksupp.c:330        void do_wfull(WORD wh) {
+0x00e35554   T _remove_locate_shortcut                desk/desksupp.c:381        void remove_locate_shortcut(WORD curr) {
+0x00e35638   T _i_find                                desk/desksupp.c:1734       ANODE *i_find(WORD wh, WORD item, FNODE **ppf, BOOL *pisapp) {
+0x00e35700   T _valid_drive                           desk/desksupp.c:1811       BOOL valid_drive(char drive) {
+0x00e35764   T _malloc_fail_alert                     desk/desksupp.c:1833       fun_alert(1, STMAFAIL);
+0x00e35776   T _desk_busy_on                          desk/desksupp.c:1842       graf_mouse(HGLASS, NULL);
+0x00e35786   T _desk_busy_off                         desk/desksupp.c:1851       graf_mouse(ARROW, NULL);
+0x00e35794   T _set_default_path                      desk/desksupp.c:1786       WORD set_default_path(char *path) {
+0x00e35858   T _do_info                               desk/desksupp.c:1289       WORD do_info(WORD curr) {
+0x00e35994   T _print_file                            desk/desksupp.c:618        BOOL print_file(char *name,LONG bufsize,char *iobuf) {
+0x00e35ad0   T _do_aopen                              desk/desksupp.c:844        WORD do_aopen(ANODE *pa, BOOL isapp, WORD curr, char *pathname, char *pname, char *tail) {
+0x00e35ff8   T _do_diropen                            desk/desksupp.c:424        char *pathname, GRECT *pt, WORD redraw) {
+0x00e360dc   T _do_fopen                              desk/desksupp.c:1090       void do_fopen(WNODE *pw, WORD curr, char *pathname, WORD allow_new_win) {
+0x00e3624e   T _refresh_window                        desk/desksupp.c:1671       void refresh_window(WNODE *pw, BOOL force_mediach) {
+0x00e362b4   T _refresh_drive                         desk/desksupp.c:1701       void refresh_drive(WORD drive) {
+0x00e36300   T _do_format                             desk/desksupp.c:1562       void do_format(void) {
+0x00e367c6   T _do_dopen                              desk/desksupp.c:1042       WORD do_dopen(WORD curr) {
+0x00e368b6   T _do_open                               desk/desksupp.c:1192       WORD do_open(WNODE *pwin, WORD curr) {
+0x00e36b1c   T _win_view                              desk/deskwin.c:64          void win_view(void) {
+0x00e36b1c   T deskwin.o                              -
+0x00e36be4   T _win_start                             desk/deskwin.c:110         G.g_iview = START_VIEW;
+0x00e36c50   T _win_free                              desk/deskwin.c:142         void win_free(WNODE *thewin) {
+0x00e36ca2   T _win_alloc                             desk/deskwin.c:157         WNODE *win_alloc(WORD obid) {
+0x00e36d78   T _win_find                              desk/deskwin.c:199         WNODE *win_find(WORD wh) {
+0x00e36d9e   T _win_top                               desk/deskwin.c:219         void win_top(WNODE *thewin) {
+0x00e36dea   T _win_onbottom                          desk/deskwin.c:251         for (p = G.g_wfirst; p; p = p->w_next)
+0x00e36e06   T _win_ontop                             desk/deskwin.c:269         wob = G.g_screen[ROOT].ob_tail;
+0x00e36e44   T _win_count                             desk/deskwin.c:283         }
+0x00e36e4c   T _win_bldview                           desk/deskwin.c:393         void win_bldview(WNODE *pwin, GRECT *r) {
+0x00e3735c   T _win_dispfile                          desk/deskwin.c:646         void win_dispfile(WNODE *pw, WORD file) {
+0x00e373f0   T _win_slide                             desk/deskwin.c:683         void win_slide(WORD wh, BOOL horizontal, WORD sl_value) {
+0x00e37464   T _win_arrow                             desk/deskwin.c:717         void win_arrow(WORD wh, WORD arrow_type) {
+0x00e374fa   T _win_srtall                            desk/deskwin.c:769         void win_srtall(void) {
+0x00e37530   T _win_bdall                             desk/deskwin.c:787         void win_bdall(void) {
+0x00e37576   T _win_shwall                            desk/deskwin.c:806         void win_shwall(void) {
+0x00e375ce   T _win_isel                              desk/deskwin.c:826         WORD win_isel(OBJECT olist[], WORD root, WORD curr) {
+0x00e37620   T _win_sname                             desk/deskwin.c:847         void win_sname(WNODE *pw) {
+0x00e37644   T _win_sinfo                             desk/deskwin.c:868         void win_sinfo(WNODE *pwin, BOOL check_selected) {
+0x00e376c8   T _desk_rs_init                          desk/desk_rsc.tr.c:2379    int desk_rs_init(void) {
+0x00e376c8   T desk_rsc.o                             -
+0x00e382c6   T _desk_rs_fstr                          desk/desk_rsc.tr.c:2398    }
+0x00e383ae   T _desk_rs_bitblk                        desk/desk_rsc.tr.c:2398    }
+0x00e3afd8   T icons.o                                -
+0x00e3afda   T _icon_rs_iconblk                       -
+0x00e3b86c   T _coma_start                            cli/cmdasm.S:26            move.l  4(sp),a5                // a5 -> basepage
+0x00e3b86c   T cmdasm.o                               -
+0x00e3b8aa   T _getwh                                 cli/cmdasm.S:52            move.l  a2,-(sp)                // not a scratch reg for gcc
+0x00e3b8b6   T _getht                                 cli/cmdasm.S:63            move.l  a2,-(sp)                // not a scratch reg for gcc
+0x00e3b8c4   T _jmp_gemdos                            cli/cmdasm.S:78            move.l  (sp)+,ret_addr          // so parameters are in the right place
+0x00e3b8ec   T _jmp_bios                              cli/cmdasm.S:88            move.l  (sp)+,ret_addr
+0x00e3b914   T _jmp_xbios                             cli/cmdasm.S:98            move.l  (sp)+,ret_addr
+0x00e3b93c   T cmdmain.o                              -
+0x00e3bb8a   T _cmdmain                               cli/cmdmain.tr.c:37        int cmdmain(void) {
+0x00e3bda8   T _valid_res                             cli/cmdmain.tr.c:243       if (vdo_value == _VDO_VIDEL)
+0x00e3bde8   T cmdedit.o                              -
+0x00e3befa   T _insert_char                           cli/cmdedit.c:110          void insert_char(char *line,WORD pos,WORD len,char c) {
+0x00e3bf6c   T _read_line                             cli/cmdedit.c:42           WORD read_line(char *line) {
+0x00e3c3f2   T _init_screen                           cli/cmdedit.c:134          n = getwh();                    /* get max cell number for x and y */
+0x00e3c42a   T _init_cmdedit                          cli/cmdedit.c:146          WORD init_cmdedit(void) {
+0x00e3c470   T _save_history                          cli/cmdedit.c:171          void save_history(const char *line) {
+0x00e3c4ec   T cmdexec.o                              -
+0x00e3c58a   T _exec_program                          cli/cmdexec.c:30           LONG exec_program(WORD argc,char **argv,char *redir) {
+0x00e3c7ac   T cmdint.o                               -
+0x00e3ddce   T _lookup_builtin                        cli/cmdint.tr.c:152        LONG (*lookup_builtin(WORD argc,char **argv))(WORD,char **) {
+0x00e3de88   T _get_path                              cli/cmdint.tr.c:865        LONG get_path(char *buf,WORD drive) {
+0x00e3eaac   T cmdparse.o                             -
+0x00e3eb06   T _parse_line                            cli/cmdparse.tr.c:10       WORD parse_line(char *line,char **argv,char *redir_name) {
+0x00e3ebe4   T cmdutil.o                              -
+0x00e3ebea   T _escape                                cli/cmdutil.tr.c:15        void escape(char c) {
+0x00e3ec1e   T _message                               cli/cmdutil.tr.c:22        void message(const char *msg) {
+0x00e3ec4e   T _messagenl                             cli/cmdutil.tr.c:32        message(msg);
+0x00e3edcc   T _errmsg                                cli/cmdutil.tr.c:39        void errmsg(LONG rc) {
+0x00e3eea6   T _strlower                              cli/cmdutil.tr.c:99        char *strlower(char *str) {
+0x00e3eecc   T _strupper                              cli/cmdutil.tr.c:111       char *strupper(char *str) {
+0x00e3eef2   T _getword                               cli/cmdutil.tr.c:123       WORD getword(char *buf) {
+0x00e3ef6c   T _decode_date_time                      cli/cmdutil.tr.c:141       WORD decode_date_time(char *s,UWORD date,UWORD time) {
+0x00e3f072   T _get_path_component                    cli/cmdutil.tr.c:195       WORD get_path_component(const char **pp,char *dest) {
+0x00e3f0b8   T _has_wildcard                          cli/cmdutil.tr.c:225       return 1;
+0x00e3f0da   T _strequal                              cli/cmdutil.tr.c:251       WORD strequal(const char *s1,const char *s2) {
+0x00e3f134   T _program_extension                     cli/cmdutil.tr.c:232       const char *program_extension(const DTA *dtaptr) {
+0x00e3f1aa   T _getcookie                             cli/cmdutil.tr.c:278       WORD getcookie(LONG cookie,LONG *pvalue) {
+0x00e3f1f4   T _ui_mupb                               -
+0x00e3f1f4   T endrom.o                               -
+0x00e3f200   D __data                                 ~emutos.ld:138             __data = .;
+0x00e3f200   D __edata                                ~emutos.ld:140             __edata = .;
+0x00e3f200   D endrom.o                               -
+0x00e3f200   T __etext                                ~emutos.ld:127             __etext = .;

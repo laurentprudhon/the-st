@@ -116,16 +116,23 @@ m68k-atari-mint-ld --version | head -1 | sed 's/^/  /'
 # --- 2. Build every country --------------------------------------------------------------------
 # `make 256 UNIQUE=<cc>` recompiles only the country-dependent objects; the linker map emutos.map is
 # overwritten by the next build, so it is copied out immediately, before the next iteration.
+#
+# -g is added to the documented -Os because map2src.py needs the compiler's line info. It does not
+# change code generation, so the images stay byte-identical to the release: the verification below
+# would fail loudly if a single byte moved.
 cd "$WORKDIR/src"
 for cc in $COUNTRIES; do
     say "-- build $cc"
-    if ! make 256 UNIQUE=$cc > "$OUT/build-$cc.log" 2>&1; then
+    if ! make 256 UNIQUE=$cc OPTFLAGS='-Os -g' > "$OUT/build-$cc.log" 2>&1; then
         tail -20 "$OUT/build-$cc.log" >&2
         die "build failed for country $cc (log: $OUT/build-$cc.log)"
     fi
     cp emutos.map "$OUT/etos256$cc.map"
     cp "etos256$cc.img" "$OUT/"
     sh tools/map2sym.sh "$OUT/etos256$cc.map" > "$OUT/etos256$cc.sym"
+    python3 "$ROOT/scripts/map2src.py" --map "$OUT/etos256$cc.map" --sym "$OUT/etos256$cc.sym" \
+        --out "$OUT/etos256$cc.src" --objects "$WORKDIR/src" --source-root "$WORKDIR/src" \
+        --check || die "could not build the source map for $cc"
 done
 cd "$ROOT"
 
@@ -186,25 +193,27 @@ if failures:
 
 print("\n  %d/%d images byte-identical to the manifest." % (len(entries) - len(failures), len(entries)))
 
-diff_report = [c for c in shipped
-               if os.path.exists(os.path.join(repodir, "etos256%s.sym" % c))
-               and sha(os.path.join(repodir, "etos256%s.sym" % c)) != sha(os.path.join(out, "etos256%s.sym" % c))]
+KINDS = ("sym", "src")
+diff_report = [("%s.%s" % (c, k)) for c in shipped for k in KINDS
+               if os.path.exists(os.path.join(repodir, "etos256%s.%s" % (c, k)))
+               and sha(os.path.join(repodir, "etos256%s.%s" % (c, k))) != sha(os.path.join(out, "etos256%s.%s" % (c, k)))]
 if write:
     os.makedirs(repodir, exist_ok=True)
     for c in shipped:
-        src = os.path.join(out, "etos256%s.sym" % c)
-        dst = os.path.join(repodir, "etos256%s.sym" % c)
-        if os.path.exists(dst) and sha(dst) == sha(src):
-            continue
-        open(dst, "wb").write(open(src, "rb").read())
-        print("  wrote roms/emutos-1.4/etos256%s.sym" % c)
+        for k in KINDS:
+            src = os.path.join(out, "etos256%s.%s" % (c, k))
+            dst = os.path.join(repodir, "etos256%s.%s" % (c, k))
+            if os.path.exists(dst) and sha(dst) == sha(src):
+                continue
+            open(dst, "wb").write(open(src, "rb").read())
+            print("  wrote roms/emutos-1.4/etos256%s.%s" % (c, k))
 elif diff_report:
-    print("  committed .sym files differ from this rebuild: %s" % ", ".join(diff_report))
+    print("  committed files differ from this rebuild: %s" % ", ".join(diff_report))
     sys.exit(1)
 else:
-    print("  committed .sym files match this rebuild.")
+    print("  committed .sym and .src files match this rebuild.")
 PY
 
 say ""
 say "OK: all images reproduced. Artefacts in $OUT"
-say "    Rebuild with --write-symbols to refresh roms/emutos-1.4/*.sym."
+say "    Rebuild with --write-symbols to refresh roms/emutos-1.4/*.sym and *.src."

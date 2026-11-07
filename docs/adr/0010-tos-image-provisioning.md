@@ -165,6 +165,26 @@ files still travel with the packaging work; the two are consistent by hash, not 
 `0x00E00000`–`0x00EFFFFF`, and the `D`/`B` ones are the absolute ST-RAM system variables at `0x380`
 and up, which is correct for a TOS image.
 
+**The symbols carry no source information**, and a debugger that can only say "you are in
+`_biosmain`" is half a debugging story, so each image also ships a companion
+`etos256<lang>.src` where **line N describes line N of that image's `.sym`**:
+`<address> <type> <name> <location> <source text>`. The location column is one of three things, and
+the difference is deliberate:
+
+- `bios/bios.c:777` — the compiler's own line info (the build adds `-g`, which changes no byte of the
+  linked image; the verification would fail if it did).
+- `~tosvars.ld:23` — located by **search**, because this toolchain's a.out stabs carry line info for
+  code only: a data or BSS symbol is looked up in the one source file its object was built from, and
+  only when the name matches exactly once there.
+- `-` — no source location: linker-provided symbols (`__text`, `__etext`) and the object-name markers
+  `map2sym` emits (`startup.o`). 1 412 of 1 695 lines are located.
+
+The granularity is the **function or the variable, not the statement**: `0x00E0111E` → `_biosmain` →
+`bios/bios.c:777` → `void biosmain(void)`. Statement-level stepping would need DWARF, and this
+toolchain emits a.out objects that EmuTOS's linker script discards `*(.debug*)` from anyway — a
+line-accurate map of these bytes is not available, and a mintelf/GCC 13 rebuild would be a different
+image, useful only as an oracle about the source.
+
 ## 7. CI
 
 EmuTOS-only, permanently offline. Every test boots an in-repo `etos256*.img`; a test asserts the
