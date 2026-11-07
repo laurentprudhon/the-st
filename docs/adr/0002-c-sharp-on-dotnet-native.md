@@ -177,6 +177,8 @@ Two different failures, kept separate on purpose:
 
 - The 0.32 ns and 53 ns figures are microbenchmarks on desktop CoreCLR (.NET 11 preview 7), not an
   emulator. **Unverified in situ** — the walking skeleton is the measurement that settles it.
+  *(Corrected 2026-11-07 by ticket #8: the 0.32 ns is the loop, not the await, and the in-situ fast
+  path is 6.8 ns. See §Revision — 2026-11-07.)*
 - No C# emulator of comparable complexity exists to point at; no multithreaded Atari ST emulator
   exists in any language in the browser, and none is claimed here for the native case.
 - The claim that Emscripten's threaded builds are stable, and the ranking of every rejected language,
@@ -192,3 +194,34 @@ Ticket #7 removed the third ordering key. Continuations are ordered by `(machine
 sequence)`; there is no hardware priority to order by, because the machine has none (ADR 0007). The
 sentence above is amended in place; nothing else in this ADR changed — the fast path, the
 `SynchronizationContext`, one scheduler thread and the delivery targets stand as written.
+
+## Revision — 2026-11-07, ticket #8
+
+Ticket #8 measured the mechanism natively (`tools/suspension-bench/`, results in
+`research/suspension-cost.md`) and the owner ruled on the topology. Four statements above are amended
+here; the status stays `accepted`.
+
+- **The 0.32 ns anchor is the loop, not the await.** Reproduced on the project's toolchain: the same
+  bare `async` loop with the `await` removed costs 0.37 ns/iteration, and a completed await costs
+  **2.31 ns net** under compiler-generated state machines — the default build, and the shipping
+  configuration. With runtime-async switched on (`-p:Features=runtime-async=on`; a Roslyn feature flag,
+  no SDK property; verified by `AsyncHelpers` in the IL) the completed await folds away — **0.01 ns
+  net** — and the total lands at 0.38 ns. So the ADR's figure is right *for a runtime-async build* and
+  overstates the default build by 7×. Neither reading approaches the 20 ns falsifier.
+- **The 53 ns yield does not reproduce** on the target hardware: 289 ns (compiler state machines) and
+  362 ns (runtime-async) on a 4-vCPU container with a busy pool. It was a desktop thread-pool post; it
+  is not a design budget and should not be quoted as one.
+- **The in-situ fast path is 6.8 ns per synchronous read** — 21× the microbenchmark and still 3× under
+  the falsifier. The gap is the mechanism, not the language: the fast path is this project's own struct
+  awaiter, whose `IsCompleted` compares the read's instant against the chip's clock, so it never enters
+  the runtime's async machinery. Runtime-async does not move it, and a suspension costs 213 ns.
+- **Topology ruled by the owner, 2026-11-07: T=1 ships and the worker pool is not on the roadmap.**
+  The measurement behind the ruling: a naive fixed pool (chips on their own threads, every scheduler
+  touch under one lock) gave 1.22 → 0.95 ms/frame at T=2, nothing at T=4 and 2.4× *worse* at T=8 on
+  4 vCPUs, while removing the only argument this design has for same-instant order. The pool is
+  unearned, not forbidden: it returns only if #10/#18 show a frame over ~25 % of the 20 ms budget at
+  T=1, or if #11 finds a T=1 digest divergence a commit-in-order pool cures.
+
+Frame cost at the ADR's own 10²–10³ crossings per frame after the DMA correction: **0.1–1.1 ms of a
+20 ms frame**, with no gen2 collection and ≤0.019 ms of GC pause per frame at the highest density
+swept (10⁴).

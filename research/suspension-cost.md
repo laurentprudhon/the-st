@@ -183,10 +183,15 @@ What would change the recommendation, stated so it can fire rather than be re-ar
 real crossing density exceeding ~25 % of the 20 ms budget at T=1 (#10 and #18 measure this), or #11
 finding a digest divergence at T=1 that a worker pool somehow cures.
 
-**Open for the owner's ruling** — the ticket is HITL and this is the question it closes on:
+**Open for the owner's ruling** — the ticket is HITL and this is the question it closed on:
 
 > T=1 as the shipping topology, with the pool held as an unearned optimisation — or a fixed 2-worker
 > pool added to the roadmap now, on the strength of the 22 % it measured?
+
+**Ruled by the owner, 2026-11-07: T=1 only; the pool is not on the roadmap.** Recorded in
+[ADR 0002 §Revision — 2026-11-07](../docs/adr/0002-c-sharp-on-dotnet-native.md) and on ticket #8. The
+same ruling corrected the ADR's 0.32 ns anchor in place (it is the loop, not the await: 2.31 ns net in
+the default build, 0.01 ns net with runtime-async).
 
 ## 8. What this does not measure
 
