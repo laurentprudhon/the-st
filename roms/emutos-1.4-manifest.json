@@ -1,0 +1,144 @@
+{
+  "upstream": "emutos-1.4-256k",
+  "release": "1.4",
+  "released": "2025-06-07",
+  "licence": "GPL-2.0",
+  "source": "emutos-src-1.4.tar.gz",
+  "selection": "host UI language, fallback uk; us is NTSC and never shipped",
+  "images": {
+    "ca": {
+      "file": "etos256ca.img",
+      "size": 262144,
+      "sha256": "69d5a2a8cd518f9a5574a703bdfe6299f4c70fa4e5f8a531f0f2825a36ff2f5e",
+      "crc32": "91A62BC4",
+      "language": "Catalan"
+    },
+    "cz": {
+      "file": "etos256cz.img",
+      "size": 262144,
+      "sha256": "3e9bd40f72b8959e623959e1c3ab2647b6b9d756175a86beb6ed52429dbe0584",
+      "crc32": "64F473CB",
+      "language": "Czech"
+    },
+    "de": {
+      "file": "etos256de.img",
+      "size": 262144,
+      "sha256": "93d4ba5a322afb059b622d07bb5f3c572ab79f2127a5a53a62fe9cc4a045f3e8",
+      "crc32": "69CBDB42",
+      "language": "German"
+    },
+    "es": {
+      "file": "etos256es.img",
+      "size": 262144,
+      "sha256": "e0fbbdf5e611a0bd6a2598a96b0c221e5411467bed3a3d48e89aab3bc9b92ed3",
+      "crc32": "9909B581",
+      "language": "Spanish"
+    },
+    "fi": {
+      "file": "etos256fi.img",
+      "size": 262144,
+      "sha256": "a7853caffb9e51709f1df69b95c2b31d5c24a73bcd7a4e434db3312ae2e546e1",
+      "crc32": "25D54A35",
+      "language": "Finnish"
+    },
+    "fr": {
+      "file": "etos256fr.img",
+      "size": 262144,
+      "sha256": "8a4c114ec850821260ac10d36fa9f62c7937053f8ebad84bc605cde229f3c3f5",
+      "crc32": "51EA0756",
+      "language": "French"
+    },
+    "gr": {
+      "file": "etos256gr.img",
+      "size": 262144,
+      "sha256": "c3310c93a58be4208621ce8766685bdfb38b0a99d937578c15712a5e2fbb1c3d",
+      "crc32": "137DCFDD",
+      "language": "Greek"
+    },
+    "hu": {
+      "file": "etos256hu.img",
+      "size": 262144,
+      "sha256": "108c4c5b1cab0142b1695ab828a4aabcc7ec05bd47f01ce23f4bc019b4add4a8",
+      "crc32": "378B1736",
+      "language": "Hungarian"
+    },
+    "it": {
+      "file": "etos256it.img",
+      "size": 262144,
+      "sha256": "6603e23e36bc910665cf1a92b999a2e653547b26b30f6b144dc44f462123011f",
+      "crc32": "7344B938",
+      "language": "Italian"
+    },
+    "nl": {
+      "file": "etos256nl.img",
+      "size": 262144,
+      "sha256": "d7102dd44338778c2989f32a6ff4d6f268fb13e0a260a5cbc333d132758ee3c4",
+      "crc32": "8BAD7F2E",
+      "language": "Dutch"
+    },
+    "no": {
+      "file": "etos256no.img",
+      "size": 262144,
+      "sha256": "0d629d17699e5f3eda99ad28197bf72b9f05e25f61f963876e5508d3b2e87341",
+      "crc32": "FEFC62AF",
+      "language": "Norwegian"
+    },
+    "pl": {
+      "file": "etos256pl.img",
+      "size": 262144,
+      "sha256": "0e9ee1291a866a27d101e0b9d0923d1a60b591a73612d3a5527ca353b8964575",
+      "crc32": "8F0190BD",
+      "language": "Polish"
+    },
+    "ro": {
+      "file": "etos256ro.img",
+      "size": 262144,
+      "sha256": "d1d1dcf46f6b7a8d46aab7ff9169026f34e9b91a50abc1829613c8390cda3cd4",
+      "crc32": "BDEEA93C",
+      "language": "Romanian"
+    },
+    "ru": {
+      "file": "etos256ru.img",
+      "size": 262144,
+      "sha256": "3d9fc459ff80afccff3804959af8ef2e4291d91bacfe110ec9969dd455e43f3c",
+      "crc32": "EB7D5BEE",
+      "language": "Russian"
+    },
+    "se": {
+      "file": "etos256se.img",
+      "size": 262144,
+      "sha256": "1a0277ea241b9e08d7ab71449a5b0aa5c4f72a13157890444e97fee37d410b3a",
+      "crc32": "ABB9B73C",
+      "language": "Swedish"
+    },
+    "sg": {
+      "file": "etos256sg.img",
+      "size": 262144,
+      "sha256": "f310ed8cf88fbae1eb6d254278303d5bd3ef65a4fde414ae11846d453ffc84db",
+      "crc32": "E6AE58C4",
+      "language": "Swiss German"
+    },
+    "tr": {
+      "file": "etos256tr.img",
+      "size": 262144,
+      "sha256": "f5d980d8d6a2b80dcf23fc17d3ec2554980a7cf0cf63b57f55f9d927b4669d5f",
+      "crc32": "FA21CD27",
+      "language": "Turkish"
+    },
+    "uk": {
+      "file": "etos256uk.img",
+      "size": 262144,
+      "sha256": "3bfdc561eb193a8f65aa772169aa2aca241015a2bad9388a2fea3326b1b0aeb0",
+      "crc32": "10FFD4BD",
+      "language": "English (UK)"
+    }
+  },
+  "excluded": {
+    "us": {
+      "file": "etos256us.img",
+      "size": 262144,
+      "sha256": "f1fe68360db345551231791edc6a7769e825edadf3632f59b10f3b2100ed75b3",
+      "reason": "English (NTSC); the machine is PAL"
+    }
+  }
+}

@@ -332,6 +332,20 @@ Numbers for the decision:
 
 ## 5. Recommended policy for The ST
 
+> ### Correction — 2026-11-07, owner ruling (ADR 0010)
+>
+> This whole section is now **evidence, not policy**. The owner's ruling: the project *ships* EmuTOS
+> 1.4 (all 18 PAL language images, source bundled), selects the image from the host UI language with
+> `uk` as fallback, displays one fixed first-launch sentence, and accepts a real TOS 1.62 **only as a
+> user-supplied file** validated against a hash accept-list. Nothing is fetched at run time.
+>
+> What that invalidates below: **§5.2 entirely** (fetch order, CORS reasoning, mirrors); §5.1's
+> "UK and US for NTSC profiles" (one PAL machine, no US image); §5.3's browser storage and its
+> download-side wording, which survive only as an accept-list for a loaded file; §5.4's draft
+> warning, replaced by the owner's sentence; §5.5's `npm`/`STEEM_*` examples and its nightly fetch
+> job, re-expressed for .NET and removed. The unchanged findings — the hashes, the FR truncation,
+> the UK variant-B delta, EmuTOS's licence and STE suitability — remain canonical here.
+
 ### 5.1 What we ship, what we fetch
 
 1. **Ship EmuTOS 1.4 256 KB (UK, and US for NTSC profiles) in the repo/bundle.** It is

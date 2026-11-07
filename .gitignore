@@ -73,3 +73,5 @@ tests/build/
 !hatari/src/cpu/jit/arm/
 !hatari/src/cpu/jit/x86/
 !hatari/src/debug/
+## A user's own TOS 1.62 dump lives beside the emulator and is never committed.
+roms/tos162*.img

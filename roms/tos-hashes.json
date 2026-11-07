@@ -1,0 +1,138 @@
+{
+  "policy": "hash accept-list; unknown dumps are refused, never booted",
+  "structural_prefilter": {
+    "size": [
+      262144,
+      262145
+    ],
+    "header_prefix": "602e0162"
+  },
+  "country_code_byte": 29,
+  "country_codes": {
+    "us": 0,
+    "de": 3,
+    "fr": 5,
+    "uk": 7,
+    "it": 11,
+    "se": 13,
+    "sf": 15,
+    "sg": 17,
+    "nl": 29,
+    "cz": 31
+  },
+  "accepted": {
+    "1.62-cz": {
+      "language": "Czech Republic",
+      "size": 262144,
+      "sha256": "a8f8defb314cb7248f87df63a6c3f2d55614abff99fd04b90cf9ebd3b06bc56f",
+      "crc32": "CCD44B6E",
+      "provenance": "reconstruction",
+      "warn": "built from Atari sources (tos1x); not an attested retail dump"
+    },
+    "1.62-de": {
+      "language": "Germany",
+      "size": 262144,
+      "sha256": "34f6640a015ab4ea98804e8365cf61155aa9e00b965c0de65b4d0f684d026d40",
+      "crc32": "2CDEB5E5",
+      "provenance": "retail dump"
+    },
+    "1.62-es": {
+      "language": "Spain",
+      "size": 262144,
+      "sha256": "7e7ac73d7d5caeae617f641b9151f83f670f7782b070d17bf7c0b2a8bae5971f",
+      "crc32": "C9C9693D",
+      "provenance": "reconstruction",
+      "warn": "built from Atari sources (tos1x); not an attested retail dump"
+    },
+    "1.62-fr": {
+      "language": "France",
+      "size": 262145,
+      "sha256": "fbd2e3edba4b04e56e11c192aae2a26d0590bde7321617bf9902bda11aa25caf",
+      "crc32": "D3D32E88",
+      "provenance": "retail dump",
+      "trim_to": 262144,
+      "sha256_trimmed": "689c451df62a7bed0156a60a2c0579f63e3b59ada121e46d5d067942acbdfc7c",
+      "trim_note": "one trailing 0xFF; strip it, then the hash is sha256_trimmed"
+    },
+    "1.62-fr-trimmed": {
+      "language": "France",
+      "size": 262144,
+      "sha256": "689c451df62a7bed0156a60a2c0579f63e3b59ada121e46d5d067942acbdfc7c",
+      "crc32": "0AB003BE",
+      "provenance": "retail dump",
+      "trimmed_from": "1.62-fr"
+    },
+    "1.62-it": {
+      "language": "Italy",
+      "size": 262144,
+      "sha256": "7444102bf237bb39158731826d0c8615ae6de346a61b72e0fc268922fdb6bc94",
+      "crc32": "866D8DEF",
+      "provenance": "reconstruction",
+      "warn": "built from Atari sources (tos1x); not an attested retail dump"
+    },
+    "1.62-nl": {
+      "language": "Netherlands",
+      "size": 262144,
+      "sha256": "a92f8bf404f918ab22e9fc45601229f824c841f61870312cf2bf2a16749a0618",
+      "crc32": "874B0467",
+      "provenance": "reconstruction",
+      "warn": "built from Atari sources (tos1x); not an attested retail dump"
+    },
+    "1.62-se-rebuild": {
+      "language": "Sweden",
+      "size": 262144,
+      "sha256": "77f9c88cbdf7127a7a6b61b2fa84ddde4d9a02a30f524a6bd87dc7deb250a575",
+      "crc32": "09494D80",
+      "provenance": "reconstruction",
+      "warn": "different build from the retail SE dump"
+    },
+    "1.62-se-retail": {
+      "language": "Sweden",
+      "size": 262144,
+      "sha256": "220fc9b35fd99908db9f9075fb3d850bf196d25741405ac6fa062facbbbd1583",
+      "crc32": "90F124B1",
+      "provenance": "retail dump"
+    },
+    "1.62-sf": {
+      "language": "Switzerland (French)",
+      "size": 262144,
+      "sha256": "9a5e8338eab196375e8cb0a925d5fa6e4a200ae639bb309a801a2cad18666d56",
+      "crc32": "88819F1D",
+      "provenance": "reconstruction",
+      "warn": "built from Atari sources (tos1x); not an attested retail dump"
+    },
+    "1.62-sg": {
+      "language": "Switzerland (German)",
+      "size": 262144,
+      "sha256": "89863fc589125ec3f6ac52eb720a5358b55d8ff14ec44cda2d6d297ff18c5742",
+      "crc32": "8F72D23E",
+      "provenance": "reconstruction",
+      "warn": "built from Atari sources (tos1x); not an attested retail dump"
+    },
+    "1.62-uk-a": {
+      "language": "United Kingdom",
+      "size": 262144,
+      "sha256": "c0c2cf6668f08f0ddfe8558d33a68896363322e4530062c584ea2c64067d5ffb",
+      "crc32": "1C1A4EBA",
+      "provenance": "retail dump",
+      "note": "byte-identical to the atariworld and tos1x dumps"
+    },
+    "1.62-uk-b": {
+      "language": "United Kingdom",
+      "size": 262144,
+      "sha256": "7f8148b382c75aa4877324dac0efa030c213f5e7de07217d3f840abb4c60c8f4",
+      "crc32": "D1C6F2FA",
+      "provenance": "retail dump",
+      "warn": "differs in 2 bytes from the reference dump"
+    }
+  },
+  "refused": {
+    "1.62-us": {
+      "language": "United States",
+      "size": 262144,
+      "sha256": "1b284510424136a8426360f30a801f8c34272f97591d42d1214d110c57c21bb2",
+      "crc32": "6372E5BD",
+      "reason": "NTSC image (header country code 0); the machine is PAL"
+    }
+  }
+}

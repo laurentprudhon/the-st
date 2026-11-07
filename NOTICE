@@ -1,0 +1,35 @@
+The ST — third-party notices
+============================
+
+EmuTOS 1.4
+----------
+
+This project ships EmuTOS 1.4 (256 KB build, 18 PAL language images) as the default operating-system
+image, and bundles its source archive so the operating system itself can be stepped through.
+
+    Copyright (C) 1998-2025 the EmuTOS development team.
+    Licence: GNU General Public License, version 2 — see roms/emutos-1.4/LICENSE.txt.
+    Source:  bundled as roms/emutos-1.4/emutos-src-1.4.tar.gz
+             upstream: https://sourceforge.net/projects/emutos/files/emutos/1.4/
+
+EmuTOS is a free implementation of the Atari TOS API and contains no code written by Atari.
+
+
+Atari TOS 1.62
+--------------
+
+This project ships no Atari ROM, no part of one, and no image derived from one.
+
+An Atari TOS 1.62 image is proprietary software owned by Atari Interactive, Inc. / Atari SA. It can
+only be supplied by the user, from a machine or medium they own. The project holds no licence to
+distribute it and does not: the emulator validates a user-supplied image against a pinned SHA-256
+accept-list (`roms/tos-hashes.json`) and refuses anything else.
+
+See docs/adr/0010-tos-image-provisioning.md.
+
+
+Vendored third-party sources
+----------------------------
+
+`hatari/`, `neost/` and `steemsse-V4.2.0_R10/` are read-only study references, vendored at the
+commits recorded in README.md. They are not built, shipped or distributed as part of The ST.

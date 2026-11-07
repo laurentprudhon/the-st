@@ -59,5 +59,22 @@ from being excluded.
 
 ## TOS
 
-The TOS image is never committed. It is obtained at first run, single version (1.62), alongside the
-reverse-engineered disassembly used for debug symbols.
+**Since 2026-11-07 the project ships an operating system** (ADR 0010). The default boot image is
+EmuTOS 1.4 — 18 PAL language images, GPLv2, one selected from the host UI language with English (UK)
+as the fallback — bundled with its source archive so the OS can be stepped through.
+
+An Atari TOS 1.62 image is never committed, bundled, cached or released. You may put your own dump in
+the emulator directory; it is checked against a pinned SHA-256 accept-list and refused if it is
+unknown or is the NTSC image.
+
+> The original Atari STE operating system (TOS) is still copyrighted, so this emulator ships with a
+> compatible open source operating system (EmuTOS). You can alternatively put your own TOS 1.62 image
+> in the emulator directory.
+
+> ### Correction 2026-11-07
+>
+> This section previously read *"The TOS image is never committed. It is obtained at first run,
+> single version (1.62), alongside the reverse-engineered disassembly used for debug symbols."* That
+> described a project shipping no operating system and fetching one at run time. Both are superseded:
+> EmuTOS ships, TOS 1.62 is user-supplied, and the debug symbols come from the EmuTOS rebuild rather
+> than from a disassembly, which the project neither ships nor fetches.

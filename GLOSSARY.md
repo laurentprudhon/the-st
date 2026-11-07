@@ -209,10 +209,16 @@ _Avoid_: hash, checksum, snapshot
 
 ### TOS image
 
-The operating-system ROM set the machine needs to run, which the project never distributes: it is
-obtained at first run, is single-version, and is accompanied by the reverse-engineered disassembly
-used for debugging symbols.
+The 256 KB operating-system ROM set the machine boots. Two artefacts answer to the term: the
+**shipped** EmuTOS 1.4 image — GPLv2, one per PAL language, selected from the host UI language — and
+the **optional user-supplied** Atari TOS 1.62 image, which the project never distributes and accepts
+only against a pinned hash accept-list. Either way it is single-version, and its symbol table comes
+from the image's own build.
 _Avoid_: ROM, firmware, BIOS
+
+> **Correction 2026-11-07** (ADR 0010). This entry previously said the set *"is obtained at first
+> run"* and is *"accompanied by the reverse-engineered disassembly"*. EmuTOS now ships with the
+> project, nothing is fetched at run time, and the disassembly is no longer part of the term.
 
 ### Oracle
 
