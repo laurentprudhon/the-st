@@ -100,7 +100,10 @@ class of the trailing fetch (a two-bit field per opcode; it costs nothing and it
 self-modifying-code effects need). Level 2 adds: the exact per-opcode micro-op placement (`PREFETCH`
 steps inside the script), which is also what makes border tricks and I/O read order exact.
 
-*Open:* whether the prefetch class is modelled in the Level-1 baseline or deferred to Level 2.
+**Settled:** the class *is* modelled at Level 1 — one two-bit `PrefetchClass` field per opcode, honoured
+at the single trailing-fetch call site. It changes no cycle count, and it is the only Level-1 behaviour
+self-modifying code and a fetch past the end of a block can observe. The exact per-opcode micro-op
+placement stays Level 2.
 
 ## 4. Reset: the first cycle
 
@@ -165,12 +168,59 @@ millions of records a second for no information.
 - Single-step = one batch; stepping *inside* an instruction is also one batch, because a bus cycle is an
   exchange between two instants.
 
-## 8. Still open in this ticket
+## 8. Cycle costs as data, and where the numbers come from
 
-- **Cost tables and their provenance** — how much of `core-comparison.md` §5.3's three tables survives
-  once cost is arithmetic (`InstrCost` is largely dissolved by §3 above; `EntryCost` per vector and the
-  `MicroOp` script remain), and where the numbers come from (a primary source obtained as a research
-  ticket, or the vendored cores' constants as an oracle with provenance in a comment).
-- **Prefetch class at Level 1 or deferred**, and the Level-1/Level-2 line for the prefetch as a whole.
+**The primary source exists and is already in hand.** M68000UM ninth edition, **chapter 7
+"MC68000 Instruction Execution Times"**: Table 7-1 (effective-address calculation), 7-2…7-4 (MOVE),
+7-5 (standard), 7-6 (immediate), 7-7 (single operand), 7-8 (shift/rotate), 7-9 (bit manipulation),
+7-10 (conditional), 7-11 (JMP/JSR/LEA/PEA/MOVEM), 7-12 (multiprecision), 7-13 (miscellaneous), 7-14
+(MOVEP), 7-15 (exception processing). No research ticket is needed, and the vendored cores are not the
+source — they are a cross-check for the one thing the manual does not tabulate (per-opcode prefetch
+*placement*).
+
+**Its rows are already in this design's shape.** Every entry is `periods (read cycles / write cycles)`,
+and the totals **include instruction fetch, operand reads and operand writes**. So the design's rule
+`clocks = 4 × bus cycles + internal clocks` is exactly the manual's own decomposition, with a
+per-case residue:
+
+| Table 7-1 row | Manual | 4 × cycles | Internal residue |
+|---|---|---|---|
+| `(An)` byte | 4 (1/0) | 4 | 0 |
+| `-(An)` word | 10 (2/0) | 8 | 2 |
+| `(d16,An)` word | 16 (4/0) | 16 | 0 |
+| `(xxx).L` long | 32 (8/0) | 32 | 0 |
+| `#imm` long | 16 (4/0) | 16 | 0 |
+
+and the same arithmetic on Table 7-15: interrupt entry `72 (9/6)` → 60 clocks of bus work + 12
+internal; illegal instruction `62 (8/6)` → 56 + 6; address error `94 (8/14)` → 88 + 6.
+
+**So the three tables of `core-comparison.md` §5.3 collapse to one**, and the design test they were
+meant to satisfy survives intact:
+
+- **`InstrCost` is dissolved.** What remains is the *residue*: internal clocks per (opcode family, size,
+  EA class), plus the handful of data-dependent formulas the manual states (MULU/MULS `38+2n`, DIVU/DIVS
+  `140…158`, shifts/rotates `6+2n`, `MOVEM` per register).
+- **`EntryCost` is dissolved.** Exception entry's cost is its script's bus cycles plus its internal
+  clocks; Table 7-15 is the oracle for the total (and its "includes the first handler fetch" is our
+  trailing prefetch, so the check is complete).
+- **`MicroOp` stays, and is the only table** — the Level-2 placement script, with the internal clocks
+  carried as steps, so Level 1 sums what Level 2 walks (Moira's one-source-two-consumers principle,
+  without the compile-time switch).
+
+**Representation rule.** Store the manual's `(periods, reads, writes)` **verbatim**, with the table
+number as its provenance in the comment; compute the residue once at start-up as
+`periods − 4 × (reads + writes)`. Then the core charges `4 × its own bus cycles + the residue`, and a
+single debug assertion can hold the two accounts together: *if the core's access list and the table's
+read/write counts disagree for an instruction, one of them is wrong and the assertion names the row.*
+That is the falsifier this table needs, and it is why the table is evidence rather than design: the
+teachable rule stays "4 clocks per bus cycle, plus declared internal clocks".
+
+## 9. Still open in this ticket
+
+- **The cost representation's confirmation** — §8's proposal (manual rows verbatim, residue computed,
+  one assertion holding the two accounts together) is awaiting the owner's answer, and with it the
+  retirement of `InstrCost`/`EntryCost` from `core-comparison.md` §5.3.
 - **The dispatch falsifier's threshold**, to be fixed with #8's measurement.
 - Whether `SampleWithInstant(wire, t)` belongs on the wire's log API or on the scheduler's.
+- Which CPU state is an anchor is fixed in §6 but not yet re-read against the tables of §8 (a residue
+  that varies with *data*, e.g. `MULU`, is the one place a logged anchor could lie about a cost).
