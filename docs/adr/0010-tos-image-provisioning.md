@@ -34,7 +34,7 @@ specific, unknown dumps are refused rather than booted, and symbol tables are pr
 | `etos256{ca,cz,de,es,fi,fr,gr,hu,it,nl,no,pl,ro,ru,se,sg,tr,uk}.img` — **18 PAL images** | 4 718 592 B | the boot image, offline, under GPLv2 |
 | `emutos-src-1.4.tar.gz` | 1 299 705 B | debugging (step through EmuTOS), and GPLv2 source availability without a link |
 | `emutos-1.4/LICENSE.txt` | — | GPLv2 text alongside the images; a `NOTICE` entry names EmuTOS, its version and its source |
-| `etos256<lang>.sym` × 18 | — | generated from the rebuild (§6), shipped only once proven byte-identical |
+| `etos256<lang>.sym` × 18 | 738 180 B | generated from the rebuild (§6); proven byte-identical 2026-11-07, committed in `roms/emutos-1.4/` |
 
 `etos256us.img` (English, NTSC) is **not** shipped and never selected: the machine is PAL.
 
@@ -125,12 +125,12 @@ It asserts no licence and no legality either way, names no rights holder, and do
 "abandonware". The draft in `research/tos-rom-sourcing.md` §5.4 is **superseded by this sentence** and
 stays in the note only as the longer variant it was chosen over.
 
-## 6. Symbols for EmuTOS: rebuild once, prove byte-equality
+## 6. Symbols for EmuTOS: rebuilt, and proven byte-identical
 
 The 256 KB packages ship **no** `.sym`; the 1024k package's `.sym` is at Falcon/TT addresses and is
 useless for an STE image. So:
 
-1. Build the 256k set from `emutos-src-1.4.tar.gz` with the documented `m68k-atari-mint` GCC 4.6.4.
+1. Build the 256k set from `emutos-src-1.4.tar.gz` with the documented `m68k-atari-mint` toolchain.
 2. Assert each built image's SHA-256 equals the value in `roms/emutos-1.4-manifest.json`.
 3. Convert that build's `emutos.map` to `.sym` per language and ship it beside the image.
 4. "Step instruction by instruction" is then the CPU's single-step (#9/#10) plus these symbols plus
@@ -139,7 +139,31 @@ useless for an STE image. So:
 **Falsifier**: if a rebuilt image is *not* byte-identical, ship no symbols for it and record why —
 never a symbol table whose addresses disagree with the bytes. If the whole set fails to match, the
 fallback is to build and distribute our own EmuTOS images (ROM and symbols consistent by
-construction), and that is a new decision. Status: `unconfirmed` until the task ticket runs it.
+construction), and that is a new decision.
+
+**Result (measured, 2026-11-07, ticket #24): 19 of 19 images reproduce byte for byte, so every
+shipped image has its symbols.** The recipe is `scripts/build-emutos-1.4.sh`; the per-image
+image/map/symbol hashes and the exact toolchain are `roms/emutos-1.4-symbols.json`; the symbols are
+`roms/emutos-1.4/etos256<lang>.sym` (18 PAL images, 1 695 symbols each, 1 192 of them code).
+
+Two facts from running it are worth keeping, because they are what makes the rebuild reproducible:
+
+- **The compiler is the release's own: GCC 4.6.4 (MiNT 20200504) with binutils 2.30.** `doc/install.txt`
+  names 4.8.4 as "the only supported" toolchain, but the 1.4 readme names 4.6.4 as the compiler the
+  release was built with, and 4.6.4 is what reproduces the bytes. The packages are Vincent Rivière's
+  Debian ones, unpacked from `.deb` rather than installed, so no root is needed.
+- **The build date is part of the ROM.** `tools/mkheader.awk` bakes `date +%Y,%m,%d` into the TOS
+  header (`os_date` at `0x18`, `os_dosdate` at `0x1e`) and into the `"Copyright (C) <year>"` string.
+  Unpinned, all 19 images differ from the release in **exactly those 5 bytes and nothing else**; pinning
+  `date` to the release date (2025-06-07) makes all 19 match. That the delta is 5 bytes and not a
+  scattered diff is itself the evidence that the toolchain is right — a different compiler would
+  move code, not a date.
+
+Consequence for #10 (packaging): the `.sym` files are committed in this ticket, while the `.img`
+files still travel with the packaging work; the two are consistent by hash, not by proximity. A
+`.sym` whose addresses fall outside the image is a bug, not a variant: every `T` symbol here lands in
+`0x00E00000`–`0x00EFFFFF`, and the `D`/`B` ones are the absolute ST-RAM system variables at `0x380`
+and up, which is correct for a TOS image.
 
 ## 7. CI
 
@@ -155,7 +179,8 @@ a proprietary ROM.
   GEM desktop*, never "runs demo X" — EmuTOS is not the compatibility oracle, and the demo corpus is
   precisely its weak class (`doc/incompatible.txt`: 25 named programs, five systemic failure classes).
   Packaging (§2) and the first-launch modal are #10's work, not this ticket's.
-- **New `wayfinder:task` — prove the EmuTOS rebuild is byte-identical and emit the 18 `.sym` files.**
+- **#24 (done, 2026-11-07)**: proved the EmuTOS rebuild byte-identical (19/19) and emitted the 18
+  `.sym` files — see §6 for the result and the two facts that make the rebuild reproducible.
 - **New `wayfinder:task` — compile the per-image keyboard layout table** (18 EmuTOS images + the 13
   accepted TOS entries), which §3 depends on and which the input path consumes.
 - **`research/tos-rom-sourcing.md`**: §5.1–5.6 become evidence, not policy; §5.2 is superseded
