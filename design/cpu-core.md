@@ -67,10 +67,14 @@ predecrement operand on A7).
 65536-entry function-pointer table (plus Hatari's separate no-return table for branches, JMP, JSR, RTS,
 RTE, TRAP) — so the nested design costs three calls and three state fields per instruction, not a
 slower dispatch. What it buys is a nameable state, a completion instant and a loggable transition per
-level, which is what makes the core steppable and digestible. **Falsifier:** if the per-instruction
-nested-entry cost measured in #8 exceeds the flat dispatch by more than the budget fixed there, keep the
-three machines but collapse each level's driving loop to a single `switch` call — do not re-litigate the
-nesting.
+level, which is what makes the core steppable and digestible.
+**Falsifier (settled, three-way split).** *Mechanism:* if an already-satisfied read costs more than
+~20 ns in situ (#8), the async/await shape is replaced by hand-written state machines — not the
+nesting. *Choice:* **if the three nested entries cost more than 1 CPU clock (4 ticks) per instruction —
+12.5 % of the cheapest instruction — the three machines stay but each level's driving loop collapses to
+a single `switch` call**, with no second state field; the nesting itself is not re-litigated.
+*Nothing:* the digest, the observer hooks and the anchor log are instrumentation; their cost reopens
+nothing.
 
 ## 3. The prefetch — the rule, and where it lives
 
@@ -221,7 +225,8 @@ the first is dissolved by arithmetic, the second by the entry script.
 
 ## 9. Still open in this ticket
 
-- **The dispatch falsifier's threshold**, to be fixed with #8's measurement.
+- **The dispatch falsifier's measurement** — the threshold is fixed (1 CPU clock per instruction, §2);
+  #8 supplies the number.
 - Whether `SampleWithInstant(wire, t)` belongs on the wire's log API or on the scheduler's.
 - Which CPU state is an anchor is fixed in §6 but not yet re-read against the tables of §8 (a residue
   that varies with *data*, e.g. `MULU`, is the one place a logged anchor could lie about a cost).
