@@ -36,7 +36,7 @@ a switch.
 | `atari-st-software/` | TOS, GEMDOS/XBIOS/BIOS APIs, file formats, ROM system, notable games and demos |
 | `atari-st-emulation/` | Emulation techniques: 68000 core model, timing, chipset emulation strategies |
 | `research/` | Evidence gathered for specific decisions, each cited and dated |
-| `design/` | Board inventory and other working design artefacts |
+| `design/` | Board inventory and working design artefacts; `validation.md` is what a run must pass to prove the timing model |
 | `tools/` | Measurement prototypes that back a decision (each with its own README) |
 | `steemsse-V4.2.0_R10/` | Source snapshot of Steem SSE v4.2.0 R10 (GPL-3.0), reference implementation |
 | `hatari/` | Captured source of the Hatari emulator, used as a reference implementation |
