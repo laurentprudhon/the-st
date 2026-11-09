@@ -159,6 +159,15 @@ nextDeadline = min( next video group boundary,      // 4th word of the current g
 
 The invariant stands: *if `nextDeadline` is set, a queued `Resume` for Memory exists at or before it.*
 
+**Why the field exists at all.** The engine never polls and has no timer wheel: a chip runs until it
+suspends, and the scheduler resumes whoever holds the earliest instant. A chip that owns a counter
+therefore has to *declare* the instant it next needs to run — otherwise it sits suspended on a
+subscription while its own counter expires, and the machine runs past an event silently, deterministically,
+with a green digest. `nextDeadline` is that declaration, and it does no scheduling: it is a debug-only
+number whose only reader is the assertion. It is computed where the logic computes it, cleared when
+consumed, and it is the **minimum** of the four because being awake at the earliest one is enough — the
+others are recomputed when Memory next runs. It costs nothing in release builds.
+
 ## 9. The memory leaf — boundary, not permission
 
 ADR 0005's leaf may substitute **exactly one closed exchange**: one CPU bus cycle and Memory's answer,

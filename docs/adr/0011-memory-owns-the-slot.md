@@ -8,7 +8,7 @@ next blanking slot, the CPU and any granted bus master are *answered* at the nex
 is arithmetic and never a record; refresh is filler and never a preemptor; the machine is bus-aware
 throughout, with no Level-1 step and no internal-share constant.
 
-**Status**: proposed (2026-11-09), on the owner's answers during ticket #20's grilling session.
+**Status**: accepted (2026-11-09), on the owner's word during ticket #20's grilling session.
 Tickets: #20 (this design), #10 (walking skeleton), #26 (sound path), #27 (video), #28 (timers),
 #29 (disk), #30 (Blitter).
 
