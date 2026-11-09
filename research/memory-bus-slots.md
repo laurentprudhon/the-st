@@ -337,6 +337,33 @@ absolute slack per line falls from 37 slots to 12.
 
 ## 7. What remains unknown
 
+> ### Correction — 2026-11-09, RTL re-read during ticket #20
+>
+> Items **1, 2 and 5** below are answered, and the answer is not the one an earlier pass gave. Re-reading
+> `gyurco/gstmcu`'s control enables (§"Verification pass" of `gstmcu-reconstructions.md` read the
+> `casez` as a priority chain) shows the three internal arms are **mutually exclusive by construction**,
+> because the two select lines are derived from the same signals:
+>
+> - `mcucontrol.v:63` `refb = pk016 | pk024;` — `pk016` is `hde1` (the horizontal display window,
+>   `gstmcu.v:906`), `pk024` is the latched `SREQ`;
+> - `mcucontrol.v:95` `snden = ~pk016 & pk024;` — sound is enabled **only outside** the display window;
+> - `gstmcu.v:142` `REF = addrselb & ~refb;` — refresh is selected **only** when the window is closed
+>   *and* no sound request is pending.
+>
+> So the internal slot has exactly one owner, decided by one equation: **video while `hde1` is high,
+> otherwise sound if `SREQ` is pending, otherwise refresh.** The `casez` is a decode table, not a
+> priority encoder — no arm can meet another. `hde` is horizontal only (`gstmcu.v:907`
+> `DE <= hde & vde`), so the window exists on all 313 lines, and the display-window internal slots of a
+> border line are *reserved and idle*, not handed to refresh. What remains true from §4's tension is
+> only that refresh must fit in blanking: it has 48 internal slots per line against 8.2 needed, so it
+> fits with room to spare and never needs to preempt anything.
+>
+> Consequences: §2's "where a group is placed" is answered (each of the four words is a separate slot
+> decision, `gstmcu.v:1078` `vid = vid_reg + 1`, no burst state machine) **and** §4's "refresh during
+> DE (unknown)" dissolves — refresh does not occur there. Item 1's second half ("can sound and refresh
+> be serviced during DE") answers **no**, by enable, not by priority. The caveat below stands: the
+> refresh *address* is hard-wired to 0, so this proves the slot, never the row.
+
 1. **The intra-line order of internal clients.** Nothing found (STE article,
    service manual, Cwik, Hatari, Steem) states whether a video group is fetched
    as 4 consecutive internal slots or interleaved 1-per-slot across 16 clocks.

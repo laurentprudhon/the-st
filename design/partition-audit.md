@@ -138,6 +138,15 @@ Yes, on three tests:
 **What is not yet validated:** the per-line slot allocation (`research/memory-bus-slots.md`, in progress),
 and the pin-level truth of `SREQ`/`SLOAD`/`DCYC` (inventory §6.14).
 
+> ### Correction — 2026-11-09 (ticket #20)
+>
+> `research/memory-bus-slots.md` is **complete**, not in progress (`research/gstmcu-reconstructions.md`
+> re-checked its load-bearing claims against the GSTMCU RTL on 2026-11-01, and ticket #20 re-read the
+> internal-owner enables on 2026-11-09). The sentence above is kept for the audit trail; the open item
+> it names has moved into that note's §7, where only the refresh period, the sound FIFO depth, the
+> blitter/disk slot occupation and the STE internal share remain unknown. The partition itself is
+> unaffected — these are behavioural questions, never topological ones. The pin-level question stands.
+
 
 ## Revision — 2026-11-01
 

@@ -435,6 +435,28 @@ Read precisely, this settles both questions left open by `research/memory-bus-sl
 (`4'b1??0: ADDR = 0; // REFRESH_ADDR`) — the row counter is not implemented. So the RTL proves refresh's
 *priority*, not its *period*. The 7.8 µs figure stays derived, not implemented.
 
+> ### Correction — 2026-11-09, ticket #20: claim 2 over-read the mux
+>
+> Claim 2 above says the `casez` arms express a precedence "refresh → sound → video" and that refresh
+> preempts video during `DE`. **The arms cannot meet**: the two select lines feeding them are derived
+> from the same signals the clients are gated by, so exactly one arm is live at a time.
+>
+> - `mcucontrol.v:63` `assign refb = pk016 | pk024;` — `pk016` is latched `hde1` (the horizontal display
+>   window, `gstmcu.v:906`), `pk024` is latched `sreq`.
+> - `mcucontrol.v:95` `assign snden = ~pk016 & pk024;` — sound is enabled only **outside** that window.
+> - `gstmcu.v:142` `assign REF = addrselb & ~refb;` — refresh is selected only when the window is shut
+>   *and* sound is idle.
+>
+> With `pk016=1` the pattern is `1?01` (video); with `pk016=0, sreq=1` it is `1?11` (sound); with both 0
+> it is `1??0` (refresh). One owner equation, no priority encoder: **video while `hde1`, else sound if
+> `SREQ`, else refresh.** Because `hde` is horizontal only (`gstmcu.v:907` `DE <= hde & vde`), the
+> display window exists on all 313 lines; a border line's window slots are reserved and idle, never
+> given to refresh. Claim 3's acceptance stands (no burst state machine, one address per fetch clock),
+> but its tail — "refresh or sound can occupy the slots between them" — is false during the window:
+> they are gated out, not outranked. The caveat's second sentence is therefore superseded too: the RTL
+> proves the *slot*, not a priority between clients. `research/memory-bus-slots.md` §7 carries the same
+> correction.
+
 **Two undocumented behaviours confirmed in the code:**
 
 - **STE VSYNC double reload** (`hdl/gstmcu.v:940-960`), comment verbatim: *"From the STE schematics, it
