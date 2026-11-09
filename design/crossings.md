@@ -55,6 +55,12 @@ resumes).
 | `HSYNC` 143, `VSYNC` 142 | Memory | **nobody in the machine** | single-driver | data | — | 313 + 1 records | the host display stage is not a virtual chip; it reads the log per frame (ADR 0004) |
 | `MWE`, `MWD`, `MWK` | Memory | Video | single-driver | 1 | a Super Hi-Res write | ~0 | never exercised at functional level; kept so the pin set is complete |
 
+> **Correction — 2026-11-09** (ADR 0011, ticket #20). The first row's basis line called the 4-word buffer
+> an approximation of the Shifter's. The buffer is now **Memory's own**: filled one word per 250 ns
+> internal slot, drained as one delivery when the fourth word lands. The delivery instant, the 4 000/frame
+> rate and the four data records per group are unchanged; what retires is the hedge on the buffering. What
+> remains approximate is the buffer's occupancy against the Shifter's own latch.
+
 ## 3. CPU, memory and the bus
 
 | Wire | Driver | Subscriber | Resolver | Class | Wake condition | Rate/frame | Basis |
@@ -170,8 +176,10 @@ traffic, which is the property the design actually needs.
    (§6.16); it decides whether Timer A counts the `*SINT` edge or a copy of it.
 4. **HBL during the VSYNC pulse** — the ~309 figure assumes suppression; the timing tables should
    confirm it.
-5. **The sound refill's exact slot** — during display every internal slot is spoken for by video, so the
-   refill must land in blanking; which slot is #20's timetable.
+5. **The sound refill's exact slot — answered by #20 (ADR 0011).** It is a rule, not a slot number: the
+   refill takes the **first blanking internal slot after `SREQ` is asserted**, up to four words
+   back-to-back, and never enters a display window (`snden = ~hde1 & sreq`, `mcucontrol.v:95`). #26 keeps
+   the FIFO depth and the sample cadence; placement is settled here.
 6. **Same-tick ordering — answered by #7, and there is no table** (ADR 0007). The three `IPL` sources
    never reach the queue as three events: Memory resolves them into one three-lane record by taking the
    highest asserting level (6 > 4 > 2). Two bus masters on `BR` produce one identical wired-OR record,

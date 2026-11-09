@@ -148,3 +148,17 @@ cost is elapsed time and never a returned number.
 The owner's position on ever turning it on, recorded because it binds later sessions: *"i hope we will
 not need it, it should only be a very last resort, because it would really cripple the cpu and memory
 coroutines logic and readability."*
+
+## Revision — 2026-11-09 (ticket #20)
+
+**One sentence in §Decision is corrected: "the functional level models no contention inside RAM beyond
+the slot alternation".** The owner ruled that the machine is built bus-aware, with no functional step
+before it — *"we should model level 2 right now, and level 2 only, no need to introduce a first step
+with level 1 given our current design"*. Memory therefore models the slot schedule in full: contention
+is the external slot's (a granted bus master holding it), and a contended answer is a later instant.
+The uniformity argument, the bill, and the leaf's boundary stand unchanged.
+
+[ADR 0011](0011-memory-owns-the-slot.md) fills in what the slot schedule is: one 500 ns cycle with one
+internal and one external slot, one owner equation for the internal slot, three client kinds, and
+refresh as filler rather than preemptor. The 40 % bill below is still #10's measurement and still the
+reason the leaf exists.

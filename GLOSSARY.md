@@ -21,6 +21,12 @@ accesses, scheduled devices, meaningful access order). Electrical, signal-level 
 level this project targets.
 _Avoid_: precision, realism, fidelity tier
 
+> **Correction 2026-11-09** (ADR 0011, owner's ruling on #20). The project builds **one** level, the
+> cycle- and bus-aware machine; there is no functional step before it. The design already computes every
+> answering instant from the memory controller's slot counters, so a "four clocks" level would be a
+> second path rather than a simpler one. "Accuracy level" survives as the name of the *distinction* in
+> the hardware overview, not as a phase of this project.
+
 ### Virtual chip
 
 The unit of the emulator's decomposition: a subsystem of the machine, regrouped from one or more
@@ -155,6 +161,19 @@ The scheduled use of RAM by a client — video fetch, sound fetch, CPU access, B
 granted by the memory controller inside the machine's timing. Distinct from bus ownership: a client
 can be served without ever owning the bus.
 _Avoid_: DMA, bus access, memory access
+
+> **Correction 2026-11-09** (ADR 0011). A client's *service* is the slot it gets, and the internal slot
+> has exactly one owner by one equation — video while the horizontal display window is open, otherwise
+> sound when `SREQ` is pending, otherwise refresh. Refresh is the filler of that equation, not a
+> preemptor.
+
+### Slot
+
+The unit of memory service: one DRAM access, 250 ns, two CPU clocks. A cycle of the memory controller is
+four CPU clocks and holds **one internal slot and one external slot**; internal slots serve video,
+sound and refresh, external ones the CPU and any granted bus master. A slot is a position in the
+controller's phase counter — arithmetic, never a record and never an event.
+_Avoid_: bus cycle, tick, time slot
 
 ### Memory leaf
 

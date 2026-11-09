@@ -122,6 +122,13 @@ Stated so no later session mistakes the green run for more than it is:
 - **Compatibility.** The ladder is D3. "Boots to the desktop" is the acceptance test (ADR 0010), never a
   compatibility claim.
 
+> **Correction — 2026-11-09** (ADR 0011, owner's ruling on #20). Contention **is** modelled: the machine
+> is bus-aware throughout, with no Level-1 step. The "Contention" line above is kept for the audit trail.
+> A run *can* now fail for a contention reason (a granted bus holding the CPU's external slots, a sound
+> refill or refresh deferred out of a display window), and G5's structural counts gain a check that the
+> per-line slot budget is not over-claimed. G1–G4 and G6–G8 are unchanged; **D4** remains the only row
+> that would catch a wrong contention model, and no gate can catch it offline.
+
 ## 8. Traceability
 
 | Row | Traces to |
