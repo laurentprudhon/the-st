@@ -148,14 +148,20 @@ can be understood only if the values that enter the address arithmetic are logge
 fetch (16 000/frame) is arithmetic and never logged. The line anchor costs 313 records and makes each
 line reconstructible without replaying the frame.
 
-**`nextDeadline`** (ADR 0008 §5) is the minimum over the chip's own counters:
+**`nextDeadline`** (ADR 0008 §5) is the minimum over the counters whose expiry **Memory can observe as
+another chip's business** — its wakes are exactly the moments it meets the outside world:
 
 ```
-nextDeadline = min( next video group boundary,      // 4th word of the current group
-                    next sound slot,                // a refill owed but not yet served
-                    refresh expiry,                 // 7.8 µs, derived
-                    next external slot owed )       // a pending bus exchange's answer
+nextDeadline = min( next video group boundary,      // 4th word of the current group → push to Video
+                    next sound slot,                // a refill owed but not yet served → SLOAD to Sound
+                    next external slot owed )       // a pending CPU/DMA exchange's answer → DTACK
 ```
+
+**Refresh is not a deadline.** It is purely internal: it never preempts video, never delays sound, and
+nothing outside Memory can observe it, so there is nothing to be awake for. The row counter is bookkeeping
+computed on demand — ADR 0008 §5's own rule ("a counter whose expiry changes nothing observable needs no
+wake") applied to the one counter that has no wire. The refresh slots a line consumed are arithmetic over
+the same anchors; if a debugger wants them, it computes them.
 
 The invariant stands: *if `nextDeadline` is set, a queued `Resume` for Memory exists at or before it.*
 
@@ -165,7 +171,7 @@ therefore has to *declare* the instant it next needs to run — otherwise it sit
 subscription while its own counter expires, and the machine runs past an event silently, deterministically,
 with a green digest. `nextDeadline` is that declaration, and it does no scheduling: it is a debug-only
 number whose only reader is the assertion. It is computed where the logic computes it, cleared when
-consumed, and it is the **minimum** of the four because being awake at the earliest one is enough — the
+consumed, and it is the **minimum** of the three because being awake at the earliest one is enough — the
 others are recomputed when Memory next runs. It costs nothing in release builds.
 
 ## 9. The memory leaf — boundary, not permission
@@ -179,12 +185,29 @@ session. This ticket defines the boundary; it does not turn it on.
 
 ## 10. Open points
 
-1. **The refresh period is `derived`, not modelled.** 7.8 µs = 512 rows ÷ 4 ms; the reconstruction
-   hard-wires the refresh address to 0 and proves the slot, never the row. A scope on `RAS0` with `CAS`
-   suppressed settles it.
+1. **The refresh period is `derived` and now only arithmetic.** 7.8 µs = 512 rows ÷ 4 ms; the
+   reconstruction hard-wires the refresh address to 0 and proves the slot, never the row. With refresh
+   off the deadline list (owner's ruling, 2026-11-09, §11), the period only shapes the *budget* — how
+   many of a line's blanking slots refresh consumes — and no instant depends on it. A scope on `RAS0`
+   with `CAS` suppressed settles the real figure; nothing in the model fails if it is wrong by a factor.
 2. **The sound FIFO's depth (4 words) is `inferred`** from Steem with no documentary support; it belongs
    to #26. If it changes, `crossings.md` §2's ≤313 refills/frame gets a dated correction.
 3. **Blitter and disk DMA slot occupation** (does a granted burst take every external slot, or one in
    two?) is #29's and #30's, not this chip's.
 4. **Absolute timeline fidelity** is unproven by design (`design/validation.md` §7); the overscan cost
    question is the one place where our CPU timing may be optimistic.
+
+## 11. Revision — 2026-11-09 (after acceptance): refresh is not a deadline
+
+Owner's ruling: *"memory only needs to run, ie to synchronize with the system time, when it interacts
+with external signals : sample CPU request, sample sound request, push to video. refresh is purely
+internal to memory, so nextDeadline should not be concerned by refresh."*
+
+- The deadline list is **three**, not four (§8): a group boundary (push to Video), a refill slot owed
+  (`SLOAD` to Sound), an external slot owed (an answer to the CPU or a granted master).
+- **Refresh leaves the wake list entirely.** It is bookkeeping computed on demand, not a scheduled
+  instant; the row counter is still logged as an anchor, and the slots a line spent on it are arithmetic.
+- The general rule this makes explicit: **a chip needs a wake only where it meets another chip.** Memory's
+  wakes are exactly its crossings — 4 000 group deliveries, ≤313 refills, and its bus answers.
+- Consequences: ADR 0011 §5 and its Consequences line revised in place; ADR 0008 §5's Memory deadline list
+  corrected; open point 1 above softened — the 7.8 µs figure now only shapes the budget, not any instant.

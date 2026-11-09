@@ -96,7 +96,7 @@ pendingReads(cont)                          // one per suspended coroutine (inva
 
 | Chip | Its counters | Why it alone owns an expiry |
 |---|---|---|
-| Memory | next owed DRAM slot, refresh due, group boundary, sound slot | the slot schedule is the machine's master timing |
+| Memory | next group boundary, next refill slot owed, next external slot owed (**never refresh** — 2026-11-09) | the slot schedule is the machine's master timing |
 | Timers | four MFP counters (A/B/C/D) | expiries assert `IRQ` |
 | Sound | FIFO underflow deadline, `*SINT` frame end | the sample clock is its own |
 | Disk | command duration, sector period, DMA byte cadence | the platter's clock; unused while the drive is a stub |

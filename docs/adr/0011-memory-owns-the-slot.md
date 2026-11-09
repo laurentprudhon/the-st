@@ -106,10 +106,13 @@ counter"*.
   "a stated approximation of the buffering" retires; what remains approximate is the buffer's occupancy
   against the Shifter's own latch.
 
-### 5. Refresh: an anchor, never a record
+### 5. Refresh: an anchor, never a record, never a deadline
 
 - No wire, no event: refresh is Memory's own service. It is logged as an anchor on the refresh counter
   (row index at each expiry).
+- **It is also not a wake.** Nothing outside Memory can observe it — it never preempts video, never
+  delays sound — so there is nothing to be resumed for. The row counter is computed on demand (ADR 0008
+  §5: "a counter whose expiry changes nothing observable needs no wake"). Revision of 2026-11-09 below.
 - **7.8 µs stays `derived`** (512 rows ÷ 4 ms, the 41256 requirement); the reconstruction hard-wires the
   refresh address to 0 and proves the slot, never the row.
 - The STE internal-share question is answered in the negative for this model: sound is gated to blanking,
@@ -136,7 +139,7 @@ refresh counter, the buffer's occupancy, the per-word fetch addresses.
 
 1. A slot is arithmetic; no record exists for an idle slot, a slot decision, or a phase.
 2. The internal slot has exactly one owner, by the equation in §2; no client enters a window it does not own.
-3. Refresh is deferred, never served inside a display window.
+3. Refresh is deferred, never served inside a display window, and never a wake instant.
 4. Video's fill rate equals the phase counter's rate; its buffer never invents an instant.
 5. Every answering instant is an external slot boundary; the CPU's wait state *is* that instant.
 6. Memory initiates no sound fetch and owns no part of the sample clock.
@@ -146,7 +149,8 @@ refresh counter, the buffer's occupancy, the per-word fetch addresses.
 ## Consequences
 
 - **#10** implements this shape: the phase counter, the owner equation, the 4-word buffer, the four
-  counters and their anchors, `nextDeadline` as the minimum over them, the per-line video anchor, and the
+  counters and their anchors, `nextDeadline` as the minimum over the three that meet another chip
+  (group boundary, refill owed, bus answer — **never refresh**), the per-line video anchor, and the
   assertion that a queued `Resume` exists at or before `nextDeadline`. Its skeleton must model
   contention, and `design/validation.md` §7's "nothing can fail for a contention reason" is corrected.
 - **#26** inherits the refill *rule* (first blanking internal slot after `SREQ`, up to four words,
@@ -197,3 +201,23 @@ refresh counter, the buffer's occupancy, the per-word fetch addresses.
    response is ADR 0005's memory leaf, never a different timetable.
 4. **Nothing.** The refresh period (7.8 µs, `derived`), the FIFO depth (4 words, `inferred`) and the
    blitter/disk slot occupation are other tickets' facts; their correction reopens nothing here.
+
+## Revision — 2026-11-09 (owner, after acceptance): refresh is not a deadline
+
+Owner's ruling: *"memory only needs to run, ie to synchronize with the system time, when it interacts
+with external signals : sample CPU request, sample sound request, push to video. refresh is purely
+internal to memory, so nextDeadline should not be concerned by refresh."*
+
+The ADR as accepted listed refresh among Memory's four deadline counters, which contradicted §5's own
+reasoning: a counter whose expiry nothing outside the chip can observe is arithmetic, not an obligation
+(ADR 0008 §5). Amended in place:
+
+- **`nextDeadline` is the minimum over three**: the next group boundary (push to Video), the next refill
+  slot owed (`SLOAD` to Sound), the next external slot owed (`DTACK` to the CPU or a granted master).
+- **Refresh leaves the wake list**: bookkeeping, computed on demand, anchored when logged.
+- **The general rule, stated once:** *a chip needs a wake only where it meets another chip.* Memory's
+  wakes are exactly its crossings — 4 000 group deliveries, ≤313 refills, and its bus answers.
+- Open point 1 of `design/memory.md` softens with it: the 7.8 µs figure now shapes only the per-line slot
+  budget, never an instant.
+
+[ADR 0008](0008-the-schedulers-rules.md) §5's Memory line carries the matching correction.
