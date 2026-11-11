@@ -104,8 +104,8 @@ Tickets: #7 (scheduler), #10 (walking skeleton), #11 (determinism), #8 (suspensi
      cleared when consumed. Every instant: *if set, a queued `Resume` for that chip exists at or before
      it.* It is declared on exactly the five chips that own a counter publishing an expiry — **Memory**
      (min over: next group boundary, next refill slot owed, next external slot owed — refresh excluded,
-     2026-11-09), **Timers** (min over the four
-     MFP counters), **Sound** (FIFO underflow deadline, `*SINT` frame end), **Disk** (command durations,
+     2026-11-09), **Timers** (min over the three counters that can assert a pending bit — A, B, C; D is
+     arithmetic while the USART is a stub, 2026-11-11), **Sound** (FIFO underflow deadline, `*SINT` frame end), **Disk** (command durations,
      sector period, DMA byte cadence — unused while the drive is a stub), **Controllers** (ACIA framing,
      paddle `ACC` window). It is **not** declared on **CPU** (every instruction ends in a read, so its
      self-wake already is the obligation), **Video** (driven by deliveries, selects and levels; its
@@ -235,3 +235,16 @@ whose expiry nothing outside the chip can observe is computed on demand, never r
   anchors rule is unchanged — refresh is still anchored when logged, it simply schedules nothing.
 - [ADR 0011](0011-memory-owns-the-slot.md) §5 and its revision carry the same correction, and
   `design/memory.md` §8/§11 is the implementable shape.
+
+## Revision — 2026-11-11 (ticket #28): Timers' deadline list is three
+
+§5's row read "min over the four MFP counters". Ticket #28's owner ruling retired one of them: **Timer D's
+only job is the USART baud clock, and the USART is a declared stub** (RS-232 is out of scope on the map), so
+D's expiry changes nothing another chip can observe. This ADR's own first principle applies — *a counter
+whose expiry changes nothing observable needs no wake* — and Timers' field is now the minimum over **A, B
+and C**.
+
+- D still counts, still reads back, and still anchors its expiries; it schedules nothing.
+- Reversal is additive: a serial ticket gives the USART a producer and puts D back on the list.
+- Nothing else moves: the five chips keep the field, the assertion keeps its wording, and
+  `design/timers.md` §2/§8 is the implementable shape.

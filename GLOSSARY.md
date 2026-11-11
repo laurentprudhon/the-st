@@ -43,6 +43,22 @@ work** in the receiving chip (ADR 0006); an answer inside an exchange the receiv
 not a crossing.
 _Avoid_: event, interrupt, edge, bus transaction
 
+### MFP source
+
+One of the sixteen interrupt channels of the timers chip, numbered 0–15, where **the number is the
+priority** (15 highest) and the number is also the bit's position in the pending, enable, mask and
+in-service register pair. A source is *selected* when it is pending, enabled and unmasked and no source
+at or above it is in service; the selected source is what the acknowledge's vector byte names. Distinct
+from the CPU's interrupt **level**, which the timers chip never computes.
+_Avoid_: priority level, IRQ number, vector number
+
+### In-service bit
+
+The timers chip's record that a source's handler is running. Set when the source is acknowledged in
+software end-of-interrupt mode, clear in automatic mode, and cleared by writing 0 to it. A source in
+service is not selected again, which is what stops a second edge from re-entering its own handler.
+_Avoid_: active flag, busy bit, pending bit
+
 ### Wire
 
 The modelled connection between virtual chips: a port group — one control signal, or every lane of a

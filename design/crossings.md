@@ -107,6 +107,12 @@ inside the vertical blank). §10's idle total becomes **≈ 4 734** class-1 wake
 HBL's *position* inside the 2 048 ticks, which is `derived` from the same line ("cycle 512") and remains
 Memory's.
 
+**Note — 2026-11-11** (ticket #28, [ADR 0013](../docs/adr/0013-the-mfp-is-one-encoder-on-one-line.md)).
+The `IACK` row and the vector row now have their semantics: the vector byte is `(VR & 0xF0) + n` with *n*
+selected **at the acknowledge instant**, the pending clear and the in-service write happen at that instant
+(never at `RTE`), and an `IACK` with no selected source is answered by nobody — Memory's `BERR` timeout
+takes the CPU to the spurious vector 24. `IRQ`'s row is unchanged: Timers is one line, level 6 only.
+
 ## 5. Bus ownership
 
 | Wire | Driver | Subscriber | Resolver | Class | Wake condition | Rate/frame | Basis |
@@ -196,8 +202,9 @@ traffic, which is the property the design actually needs.
    `U400` both on the net).
 2. **`DE` → `TBI` is documented, not drawn** (`board-inventory.md` §6.15): one `Memory → Timers`
    crossing per active line, unverified at the pin level.
-3. **`TAI`'s edge** on the STE is the sound-frame-end signal, possibly through an added 74LS164 delay
-   (§6.16); it decides whether Timer A counts the `*SINT` edge or a copy of it.
+3. **`TAI`'s edge — answered by #28 (2026-11-11).** Timer A counts the **74LS164-delayed copy** of `*SINT`
+   (128 master ticks ≈ 4 µs; `derived`), while `GPIP` bit 7 / source 15 sees the record's own instant. See
+   [ADR 0013](../docs/adr/0013-the-mfp-is-one-encoder-on-one-line.md) and `design/timers.md` §3.
 4. **HBL during the VSYNC pulse — answered by #28 (2026-11-11).** There is no suppression: the
    horizontal machine runs on all 313 lines, so the CPU sees 313 level-2 autovectors a frame. Evidence
    and the corrected totals in §4's dated block.

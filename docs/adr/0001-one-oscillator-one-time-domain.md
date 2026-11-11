@@ -103,3 +103,23 @@ Level 1, and it is tracked on the map's audio-fidelity fog rather than only here
 A real-hardware test showing a demo or music class depends on the sample-to-line phase rotation, or a
 documented program or burn-in test that measures the SCLK-to-MCLK ratio, reopens this ADR and promotes
 the second clock domain from a constant to a scheduler concern.
+
+## Revision — 2026-11-11 (ticket #28): a third clock domain, and it is exact
+
+The MFP's timers do not count the bus clock: they count `Y200`, a **2.4576 MHz crystal** on the chip's
+`X1`/`X2` pins (`board-inventory.md` §2.3, §3.8; the same figure in Hatari's `ATARI_MFP_XTAL` and NeoST's
+`2457600`). This ADR's "every clock is 32 MHz ÷ 2ⁿ" was written about the video and sound trees and is
+false for this one.
+
+- **The ratio is exact**: 32 000 000 / 2 457 600 = **625/48**. It is not an approximation, and it is not
+  the sound path's −0.133 % either: one MFP clock is 625/48 master ticks, no more and no less.
+- **So the model gets a third clock domain, and it costs nothing.** Counters keep their position in
+  subticks (1/48 of a master tick); an expiry is `t + N × 625/48`, rounded **up** to a whole tick, with the
+  remainder carried. Every instant in the queue stays an integer and no fractional period appears — the
+  invariant this ADR set out to protect survives untouched.
+- **The OS's own clock proves it.** 200 Hz = 12 288 MFP clocks = 160 000 master ticks = exactly four per
+  frame, so `_frclock`'s four-a-frame advance (`design/validation.md` G6) is arithmetic, not a number
+  arranged in the model.
+- **The two derived domains keep their rule**, and the third is stated as what it is. Quantising this
+  crystal to a power of two was rejected in ADR 0013: TOS writes a count computed for 2.4576 MHz, so any
+  other timer clock silently retimes the operating system.
