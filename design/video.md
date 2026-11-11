@@ -97,6 +97,40 @@ them adds a data-bus-lane dependency and a "stopped" state that nothing in the s
 | colour (low 320×200, medium 640×200) | the PAL colour raster | **840** | **284** | 477 120 B |
 | mono (640×400) | the SM124 raster | **640** | **400** | 512 000 B |
 
+### 5.1 The two physical sizes — public constants of the chip
+
+The host scales the picture, so the chip publishes **the physical display area of the two monitors it was
+built for**, from Atari's own specification sheet (Atari Corp (UK), issue 1-302/985, 1985):
+
+| Constant | Monitor | Display area | CRT |
+|---|---|---|---|
+| `ColourMonitor` | SC1224 | **216 mm × 160 mm** | 12", 305 mm diagonal, dot trio 0.385 mm |
+| `MonochromeMonitor` | SM124 | **210 mm × 130 mm** | 12", 305 mm diagonal, paper white |
+
+```csharp
+// Video's two reference monitors — the host scales the screen onto one of these areas.
+// Source: Atari Corp (UK), "SM124 / SC1224 Monitors", issue 1-302/985, 1985, §PHYSICAL.
+public static readonly MonitorSize ColourMonitor     = new(WidthMm: 216, HeightMm: 160); // SC1224
+public static readonly MonitorSize MonochromeMonitor = new(WidthMm: 210, HeightMm: 130); // SM124
+```
+
+What they mean, and the numbers the host derives from them (`derived`):
+
+| | mm per buffer column | mm per buffer row | Pixel aspect (w × h) | Area aspect |
+|---|---|---|---|---|
+| colour, low res | 216 ÷ 840 = 0.2571 | 160 ÷ 284 = 0.5634 | 2 cols × 1 row = **0.514 × 0.563 → 0.91** | **1.35 : 1** |
+| colour, medium | same | same | 1 col × 1 row = **0.257 × 0.563 → 0.46** | 1.35 : 1 |
+| mono | 210 ÷ 640 = 0.3281 | 130 ÷ 400 = 0.3250 | **0.328 × 0.325 → 1.01** | **1.615 : 1** |
+
+- **The buffer maps onto the area, borders included**: the whole visible signal fills the monitor's
+  raster, so a host that scales the 840 × 284 buffer to 1.35 : 1 reproduces the original picture's
+  proportions — square-pixel output would stretch it by 2.2× in width.
+- The mono area is 1.615 : 1 against a 640 × 400 raster, which is why the SM124 is the one monitor whose
+  pixels are square, and why mono text looks correct there and squat elsewhere.
+- Both monitors are 12-inch, 305 mm diagonal; the alternatives of the era (SC1435 14", SM144/SM147) are
+  listed in §10 as not modelled.
+
+
 ```
 colour columns = 52.5 µs × 16 MHz = 840      (52.5 µs = cycles 28…448; 16 MHz = the max colour pixel rate)
 colour rows    = 39 upper border + 200 display + 45 lower border = 284   (the frame's last 29 lines are blanked)
@@ -206,3 +240,12 @@ mono), 284 counter anchors, ≤ 939 register writes in the worst raster demo.
    `A[15:1]`, so it cannot tell `$FF8260` from `$FF8261`; the hardware overview, Hatari and Atari's own
    "two registers" wording all say they differ. Two registers are modelled; the reconstruction's shared
    decode is the divergence, and a scope on `U401.18` (`CS`) would settle it.
+7. **The physical constants are the 1985 pair** — SM124 and SC1224, both 12"/305 mm. Later European
+   bundles shipped the **SC1435 (14")** and **SM144/SM147**, whose display areas are not in the
+   specification sheet we hold; adding one is a constant plus its source, not a design change, and the
+   host picks by machine variant (this machine is fixed, so the pair above is the default).
+8. **How much of the display area the border occupies is `derived`**, not measured: the 216 × 160 mm is
+   the monitor's usable area, and the mapping assumed here is "the whole visible raster fills it". A
+   photograph of a real SC1224 with a calibration grid, or M1 against a screenshot, would prove the
+   picture's fraction of the area. If it is wrong, only the mm-per-pixel rows of §5.1 move — the aspect
+   of the *buffer* (1.35 : 1) does not.

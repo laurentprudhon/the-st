@@ -35,6 +35,10 @@ timeline), 0004 (wires are logs), 0006 (subscriptions), 0008 (write shapes, anch
 
 - Two buffers, allocated once at start-up and never reallocated: **colour 840 × 284** and **mono
   640 × 400**, 16-bit `0RGB` (4 bits per channel) per pixel.
+- **Two public constants record the physical display area of the monitors the machine was built for** —
+  colour **216 × 160 mm** (SC1224) and monochrome **210 × 130 mm** (SM124), both 12-inch — so the host
+  scales the buffer onto the original picture's proportions (1.35 : 1 and 1.615 : 1) instead of guessing
+  a square-pixel stretch.
 - A **chunk** is 16 pixels — one iteration of the shifter. A **group delivery** drives one chunk in low
   res, two in medium, four in mono, so a frame writes 4 000 / 8 000 / 16 000 chunks.
 - Column of a pixel = `(instant − blank release) / ticks per pixel`; a low-res pixel covers two columns
@@ -93,8 +97,10 @@ no crossing row for it.
 - **#10** writes the screen instead of a pixel log; it adds the three callbacks, the 284 counter anchors
   and the debug re-derivation falsifier (§Falsifier 4), and G5's per-chip counts gain the chunk rate
   (4 000 low res) beside the 4 000 deliveries.
-- **#12** reads the screen — 840×284 or 640×400, 0RGB — and owns scaling, the window and the blit path.
-  It no longer needs the derivation this ticket's first draft proposed.
+- **#12** reads the screen — 840×284 or 640×400, `0RGB` — and owns scaling, the window and the blit path.
+  It scales onto the **recorded display area** (216 × 160 mm colour, 210 × 130 mm mono), so the picture
+  keeps the monitor's proportions rather than a square-pixel stretch. It no longer needs the derivation
+  this ticket's first draft proposed.
 - **#26** inherits `$FF8922`/`$FF8924`, the Microwire shift, and the LMC1992 decode; the STE's `MW*`
   link is a Sound-internal wire.
 - **#6**'s catalogue loses a row it never should have had (`MW*`) and gains no new one; `crossings.md`
@@ -140,8 +146,10 @@ no crossing row for it.
 ## Evidence labels carried through
 
 - `documented`: the border is palette colour 0 in multi-plane modes and black in mono (*Engineering
-  Hardware Specification*); the 11-bit Microwire message and its mask routine (*STE Developer Addendum*);
-  the absence of a fourth STE resolution (same document, plus the STE FAQ).
+  Hardware Specification*); the two monitors' display areas — 216 × 160 mm (SC1224) and 210 × 130 mm
+  (SM124), both 12-inch (*Atari Corp (UK)*, "SM124 / SC1224 Monitors", issue 1-302/985, 1985, §PHYSICAL);
+  the 11-bit Microwire message and its mask routine (*STE Developer Addendum*); the absence of a fourth
+  STE resolution (same document, plus the STE FAQ).
 - `derived`: 840 columns and 284 rows (52.5 µs at 16 MHz; 39 + 200 + 45 lines), the 28/448 blanking
   cycles, the 1/2/4 chunks per group.
 - `implemented` in the reconstruction: the reload cadence (`shifter_video.v:83,106`), the palette bit

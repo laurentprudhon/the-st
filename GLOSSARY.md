@@ -90,7 +90,9 @@ Video's output state: the visible raster the Shifter paints into, written 16 pix
 with its state machine (ADR 0012). **840 × 284** columns × rows in colour (52.5 µs at the maximum colour
 pixel rate; 39 upper border + 200 display + 45 lower border) and **640 × 400** in mono, 16-bit `0RGB`
 per pixel, borders included and blanking excluded. The host reads it and scales it; the host derives no
-pixels.
+pixels. The chip also publishes the **physical display area** of its two reference monitors — 216 × 160 mm
+(SC1224, colour) and 210 × 130 mm (SM124, monochrome) — which is what a realistic scaling is computed
+from: 1.35 : 1 and 1.615 : 1.
 _Avoid_: framebuffer, raster buffer, video RAM
 
 
