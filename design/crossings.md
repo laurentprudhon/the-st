@@ -23,6 +23,15 @@ counters round to 313 lines. **× 50 converts per-frame to per-second.**
 > understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
 > See [ADR 0014](../docs/adr/0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
 
+> ### Correction — 2026-11-11 (owner's ruling, same session)
+>
+> This chip is the **Timers and events chip** (`TimersAndEvents`). It was *Timers and interrupts* in the
+> partition and *Timers* in every operational artefact — a half-renamed vocabulary, which is what made
+> the name worth settling. Owner's words: *"maybe we could name it : TimersAndEvents ?"*, on the rule
+> that at this stage the chip **selects and names an event**, and presenting it to the CPU as a level is
+> the System Control Unit's act. The block that does the selecting is the **event selector**; the file
+> `design/timers.md` is now `design/timers-and-events.md`. No decision, rate, record or instant changed.
+
 ## 1. The rules
 
 **Class 1 — a crossing.** A subscription whose firing *starts new work* in the receiver: a delivery, a
@@ -60,7 +69,7 @@ resumes).
 | `SREQ` (`U401.36` → U400.107; **driver: Sound**) | Sound | System Control Unit | single-driver, active low | 1 | the sample FIFO is about to underflow | ≤ 313 | one refill per line at 50 kHz (3.2 of 4 words consumed per line); ~125 at 25 kHz, ~63 at 12.5, ~31 at 6.25. A 4-word FIFO holds 1.25 lines at the top rate, so refills cannot exceed one per line |
 | `SLOAD` (U400.106 port group: 1 control lane + 16 data lanes) | System Control Unit | Sound | single-driver | 2 | answers the `SREQ` it just served | ≤ 313 | up to 4 words per refill, one internal slot (250 ns) each |
 | `DE` (U400.141) | System Control Unit | Video | single-driver | 1 | the display window opens | 200 | one per vertically active line; gates the fetch and the pixel output |
-| `DE` — second subscriber: `TBI` (U203.20) | System Control Unit | Timers | single-driver | 1 | the same write, counted by Timer B | 200 | one count per active line. Documented (`board-inventory.md` §6.15), not drawn in the redraw |
+| `DE` — second subscriber: `TBI` (U203.20) | System Control Unit | Timers and events | single-driver | 1 | the same write, counted by Timer B | 200 | one count per active line. Documented (`board-inventory.md` §6.15), not drawn in the redraw |
 | `BLANK` (U400.140) | System Control Unit | Video (level read, no subscription) | single-driver | data | — | 313 records | Video is already running when blanking changes, so it reads the level; nothing starts |
 | `HSYNC` 143, `VSYNC` 142 | System Control Unit | **nobody in the machine** | single-driver | data | — | 313 + 1 records | the host display stage is not a virtual chip; it reads the log per frame (ADR 0004) |
 > **Correction — 2026-11-11** (ticket #27, `research/ste-super-hires.md`). This table's last row read
@@ -93,17 +102,17 @@ resumes).
 | `DTACK` (71) | System Control Unit | CPU | single-driver | 2 | the answering instant arrives | ≤ 40 000 | computed from the slot schedule; the CPU's wait state is its clock advancing to this record |
 | `BERR` (23) | System Control Unit | CPU | single-driver | 2 | a bus fault | ~0 | should never fire on valid TOS software |
 | `VPA` (25), `VMA` (24) | System Control Unit / CPU | System Control Unit / CPU | single-driver | 2 | a 6800-style peripheral cycle | per MFP access | the MFP's cycle shape, not an event |
-| `RESET` (66) | reset network | CPU, System Control Unit, Disk, Timers | single-driver | 1 | power-on | 1 per boot | the reset network is not a chip; modelled as a host event |
+| `RESET` (66) | reset network | CPU, System Control Unit, Disk, Timers and events | single-driver | 1 | power-on | 1 per boot | the reset network is not a chip; modelled as a host event |
 
 ## 4. Interrupts
 
 | Wire | Driver | Subscriber | Resolver | Class | Wake condition | Rate/frame | Basis |
 |---|---|---|---|---|---|---|---|
-| `IRQ` (U203.32) | Timers | System Control Unit | single-driver, active low | 1 | the MFP has a pending, unmasked source | one per assertion | the MFP's 16 sources and its priority encoder are internal to Timers, one line carries them all |
+| `IRQ` (U203.32) | Timers and events | System Control Unit | single-driver, active low | 1 | the MFP has a pending, unmasked source | one per assertion | the MFP's 16 sources and its priority encoder are internal to Timers and events, one line carries them all |
 | `IPL0–IPL2` (33/34/35) | System Control Unit | CPU | single-driver, 3 lanes | 1 | the **resolved level changes** | 1 + 313 + one per MFP assertion | System Control Unit arbitrates VBL 4, HBL 2 and the MFP's request 6 and drives the winner. HBL is raised on **all 313 lines**, vertical blanking included — see the correction below |
-| `IACK` (83) | CPU | Timers | single-driver | 2 | the CPU acknowledges | one per acknowledge | part of the cycle `IPL` opened |
-| `D0–D7` vector | Timers | CPU | tristate bus | data | — | one per acknowledge | the MFP supplies its vector; autovector levels need no data |
-| `FDINT` 16, `DINT` 17, `BINT` 60, `SINT` 105 | System Control Unit | Timers | single-driver, active low | 1 | floppy command done, disk DMA done, blit done, sound frame end | per completion | each sets an MFP pending bit; that is the whole behaviour |
+| `IACK` (83) | CPU | Timers and events | single-driver | 2 | the CPU acknowledges | one per acknowledge | part of the cycle `IPL` opened |
+| `D0–D7` vector | Timers and events | CPU | tristate bus | data | — | one per acknowledge | the MFP supplies its vector; autovector levels need no data |
+| `FDINT` 16, `DINT` 17, `BINT` 60, `SINT` 105 | System Control Unit | Timers and events | single-driver, active low | 1 | floppy command done, disk DMA done, blit done, sound frame end | per completion | each sets an MFP pending bit; that is the whole behaviour |
 | `KHZ500` (6), `CLK8/4/2` (3/4/5), `SCLK`, `FCLK`, `CLK` | System Control Unit / Video | — | **class 3** | — | never | — | phase only; no records, no subscriptions |
 
 **Correction — 2026-11-11** (ticket #28). The `IPL0–IPL2` row and §11 point 4 assumed HBL is suppressed
@@ -121,7 +130,7 @@ the System Control Unit's.
 The `IACK` row and the vector row now have their semantics: the vector byte is `(VR & 0xF0) + n` with *n*
 selected **at the acknowledge instant**, the pending clear and the in-service write happen at that instant
 (never at `RTE`), and an `IACK` with no selected source is answered by nobody — the System Control Unit's `BERR` timeout
-takes the CPU to the spurious vector 24. `IRQ`'s row is unchanged: Timers is one line, level 6 only.
+takes the CPU to the spurious vector 24. `IRQ`'s row is unchanged: Timers and events is one line, level 6 only.
 
 ## 5. Bus ownership
 
@@ -141,7 +150,7 @@ mode (a release between words) expressible as a second transfer.
 | Wire | Driver | Subscriber | Resolver | Class | Wake condition | Rate/frame | Basis |
 |---|---|---|---|---|---|---|---|
 | `CS` on the Shifter (`A1–A6`, `LD`, `HD`) | System Control Unit | Video | single-driver | 1 (write) / 2 (read) | a **write** to a Shifter register | ~10 idle, up to 939 in a raster demo | a write changes the target's future behaviour; a read only answers the cycle |
-| `MFPCS` | System Control Unit | Timers | single-driver | 1 / 2 | a write to the MFP; reads answer | per access | the MFP's register file is its state |
+| `MFPCS` | System Control Unit | Timers and events | single-driver | 1 / 2 | a write to the MFP; reads answer | per access | the MFP's register file is its state |
 | `SNDCS` 19, `SNDIR` 18 | System Control Unit | Sound | single-driver | 1 / 2 | a PSG or LMC write | per access | `SNDIR` is the Microwire direction line. **This row now carries `$FF8922`/`$FF8924` too**: the LMC1992 is a Sound member, so its two registers and the Microwire shift live inside Sound (owner's ruling on #27, 2026-11-11 — the same rule as `SREQ`: physical pins on the Shifter, logic owned by the chip whose timeline it serves) |
 | `FCS` 136 | System Control Unit | Disk | single-driver | 1 / 2 | a DMA-controller register access | tens | |
 | `JOYWE` 101, `JOYWL` 102 | System Control Unit | Controllers | single-driver | 1 | a joystick port read select | per read | the strobe is the crossing, the data is not |
@@ -181,7 +190,7 @@ exist at all (class 3, internal state) nothing can subscribe.
 - **Clocks**: `CLK`, `CLK8`, `CLK4`, `CLK2`, `FCLK`, `SCLK`, `KHZ500`. Class 3: not wires.
 - **Inside a chip**: the video beam counter, the DRAM refresh counter and its `MAL0–MAL9` outputs, the
   sound address counter and frame pointers, the slot scheduler, the decode PLA, the MFP's four timer
-  counters and its 16-source priority encoder, the PSG tone counters, the Blitter's address pointers,
+  counters and its event selector, the PSG tone counters, the Blitter's address pointers,
   the FDC's MFM shift register and CRC, the keyboard ACIA's framing counters.
 - **Glue absorbed by a chip**: the palette latch `U511`, the pixel pipeline `U500/U501`, the DE/LOAD
   pipeline `U304/U306`, the RAM transceivers. `LATCH` is therefore Video-internal, not a crossing.
@@ -200,7 +209,7 @@ Class-2 queue entries are separate and much larger: **≤ 40 000 bus cycles/fram
 the 40 % bill ADR 0005 records for #10, and the reason the memory leaf exists as a planned option.
 
 The old 10²–10³ band is gone, and the reason is a decision, not an error: the video group delivery is a
-crossing at 4 000/frame by the owner's ruling of 2026-11-05 (one event per four words, an approximation
+crossing at 4 000/frame by the owner's ruling of 2026-11-05 (one wire event per four words, an approximation
 of the Shifter's input buffer). Everything else in the table stays two to three orders below the bus
 traffic, which is the property the design actually needs.
 
@@ -210,11 +219,11 @@ traffic, which is the property the design actually needs.
    defaults to tristate, the strictest resolver, so an unlisted multi-driver net shows as a reported
    conflict rather than as a wrong value. `BR`/`BG`/`BGACK` are almost certainly wired-OR (`U101` and
    `U400` both on the net).
-2. **`DE` → `TBI` is documented, not drawn** (`board-inventory.md` §6.15): one `System Control Unit → Timers`
+2. **`DE` → `TBI` is documented, not drawn** (`board-inventory.md` §6.15): one `System Control Unit → Timers and events`
    crossing per active line, unverified at the pin level.
 3. **`TAI`'s edge — answered by #28 (2026-11-11).** Timer A counts the **74LS164-delayed copy** of `*SINT`
    (128 master ticks ≈ 4 µs; `derived`), while `GPIP` bit 7 / source 15 sees the record's own instant. See
-   [ADR 0013](../docs/adr/0013-the-mfp-is-one-encoder-on-one-line.md) and `design/timers.md` §3.
+   [ADR 0013](../docs/adr/0013-the-mfp-is-one-encoder-on-one-line.md) and `design/timers-and-events.md` §3.
 4. **HBL during the VSYNC pulse — answered by #28 (2026-11-11).** There is no suppression: the
    horizontal machine runs on all 313 lines, so the CPU sees 313 level-2 autovectors a frame. Evidence
    and the corrected totals in §4's dated block.
@@ -223,7 +232,7 @@ traffic, which is the property the design actually needs.
    back-to-back, and never enters a display window (`snden = ~hde1 & sreq`, `mcucontrol.v:95`). #26 keeps
    the FIFO depth and the sample cadence; placement is settled here.
 6. **Same-tick ordering — answered by #7, and there is no table** (ADR 0007). The three `IPL` sources
-   never reach the queue as three events: the System Control Unit resolves them into one three-lane record by taking the
+   never reach the queue as three wire events: the System Control Unit resolves them into one three-lane record by taking the
    highest asserting level (6 > 4 > 2). Two bus masters on `BR` produce one identical wired-OR record,
    and the grant follows request order (earliest assertion, `seq` breaking a same-instant tie), with a
    simultaneous `BGACK` double drive reported as a conflict. A video group and a CPU cycle never share
@@ -237,8 +246,8 @@ reading. Four corrections produced this version, each with its evidence in the t
 1. **The partition is eight chips**, and the Blitter is one of them (two-DMA rule).
 2. **`SREQ`/`*SLOAD` are the sound path; `DCYC`/`*LOAD` the video path** —
    `research/bus-arbitration.md`, `research/schematic-evidence.md` §1.
-3. **The video delivery is one event per four words, initiated by the System Control Unit**, and the sound refill is one
-   event per FIFO demand, initiated by Sound (owner's rulings, 2026-11-05).
+3. **The video delivery is one wire event per four words, initiated by the System Control Unit**, and the sound refill is one
+   wire event per FIFO demand, initiated by Sound (owner's rulings, 2026-11-05).
 4. **The catalogue is a subscription table, not a trigger list** (ADR 0006): a class-2 completion costs
    a queue entry and starts nothing.
 

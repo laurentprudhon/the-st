@@ -38,10 +38,10 @@ a permanent second-rate mechanism for a difference below measurement.
   clock 8 MHz.
 - **One oscillator, two clock domains, one time domain.** The clock domains are the main tree and the
   sound path; their frequency ratio is exactly 4 in this model (4.00531 on hardware). Machine time is
-  the only timeline, so no event is ever converted between domains.
+  the only timeline, so no instant is ever converted between domains.
 - **The whole SCLK cluster derives**, not just audio: sound DMA, WD1772 bit rate and YM2149 all take
   their clock from the derived 8 MHz.
-- **Periodic events have integer tick periods**; no fractional period appears anywhere in the model.
+- **Periodic instants have integer tick periods**; no fractional period appears anywhere in the model.
 
 ## Divergences accepted
 
@@ -80,7 +80,7 @@ Level 1, and it is tracked on the map's audio-fidelity fog rather than only here
 
 - The scheduler ticket needs no cross-domain rule: instants are machine ticks, ordering is within one
   domain. The SCLK ratio must stay a single local constant so Level 2 can correct it.
-- Level 2 may set the ratio to 4.00531. Periods then stop being integers, so the periodic-event
+- Level 2 may set the ratio to 4.00531. Periods then stop being integers, so the periodic-instant
   mechanism must not forbid a rational period; the contention phase rotation comes back with it.
 - Host pacing uses 50.000 Hz, 0.1 % slower than a real PAL STE.
 - Vocabulary: oscillator, clock, clock domain and time domain are four distinct terms (see

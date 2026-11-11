@@ -16,7 +16,7 @@ is a native multiplatform application; the browser is not a delivery target.
   sources) plus `research/async-runtime-options.md` (589 lines) as its evidence.
 - The evidence had narrowed the field to C11 + Emscripten, then C# as *design oracle, rejected for
   delivery*, then Rust. The dividing property (#17's resolution) is whether a read of an
-  already-past event can complete on the same stack, without a task hop: JS and Dart cannot express
+  already-past instant can complete on the same stack, without a task hop: JS and Dart cannot express
   it at all; C# does it in 0.32 ns; C only by hand-writing the state machines; Rust by hand-driving
   `poll`.
 - **The owner then changed the requirement.** Readability and simplicity outrank web delivery. If
@@ -37,7 +37,7 @@ is a native multiplatform application; the browser is not a delivery target.
   number for the real target: it was measured on desktop CoreCLR with the JIT (1e8 awaits of an
   already-completed `Task` in 32 ms, .NET 11 preview 7), which is exactly the configuration this ADR
   ships. The 1.91 ns it replaced is also inside budget, so the decision does not stand or fall on it.
-- **The event rate rests on a ruling, not on a placeholder.** The 10⁵ crossings/frame the browser
+- **The wire-event rate rests on a ruling, not on a placeholder.** The 10⁵ crossings/frame the browser
   research assumed is gone: at ~10⁴ per frame it was already an order of magnitude too high, and the
   owner's ruling that **the DMA parts of the video and audio streams are internal to the RAM memory
   subsystem** cuts it again to **10²–10³ crossings per frame** — the residual of interrupts, timer
@@ -98,7 +98,7 @@ is a native multiplatform application; the browser is not a delivery target.
   internally from counters. Being a *client* of memory service is not membership: the 68000 is a
   separate virtual chip that the memory subsystem serves, and whether the Blitter sits inside the
   memory subsystem or beside it is exactly what the partition (#5) has to decide. So the scheduler is
-  not a bus arbiter with a two-queue split; it is a small ordered event queue for control signals,
+  not a bus arbiter with a two-queue split; it is a small ordered queue of wire events for control signals,
   and the machine's expensive timing lives inside one chip, wherever that chip's boundary falls.
 - **#8 (thread topology):** has no browser subject left. It becomes a *native* prototype — cost per
   suspension through the custom context, the share of reads that complete synchronously, and
@@ -166,9 +166,9 @@ Two different failures, kept separate on purpose:
    machines in C#, keep everything else in this ADR.
 2. **The language reopens** only if the synchronous path exceeds **~100 ns**, or if GC pauses
    demonstrably cost frames in the walking skeleton. The named alternative is then **Rust**.
-3. **The event rate does not reopen anything.** The number from ticket #18 ("Measure the real
+3. **The wire-event rate does not reopen anything.** The number from ticket #18 ("Measure the real
    pin-event rate in a reference emulator") sizes the scheduler — how often a chip must suspend
-   versus return — and sets #7's batching question. With a synchronous fast path, an event rate ten
+   versus return — and sets #7's batching question. With a synchronous fast path, a wire-event rate ten
    times higher changes the scheduler's design, not the language.
 4. **A .NET 11 failure is not a falsifier.** If runtime-async proves unavailable or unhelpful, the
    1.91 ns path on .NET 10 is inside budget and this ADR stands unchanged.

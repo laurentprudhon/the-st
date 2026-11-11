@@ -118,7 +118,7 @@ counter"*.
 
 ### 5. Refresh: an anchor, never a record, never a deadline
 
-- No wire, no event: refresh is the System Control Unit's own service. It is logged as an anchor on the refresh counter
+- No wire, no wire event: refresh is the System Control Unit's own service. It is logged as an anchor on the refresh counter
   (row index at each expiry).
 - **It is also not a wake.** Nothing outside the System Control Unit can observe it — it never preempts video, never
   delays sound — so there is nothing to be resumed for. The row counter is computed on demand (ADR 0008

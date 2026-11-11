@@ -966,7 +966,8 @@ These are listed only because they occupy in-scope GSTMCU pins.
     `DE` (`U400.141`) going only to `U401.54`, so either the CAD redraw dropped the MFP branch or it is
     routed under a label the extraction did not pair. **Status: documented at the signal level,
     unverified at the pin level** (the MFP's `TBI` is pin 20, §3.8). Consequence for the model: one
-    `System Control Unit → Timers` crossing per display line, which is how the machine counts scanlines.
+    `System Control Unit → Timers and events` crossing per display line, which is how the machine counts
+    scanlines. (The chip's name was settled on 2026-11-11 — `GLOSSARY.md`, *Timers and events*.)
 16. **Two 74LS164 stories do not fit one part.** The 1991 parts list has a single 74LS164 at `U900`
     ("keyboard/MIDI serialisation"), while the STE hardware article describes a 74LS164 **added on
     production boards to delay `*SINT` before it reaches the MFP's `TAI`** (a four-microsecond delay so

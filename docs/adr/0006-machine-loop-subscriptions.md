@@ -140,7 +140,7 @@ a record and pushes the writer's own `Resume` behind its receivers (ADR 0008 §2
 ## Considered options
 
 - **Keep only dated reads and let receivers poll.** Rejected: the Shifter and the CPU would re-check
-  wires on a fixed grid, which is the per-tick barrier with extra steps, and the event budget would
+  wires on a fixed grid, which is the per-tick barrier with extra steps, and the wire-event budget would
   silently become a poll budget.
 - **Let any wire write wake any awaiter (an open set).** Rejected as the spec: the wake rate would then
   depend on how each chip's code happens to be written, and the catalogue would stop being the

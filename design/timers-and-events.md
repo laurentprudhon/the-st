@@ -1,4 +1,4 @@
-# The Timers chip — one encoder, four counters, one line
+# The Timers and events chip — one encoder, four counters, one line
 
 Implementation-facing companion to ticket [#28](https://github.com/laurentprudhon/the-st/issues/28) and
 [ADR 0013](../../docs/adr/0013-the-mfp-is-one-encoder-on-one-line.md). Decisions live in the ADR; this
@@ -22,15 +22,24 @@ from `design/board-inventory.md` §3.8 for the pins.
 > understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
 > See [ADR 0014](../docs/adr/0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
 
+> ### Correction — 2026-11-11 (owner's ruling, same session)
+>
+> This chip is the **Timers and events chip** (`TimersAndEvents`). It was *Timers and interrupts* in the
+> partition and *Timers* in every operational artefact — a half-renamed vocabulary, which is what made
+> the name worth settling. Owner's words: *"maybe we could name it : TimersAndEvents ?"*, on the rule
+> that at this stage the chip **selects and names an event**, and presenting it to the CPU as a level is
+> the System Control Unit's act. The block that does the selecting is the **event selector**; the file
+> `design/timers.md` is now `design/timers-and-events.md`. No decision, rate, record or instant changed.
+
 ## 1. What the chip is
 
-**Members (inside Timers):** the four counters and their prescalers, the four control and four data
-registers, **the event selector** — the sixteen event inputs and the four bit-files over them (pending,
-enable, mask, in-service) with the selected event and the acknowledge path; the hardware calls an input
-a *source* because that is what an acknowledge names —, the vector register, `GPIP`/`AER`/`DDR` with the
-eight port lines, and the **USART register file as a declared stub**.
+**Members (inside Timers and events):** the four counters and their prescalers, the four control and four
+data registers, **the event selector** (the sixteen event inputs — the hardware calls an input a *source*,
+because that is what an acknowledge names — and the four bit-files over them: pending, enable, mask,
+in-service, with the selected event and the acknowledge path), the vector register, `GPIP`/`AER`/`DDR`
+with the eight port lines, and the **USART register file as a declared stub**.
 
-**Not members, and not Timers':** the `IPL0–IPL2` lanes and the arbitration between levels (**the System Control Unit's** —
+**Not members, and not the chip's:** the `IPL0–IPL2` lanes and the arbitration between levels (**the System Control Unit's** —
 it drives those three pins, `board-inventory.md` §4.3); the VBL and HBL autovectors (the System Control Unit's line and
 frame counters); the address decode and `MFPCS` (the System Control Unit's); the RS-232 line drivers and the ACIA (out of
 scope and Controllers').
@@ -38,23 +47,23 @@ scope and Controllers').
 **The MFP has no `IPL` pins.** `IPL0–IPL2` belongs to the GSTMCU and the MFP to level 6 only, for all
 sixteen of its sources, over the one `IRQ` line (`U203.32`).
 
-## 2. What arrives, and what Timers takes
+## 2. What arrives, and what Timers and events takes
 
-| Arrives as | Wire | Rate | How Timers treats it |
+| Arrives as | Wire | Rate | How Timers and events treats it |
 |---|---|---|---|
-| `DE`, second subscriber | `System Control Unit → Timers` (`TBI`, pin 20) | 200/frame | **event count** for Timer B: one count per active line, whatever the CPU is doing |
+| `DE`, second subscriber | `System Control Unit → Timers and events` (`TBI`, pin 20) | 200/frame | **event count** for Timer B: one count per active line, whatever the CPU is doing |
 | sound frame end | `SINT` (`U400.105`) | per frame end | sets source 15's pending bit at the record instant; **Timer A counts the edge 128 ticks later** (`TAI`, through the 74LS164) |
 | floppy / disk DMA completion | `FDINT`, `DINT` (one shared line) | per completion | sets source 7's pending bit; nothing else |
 | blitter completion | `BINT` | per blit | sets source 3's pending bit; nothing else |
-| keyboard ACIA interrupt | `N6850` → `GPI4` | per key or mouse event | sets source 6's pending bit |
+| keyboard ACIA event | `N6850` → `GPI4` | per key or mouse event | sets source 6's pending bit |
 | register writes and reads | `MFPCS` | per access | writes are one subscription each; reads answer the cycle |
 
-**Timers declares one `nextDeadline`** (ADR 0008 §5): the minimum over the counters that can assert a
+**Timers and events declares one `nextDeadline`** (ADR 0008 §5): the minimum over the counters that can assert a
 pending bit — **A, B and C**. Timer D is arithmetic (Q1): its only purpose is the USART baud clock, the
 USART is a stub, so its expiry nothing can observe. The assertion is unchanged: *if `nextDeadline` is
-set, a queued `Resume` for Timers exists at or before it.*
+set, a queued `Resume` for Timers and events exists at or before it.*
 
-**Timers drives exactly one wire that starts work elsewhere**: `IRQ`, one record per assertion and one per
+**Timers and events drives exactly one wire that starts work elsewhere**: `IRQ`, one record per assertion and one per
 release. Everything else it does is either an answer inside an open exchange (`IACK`, the vector byte, the
 register read) or invisible.
 
@@ -138,18 +147,18 @@ such a source exists.
   are unused. The vector byte is `(VR & 0xF0) + n`, where *n* is the source selected **at the acknowledge
   instant** (Q5 — the encoder re-runs there, so the byte names exactly the handler the CPU will run).
 - **`IACK`** (`U203.45`) is class 2 in the catalogue: it answers the cycle `IPL` opened. On the
-  acknowledge, at that instant, Timers appends three records — the vector byte (data), the pending clear
+  acknowledge, at that instant, Timers and events appends three records — the vector byte (data), the pending clear
   (anchor), and the in-service write (anchor) — then re-evaluates `IRQ`, so a still-pending source
   re-asserts inside the same instant.
 - **State moves at the IACK cycle, never at `RTE`.** Pending clears when the vector is passed; in-service
   is *set* only when `VR` bit 3 = 1 (software EOI, the handler writes 0 to `ISR` at its end) and stays
   clear in automatic mode.
-- **A stale acknowledge is a bus error.** If nothing is selected at the acknowledge instant, Timers answers
+- **A stale acknowledge is a bus error.** If nothing is selected at the acknowledge instant, Timers and events answers
   nothing; the System Control Unit times the 6800-style cycle out and drives `BERR`; the CPU takes the **spurious vector
-  24 ($60)**. Steem and NeoST model this; Hatari leaves it a TODO. A debug assertion on the Timers side
+  24 ($60)**. Steem and NeoST model this; Hatari leaves it a TODO. A debug assertion on this chip's side
   reports such an acknowledge as a conflict — it must never be a normal path.
 - **The `IPL` record is the System Control Unit's**, one three-lane record per level change, resolved by
-  `max(MFP 6, VBL 4, HBL 2)`. Timers never computes a level and the System Control Unit never learns a source.
+  `max(MFP 6, VBL 4, HBL 2)`. Timers and events never computes a level and the System Control Unit never learns a source.
 
 ## 6. The register file
 
@@ -210,7 +219,7 @@ subscription. Its changes are anchored (§8).
 
 ## 8. Records, anchors, deadlines
 
-**Anchors** (internal register log, one driver, stamped with Timers' clock):
+**Anchors** (internal register log, one driver, stamped with the chip's clock):
 
 | Log | Anchor at |
 |---|---|
@@ -240,7 +249,7 @@ anchors sit in the same order as the System Control Unit's 313 line anchors and 
 source, the pending/in-service bits between anchors, the encoder's scan, the `GPIP` level between changes,
 the USART stub's state.
 
-**The one thing Timers does not drive:** an `IPL` lane, a VBL, an HBL, or a refresh. All four exist; none of
+**The one thing Timers and events does not drive:** an `IPL` lane, a VBL, an HBL, or a refresh. All four exist; none of
 them here. A second source would fire twice and the digest would not see it (two identical runs).
 
 ## 10. Open points
@@ -256,7 +265,7 @@ them here. A second source would fire twice and the digest would not see it (two
    `KHZ500`'s other job — the floppy's — is Disk's.
 4. **`SINT`'s driver is the System Control Unit in the catalogue, and the sound-DMA frame end is Sound's fact.** The split
    stays as catalogued (#26 keeps the sound side); if #26 re-homes the record, only the `Driver` cell moves.
-5. **Timers' `nextDeadline` gained and lost a counter in one ticket:** §2's list is three (A, B, C) rather
+5. **the chip's `nextDeadline` gained and lost a counter in one ticket:** §2's list is three (A, B, C) rather
    than ADR 0008 §5's four. That is a correction to that ADR, recorded there, not a silent change.
 6. **The exact IACK latency is not modelled beyond the CPU's sampling window.** Hatari and NeoST hold `IRQ`
    invisible to the CPU for 4 cycles after it asserts; ADR 0009 already samples interrupts in the

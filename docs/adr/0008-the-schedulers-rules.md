@@ -19,6 +19,15 @@ Tickets: #7 (scheduler), #10 (walking skeleton), #11 (determinism), #8 (suspensi
 > understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
 > See [ADR 0014](0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
 
+> ### Correction — 2026-11-11 (owner's ruling, same session)
+>
+> This chip is the **Timers and events chip** (`TimersAndEvents`). It was *Timers and interrupts* in the
+> partition and *Timers* in every operational artefact — a half-renamed vocabulary, which is what made
+> the name worth settling. Owner's words: *"maybe we could name it : TimersAndEvents ?"*, on the rule
+> that at this stage the chip **selects and names an event**, and presenting it to the CPU as a level is
+> the System Control Unit's act. The block that does the selecting is the **event selector**; the file
+> `design/timers.md` is now `design/timers-and-events.md`. No decision, rate, record or instant changed.
+
 ## Context
 
 - ADR 0006 fixed the queue's two entry kinds and two read shapes. Ticket #7 inherited the rest: the
@@ -114,7 +123,7 @@ Tickets: #7 (scheduler), #10 (walking skeleton), #11 (determinism), #8 (suspensi
      cleared when consumed. Every instant: *if set, a queued `Resume` for that chip exists at or before
      it.* It is declared on exactly the five chips that own a counter publishing an expiry — **System Control Unit**
      (min over: next group boundary, next refill slot owed, next external slot owed — refresh excluded,
-     2026-11-09), **Timers** (min over the three counters that can assert a pending bit — A, B, C; D is
+     2026-11-09), **Timers and events** (min over the three counters that can assert a pending bit — A, B, C; D is
      arithmetic while the USART is a stub, 2026-11-11), **Sound** (FIFO underflow deadline, `*SINT` frame end), **Disk** (command durations,
      sector period, DMA byte cadence — unused while the drive is a stub), **Controllers** (ACIA framing,
      paddle `ACC` window). It is **not** declared on **CPU** (every instruction ends in a read, so its
@@ -246,15 +255,15 @@ whose expiry nothing outside the chip can observe is computed on demand, never r
 - [ADR 0011](0011-memory-owns-the-slot.md) §5 and its revision carry the same correction, and
   `design/system-control-unit.md` §9/§12 is the implementable shape.
 
-## Revision — 2026-11-11 (ticket #28): Timers' deadline list is three
+## Revision — 2026-11-11 (ticket #28): the chip's deadline list is three
 
 §5's row read "min over the four MFP counters". Ticket #28's owner ruling retired one of them: **Timer D's
 only job is the USART baud clock, and the USART is a declared stub** (RS-232 is out of scope on the map), so
 D's expiry changes nothing another chip can observe. This ADR's own first principle applies — *a counter
-whose expiry changes nothing observable needs no wake* — and Timers' field is now the minimum over **A, B
+whose expiry changes nothing observable needs no wake* — and the chip's field is now the minimum over **A, B
 and C**.
 
 - D still counts, still reads back, and still anchors its expiries; it schedules nothing.
 - Reversal is additive: a serial ticket gives the USART a producer and puts D back on the list.
 - Nothing else moves: the five chips keep the field, the assertion keeps its wording, and
-  `design/timers.md` §2/§8 is the implementable shape.
+  `design/timers-and-events.md` §2/§8 is the implementable shape.

@@ -125,7 +125,7 @@ Hence `Refresh(int row)` and not `Refresh(int bank, int row)`. `derived` from AD
 ### 5. The name: the System Control Unit — and what "memory" now means
 
 The chip is the **System Control Unit** (`SystemControlUnit` in code). The partition names its
-virtual chips for roles and their parts in a second column — CPU, Video, Sound, Disk, Timers,
+virtual chips for roles and their parts in a second column — CPU, Video, Sound, Disk, Timers and events,
 Controllers, Blitter — and "Memory" was a role name that stopped describing the role. "System
 control" is the board's own description of this function (`atari-st-hardware/components/03-glue-mmu-dma.md`
 §153: Glue, "System control logic"), and the part it is stays in the second column (`U400`, 144-pin).

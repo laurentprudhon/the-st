@@ -132,7 +132,7 @@ The counter is **phase, not a schedule**: `addrselb = ~time5` in the reconstruct
 8-phase ring. Nothing can widen it, and no client can jump it. Therefore:
 
 - **No record exists for a slot.** `design/scheduler.md` §2's two entry kinds and §6's anchors are the
-  whole bookkeeping; a slot is an arithmetic position in the counter, never an event.
+  whole bookkeeping; a slot is an arithmetic position in the counter, never a wire event.
 - **An answering instant is on the slot grid.** The CPU's answer is the next external slot boundary at or
   after its assertion; that is ADR 0009's "round up to 4" and the whole of the wait-state model.
 - **CPU throughput is capped by the phase** — at most one external access per 4 clocks, 4 MB/s.
@@ -269,7 +269,7 @@ The invariant stands: *if `nextDeadline` is set, a queued `Resume` for the chip 
 **Why the field exists at all.** The engine never polls and has no timer wheel: a chip runs until it
 suspends, and the scheduler resumes whoever holds the earliest instant. A chip that owns a counter
 therefore has to *declare* the instant it next needs to run — otherwise it sits suspended on a
-subscription while its own counter expires, and the machine runs past an event silently, deterministically,
+subscription while its own counter expires, and the machine runs past a due instant silently, deterministically,
 with a green digest. `nextDeadline` is that declaration, and it does no scheduling: it is a debug-only
 number whose only reader is the assertion. It is computed where the logic computes it, cleared when
 consumed, and it is the **minimum** of the three because being awake at the earliest one is enough — the

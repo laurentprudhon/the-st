@@ -27,7 +27,7 @@ cleared, because colour 0 can change line by line.
 - Video receives **one group delivery per four words** (4 000/frame) and four `MD0–MD15` payload
   records; it never sees a slot decision and never asks for a fetch (ADR 0011, owner's ruling on #20).
 - A record per pixel is ~3.2 M/s; a record per 16-pixel chunk is 4 000/frame *on top of* the 4 000
-  deliveries and 16 000 payload records. ADR 0006/0008 exist to keep the event stream at the crossings,
+  deliveries and 16 000 payload records. ADR 0006/0008 exist to keep the wire-record stream at the crossings,
   not at the sample rate.
 - The alternative — commit registers and derive the picture — was argued in the session and rejected by
   the owner: *"the video subsystem should include a virtual screen … and the video subsystem writes 16
@@ -122,7 +122,7 @@ no crossing row for it.
 ## Considered options
 
 - **A record per 16-pixel chunk** (4 000/frame, doubling crossings, carrying the colour indices). Rejected:
-  it duplicates what the screen already holds, doubles the event stream at the exact place ADR 0006
+  it duplicates what the screen already holds, doubles the record stream at the exact place ADR 0006
   exists to protect, and no chip in the machine reads it.
 - **A record per line** (200/frame, a line digest). Rejected: a digest of pixels answers "did it change",
   not "what is on screen", and the screen answers both for free.

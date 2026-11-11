@@ -18,7 +18,7 @@ draws.
 - Three of those clauses needed correcting, and the corrections are what this ADR records:
   1. **Retroactive cancellation corrupts history.** Deleting a driver's last record makes a sample
      taken at an earlier instant return a value the wire never carried, and it silently invalidates
-     every trace and graph already drawn. Release is therefore an event, `Z`, appended in order.
+     every trace and graph already drawn. Release is therefore a wire event, `Z`, appended in order.
   2. **One wire can have several drivers at once.** A single-driver resolver is not enough for the
      nets this machine has (an open-collector request line pulled by any of several devices, a bus
      two masters can drive in turn). The value is a function of the *set* of driving values, so the

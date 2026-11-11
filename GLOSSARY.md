@@ -52,6 +52,24 @@ _Avoid_: Memory, GSTMCU, memory controller, MMU
 > controller* keep their words: they name the use of storage, the fast path in the memory-access
 > path, and the function inside the chip — none of them names the virtual chip.
 
+### Timers and events
+
+The virtual chip that counts time and names peripheral events: the four MFP counters and their
+prescalers, the **event selector** (sixteen event inputs over four bit-files), the vector register and
+the acknowledge path, `GPIP`/`AER`/`DDR` with its eight port lines, and the USART as a declared stub.
+It is `U203`, the MFP 68901; the name states both halves because neither describes the other, and
+"interrupts" would be the CPU-side word for what the System Control Unit does with the single `IRQ`
+line this chip drives.
+_Avoid_: interrupt controller, Timers, interrupts chip (the part is the MFP — that stays in the
+partition's second column)
+
+> **Correction 2026-11-11** (owner's ruling). The partition called this chip *Timers and interrupts*
+> while every operational artefact called it *Timers*; owner's words: *"maybe we could name it :
+> TimersAndEvents ?"* — nothing at this stage presents an interrupt, it selects and names an event, and
+> the level belongs to the System Control Unit. The same pass made the word *event* single-sensed: bare
+> "event" for a wire record or a crossing now reads **wire event** or **record** in the ADRs, so *Event*
+> below means only a peripheral condition.
+
 ### Signal crossing
 
 An output control signal of one virtual chip that provokes a behaviour in another virtual chip: the
@@ -63,27 +81,27 @@ _Avoid_: event, interrupt, edge, bus transaction
 
 ### MFP source
 
-One of the sixteen **event inputs** of the timers chip — the hardware's own word for the slots (the
+One of the sixteen **event inputs** of the Timers and events chip — the hardware's own word for the slots (the
 number is the priority, the bit position in the pending, enable, mask and in-service register pair), and
 the chip needs it because an acknowledge names a source. What *enters* a source is an **event**. A
 source is *selected* when its event is pending, it is enabled and unmasked, and no source at or above it
 is in service; the selected source is what the acknowledge's vector byte names. Distinct from the CPU's
-interrupt **level**, which the timers chip never computes.
+interrupt **level**, which the Timers and events chip never computes.
 _Avoid_: priority level, IRQ number, vector number
 
 ### Event
 
 A condition a peripheral or a counter raises without being asked — a port line's edge, a counter's
-expiry, a USART state — which the timers chip latches into that source's pending bit and then selects
+expiry, a USART state — which the Timers and events chip latches into that source's pending bit and then selects
 one of. The chip **names** the event; presenting it to the CPU is not its act: the System Control Unit
 drives the level (`IPL0–IPL2`) that the CPU eventually sees. "Interrupt" is the CPU-side word for the
-result, not the thing the selector chooses — which is why the timers chip is not an interrupt
+result, not the thing the selector chooses — which is why the Timers and events chip is not an interrupt
 controller.
 _Avoid_: interrupt, interrupt request, IRQ, crossing, wire event
 
 ### Event selector
 
-The block inside the timers chip that takes the sixteen event inputs and selects exactly one: the
+The block inside the Timers and events chip that takes the sixteen event inputs and selects exactly one: the
 highest-numbered source whose event is pending, enabled, unmasked, with none numbered at or above it in
 service. The selected number *is* the vector offset (`(VR & 0xF0) + n`), so the block's product is a
 named event — never a level. It computes no priority level, holds no chronology and owns no table: the

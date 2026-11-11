@@ -174,7 +174,7 @@ millions of records a second for no information.
 
 - A breakpoint is **not** a suspension in the model: the host simply stops popping the queue at a batch
   boundary (one instant, fully drained), so no record and no digest can differ.
-- The live events are the `ICpuObserver` hooks: instruction start, register write, bus cycle, bus
+- The live callbacks are the `ICpuObserver` hooks: instruction start, register write, bus cycle, bus
   answer, interrupt sampled/taken, exception entry, halt. An address breakpoint is a predicate on the
   bus-cycle hook; a stop on "interrupt received" is the sampled hook plus the level.
 - Retrospective tracing needs no hook: every bus cycle is already a record with its instant (ADR 0004),

@@ -16,6 +16,15 @@ code takes, so #10 has nothing left to interpret. Chip names are the eight from
 > understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
 > See [ADR 0014](../docs/adr/0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
 
+> ### Correction — 2026-11-11 (owner's ruling, same session)
+>
+> This chip is the **Timers and events chip** (`TimersAndEvents`). It was *Timers and interrupts* in the
+> partition and *Timers* in every operational artefact — a half-renamed vocabulary, which is what made
+> the name worth settling. Owner's words: *"maybe we could name it : TimersAndEvents ?"*, on the rule
+> that at this stage the chip **selects and names an event**, and presenting it to the CPU as a level is
+> the System Control Unit's act. The block that does the selecting is the **event selector**; the file
+> `design/timers.md` is now `design/timers-and-events.md`. No decision, rate, record or instant changed.
+
 ## 1. The chip-facing API
 
 ```
@@ -96,7 +105,7 @@ pendingReads(cont)                          // one per suspended coroutine (inva
 |---|---|---|
 | 1 | queue head non-decreasing | an ordering bug, at the instant it happens |
 | 2 | `suspendedChips == pendingReads + pendingWriteAndWaits` | a chip suspended with nothing queued — a lost obligation |
-| 3 | `nextDeadline != null ⇒ a Resume for that chip is queued at or before it` | the forgotten self-wake; on System Control Unit, Timers, Sound, Disk, Controllers only |
+| 3 | `nextDeadline != null ⇒ a Resume for that chip is queued at or before it` | the forgotten self-wake; on System Control Unit, Timers and events, Sound, Disk, Controllers only |
 | 4 | `subscribers(wire)` ⊆ the catalogue's rows for that wire | a subscription nobody documented |
 | 5 | every class-1 row's subscriber present while its chip is suspended | a liveness bug with one owner |
 | 6 | writes per resume below a cap | a loop with no suspension in it |
@@ -107,7 +116,7 @@ pendingReads(cont)                          // one per suspended coroutine (inva
 | Chip | Its counters | Why it alone owns an expiry |
 |---|---|---|
 | System Control Unit | next group boundary, next refill slot owed, next external slot owed (**never refresh** — 2026-11-09) | the slot schedule is the machine's master timing |
-| Timers | four MFP counters (A/B/C/D) | expiries assert `IRQ` |
+| Timers and events | four MFP counters (A/B/C/D) | expiries assert `IRQ` |
 | Sound | FIFO underflow deadline, `*SINT` frame end | the sample clock is its own |
 | Disk | command duration, sector period, DMA byte cadence | the platter's clock; unused while the drive is a stub |
 | Controllers | ACIA framing, paddle `ACC` window | a byte completes at a serial instant |

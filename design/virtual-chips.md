@@ -16,6 +16,15 @@ subsystem grouping §5), `design/subsystems-spec.md` (the five-column partition)
 > understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
 > See [ADR 0014](../docs/adr/0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
 
+> ### Correction — 2026-11-11 (owner's ruling, same session)
+>
+> This chip is the **Timers and events chip** (`TimersAndEvents`). It was *Timers and interrupts* in the
+> partition and *Timers* in every operational artefact — a half-renamed vocabulary, which is what made
+> the name worth settling. Owner's words: *"maybe we could name it : TimersAndEvents ?"*, on the rule
+> that at this stage the chip **selects and names an event**, and presenting it to the CPU as a level is
+> the System Control Unit's act. The block that does the selecting is the **event selector**; the file
+> `design/timers.md` is now `design/timers-and-events.md`. No decision, rate, record or instant changed.
+
 ## The boundary rules
 
 1. **A virtual chip is one timeline; the engine goes with the timeline it drives.** A physical IC that
@@ -124,14 +133,14 @@ encoder, not the machine's.
 Disk DMA is the *mediated* burst: `U300.RDY` (38) → `U400` 135, the GSTMCU relays `*BR`, the CPU
 grants, and `DCYC` (U400.138) acknowledges each DMA cycle.
 
-### 6. Timers and interrupts — U203 MFP 68901
+### 6. Timers and events — U203 MFP 68901
 
-Timers A–D, the interrupt priority encoder, and the USART that carries the IKBD link: `MFPCS`, `IACK`,
+the four counters A–D, the event selector, and the USART that carries the IKBD link: `MFPCS`, `IACK`,
 `DINT`, `FDINT`, `HDINT`, `BINT`, `SINT`, `IPL0–IPL2` (drive side), `KHZ500` (timer reference),
 `EINT3/EINT5/EINT7` (out of scope, but occupying pins).
 
 Timer B counts `DE` transitions — that is how the machine measures scanlines, and it is a crossing in
-its own right (`DE` from the System Control Unit to Timers), not a shortcut inside the video code.
+its own right (`DE` from the System Control Unit to Timers and events), not a shortcut inside the video code.
 
 ### 7. Controllers — U400 pad/pen/port logic + YM2149 ports + U900 + keyboard ACIA
 

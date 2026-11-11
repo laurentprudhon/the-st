@@ -16,6 +16,15 @@ bucket is a hole in the partition, not a detail.
 > understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
 > See [ADR 0014](../docs/adr/0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
 
+> ### Correction — 2026-11-11 (owner's ruling, same session)
+>
+> This chip is the **Timers and events chip** (`TimersAndEvents`). It was *Timers and interrupts* in the
+> partition and *Timers* in every operational artefact — a half-renamed vocabulary, which is what made
+> the name worth settling. Owner's words: *"maybe we could name it : TimersAndEvents ?"*, on the rule
+> that at this stage the chip **selects and names an event**, and presenting it to the CPU as a level is
+> the System Control Unit's act. The block that does the selecting is the **event selector**; the file
+> `design/timers.md` is now `design/timers-and-events.md`. No decision, rate, record or instant changed.
+
 ## 1. Physical parts
 
 | Part | Reference | Status |
@@ -27,7 +36,7 @@ bucket is a hole in the partition, not a detail.
 | ST Blitter | U101 | **Blitter** |
 | TOS ROM high/low | U102, U103 | **UNASSIGNED — finding 1** |
 | YM2149 | U202 | **split**: Sound (PSG) + Controllers (I/O ports) |
-| MFP 68901 | U203 | **Timers and interrupts** |
+| MFP 68901 | U203 | **Timers and events** |
 | 6850 ACIA ×2 | U200, U201 | **U201 → Controllers** (keyboard, 7812.5 baud); **U200 → out of scope** (MIDI). Resolved from the service manual's keyboard procedure; see `research/schematic-evidence.md` §4 |
 | MIDI opto-coupler | U208 | excluded, out of scope |
 | WD1772 | U301 | **Disk** |
@@ -77,7 +86,7 @@ Every address the STE dispatch table maps, by owner. Repeats are marked.
 | `$FF8922`, `$FF8924` | Video | Microwire data/mask — physically in the Shifter |
 | `$FF8A00–$FF8A3E` | Blitter | whole block |
 | `$FF9200`, `$FF9202`, `$FF9211`–`$FF9217`, `$FF9220`, `$FF9222` | Controllers | joypad, analog pads, light pen |
-| `$FFFA01`–`$FFFA2F` | Timers and interrupts | whole MFP block |
+| `$FFFA01`–`$FFFA2F` | Timers and events | whole MFP block |
 | `$FFFC00`, `$FFFC02` | Controllers | keyboard ACIA |
 | `$FFFC04`, `$FFFC06` | out of scope | MIDI ACIA |
 
@@ -118,7 +127,7 @@ The remaining half most likely serves floppy/ACSI timing and would belong to **D
 
 `U104` generates the power-on reset delay feeding the whole board.
 
-**Recommendation: exclude it from the partition and treat reset as a host event.** A 555 timer with an RC
+**Recommendation: exclude it from the partition and treat reset as a host action.** A 555 timer with an RC
 delay models nothing the emulator needs: machine time starts at zero on reset, and reset distribution is
 a single edge. If it ever needs modelling (e.g. for a reset that must race something), it becomes a
 System-Control-Unit-adjacent detail, not a chip.
@@ -142,7 +151,7 @@ property of the hardware, not of the partition. Both chips hold a copy; a write 
 Yes, on three tests:
 
 1. **Every chip has one timeline.** CPU executes; the System Control Unit schedules DRAM and keeps the beam; Video
-   shifts the words into pixels; Sound counts PSG tones; Disk turns a platter; Timers count down;
+   shifts the words into pixels; Sound counts PSG tones; Disk turns a platter; the Timers and events chip counts down;
    Controllers sample devices; Blitter runs a blit. No chip owns two clocks.
 2. **The two-DMA rule is applied without exception.** Continuous streams (video fetch, sound DMA) are in
    the System Control Unit with their counters; bursts (disk DMA, Blitter) are in the chips that produce them and negotiate

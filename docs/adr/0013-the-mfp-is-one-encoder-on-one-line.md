@@ -1,6 +1,6 @@
 # The MFP is one encoder on one line
 
-The Timers chip owns sixteen interrupt sources and one output: a single `IRQ` line into the GSTMCU. The
+The Timers and events chip owns sixteen event inputs and one output: a single `IRQ` line into the GSTMCU. The
 chip's internal rule is a sentence — *the highest-numbered source that is pending, enabled and unmasked,
 with no source at or above it in service* — not a table, and everything the machine sees of it is that one
 line plus the vector byte it answers an acknowledge with. The `IPL` lanes, the arbitration between levels,
@@ -20,11 +20,20 @@ Tickets: #28 (this design), #10 (the walking skeleton), #16 (the logic-reconstru
 > understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
 > See [ADR 0014](0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
 
+> ### Correction — 2026-11-11 (owner's ruling, same session)
+>
+> This chip is the **Timers and events chip** (`TimersAndEvents`). It was *Timers and interrupts* in the
+> partition and *Timers* in every operational artefact — a half-renamed vocabulary, which is what made
+> the name worth settling. Owner's words: *"maybe we could name it : TimersAndEvents ?"*, on the rule
+> that at this stage the chip **selects and names an event**, and presenting it to the CPU as a level is
+> the System Control Unit's act. The block that does the selecting is the **event selector**; the file
+> `design/timers.md` is now `design/timers-and-events.md`. No decision, rate, record or instant changed.
+
 ## Context
 
 - The partition gave the MFP to one virtual chip — "timers A–D; interrupt priority encoder and vectoring;
   GPIP edge detection" (`design/subsystems-spec.md` §1) — and left the *behaviour* to this ticket. Eight
-  sub-questions arrived with it: the four counters and their prescalers, Timer A's input edge, what Timers
+  sub-questions arrived with it: the four counters and their prescalers, Timer A's input edge, what Timers and events
   owns versus what the System Control Unit owns, the register semantics, the vector and the acknowledge, the USART's fate,
   the four external inputs, and what is logged.
 - **The level question was already settled, and in the direction that makes this ADR small.** Ticket #20's
@@ -59,9 +68,9 @@ source numbered *n* or above is in service.** `IRQ` asserts exactly while such a
   instruction (an artefact of instruction-granularity emulation). The machine's ordering key is
   `(instant, seq)` (ADR 0007); at one instant the source number decides.
 
-### 2. The boundary: Timers never knows a level, the System Control Unit never knows a source
+### 2. The boundary: Timers and events never knows a level, the System Control Unit never knows a source
 
-| Timers owns | System Control Unit owns |
+| Timers and events owns | System Control Unit owns |
 |---|---|
 | the sixteen pending bits, enables, masks, in-service bits | the arbitration between the three asserting levels |
 | **which source is selected** | the `IPL0–IPL2` lanes and the one three-lane record per level change |
@@ -79,7 +88,7 @@ as *inputs* — two new crossings, one per line — to reproduce what one chip a
   CPU will run, and a window race shows up as a recorded vector rather than as silence.
 - **State moves at the `IACK` cycle, never at `RTE`.** Pending clears when the vector is passed; in-service
   is set only when `VR` bit 3 = 1 (software end-of-interrupt) and stays clear in automatic mode.
-- **A stale acknowledge is a bus error**: Timers answers nothing, the System Control Unit times the 6800-style cycle out and
+- **A stale acknowledge is a bus error**: Timers and events answers nothing, the System Control Unit times the 6800-style cycle out and
   drives `BERR`, the CPU takes the spurious vector 24 ($60). Two of the three references model it; Hatari
   leaves it a `TODO`. A debug assertion reports the case, so a model bug cannot hide inside it.
 
@@ -92,7 +101,7 @@ as *inputs* — two new crossings, one per line — to reproduce what one chip a
 - **Timer C is a period, Timer B and Timer A are event counters, Timer D is arithmetic.** A prescaler-driven
   Timer B would disagree with the beam on every line that is not exactly 2 048 ticks. Timer D's only job is
   the USART baud clock, and the USART is a stub — so ADR 0008 §5's own rule retires it from the wake list:
-  **Timers' `nextDeadline` is the minimum over A, B and C**.
+  **the chip's `nextDeadline` is the minimum over A, B and C**.
 - **The MFP clock enters the one time domain as an exact rational**: one master tick = 48/625 MFP clocks;
   counters keep subticks, expiries round **up** to a whole tick, the remainder is carried. No float, no
   fractional instant, and the 200 Hz tick lands on 160 000 exactly. ADR 0001 is revised in place: one time
@@ -115,7 +124,7 @@ as *inputs* — two new crossings, one per line — to reproduce what one chip a
 ## Consequences
 
 - **#10** gets a chip it can boot with: `IRQ` at 200 Hz from Timer C, the enable/mask/pending/in-service
-  registers with their clear-on-zero semantics, the vector path, and one declared stub. What a Timers stub
+  registers with their clear-on-zero semantics, the vector path, and one declared stub. What a stub here
   may **not** fake: raise a VBL or an HBL (the System Control Unit's), assert an `IPL` lane (the System Control Unit's), or count `DE` twice
   (one record, two subscribers).
 - **#16** inherits the encoder as its pilot subject, with this ADR as the answer it must reproduce from the
@@ -124,7 +133,7 @@ as *inputs* — two new crossings, one per line — to reproduce what one chip a
 - **#26** keeps the sound side: `SINT`'s frame end is Sound's fact, the record's driver cell stays as
   catalogued.
 - **#29** and **#30** own bits 5 and 3 respectively; each sets one pending bit and does nothing else.
-- **ADR 0001** gains a dated revision (the third clock domain); **ADR 0008 §5** gains one (Timers' deadline
+- **ADR 0001** gains a dated revision (the third clock domain); **ADR 0008 §5** gains one (the chip's deadline
   list is three); `design/crossings.md` §11's `TAI` and HBL points are answered.
 
 ## Considered options
@@ -132,7 +141,7 @@ as *inputs* — two new crossings, one per line — to reproduce what one chip a
 - **A sixteen-entry priority table.** Rejected: the table *is* the bit positions, and two artefacts that can
   drift apart are one more than the design needs. The rule is also the assertion: a pending, enabled,
   unmasked source that is not selected while nothing at or above it is in service is a bug.
-- **The encoder hands the System Control Unit a level.** Rejected before it starts: a second `IPL` source inside Timers fires
+- **The encoder hands the System Control Unit a level.** Rejected before it starts: a second `IPL` source inside Timers and events fires
   twice, and the digest cannot see it (two identical runs).
 - **Freeze the source at `IRQ` assertion.** Rejected: it fabricates a handler call when software clears the
   pending bit in the window, which is exactly the case a raster demo provokes.
@@ -152,7 +161,7 @@ as *inputs* — two new crossings, one per line — to reproduce what one chip a
 2. **The 200 Hz reading** — if `_frclock` does not advance exactly four times per frame over 100 frames,
    the sub-tick arithmetic or the 625/48 ratio is wrong; the reading is `design/validation.md` G6's second
    column.
-3. **The anchor budget** — if Timers' anchors exceed ~1 000 a frame on the idle desktop (they should be
+3. **The anchor budget** — if the chip's anchors exceed ~1 000 a frame on the idle desktop (they should be
    ≈420: 200 C expiries, ~200 B expiries, ~20 writes), something has started logging per tick.
 4. **The delayed `TAI` edge** — a test that reads Timer A's count at the `SINT` record's instant and finds
    it already counted means the 128-tick constant is not applied; if it is applied twice, the test reads one

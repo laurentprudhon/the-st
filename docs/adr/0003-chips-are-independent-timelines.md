@@ -100,7 +100,7 @@ guarantees the log is complete for every instant before the head.
 
 The one obligation that replaces all of that machinery: **any time-driven obligation must be
 registered as a wake instant.** A chip that owns a counter and forgets to wake when the counter
-expires does not deadlock — it silently runs the machine past an event, which is a visible bug and a
+expires does not deadlock — it silently runs the machine past a due instant, which is a visible bug and a
 unit test, not a protocol.
 
 ## Consequences

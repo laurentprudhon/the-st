@@ -36,7 +36,7 @@ the sources dissolved all three:
   (`research/memory-bus-slots.md` §6: 80 internal slots per active line, 4 words per 16 clocks), so the
   delivery record lands at an `I` instant and the CPU's cycle at an `E` instant, 8 ticks apart. The tie
   exists only if the model rounds a group to a line boundary.
-- **The three `IPL` sources never reach the scheduler as three events.** VBL 4 and HBL 2 come from
+- **The three `IPL` sources never reach the scheduler as three wire events.** VBL 4 and HBL 2 come from
   the System Control Unit's own sync generator, the MFP's level 6 arrives over the `IRQ` wire, and the System Control Unit resolves them
   into **one** three-lane record: the highest asserting level wins (6 > 4 > 2, the 68000's own
   precedence, overview §3.1). That is a `max()`, not an ordering — and the CPU's acceptance is then its
