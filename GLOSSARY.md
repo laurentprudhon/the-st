@@ -63,6 +63,37 @@ The virtual chip that imposes a value on a wire at an instant. Several drivers m
 at most one drives a tristate bus at a time, and any number may pull an open-collector line.
 _Avoid_: writer, source, owner
 
+### Group delivery
+
+Memory's single record on `LOAD`+`DCYC` when the fourth word of its 4-word fetch buffer lands: the one
+crossing that starts the Shifter, 4 000 times a frame in low resolution. It carries no data — the four
+words are separate payload records sampled at its instant. Video consumes groups and never sees a slot
+decision (ADR 0011).
+_Avoid_: burst, DMA request, word event
+
+### Payload record
+
+One `MD0–MD15` wire event: the four words of a group arrive as four of them, 16 000 a frame. Video
+samples them at the group delivery's instant; it does not subscribe to the data wire.
+_Avoid_: MD record, data packet, fetch
+
+### Chunk
+
+The Shifter's unit of work and of output: **16 pixels**, one iteration of the state machine, one write
+into the virtual screen. A group delivery drives one chunk in low resolution, two in medium, four in
+mono, so a frame writes 4 000 / 8 000 / 16 000 chunks (ADR 0012).
+_Avoid_: tile, block, group (of pixels)
+
+### Virtual screen
+
+Video's output state: the visible raster the Shifter paints into, written 16 pixels at a time in step
+with its state machine (ADR 0012). **840 × 284** columns × rows in colour (52.5 µs at the maximum colour
+pixel rate; 39 upper border + 200 display + 45 lower border) and **640 × 400** in mono, 16-bit `0RGB`
+per pixel, borders included and blanking excluded. The host reads it and scales it; the host derives no
+pixels.
+_Avoid_: framebuffer, raster buffer, video RAM
+
+
 ### Resolver
 
 The rule that turns the drivers' current values into a wire's value: single-driver, wired-AND/OR for
