@@ -17,10 +17,11 @@ Six files, and nothing else:
 
 ## Running it
 
-Needs the .NET 11 SDK. On a fresh machine:
+Needs the .NET 11 SDK (**11.0.100**, GA 2026-11-10; the figures in `research/suspension-cost.md` were
+measured on `11.0.100-rc.3`). On a fresh machine:
 
 ```sh
-curl -sSL -o dotnet.tar.gz https://builds.dotnet.microsoft.com/dotnet/Sdk/11.0.100-rc.3.26522.148/dotnet-sdk-11.0.100-rc.3.26522.148-linux-x64.tar.gz
+curl -sSL -o dotnet.tar.gz https://builds.dotnet.microsoft.com/dotnet/Sdk/11.0.100/dotnet-sdk-11.0.100-linux-x64.tar.gz
 mkdir -p ~/dotnet && tar -xzf dotnet.tar.gz -C ~/dotnet && export PATH=~/dotnet:$PATH
 export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1        # no libicu in a bare container
 ```

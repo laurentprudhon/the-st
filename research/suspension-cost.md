@@ -25,6 +25,14 @@ Every figure is labelled:
 | Build | `dotnet build -c Release` — compiler-generated async state machines unless stated |
 | Run count | 3 runs per micro-measurement, median quoted; 3 runs per frame figure after a warm-up frame |
 
+> **Note 2026-11-11** (not a correction — the figures were not re-measured). .NET 11 went GA on
+> 2026-11-10: **11.0.0** runtime, **11.0.100** SDK. Every number in this note is an
+> **`11.0.0-rc.3` measurement**, and it stays labelled that way. Re-running the whole set is one
+> command on the new SDK (`tools/suspension-bench/README.md`, updated), and would be a fresh row, not
+> an edit of these. The project's decisions do not depend on the difference: ADR 0002's falsifier is
+> about the mechanism (asynchronous state machines, ordering, the fast path), and #10 carries the
+> only figure whose threshold is absolute (50 Hz with 2× headroom, in release).
+
 Two configuration facts belong with every number:
 
 - **The state machines are the compiler's.** Runtime-async is opt-in and has no SDK property on this

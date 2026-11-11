@@ -1,6 +1,6 @@
 // ============================================================================================
 // The ST — the stores (Ram, Rom), structural sketch (ticket #31). NOT the implementation, but it
-// does compile as written (checked 2026-11-11 against .NET 11.0.100-rc.3: 0 warnings, 0 errors).
+// does compile as written (checked 2026-11-11 against .NET 11.0.100, GA: 0 warnings, 0 errors).
 // The prose that goes with it is design/system-control-unit.md §2; the ruling is ADR 0014.
 //
 // The interface is the pins and nothing else. The owner's constraint, verbatim: "the C# interface

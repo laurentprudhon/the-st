@@ -6,8 +6,8 @@ lane) and nothing else: no cycle cost, no latch state, no strobe sequence, no re
 subscription, no wake. What remains of the chip is its bus, its timing and its beam, and it is named
 the **System Control Unit**.
 
-**Status**: proposed (2026-11-11) — awaiting the owner's word on the text. Ticket:
-[#31](https://github.com/laurentprudhon/the-st/issues/31). Shape:
+**Status**: accepted (2026-11-11), on the owner's word — *"ok with adr 0014"* — after reading the
+text. Ticket: [#31](https://github.com/laurentprudhon/the-st/issues/31). Shape:
 [`design/system-control-unit.md`](../design/system-control-unit.md) §1–§2, sketch
 [`design/stores-sketch.cs`](../design/stores-sketch.cs).
 
