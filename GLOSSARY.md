@@ -63,12 +63,32 @@ _Avoid_: event, interrupt, edge, bus transaction
 
 ### MFP source
 
-One of the sixteen interrupt channels of the timers chip, numbered 0–15, where **the number is the
-priority** (15 highest) and the number is also the bit's position in the pending, enable, mask and
-in-service register pair. A source is *selected* when it is pending, enabled and unmasked and no source
-at or above it is in service; the selected source is what the acknowledge's vector byte names. Distinct
-from the CPU's interrupt **level**, which the timers chip never computes.
+One of the sixteen **event inputs** of the timers chip — the hardware's own word for the slots (the
+number is the priority, the bit position in the pending, enable, mask and in-service register pair), and
+the chip needs it because an acknowledge names a source. What *enters* a source is an **event**. A
+source is *selected* when its event is pending, it is enabled and unmasked, and no source at or above it
+is in service; the selected source is what the acknowledge's vector byte names. Distinct from the CPU's
+interrupt **level**, which the timers chip never computes.
 _Avoid_: priority level, IRQ number, vector number
+
+### Event
+
+A condition a peripheral or a counter raises without being asked — a port line's edge, a counter's
+expiry, a USART state — which the timers chip latches into that source's pending bit and then selects
+one of. The chip **names** the event; presenting it to the CPU is not its act: the System Control Unit
+drives the level (`IPL0–IPL2`) that the CPU eventually sees. "Interrupt" is the CPU-side word for the
+result, not the thing the selector chooses — which is why the timers chip is not an interrupt
+controller.
+_Avoid_: interrupt, interrupt request, IRQ, crossing, wire event
+
+### Event selector
+
+The block inside the timers chip that takes the sixteen event inputs and selects exactly one: the
+highest-numbered source whose event is pending, enabled, unmasked, with none numbered at or above it in
+service. The selected number *is* the vector offset (`(VR & 0xF0) + n`), so the block's product is a
+named event — never a level. It computes no priority level, holds no chronology and owns no table: the
+rule is four conditions on four sixteen-bit files.
+_Avoid_: interrupt controller, priority encoder, arbiter, multiplexer
 
 ### In-service bit
 

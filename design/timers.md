@@ -25,9 +25,10 @@ from `design/board-inventory.md` §3.8 for the pins.
 ## 1. What the chip is
 
 **Members (inside Timers):** the four counters and their prescalers, the four control and four data
-registers, **the sixteen-source priority encoder** (pending, enable, mask, in-service, the selected
-source), the vector register and the acknowledge path, `GPIP`/`AER`/`DDR` with the eight port lines, and
-the **USART register file as a declared stub**.
+registers, **the event selector** — the sixteen event inputs and the four bit-files over them (pending,
+enable, mask, in-service) with the selected event and the acknowledge path; the hardware calls an input
+a *source* because that is what an acknowledge names —, the vector register, `GPIP`/`AER`/`DDR` with the
+eight port lines, and the **USART register file as a declared stub**.
 
 **Not members, and not Timers':** the `IPL0–IPL2` lanes and the arbitration between levels (**the System Control Unit's** —
 it drives those three pins, `board-inventory.md` §4.3); the VBL and HBL autovectors (the System Control Unit's line and
@@ -90,10 +91,17 @@ MFP clock    = 2.4576 MHz  (Y200, X1/X2 pins 17/18 — a third crystal, not CLK4
 - **Timer A** is an event counter on `SINT`, at `TAADR` events.
 - **Timer D** counts and can be read back, and sets no pending bit while the USART is a stub.
 
-## 4. The encoder — one rule, no table
+## 4. The event selector — one rule, no table
 
-**Selected source** = the highest-numbered source that is (a) pending, (b) enabled, (c) unmasked, and
-with (d) **no source numbered *n* or above in service**. `IRQ` asserts exactly while such a source exists.
+**What enters:** sixteen events — eight port lines (`GPIP` bits 0–7, live on 3, 4, 5 and 7; the others
+tied inactive-high), four counter expiries (A, B, C, D) and four USART conditions (a stub, so they never
+arrive). The hardware calls each input a *source*; the thing that arrives on it is an **event**
+(`GLOSSARY.md`). Nothing at this stage knows about priority *levels* — those belong to the System
+Control Unit, and this chip never computes one.
+
+**Selected source / selected event** = the highest-numbered source that is (a) pending, (b) enabled,
+(c) unmasked, and with (d) **no source numbered *n* or above in service**. `IRQ` asserts exactly while
+such a source exists.
 
 - The number *is* the priority: source *n* is `IPRA` bit *n−8* for *n* ≥ 8, else `IPRB` bit *n*. So
   "highest number" is a bit position, never a ranked list, and no sixteen-entry table is written down.
