@@ -44,6 +44,13 @@ clock inside the machine:
   G6), and `run.report` (one page — the §3 tables with measured values filled in),
 - is driven by `scripts/validate.sh`, which runs the gates, prints the report and exits 0 or 1.
 
+> **Note — 2026-11-11** (ticket #10, delivered). The packaging is in the tree: the 18 PAL images, the
+> source tarball and `LICENSE.txt`, 19/19 verified against `roms/emutos-1.4-manifest.json`. The run's
+> language argument defaults to **`uk`** — the fallback image ADR 0010 names, and the one §3's
+> `_deskstart 0x00e2b394` quotes. G6's addresses are **per image** (`_deskstart` is `0x00e2b4b4` in
+> `fr`, `0x00e2b408` in `de`), so the harness reads them from the booted image's own `.sym`;
+> `_nvbls` (`$454`) and `_gl_apid` are common to all 18.
+
 Two build configurations, deliberately:
 
 | Build | Used by | Why |
