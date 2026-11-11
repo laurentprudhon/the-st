@@ -6,13 +6,23 @@ the form `Uxxx.PINNAME`. Sources: `design/board-inventory.md` (pin tables §3, c
 subsystem grouping §5), `design/subsystems-spec.md` (the five-column partition), and
 `research/bus-arbitration.md` (how each access path reaches RAM).
 
+> ### Correction — 2026-11-11 (ticket #31, owner's ruling)
+>
+> The virtual chip this file calls *Memory* is the **System Control Unit**, and the DRAM and the TOS
+> ROMs are no longer members with pins: they are plain data structures (`Ram`, `Rom`) inside it —
+> stores with no timeline, no record, no subscription and no wake. Every statement below about the
+> counter, the owner equation, the clients, the beam, the buffer or the leaf stands unchanged; only
+> the name and the store boundary moved. Owner's words: *"GSTMCU is too cryptic when you want to
+> understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
+> See [ADR 0014](../docs/adr/0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
+
 ## The boundary rules
 
 1. **A virtual chip is one timeline; the engine goes with the timeline it drives.** A physical IC that
    serves two independent timelines is split, and each half goes where its timeline goes. An analog
    tail is not a chip at all: the emulation ends at the digital boundary.
 2. **Two kinds of DMA, split by how the device reaches the bus.** A continuous stream addressed by the
-   memory controller itself — video fetch, sound fetch — belongs to **Memory**, because it *is* the
+   memory controller itself — video fetch, sound fetch — belongs to the **System Control Unit**, because it *is* the
    controller's own schedule and never touches the CPU bus. A temporary burst that must take the bus —
    Disk DMA, the Blitter — belongs to **the chip that produces it**, because its request and its grant
    are moments the rest of the model can see.
@@ -29,12 +39,12 @@ state of their own; their behaviour is absorbed by the chip on whose pins they s
 
 | Physical IC | Split into | Because |
 |---|---|---|
-| U400 GSTMCU | **Memory** (memory control, counters, decode, sync generation) + **Controllers** (pad/pen ADC, port logic) | the memory controller's timetable and the pad/pen logic progress independently. The video timing generator does **not** become a third piece: the beam counter and the fetch cadence are one counter, so they stay with the memory controller (`design/subsystems-spec.md` §1, §4 finding 3) |
+| U400 GSTMCU | **System Control Unit** (memory control, counters, decode, sync generation) + **Controllers** (pad/pen ADC, port logic) | the memory controller's timetable and the pad/pen logic progress independently. The video timing generator does **not** become a third piece: the beam counter and the fetch cadence are one counter, so they stay with the memory controller (`design/subsystems-spec.md` §1, §4 finding 3) |
 | U202 YM2149 | **Sound** (PSG) + **Controllers** (I/O ports A/B) | the PSG has its own 2 MHz clock; the ports are a keyboard/joystick scanner |
 
 `U300` (DMA controller) is **not** split: it is a bus master for disk DMA and the register slave for
 the FDC, and both serve the platter's timeline. `U400`'s memory half and `U401` (Shifter) are separate
-chips: the counters that decide *when* a word is fetched are Memory's, the registers that turn it into
+chips: the counters that decide *when* a word is fetched are the System Control Unit's, the registers that turn it into
 pixels are Video's.
 
 ## The eight chips
@@ -49,7 +59,7 @@ and takes it back, 4 cycles each way on this machine.
 The CPU never reaches into another chip: it asks, and either gets an answer (`DTACK`), an exception
 (`BERR`, `IPL`), or is told to stop driving the bus (`BG`).
 
-### 2. Memory — U400 memory half `C300589-001` + 16 DRAM `C0101743-002` + SIMM sockets U600–U603
+### 2. The System Control Unit — U400 memory half `C300589-001`, and the two stores it holds
 
 Owns RAM, **everything needed to supply a stream of bytes to another chip**, and the timetable that
 decides when each client is served. Its side of the video and audio divide is the *supply* side — the
@@ -79,7 +89,7 @@ Agnus role.
 The *interpretation* side — the Denise role. It receives a stream of bitplane words and turns them
 into pixels and colours; it does not decide when a fetch happens.
 
-- `U401`: `MD0–MD15` (fetched words arrive from Memory), `PD0–PD15` (palette/pixel path),
+- `U401`: `MD0–MD15` (fetched words arrive from the System Control Unit), `PD0–PD15` (palette/pixel path),
   `MWE`/`MWD`/`MWK` (the Microwire link to the LMC1992 — the pins are this chip's, the logic is Sound's), `R0–R3`/`G0–G3`/`B0–B3` (12-bit RGB out),
   `MONO`/`COLOR`, `SCLK`, `FCLK`, `CLK`, `A1–A6`/`CS`/`LD`/`HD`/`R/W` (register interface);
 - `DCYC` arrives with the fetched word and `LOAD` latches it — **this is the video handshake**;
@@ -99,9 +109,9 @@ encoder, not the machine's.
 - `U508`: volume, bass, treble and mixing, driven over Microwire **from the Shifter**;
 - **the sound-DMA requester side: the 4-word sample FIFO, `SREQ`, and the split of each fetched word
   into two bytes on `SD0–SD7`.** The pins are physically on the Shifter, the demand is this chip's —
-  the sample clock is Sound's timeline, which is why Sound initiates the refill exchange and Memory
+  the sample clock is Sound's timeline, which is why Sound initiates the refill exchange and the System Control Unit
   answers it (`design/crossings.md` §2);
-- the fetched words themselves are Memory's business; this chip consumes them.
+- the fetched words themselves are the System Control Unit's business; this chip consumes them.
 
 ### 5. Disk — U300 DMA controller `C398739-001` + U301 WD1772 + drive buffers
 
@@ -121,7 +131,7 @@ Timers A–D, the interrupt priority encoder, and the USART that carries the IKB
 `EINT3/EINT5/EINT7` (out of scope, but occupying pins).
 
 Timer B counts `DE` transitions — that is how the machine measures scanlines, and it is a crossing in
-its own right (`DE` from Memory to Timers), not a shortcut inside the video code.
+its own right (`DE` from the System Control Unit to Timers), not a shortcut inside the video code.
 
 ### 7. Controllers — U400 pad/pen/port logic + YM2149 ports + U900 + keyboard ACIA
 
@@ -140,7 +150,7 @@ block.
 
 ## Consequences worth stating
 
-- **Eight chips; two physical ICs split.** U400 divides into Memory and Controllers; U202 into Sound
+- **Eight chips; two physical ICs split.** U400 divides into the System Control Unit and Controllers; U202 into Sound
   and Controllers. The pin count of each virtual chip is the union of its members' external pins; the
   nets that run *between* members (`FDCS`/`FDRQ`, `IOA`/`IOB`) are internal and disappear.
 - **The two handshakes cross, and they are different handshakes.** `DCYC`/`LOAD` carry the video word
@@ -148,10 +158,10 @@ block.
   per frame). An earlier revision of this document had them the other way round and called the
   Shifter↔timing pair intra-chip; both were wrong (`research/bus-arbitration.md`,
   `research/schematic-evidence.md` §1).
-- **Memory is where the machine's hard timing lives** — refresh, the two fetch streams, the beam
+- **The System Control Unit is where the machine's hard timing lives** — refresh, the two fetch streams, the beam
   counter, and the decode that answers every CPU cycle.
-- **The Blitter is a chip, not a unit inside Memory.** It takes the bus by itself; folding it into
-  Memory would hide a bus master inside the memory controller, which is what the two-DMA rule exists
+- **The Blitter is a chip, not a unit inside the System Control Unit.** It takes the bus by itself; folding it into
+  the System Control Unit would hide a bus master inside the memory controller, which is what the two-DMA rule exists
   to prevent.
 - **Disk DMA is the only mediated burst**; that asymmetry with the Blitter is a hardware property, not
   a modelling choice.
@@ -160,11 +170,11 @@ block.
 
 ## Revision — 2026-11-02
 
-This document said *seven* chips and put the Blitter inside Memory, on the 2026-10-30 resolution of
+This document said *seven* chips and put the Blitter inside the System Control Unit, on the 2026-10-30 resolution of
 [ticket #5](https://github.com/laurentprudhon/the-st/issues/5). Three later rulings supersede that:
 
 1. **Two kinds of DMA** (`design/subsystems-spec.md`, from `research/bus-arbitration.md`): a burst that
-   asks for the bus belongs to the chip that produces it — so the Blitter is a chip again and Memory no
+   asks for the bus belongs to the chip that produces it — so the Blitter is a chip again and the System Control Unit no
    longer holds it.
 2. **Arbitration is CPU-side**; the GSTMCU only relays `*RDY` → `*BR` for disk DMA.
 3. **`SREQ`/`*SLOAD` are the sound path and `DCYC`/`*LOAD` the video path** — the opposite of what this

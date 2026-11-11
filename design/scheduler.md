@@ -6,6 +6,16 @@ Implementation-facing companion to ADRs [0006](../docs/adr/0006-machine-loop-sub
 code takes, so #10 has nothing left to interpret. Chip names are the eight from
 `design/virtual-chips.md`.
 
+> ### Correction — 2026-11-11 (ticket #31, owner's ruling)
+>
+> The virtual chip this file calls *Memory* is the **System Control Unit**, and the DRAM and the TOS
+> ROMs are no longer members with pins: they are plain data structures (`Ram`, `Rom`) inside it —
+> stores with no timeline, no record, no subscription and no wake. Every statement below about the
+> counter, the owner equation, the clients, the beam, the buffer or the leaf stands unchanged; only
+> the name and the store boundary moved. Owner's words: *"GSTMCU is too cryptic when you want to
+> understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
+> See [ADR 0014](../docs/adr/0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
+
 ## 1. The chip-facing API
 
 ```
@@ -86,7 +96,7 @@ pendingReads(cont)                          // one per suspended coroutine (inva
 |---|---|---|
 | 1 | queue head non-decreasing | an ordering bug, at the instant it happens |
 | 2 | `suspendedChips == pendingReads + pendingWriteAndWaits` | a chip suspended with nothing queued — a lost obligation |
-| 3 | `nextDeadline != null ⇒ a Resume for that chip is queued at or before it` | the forgotten self-wake; on Memory, Timers, Sound, Disk, Controllers only |
+| 3 | `nextDeadline != null ⇒ a Resume for that chip is queued at or before it` | the forgotten self-wake; on System Control Unit, Timers, Sound, Disk, Controllers only |
 | 4 | `subscribers(wire)` ⊆ the catalogue's rows for that wire | a subscription nobody documented |
 | 5 | every class-1 row's subscriber present while its chip is suspended | a liveness bug with one owner |
 | 6 | writes per resume below a cap | a loop with no suspension in it |
@@ -96,7 +106,7 @@ pendingReads(cont)                          // one per suspended coroutine (inva
 
 | Chip | Its counters | Why it alone owns an expiry |
 |---|---|---|
-| Memory | next group boundary, next refill slot owed, next external slot owed (**never refresh** — 2026-11-09) | the slot schedule is the machine's master timing |
+| System Control Unit | next group boundary, next refill slot owed, next external slot owed (**never refresh** — 2026-11-09) | the slot schedule is the machine's master timing |
 | Timers | four MFP counters (A/B/C/D) | expiries assert `IRQ` |
 | Sound | FIFO underflow deadline, `*SINT` frame end | the sample clock is its own |
 | Disk | command duration, sector period, DMA byte cadence | the platter's clock; unused while the drive is a stub |
@@ -128,10 +138,10 @@ clock, never queued, never backdated.
 
 ## 7. The memory leaf (last resort, off by default)
 
-A function inside Memory — `Serve(cycle) -> (t_answer, value)` — that the CPU calls instead of the four
+A function inside the System Control Unit — `Serve(cycle) -> (t_answer, value)` — that the CPU calls instead of the four
 queue round trips of a bus cycle, appending the same records at the same instants. Conditions, all seven
-(ADR 0008 §7): one closed exchange; both clocks land at the answering instant, Memory's included;
-records and the `Z` release survive in full; only class-2 exchanges whose instant Memory computes alone;
+(ADR 0008 §7): one closed exchange; both clocks land at the answering instant, the System Control Unit's included;
+records and the `Z` release survive in full; only class-2 exchanges whose instant the System Control Unit computes alone;
 no other chip's subscription touched; digest stream identical but for declared display decimation; T=1
 only, off by default.
 

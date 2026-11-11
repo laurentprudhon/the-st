@@ -10,6 +10,16 @@ of triggers.
 **Status**: accepted (2026-11-05), on the owner's question and confirmation. Tickets: #7 (scheduler),
 #6 (crossing catalogue), #10 (walking skeleton), #11 (determinism).
 
+> ### Correction — 2026-11-11 (ticket #31, owner's ruling)
+>
+> The virtual chip this file calls *Memory* is the **System Control Unit**, and the DRAM and the TOS
+> ROMs are no longer members with pins: they are plain data structures (`Ram`, `Rom`) inside it —
+> stores with no timeline, no record, no subscription and no wake. Every statement below about the
+> counter, the owner equation, the clients, the beam, the buffer or the leaf stands unchanged; only
+> the name and the store boundary moved. Owner's words: *"GSTMCU is too cryptic when you want to
+> understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
+> See [ADR 0014](0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
+
 ## Context
 
 - ADR 0003 fixed the ordering, the queue and the ownership of a chip's clock, and left two things
@@ -21,7 +31,7 @@ of triggers.
   waiting for `BG` all wait for *another chip's* decision. With only dated reads, every one of them
   would have to poll, and the tick table would return through a side door.
 - **Gap 2 — "only class 1 makes a chip run" is false for the CPU.** The 68000 cannot know how long
-  Memory takes; `DTACK` must reach it through the queue. ADR 0005 already bills ≤ 40 000 bus cycles
+  the System Control Unit takes; `DTACK` must reach it through the queue. ADR 0005 already bills ≤ 40 000 bus cycles
   per frame at ~4 wire operations each, which is a queue-insertion count, so the two ADRs were
   describing the same traffic with different words.
 - The resolution is that *wake* and *crossing* are different concepts: the queue entry is universal,

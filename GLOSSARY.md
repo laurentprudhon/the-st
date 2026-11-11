@@ -34,6 +34,24 @@ physical chips, whose pins and internal logic keep the names of the physical com
 from. It is the smallest thing that can make progress on its own.
 _Avoid_: device, module, component, peripheral
 
+### System Control Unit
+
+The virtual chip that owns the machine's time base and its bus: the 8-phase slot counter, the DRAM
+controller and its decode, the video and sound fetch streams, sync generation (`DE`, `BLANK`,
+`HSYNC`, `VSYNC`), `DTACK`/`BERR`, the chip-select decode and the `IPL` arbitration. It is the
+`U400` half that is not the pad/pen logic, and it is what "the memory subsystem" used to be called.
+It holds two **stores** — `Ram` and `Rom` — as plain data (ADR 0014).
+_Avoid_: Memory, GSTMCU, memory controller, MMU
+
+> **Correction 2026-11-11** (ticket #31, owner's ruling). This role was named **Memory** until the
+> stores left it. Owner's words: *"GSTMCU is too cryptic when you want to understand the machine,
+> what about keeping only three letters of the name : SystemControlUnit ?"*
+>
+> **The vocabulary rule that comes with the rename: "memory" names the resource — the RAM and the ROM
+> as storage — and never the chip.** That is why *Memory service*, *Memory leaf* and *memory
+> controller* keep their words: they name the use of storage, the fast path in the memory-access
+> path, and the function inside the chip — none of them names the virtual chip.
+
 ### Signal crossing
 
 An output control signal of one virtual chip that provokes a behaviour in another virtual chip: the
@@ -81,7 +99,7 @@ _Avoid_: writer, source, owner
 
 ### Group delivery
 
-Memory's single record on `LOAD`+`DCYC` when the fourth word of its 4-word fetch buffer lands: the one
+The System Control Unit's single record on `LOAD`+`DCYC` when the fourth word of its 4-word fetch buffer lands: the one
 crossing that starts the Shifter, 4 000 times a frame in low resolution. It carries no data — the four
 words are separate payload records sampled at its instant. Video consumes groups and never sees a slot
 decision (ADR 0011).
@@ -216,6 +234,11 @@ _Avoid_: DMA, bus access, memory access
 > sound when `SREQ` is pending, otherwise refresh. Refresh is the filler of that equation, not a
 > preemptor.
 
+> **Note 2026-11-11** (ticket #31, owner's ruling). The word *memory* here names **the resource**, not
+> the chip: the service is granted by the **System Control Unit**, and its unit is the *Slot* below.
+> The name is kept deliberately — one rule ("memory = the resource") instead of two renames — and the
+> leaf below follows the same rule.
+
 ### Slot
 
 The unit of memory service: one DRAM access, 250 ns, two CPU clocks. A cycle of the memory controller is
@@ -226,11 +249,32 @@ _Avoid_: bus cycle, tick, time slot
 
 ### Memory leaf
 
-The deferred fast path inside the Memory chip that serves a CPU bus cycle with a direct call instead of
+The deferred fast path inside the System Control Unit that serves a CPU bus cycle with a direct call instead of
 the queue round trips, appending the same records at the same instants. A last resort, off by default:
 it may remove pops and stack frames, never a clock movement, a record, another chip's subscription, or
 an instant.
 _Avoid_: fast path, shortcut, special case, bypass
+
+> **Note 2026-11-11** (ticket #31). *Memory* here names the memory-access path, not the chip — the chip
+> is the System Control Unit. The leaf inlines the **slot wait**, not the store's read, so the store
+> split (ADR 0014) neither crosses its boundary nor makes it cheaper to justify.
+
+### Store
+
+A plain data structure that holds bytes for one chip and has no timeline: `Ram` (2 banks × 512 rows ×
+512 columns × 16 bits = 1 MB) and `Rom` (2 × 27C010 = 256 KB, two byte lanes). Its interface **is** the
+pins — bank, row, column, byte lane, direction — one call per access, and no timing: no cycle cost, no
+latch state, no strobe sequence, no record, no subscription, no wake. A store is not a virtual chip; it
+is the thing a chip holds. (ADR 0014)
+_Avoid_: memory chip, RAM chip, device, address space
+
+### Machine bytes
+
+The host's view of a store: a `Span<byte>` in **machine byte order** (big-endian pairs, index `2n` the
+high byte of word `n`), serving display inspection, the debugger and side-loading. Host-only — no
+virtual chip may hold it, because a chip's only route to memory is its pins — and written **only while
+the machine is stopped**, so a host write carries no record and no instant. (ADR 0014)
+_Avoid_: memory dump, buffer, host pointer, RAM array
 
 ### Internal register log
 

@@ -10,6 +10,16 @@ makes "wait until every writer has caught up with this instant" a primitive the 
 
 **Status**: accepted (2026-11-04). Tickets: #7 (scheduler), #11 (determinism), #6 (crossing catalogue).
 
+> ### Correction — 2026-11-11 (ticket #31, owner's ruling)
+>
+> The virtual chip this file calls *Memory* is the **System Control Unit**, and the DRAM and the TOS
+> ROMs are no longer members with pins: they are plain data structures (`Ram`, `Rom`) inside it —
+> stores with no timeline, no record, no subscription and no wake. Every statement below about the
+> counter, the owner equation, the clients, the beam, the buffer or the leaf stands unchanged; only
+> the name and the store boundary moved. Owner's words: *"GSTMCU is too cryptic when you want to
+> understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
+> See [ADR 0014](0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
+
 ## Context
 
 - ADR 0002 fixed the mechanism — C#, one `async` state machine per virtual chip, a scheduler-owned
@@ -166,7 +176,7 @@ Ticket #7 filled in the ordering key this ADR left open, and found that the thir
 
 1. **The key is `(machine time, emitter sequence)`.** The chip-priority field is gone (ADR 0007). The
    machine has no priority table: every precedence it really has is a resolver on a wire (an interrupt
-   level taken as a maximum, a wired-OR line, a conflict report), the slot phase Memory decodes for
+   level taken as a maximum, a wired-OR line, a conflict report), the slot phase the System Control Unit decodes for
    itself, or the 68000's own mask comparison. A static rank would have had to be invented.
 2. **Invariant 6** is amended accordingly; the Decision bullet and the Consequences line follow.
 3. **Invariant 5's "earliest instant"** now has a second shape in the chip-facing API — an awaited write

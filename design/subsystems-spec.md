@@ -3,10 +3,10 @@
 Eight virtual chips. Two rules decide every boundary, both from the owner (2026-10-30):
 
 - **Two kinds of DMA, split by how they reach the bus.** A stream with direct access to the memory bus —
-  video fetch, sound DMA — belongs to the **Memory** subsystem, because it *is* the memory controller's
+  video fetch, sound DMA — belongs to the **System Control Unit** subsystem, because it *is* the memory controller's
   own schedule and never touches the CPU bus. A temporary burst that must ask the CPU for the bus — Disk
   DMA, Blitter — belongs to **the chip that produces the burst**.
-- **Only the address counters and the fetch machinery for those streams stay in Memory**; everything that
+- **Only the address counters and the fetch machinery for those streams stay in the System Control Unit**; everything that
   interprets the bytes stays outside.
 
 Plus, from the same rulings: **bus arbitration is CPU-side** (grant sequencing), **timers and interrupts
@@ -18,12 +18,22 @@ service manual), Hatari's I/O dispatch tables (`ioMemTabSTE.c`) for register own
 
 ---
 
+> ### Correction — 2026-11-11 (ticket #31, owner's ruling)
+>
+> The virtual chip this file calls *Memory* is the **System Control Unit**, and the DRAM and the TOS
+> ROMs are no longer members with pins: they are plain data structures (`Ram`, `Rom`) inside it —
+> stores with no timeline, no record, no subscription and no wake. Every statement below about the
+> counter, the owner equation, the clients, the beam, the buffer or the leaf stands unchanged; only
+> the name and the store boundary moved. Owner's words: *"GSTMCU is too cryptic when you want to
+> understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
+> See [ADR 0014](../docs/adr/0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
+
 ## 1. The table
 
 | Virtual chip | Original chip and reference | Functions included | Registers included (internal + externally accessible) | Pins exposed |
 |---|---|---|---|---|
 | **CPU** | U100 MC68000 `C398061-001`, PLCC68 | instruction execution; exception and interrupt vectoring; bus-cycle sequencing; **bus arbitration** — the grant sequence, 4-cycle acquire and release | *externally accessible*: none — the CPU owns no memory-mapped state. *internal*: D0–D7/A0–A7, SR, PC, prefetch queue, arbitration state machine | `D0–D15`, `A1–A23`, `AS`, `LDS`, `UDS`, `R/W`, `FC0–FC2`, `VMA`/`VPA`, `DTACK`, `BERR`, `IPL0–IPL2`, `BR`, `BG`, `BGACK`, `CLK`, `RESET` |
-| **Memory** | U400 memory half `C300589-001` (144-pin) + 16 × DRAM `C0101743-002` + SIMM sockets U600–U603 | DRAM mux and strobes; refresh; **video address counters and fetch machinery** (`VBASE`, `VCOUNT`, `LINEWIDTH`, the 16 000-addresses-per-frame schedule); **sound DMA counters and fetch machinery** (`FBASE`, `FCOUNT`, `FEND`); `DTACK`/`BERR`; chip-select decode; **sync generation** (`HSYNC`, `VSYNC`, `DE`, `*BLANK`, `*DCYC`) — a GLUE function on this machine | *externally accessible*: `$FF8001` MMU config; `$FF8201`/`$FF8203`/`$FF820D` video base; `$FF8205`/`$FF8207`/`$FF8209` video counter; `$FF820A` sync/frequency; `$FF820F` line width; `$FF8900` sound control, `$FF8903`–`$FF8913` frame pointers, `$FF8921` sound mode; **a second copy of `$FF8260`** (GSTMCU side). *internal*: refresh counter, DRAM address latch, video address counter, **the 4-word video fetch buffer**, sound address counter, fetch scheduler, decode PLA | `MAD0–MAD9`, `RAS0`, `RAS1`, `CAS0H`, `CAS0L`, `CAS1H`, `CAS1L`, `WE`, `AS`/`LDS`/`UDS`, `R/W`, `FC0–FC2`, `DTACK`, `BERR`, `BR`, `BG`, `BGACK`, `MD0–MD15`, `SREQ`, `SLOAD`, `DCYC`, `HSYNC`, `VSYNC`, `DE`, `BLANK`, `LATCH`, `FCS`, `MFPCS`, `SNDCS`, `ROM0–ROM6` |
+| **System Control Unit** | U400 memory half `C300589-001` (144-pin). The DRAMs (32 × `C0101743-002`, 16 per bank, two banks) and `U102`/`U103` (2 × 27C010) are **stores** it holds — `Ram`, `Rom` — not members with pins (ADR 0014) | DRAM controller, mux and strobes (the parts themselves are `Ram`); refresh scheduling; **video address counters and fetch machinery** (`VBASE`, `VCOUNT`, `LINEWIDTH`, the 16 000-addresses-per-frame schedule); **sound DMA counters and fetch machinery** (`FBASE`, `FCOUNT`, `FEND`); `DTACK`/`BERR`; chip-select decode; **sync generation** (`HSYNC`, `VSYNC`, `DE`, `*BLANK`, `*DCYC`) — a GLUE function on this machine | *externally accessible*: `$FF8001` MMU config; `$FF8201`/`$FF8203`/`$FF820D` video base; `$FF8205`/`$FF8207`/`$FF8209` video counter; `$FF820A` sync/frequency; `$FF820F` line width; `$FF8900` sound control, `$FF8903`–`$FF8913` frame pointers, `$FF8921` sound mode; **a second copy of `$FF8260`** (GSTMCU side). *internal*: refresh counter, DRAM address latch, video address counter, **the 4-word video fetch buffer**, sound address counter, fetch scheduler, decode PLA | `MAD0–MAD9`, `RAS0`, `RAS1`, `CAS0H`, `CAS0L`, `CAS1H`, `CAS1L`, `WE`, `AS`/`LDS`/`UDS`, `R/W`, `FC0–FC2`, `DTACK`, `BERR`, `BR`, `BG`, `BGACK`, `MD0–MD15`, `SREQ`, `SLOAD`, `DCYC`, `HSYNC`, `VSYNC`, `DE`, `BLANK`, `LATCH`, `FCS`, `MFPCS`, `SNDCS`, `ROM0–ROM6` |
 | **Video** | U401 GST Shifter `C300588-001`, PLCC84 | bitplane shift (4 planes → 16 colours, 2 → 4, 1 → mono); palette lookup; DE/BLANK gating; fine scroll; **the Shifter's copy of the resolution register**. (There is no fourth resolution to interpret on this board — the "Super Hi-Res" label was withdrawn 2026-11-11, `research/ste-super-hires.md`. The Microwire controller left this row on 2026-11-11: its pins are on U401 but its registers and its logic are Sound's — see the Sound row.) The sound-DMA requester side (`SREQ`, the 4-word FIFO, the byte split, `SD0–SD7`) is **Sound's**, although those pins are physically on this chip (owner's ruling, 2026-11-05) | *externally accessible*: `$FF8240–$FF825F` palette (16 words); `$FF8260` (Shifter copy); `$FF8261`; `$FF8264`/`$FF8265` fine scroll. *internal*: shift registers, palette latch, pixel pipeline, pixel counter | `MD0–MD15` (in), `PD0–PD15`, `R0–R3`/`G0–G3`/`B0–B3` (out), `MONO`, `COLOR`, `DE`, `BLANK`, `LATCH`, `SCLK`, `FCLK`, `CLK`, `SREQ` (out), `SLOAD`, `MWE`, `MWD`, `MWK` (out; Sound's logic), `SD0–SD7` (out), `A1–A6`, `CS`, `LD`, `HD`, `R/W` |
 | **Sound** | U202 YM2149 `C025983`, DIP40 + U508 LMC1992 `C398058-001`, DIP28 | PSG: 3 tone channels, noise, envelope; LMC1992 volume/bass/treble/mixing; **the Microwire controller that drives the LMC1992** (`*MWE`/`MWD`/`MWK` — pins on the Shifter, logic here, owner's ruling 2026-11-11); **the sound-DMA requester side** — the 4-word sample FIFO, `SREQ`, and the split of each fetched word into two bytes on `SD0–SD7` (physically on the Shifter, owned here) | *externally accessible*: `$FF8800` PSG select, `$FF8802` PSG data, **`$FF8922` Microwire data, `$FF8924` Microwire mask** (2026-11-11; the shift and its mask rotation are internal state). *internal*: PSG tone counters, envelope state, noise LFSR, Microwire shift register and mask | `SD0–SD7` (via the DACs), `ACC`, `SNDCS`, `SNDIR`, `MWE`, `MWD`, `MWK` (out, physically on U401); `IOA0–IOA7`, `IOB0–IOB3` (owned by Controllers) |
 | **Disk** | U301 WD1772 `C026028-002`, DIP28 + U300 DMA controller `C398739-001`, DIP40 | MFM encode/decode; sector search; stepping and drive control; **disk DMA as a bus-mastering burst** — `*RDY` to the GSTMCU, `*BR` relayed to the CPU, `*BGACK` held for the burst; ACSI | *externally accessible*: `$FF8604` FDC command/status, `$FF8606` DMA mode control, `$FF8609`/`$FF860B`/`$FF860D` DMA address. *internal*: MFM shift register, CRC, sector counter, DMA word counter, drive phase | `FDCS`, `FDRQ`, `CD0–CD7`, `CR/W`, `CA1`, `CA2`, `STEP`, `DIRC`, `WG`, `WD`, `MO`, `RD`, `DDEN`, `TR00`, `WPRT`, `IP`, `MR`, `FCS`, `RDY`, `DCYC`, `HDCS`, `HDRQ`, `ACK` |
@@ -37,12 +47,21 @@ and glue (`U302`, `U307`, `U509`, `U510`, `U512`, `U632`, `U304`, `U306`, `U511`
 **Correction — 2026-11-11 (ticket #28).** The Timers row's pin list said `IPL0–IPL2`; **the MFP has no
 `IPL` pins**. It raises `IRQ` (`U203.32`) into the GSTMCU, which combines it with VBL (4) and HBL (2)
 and drives `IPL0–IPL2` itself (`board-inventory.md` §4.3, corrected 2026-11-05). The same row's "GPIP
-edge detection (HBL/VBL side channels)" is also wrong — HBL and VBL are Memory's counters and never
+edge detection (HBL/VBL side channels)" is also wrong — HBL and VBL are the System Control Unit's counters and never
 reach the MFP. What `GPIP` carries on this board: the four external completions (`FDINT` and `DINT`
 share source 7, `BINT` is source 3, `SINT` is source 15 — the line the STE shares with mono detect, and
 also Timer A's event input), the keyboard ACIA (source 6) and the two RS-232 status lines (sources 1
 and 2). Sources and bit assignments: `atari-st-hardware/components/mfp/01-mc68901.md`'s dated block.
 The USART is a declared stub (RS-232 is out of scope on the map).
+
+**Correction — 2026-11-11 (ticket #31, owner's ruling).** The first column's **Memory** row is the
+**System Control Unit**, and the DRAM parts and the two TOS ROMs are **stores** (`Ram`, `Rom`) it
+holds rather than members with pins — no pin of theirs leaves the chip, they own no clock, subscribe
+to nothing and are woken by nothing (ADR 0014, `design/system-control-unit.md` §2). The eight chips,
+the functions, the registers and the pin list of the row are otherwise unchanged; `MAD0–MAD9`,
+`RAS0/1`, `CAS0H/L`, `CAS1H/L`, `WE` and `ROM0–ROM6` remain `U400`'s pins and are internal to the
+sockets and the ROM pair. A store also gains **two members of its own**: `Ram` is 2 banks × 512 rows ×
+512 columns × 16 bits = 1 MB, `Rom` is 2 × 27C010 = 256 KB.
 
 ---
 
@@ -92,12 +111,12 @@ Blitter's is a direct one, and it is the only asymmetry between the two bus mast
    fetched data are ready. Either it fans out to both or the redraw lost a net.
 3. **Video and sound counters are physically GSTMCU registers** (`VBASE`, `VCOUNT`, `LINEWIDTH`, sync,
    `FBASE`, `FCOUNT`, `FEND`), and only `COLORS`, `VIDEOMOD` and `HSCROLL` are in the Shifter — which is
-   why the counters stay in Memory rather than moving to Video.
+   why the counters stay in the System Control Unit rather than moving to Video.
 4. **`$FF8260` exists twice**, one copy in each chip.
 5. **Sync generation is a GLUE/GSTMCU function.** That is the one place where "keep everything but the
-   counters outside Memory" cannot be honoured without deviating from the hardware; it is recorded here
+   counters outside the System Control Unit" cannot be honoured without deviating from the hardware; it is recorded here
    rather than silently split.
-6. **Per-line slot placement — answered by #20** (ADR 0011, `design/memory.md`): one 500 ns cycle with one
+6. **Per-line slot placement — answered by #20** (ADR 0011, `design/system-control-unit.md`): one 500 ns cycle with one
    internal and one external slot, the internal slot owned by video (display window), sound (`SREQ`,
    blanking) or refresh (filler), and the CPU/DMA answered at the next external slot. The 16 000-words
    figure was the total; the placement is now decided.

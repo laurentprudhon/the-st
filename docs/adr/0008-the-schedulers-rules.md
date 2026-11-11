@@ -9,6 +9,16 @@ deferred memory leaf — the one place the scheduler may be bypassed — in sche
 **Status**: accepted (2026-11-06), on the owner's answers during ticket #7's grilling session.
 Tickets: #7 (scheduler), #10 (walking skeleton), #11 (determinism), #8 (suspension-cost prototype).
 
+> ### Correction — 2026-11-11 (ticket #31, owner's ruling)
+>
+> The virtual chip this file calls *Memory* is the **System Control Unit**, and the DRAM and the TOS
+> ROMs are no longer members with pins: they are plain data structures (`Ram`, `Rom`) inside it —
+> stores with no timeline, no record, no subscription and no wake. Every statement below about the
+> counter, the owner equation, the clients, the beam, the buffer or the leaf stands unchanged; only
+> the name and the store boundary moved. Owner's words: *"GSTMCU is too cryptic when you want to
+> understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
+> See [ADR 0014](0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
+
 ## Context
 
 - ADR 0006 fixed the queue's two entry kinds and two read shapes. Ticket #7 inherited the rest: the
@@ -102,7 +112,7 @@ Tickets: #7 (scheduler), #10 (walking skeleton), #11 (determinism), #8 (suspensi
   the case no fired read catches. Three checks, cheapest first:
   1. **Debug-only `nextDeadline`**, one nullable field per chip, set where the logic computes it and
      cleared when consumed. Every instant: *if set, a queued `Resume` for that chip exists at or before
-     it.* It is declared on exactly the five chips that own a counter publishing an expiry — **Memory**
+     it.* It is declared on exactly the five chips that own a counter publishing an expiry — **System Control Unit**
      (min over: next group boundary, next refill slot owed, next external slot owed — refresh excluded,
      2026-11-09), **Timers** (min over the three counters that can assert a pending bit — A, B, C; D is
      arithmetic while the USART is a stub, 2026-11-11), **Sound** (FIFO underflow deadline, `*SINT` frame end), **Disk** (command durations,
@@ -149,14 +159,14 @@ Tickets: #7 (scheduler), #10 (walking skeleton), #11 (determinism), #8 (suspensi
 ADR 0005 allowed a fast path that inlines the memory bus and forbade it changing "a timestamp, an
 ordering or a release instant". Stated as scheduler conditions, such a leaf:
 
-1. substitutes **exactly one closed exchange** — a CPU bus cycle and Memory's answer; not a fetch, not a
+1. substitutes **exactly one closed exchange** — a CPU bus cycle and the System Control Unit's answer; not a fetch, not a
    grant, not an interrupt;
-2. moves **both clocks to the answering instant** — the CPU's as always, and **Memory's as if it had
+2. moves **both clocks to the answering instant** — the CPU's as always, and **the System Control Unit's as if it had
    been resumed**, or its next interaction computes from a stale instant;
 3. **appends every record in full** — same instants, drivers, masks, values, including the `Z` release
    after a read;
 4. fires only where **the answer needs no other chip to run** (a class-2 exchange whose instant is
-   computable from Memory's own slot counters);
+   computable from the System Control Unit's own slot counters);
 5. touches **no subscription but the CPU's own**;
 6. leaves the **digest stream identical** apart from its declared display decimation;
 7. is **T=1 only and off by default**, so the reference path stays the one that runs until a measurement
@@ -218,15 +228,15 @@ cpu and memory coroutines logic and readability"*.
 5. A chip needing a third write shape, or a `RegisterWake`, is a sign the two shapes and the horizon are
    insufficient — reopen here rather than adding a primitive.
 
-## Revision — 2026-11-09 (ticket #20): Memory's refresh is not a deadline
+## Revision — 2026-11-09 (ticket #20): the System Control Unit's refresh is not a deadline
 
-The Memory row above listed refresh among its four deadline counters. Ticket #20's owner ruling corrected
+The System Control Unit row above listed refresh among its four deadline counters. Ticket #20's owner ruling corrected
 it — *"memory only needs to run … when it interacts with external signals : sample CPU request, sample
 sound request, push to video. refresh is purely internal to memory, so nextDeadline should not be
 concerned by refresh"* — and the correction is §5's own first principle applied consistently: a counter
 whose expiry nothing outside the chip can observe is computed on demand, never registered as a wake.
 
-- **Memory's list is three**: next group boundary (push to Video), next refill slot owed (`SLOAD` to
+- **The System Control Unit's list is three**: next group boundary (push to Video), next refill slot owed (`SLOAD` to
   Sound), next external slot owed (`DTACK` to the CPU or a granted master). Refresh is bookkeeping.
 - **The rule the case generalises to**, and the wording future chips should be read against: *a chip needs
   a wake only where it meets another chip.* A counter that changes nothing another chip can observe is
@@ -234,7 +244,7 @@ whose expiry nothing outside the chip can observe is computed on demand, never r
 - Nothing else in this ADR moves: the five chips keep the field, the assertion keeps its wording, and the
   anchors rule is unchanged — refresh is still anchored when logged, it simply schedules nothing.
 - [ADR 0011](0011-memory-owns-the-slot.md) §5 and its revision carry the same correction, and
-  `design/memory.md` §8/§11 is the implementable shape.
+  `design/system-control-unit.md` §9/§12 is the implementable shape.
 
 ## Revision — 2026-11-11 (ticket #28): Timers' deadline list is three
 

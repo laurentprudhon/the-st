@@ -181,7 +181,7 @@ Every package on the board that carries an active device, from the Section 7 par
 | U303 | C398066-001 | 8.010613 MHz oscillator | 68000 clock (32.042454/4) |
 | U402 | C398068-001 | 32.215905 MHz oscillator | NTSC master clock |
 | U402 | C398097-001 | 32.084988 MHz oscillator | **Peritel/PAL master clock** — one of the two is fitted, never both |
-| U600–U603 | C398063-001 / C398152-001 | 30-pin SIMM sockets on `PCB SIMM 256K x 8 DIP STE` | 4 sockets; 16 × `C0101743-002` DRAM 256K×1 120 ns populate them (1040STE = 2 banks populated) |
+| U600–U603 | C398063-001 / C398152-001 | 30-pin SIMM sockets on `PCB SIMM 256K x 8 DIP STE` | 4 sockets; 16 × `C0101743-002` DRAM 256K×1 120 ns populate them (1040STE = 2 banks populated). **Correction 2026-11-11** (ticket #31): the 16 parts are **per bank** — 16 × 256K×1 = 512 KB is one 16-bit-wide bank (`CASnL` + `CASnH`), so two banks are 32 parts and the machine's 1 MB. With refresh strobed on both `RAS` lines at once, one row counter (512 rows) serves both banks, which is why 7.8 µs × 512 = 4 ms |
 | P100 | C101008-122 | resistor network 1.2 kΩ 9P | pull-ups |
 | P101–P103, P500–P502 | C101008-472 | resistor network 4.7 kΩ 9P | bus pull-ups |
 | P104, P105, P600 | C070448 | resistor network 10 kΩ 9P | pull-ups |
@@ -966,7 +966,7 @@ These are listed only because they occupy in-scope GSTMCU pins.
     `DE` (`U400.141`) going only to `U401.54`, so either the CAD redraw dropped the MFP branch or it is
     routed under a label the extraction did not pair. **Status: documented at the signal level,
     unverified at the pin level** (the MFP's `TBI` is pin 20, §3.8). Consequence for the model: one
-    `Memory → Timers` crossing per display line, which is how the machine counts scanlines.
+    `System Control Unit → Timers` crossing per display line, which is how the machine counts scanlines.
 16. **Two 74LS164 stories do not fit one part.** The 1991 parts list has a single 74LS164 at `U900`
     ("keyboard/MIDI serialisation"), while the STE hardware article describes a 74LS164 **added on
     production boards to delay `*SINT` before it reaches the MFP's `TAI`** (a four-microsecond delay so

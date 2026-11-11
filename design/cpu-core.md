@@ -8,9 +8,19 @@ the code shape is [`cpu-core-sketch.cs`](cpu-core-sketch.cs) — a sketch, not a
 (implementation is #10).
 
 Engine rules this file assumes: ADR 0003 (a chip owns its clock), ADR 0004 (a wire is an append-only
-log; a bus is one wire with lane masks), ADR 0005 (Memory is a chip on the same rules; the bus is the
+log; a bus is one wire with lane masks), ADR 0005 (the System Control Unit is a chip on the same rules; the bus is the
 authority on cost), ADR 0007 (order is `(instant, seq)`, no chip rank), ADR 0008 (five verbs, two write
 shapes, the run-ahead horizon, anchors-not-samples, the digest).
+
+> ### Correction — 2026-11-11 (ticket #31, owner's ruling)
+>
+> The virtual chip this file calls *Memory* is the **System Control Unit**, and the DRAM and the TOS
+> ROMs are no longer members with pins: they are plain data structures (`Ram`, `Rom`) inside it —
+> stores with no timeline, no record, no subscription and no wake. Every statement below about the
+> counter, the owner equation, the clients, the beam, the buffer or the leaf stands unchanged; only
+> the name and the store boundary moved. Owner's words: *"GSTMCU is too cryptic when you want to
+> understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
+> See [ADR 0014](../docs/adr/0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
 
 ## 1. The bus cycle — settled
 
@@ -18,8 +28,8 @@ A bus cycle is **two records and one subscription**, written in the CPU's own co
 
 1. `Write(t_assert, bus, mask, {AS low, R/W, FC0–2, A1–A23, D lanes if a write})` — one masked record
    (ADR 0004: the address bus is one wire with 24 lanes, the data bus one with 16).
-2. `await ReadNext(t_assert, Answer)` — Memory chooses the instant from its slot schedule.
-3. At the answering instant: the data sample and `BERR`/`VPA` samples **resolve on the stack** (Memory
+2. `await ReadNext(t_assert, Answer)` — the System Control Unit chooses the instant from its slot schedule.
+3. At the answering instant: the data sample and `BERR`/`VPA` samples **resolve on the stack** (the System Control Unit
    appended them before the answer record at the same instant), then the CPU appends its release
    record — `AS` high and `Z` on the data lanes.
 
@@ -27,7 +37,7 @@ A bus cycle is **two records and one subscription**, written in the CPU's own co
 which is the same time the CPU's clock lands on. `core-comparison.md` §5.3's `Access`/`Result` survives
 as a CPU-internal description of the bundle and of `{data, faulted, vectorProvided}` — never as a
 calling convention (ADR 0005 invariant 1). Wait states therefore need no mechanism: a slow device is a
-chip that answers later. The "round up to 4 clocks" rule is Memory's slot phase and is invisible here.
+chip that answers later. The "round up to 4 clocks" rule is the System Control Unit's slot phase and is invisible here.
 
 Consequences: `DTACK` answering at least one bus cycle out makes the per-instruction suspension
 structural (a fetch read is never already-satisfied), and `IACK` is the same three steps with
@@ -234,6 +244,6 @@ What each dependent ticket inherits:
   nested entries, against the **1 CPU clock (4 ticks)** threshold in §2.
 - **#11 (determinism)** — no new surface: `SampleWithInstant` reads records the log already holds, and the
   observer stream is host-side and off in release.
-- **#20 (memory)** — the answering-instant contract: Memory chooses `t_answer` from its slot schedule, and
+- **#20 (memory)** — the answering-instant contract: the System Control Unit chooses `t_answer` from its slot schedule, and
   the CPU's wait state is that choice. The 4-clock cycle is a minimum, not a constant (slot phase,
   overscan, bus grant).

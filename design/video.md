@@ -5,10 +5,20 @@ Implementation-facing companion to ticket [#27](https://github.com/laurentprudho
 the shape the code takes, so #10 and #12 have nothing left to interpret. Engine rules assumed: ADR 0003
 (a chip owns its clock), ADR 0004 (wires are append-only logs), ADR 0006 (subscriptions), ADR 0007
 (no priority table), ADR 0008 (two write shapes, anchors not samples, a wake only where a chip meets
-another chip), ADR 0011 (Memory owns the slot and the group delivery).
+another chip), ADR 0011 (The System Control Unit owns the slot and the group delivery).
 
-Rates are `design/crossings.md`'s. Group arithmetic is `design/memory.md`'s. The Microwire ownership is
+Rates are `design/crossings.md`'s. Group arithmetic is `design/system-control-unit.md`'s. The Microwire ownership is
 `research/ste-super-hires.md`'s.
+
+> ### Correction — 2026-11-11 (ticket #31, owner's ruling)
+>
+> The virtual chip this file calls *Memory* is the **System Control Unit**, and the DRAM and the TOS
+> ROMs are no longer members with pins: they are plain data structures (`Ram`, `Rom`) inside it —
+> stores with no timeline, no record, no subscription and no wake. Every statement below about the
+> counter, the owner equation, the clients, the beam, the buffer or the leaf stands unchanged; only
+> the name and the store boundary moved. Owner's words: *"GSTMCU is too cryptic when you want to
+> understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
+> See [ADR 0014](../docs/adr/0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
 
 ## 1. What the chip is
 
@@ -17,10 +27,10 @@ the palette latch (absorbed `U511`), the pixel pipeline (absorbed `U500/U501`, a
 latency), the register file (`$FF8240–$FF825F`, `$FF8260`/`$FF8261`, `$FF8264`/`$FF8265`), and **the
 virtual screen**.
 
-**Not members, and not Video's:** the 4-word fetch buffer and every fetch decision (Memory's, ADR 0011);
+**Not members, and not Video's:** the 4-word fetch buffer and every fetch decision (the System Control Unit's, ADR 0011);
 the Microwire shift and `$FF8922`/`$FF8924` (**Sound's** — the pins are on the Shifter, the timeline is
 the audio one; `SREQ` precedent, owner's ruling 2026-11-05 and on #27, 2026-11-11); the `DE → LOAD`
-pipeline (`U304/U306`, Memory's); the analog tail (`U403`, `U405`, the DACs, the filters).
+pipeline (`U304/U306`, the System Control Unit's); the analog tail (`U403`, `U405`, the DACs, the filters).
 
 **There is no fourth resolution on this board.** Super Hi-Res is the TT's; the `MWE`/`MWD`/`MWK` pins
 are the Microwire link (`research/ste-super-hires.md`).
@@ -74,9 +84,9 @@ visible    = cycles 28…448 = 420 cycles = 1 680 ticks = 52.5 µs
 | Register | Owner | Behaviour |
 |---|---|---|
 | `$FF8240–$FF825F` | Video | 16 words, **4 bits per channel**, R at 11–8, G at 7–4, B at 3–0. Atari's own wording: *"the least significant bit is added above the old most significant bit"* — the RTL's `0321` rotation (`gstshifter.v:236-237,257-263`) is that serial order. The value applies **from the next emitted pixel** |
-| `$FF8260` | **both** | one write, two latches: Memory's timing mode (`mde1`/`mde0`) and Video's plane mode (`shmode`) |
+| `$FF8260` | **both** | one write, two latches: the System Control Unit's timing mode (`mde1`/`mde0`) and Video's plane mode (`shmode`) |
 | `$FF8261` | Video | plane mode only — the documented trick that lets software make the two disagree |
-| `$FF8264` / `$FF8265` | Video | the pixel offset, 0–15. `$FF8265` also asks for the prefetch group (a **Memory** count rule, §6) |
+| `$FF8264` / `$FF8265` | Video | the pixel offset, 0–15. `$FF8265` also asks for the prefetch group (a **System Control Unit** count rule, §6) |
 
 **Every one of these writes is `Write`, never `WriteAndWait`.** With no per-pixel record the palette has
 no reader inside the machine: its only consumer writes pixels at instants strictly later than the
@@ -159,14 +169,14 @@ pixels inside `DE`, **palette colour 0** outside it — and writes nothing while
 
 Three things carry the name, and they belong to two chips:
 
-| Register | Chip | Effect on Video | Effect on Memory |
+| Register | Chip | Effect on Video | Effect on System Control Unit |
 |---|---|---|---|
-| `$FF820F` `LINEWIDTH` | Memory | none | the line-to-line address step |
-| `$FF8265` (prefetch) | Video (the offset) / Memory (the count) | offsets the shift by 0–15 px | **one extra group per line** while non-zero: 21 deliveries/line, 4 200/frame |
+| `$FF820F` `LINEWIDTH` | The System Control Unit | none | the line-to-line address step |
+| `$FF8265` (prefetch) | Video (the offset) / System Control Unit (the count) | offsets the shift by 0–15 px | **one extra group per line** while non-zero: 21 deliveries/line, 4 200/frame |
 | `$FF8264` (no prefetch) | Video | offsets the shift by 0–15 px | none; the display starts 16 px late and ends 16 px short — the counter's unloaded words produce it |
 
 - Video models **one** `pixel_offset` (0–15) and applies it when shifting out.
-- The prefetch is **Memory's count**, not Video's work: `$FF8265 ≠ 0` ⇒ one more group per line. G5's
+- The prefetch is **the System Control Unit's count**, not Video's work: `$FF8265 ≠ 0` ⇒ one more group per line. G5's
   **4 000/frame stays exact** because GEM does not scroll.
 - The three counter effects are **modelled** (Option B), not approximated: they are pixels in the
   screen, which is exactly what makes the screen worth committing.
@@ -234,7 +244,7 @@ mono), 284 counter anchors, ≤ 939 register writes in the worst raster demo.
    the skeleton paints low res. A mono-display ticket reopens it, with the SM124's ~71 Hz raster named
    as the reference.
 5. **`$FF8920`/`$FF8921` (SAMPMOD)** is decoded inside the Shifter in the reconstruction and listed as
-   Memory's in `design/subsystems-spec.md` §1. It is Sound's business (#26), recorded here so the
+   the System Control Unit's in `design/subsystems-spec.md` §1. It is Sound's business (#26), recorded here so the
    Microwire ruling does not look like it left a hole.
 6. **`$FF8260`'s second subscriber is a source conflict, not a doubt**: the reconstruction decodes
    `A[15:1]`, so it cannot tell `$FF8260` from `$FF8261`; the hardware overview, Hatari and Atari's own

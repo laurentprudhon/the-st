@@ -1,7 +1,7 @@
 # The 68000 core is three nested machines on one bus contract
 
 The CPU's execution maps onto the engine's five verbs without a private calling convention: a bus
-cycle is one masked control record, one subscription to Memory's answer, one data sample that resolves
+cycle is one masked control record, one subscription to the System Control Unit's answer, one data sample that resolves
 on the stack and one release record — and its cost is the elapsed machine time, never a returned
 number. Inside the core the machine is three nested state machines, each with its own state field, a
 completion tag as its only return, and the clock as the only cycle account; bus requests leave the core
@@ -12,17 +12,27 @@ from documented sources rather than from reconstruction.
 **Status**: accepted (2026-11-07), on the owner's answers during ticket #9's grilling session.
 Tickets: #9 (this core), #10 (walking skeleton), #8 (suspension-cost prototype), #11 (determinism).
 
+> ### Correction — 2026-11-11 (ticket #31, owner's ruling)
+>
+> The virtual chip this file calls *Memory* is the **System Control Unit**, and the DRAM and the TOS
+> ROMs are no longer members with pins: they are plain data structures (`Ram`, `Rom`) inside it —
+> stores with no timeline, no record, no subscription and no wake. Every statement below about the
+> counter, the owner equation, the clients, the beam, the buffer or the leaf stands unchanged; only
+> the name and the store boundary moved. Owner's words: *"GSTMCU is too cryptic when you want to
+> understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
+> See [ADR 0014](0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
+
 ## Context
 
 - The engine is fixed: ADR 0003 (a chip owns its clock), ADR 0004 (a wire is an append-only log; a bus
-  is one wire with lane masks), ADR 0005 (Memory is a chip on the same rules; the bus is the authority
+  is one wire with lane masks), ADR 0005 (the System Control Unit is a chip on the same rules; the bus is the authority
   on cost), ADR 0006 (two queue entries, two read shapes), ADR 0007 (order is `(instant, seq)`),
   ADR 0008 (five verbs, two write shapes, the run-ahead horizon, anchors-not-samples, the digest).
 - The owner fixed the core's structure in round 4, and it is the one place this design departs from all
   three vendored cores, which chose a flat dispatch:
   > "the 68000 is **nested state machines** — instruction/interrupt machine, nested instruction-specific
   > machine after fetch, nested addressing-mode machines for operands."
-- The bus was the constraint that shaped everything else: the CPU cannot know when Memory will answer,
+- The bus was the constraint that shaped everything else: the CPU cannot know when the System Control Unit will answer,
   so the vocabulary of `research/core-comparison.md` §5.3 (`bus.read(Access) -> {data, cycles}`) was
   wrong at the root. ADR 0005's own sentence — "a read is `await Read(t_response, dataWire)`" —
   presumed the same knowledge.
@@ -35,16 +45,16 @@ Tickets: #9 (this core), #10 (walking skeleton), #8 (suspension-cost prototype),
 ### 1. A bus cycle is two records and one subscription
 
 1. `Write(t_assert, bus, mask, {AS low, R/W, FC0–2, A1–A23, D lanes if a write})` — one masked record.
-2. `await ReadNext(t_assert, Answer)` — Memory chooses the instant from its own slot schedule, and the
+2. `await ReadNext(t_assert, Answer)` — the System Control Unit chooses the instant from its own slot schedule, and the
    scheduler sets the CPU's clock to it before resuming.
 3. At the answering instant, the data sample and the `BERR`/`VPA` samples **resolve on the stack**
-   (Memory appended them before the answer record at that instant), then the CPU appends its release
+   (the System Control Unit appended them before the answer record at that instant), then the CPU appends its release
    record: `AS` high and `Z` on the data lanes.
 
 **No `Result.cycles`.** The CPU's cost is `t_answer − t_assert`, which is the instant its own clock
 lands on. `Access`/`Result` survive only as a CPU-internal description of the bundle and of
 `{data, faulted, vectorProvided}` — never as a calling convention (ADR 0005 invariant 1). Wait states
-therefore need no mechanism, and the "round up to 4 clocks" rule is Memory's slot phase: the CPU is
+therefore need no mechanism, and the "round up to 4 clocks" rule is the System Control Unit's slot phase: the CPU is
 capped at half the bus during display (video takes 100 % of the internal slots), and a bus master can
 stretch an answer arbitrarily.
 
@@ -169,7 +179,7 @@ so no record and no digest can differ.
   three nested entries**, against the 1 CPU clock threshold below.
 - **#11** inherits no new determinism surface: the log query (`SampleWithInstant`) reads only records
   the log already holds, and the observer stream is host-side and off in release.
-- **Memory (#20)** inherits the answering-instant contract: it chooses `t_answer` from its slot schedule,
+- **The System Control Unit (#20)** inherits the answering-instant contract: it chooses `t_answer` from its slot schedule,
   and the CPU's wait state *is* that choice — no separate wait-state mechanism exists anywhere.
 - **ADR 0004** gains one sentence on retention: a wire's log must retain back to the earliest instant a
   live reader may still sample, and the watermark is the minimum over subscribers **and live sampling
@@ -184,7 +194,7 @@ so no record and no digest can differ.
 
 - **`bus.read(Access) -> {data, cycles, faulted}`** (the §5.3 proposal). Rejected: a private calling
   convention ADR 0005 forbids, and a second source of truth for time — the number would be computed by
-  Memory anyway, and at Level 2 it *is* the answer instant.
+  the System Control Unit anyway, and at Level 2 it *is* the answer instant.
 - **`await WriteAndWait` as the whole cycle.** Rejected: it resumes behind the receivers of its own record
   at the same instant, so it cannot express a wait for an *answer* at an instant the other chip chooses.
 - **Async methods as the nesting itself** (the call stack is the machine). Rejected: the compiler's state

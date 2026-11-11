@@ -673,6 +673,13 @@ What this changes in practice:
 The emulator consequence is architectural economy: one `GSTMCU` device owning decode, DRAM
 scheduling, video timing, interrupt generation and arbitration is both simpler and more faithful
 than modelling two chips for the STE.
+
+> **Note — 2026-11-11** (ticket #31, owner's ruling). This section describes the **part** and keeps its
+> name. The emulator's virtual chip for it is called the **System Control Unit** (the role name; the
+> part stays in the partition's second column as `U400`, 144-pin — `design/subsystems-spec.md` §1), and
+> the DRAMs and the TOS ROMs are plain stores (`Ram`, `Rom`) it holds rather than members with pins
+> (ADR 0014). "GSTMCU" as a name for the virtual chip was rejected by the owner as cryptic; the word
+> survives here because this page is about the hardware.
 ---
 
 ## 6. Video

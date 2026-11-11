@@ -8,6 +8,16 @@ Source for the merging: the ST Magazine 44 (1990) STE article, the 520/1040STE F
 (§2.5, §2.9), and `design/board-inventory.md` (pin tables, with the 1989 factory drawing's original
 `X`-prefixed net names).
 
+> ### Correction — 2026-11-11 (ticket #31, owner's ruling)
+>
+> The virtual chip this file calls *Memory* is the **System Control Unit**, and the DRAM and the TOS
+> ROMs are no longer members with pins: they are plain data structures (`Ram`, `Rom`) inside it —
+> stores with no timeline, no record, no subscription and no wake. Every statement below about the
+> counter, the owner equation, the clients, the beam, the buffer or the leaf stands unchanged; only
+> the name and the store boundary moved. Owner's words: *"GSTMCU is too cryptic when you want to
+> understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
+> See [ADR 0014](../docs/adr/0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
+
 ## 1. The naming scheme
 
 ```
@@ -35,7 +45,7 @@ Examples:
 | `memory.gstmcu.glue.XROM4` | ROM chip select, GSTMCU, from the ST's GLUE |
 | `video.gstshifter.shifter.R0` | red bit 0, GST Shifter, the ST's Shifter line extended |
 | `disk.gstmcu.mmu.FF8609` | disk DMA address register — owned by **Disk**, physically in the GSTMCU (§5.1) |
-| `sound.gstshifter.shifter.SREQ` | sound DMA request — pin on the **Shifter**, service owned by Memory (§5.2) |
+| `sound.gstshifter.shifter.SREQ` | sound DMA request — pin on the **Shifter**, service owned by the System Control Unit (§5.2) |
 | `timers.mfp.none.IRQ` | the MFP's single interrupt request (pin 32) into the GSTMCU — the MFP has no `IPL` pins, so the level it gets is the level the GSTMCU drives (6) |
 
 ## 2. Chip equivalence

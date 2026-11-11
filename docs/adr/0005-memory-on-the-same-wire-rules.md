@@ -1,13 +1,23 @@
-# Memory is a virtual chip, on the same wire rules as every other boundary
+# The System Control Unit is a virtual chip, on the same wire rules as every other boundary
 
 RAM is a virtual chip with pins like any other: the CPU drives address, data direction and control on
-wires, Memory samples them at the instant they are asserted, and answers by driving data and `DTACK`
+wires, the System Control Unit samples them at the instant they are asserted, and answers by driving data and `DTACK`
 at a later instant it computes. No boundary in the machine gets a private calling convention. The
 uniformity is chosen deliberately at the *functional* accuracy level, where it costs roughly 40 % of a
 frame for CPU traffic alone; the inlined memory fast path is a later optimisation that must leave
 every timestamp and every ordering unchanged, so it can be added without touching a single other chip.
 
 **Status**: accepted (2026-11-04), on the owner's instruction. Ticket: #7 (scheduler), #10 (walking skeleton).
+
+> ### Correction — 2026-11-11 (ticket #31, owner's ruling)
+>
+> The virtual chip this file calls *Memory* is the **System Control Unit**, and the DRAM and the TOS
+> ROMs are no longer members with pins: they are plain data structures (`Ram`, `Rom`) inside it —
+> stores with no timeline, no record, no subscription and no wake. Every statement below about the
+> counter, the owner equation, the clients, the beam, the buffer or the leaf stands unchanged; only
+> the name and the store boundary moved. Owner's words: *"GSTMCU is too cryptic when you want to
+> understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
+> See [ADR 0014](0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
 
 ## Context
 
@@ -35,8 +45,8 @@ every timestamp and every ordering unchanged, so it can be added without touchin
 
 ## Decision
 
-- **Memory is a virtual chip.** The CPU asserts `AS`, `R/W`, `FC0–FC2`, the address lanes and (for a
-  write) the data lanes; Memory samples them at the instant of assertion and drives data and `DTACK`
+- **The System Control Unit is a virtual chip.** The CPU asserts `AS`, `R/W`, `FC0–FC2`, the address lanes and (for a
+  write) the data lanes; it samples them at the instant of assertion and drives data and `DTACK`
   at the instant its slot schedule allows. A read is `await Read(t_response, dataWire)`; the CPU's
   clock advance to `t_response` *is* the wait-state model.
 - **Every rule of ADR 0004 applies unchanged**: append-only logs, per-driver values, `Z` on release
@@ -53,7 +63,7 @@ every timestamp and every ordering unchanged, so it can be added without touchin
   50 ns each, that is ~8 ms of a 20 ms frame: **~40 % of the budget before the CPU executes an
   instruction.** The Blitter, when it is added, roughly doubles it. This figure is the acceptance test
   of #10, and the reason the fast path exists as a planned option rather than as an improvisation.
-- **The deferred fast path is a leaf inside Memory, not an exception in the model.** It may inline
+- **The deferred fast path is a leaf inside the System Control Unit, not an exception in the model.** It may inline
   the wires of the memory bus, serve a bus cycle from a direct call, and decimate its own display log.
   It may not change a timestamp, an ordering or a release instant, and no other chip may know it
   exists. Acceptance: the trace with the leaf on and off is identical except for the decimated
@@ -63,7 +73,7 @@ every timestamp and every ordering unchanged, so it can be added without touchin
   could be built, and the design forbids it by construction: a grant is decided inside the firing of
   an instant, not by a suspension. There is no priority key to decide it with (ADR 0007): the resolved
   interrupt level is a `max()`, the slot choice is a phase, and a contested bus is a reported conflict.
-- **Memory's internal schedule is the slot alternation, not a priority table.** Two internal slots and
+- **The System Control Unit's internal schedule is the slot alternation, not a priority table.** Two internal slots and
   two external slots alternate, with no precedence of any kind; the internal ones carry display fetch,
   refresh and audio DMA, the external ones the CPU and any bus master. Modelling it as priorities
   would invent contention the machine never had.
@@ -71,10 +81,10 @@ every timestamp and every ordering unchanged, so it can be added without touchin
 ## Invariants
 
 1. No chip has a private calling convention into another; a bus cycle is wire records and samples.
-2. Memory owns its own clock and its own slot schedule; nobody reads its state directly.
+2. The System Control Unit owns its own clock and its own slot schedule; nobody reads its state directly.
 3. A completion's delay is a computed instant the answering chip drives at. Its record costs a queue
    entry (ADR 0006) — the entry starts no new work, which is what keeps it inlinable.
-4. Video and sound fetch stay inside Memory; only their control signals cross.
+4. Video and sound fetch stay inside the System Control Unit; only their control signals cross.
 5. A fast path may change the number of instructions, never an instant, an order or a visible value.
 
 ## Consequences
@@ -98,7 +108,7 @@ every timestamp and every ordering unchanged, so it can be added without touchin
   the named deferred optimisation, with its acceptance test fixed here.
 - **RAM as a chip, with the video and sound fetch also crossing pins.** Rejected: 16 000–25 000 word
   fetches per frame through wire records would put the memory bus at 10⁷ record operations per second
-  in the *fetch* path alone, and the owner's earlier ruling already places the fetch inside Memory.
+  in the *fetch* path alone, and the owner's earlier ruling already places the fetch inside the System Control Unit.
 - **Per-chip private memory pointers (a shared RAM array every chip indexes).** Rejected: it is a
   second, unlogged path for the machine's dominant traffic, invisible to the graphs, and it makes the
   Blitter/CPU contention exactly the thing the model cannot see.
@@ -109,7 +119,7 @@ every timestamp and every ordering unchanged, so it can be added without touchin
 
 - If the walking skeleton cannot hold 50 Hz with at least 2× headroom on the reference host, the
   uniform model is too expensive as specified and the leaf in this ADR is implemented — inside
-  Memory, with the trace-identity acceptance test. That is a performance change, not a model change.
+  the System Control Unit, with the trace-identity acceptance test. That is a performance change, not a model change.
 - If enabling the leaf moves a single timestamp or ordering, the leaf is wrong.
 - If a chip ever wants a private handle on RAM (invariant 1 broken "just here"), the model has started
   to fork and this ADR is the place to reopen, not a code review to lose.
@@ -126,15 +136,15 @@ Two sentences above were corrected by later rulings, and the leaf gained the bou
    costs a queue entry like any other, and that it starts no new work. That distinction, not the entry
    count, is what keeps the leaf a substitution.
 3. **The leaf's scheduler boundary** is now stated as seven conditions (ADR 0008 §7): one closed
-   exchange; both clocks land at the answering instant, Memory's included; every record and the `Z`
-   release survive; class-2 exchanges only, where Memory computes the instant alone; no other chip's
+   exchange; both clocks land at the answering instant, the System Control Unit's included; every record and the `Z`
+   release survive; class-2 exchanges only, where the System Control Unit computes the instant alone; no other chip's
    subscription touched; digest stream identical but for declared display decimation; T=1 only and off
    by default.
 
 ## Revision — 2026-11-07 (ticket #9)
 
 **The read sentence in §Decision is superseded.** It said "a read is `await Read(t_response, dataWire)`",
-which presumes the CPU knows the instant Memory will answer. It cannot: only Memory computes that instant
+which presumes the CPU knows the instant the System Control Unit will answer. It cannot: only the System Control Unit computes that instant
 from its slot schedule. The cycle is instead one masked control record, one subscription to the answer
 (`ReadNext`), a data sample that resolves on the stack, and the CPU's own release record; the CPU's clock
 advance to the answering instant is still the wait-state model, exactly as written above. See
@@ -154,7 +164,7 @@ coroutines logic and readability."*
 **One sentence in §Decision is corrected: "the functional level models no contention inside RAM beyond
 the slot alternation".** The owner ruled that the machine is built bus-aware, with no functional step
 before it — *"we should model level 2 right now, and level 2 only, no need to introduce a first step
-with level 1 given our current design"*. Memory therefore models the slot schedule in full: contention
+with level 1 given our current design"*. The System Control Unit therefore models the slot schedule in full: contention
 is the external slot's (a granted bus master holding it), and a contended answer is a later instant.
 The uniformity argument, the bill, and the leaf's boundary stand unchanged.
 
@@ -162,3 +172,23 @@ The uniformity argument, the bill, and the leaf's boundary stand unchanged.
 internal and one external slot, one owner equation for the internal slot, three client kinds, and
 refresh as filler rather than preemptor. The 40 % bill below is still #10's measurement and still the
 reason the leaf exists.
+
+## Revision — 2026-11-11 (ticket #31): the stores are inside the chip, not the boundary
+
+The DRAM and the TOS ROMs became plain data structures (`Ram`, `Rom`) inside this chip, which is now
+the **System Control Unit** ([ADR 0014](0014-the-stores-are-data-structures.md),
+`design/system-control-unit.md`). What changes here, and what does not:
+
+- **Invariant 1 stands untouched.** A call to `Ram.Read(bank, row, column)` is *inside one chip's own
+  execution*, like its phase counter — not a private calling convention between chips. The uniformity
+  this ADR bought is about how chips meet each other, and the stores meet nobody.
+- **The bill is unchanged.** The ~40 % figure is queue entries for the CPU's *bus cycle* (control
+  record, subscription, data sample, release), not for the store call behind it; #10 measures the same
+  thing it did before.
+- **The leaf's boundary and its status are unchanged**, and the split does not weaken the owner's
+  constraint: the leaf inlines the **slot wait** — the suspension and the two clock movements — not
+  the store's read. A `Ram.Read` that is one call is therefore neither the leaf nor an argument for
+  turning it on.
+- **The rejected option "per-chip private memory pointers (a shared RAM array every chip indexes)"
+  is still rejected.** `MachineBytes` is the host's view only, in machine byte order, and no virtual
+  chip may hold it (ADR 0014 §4).

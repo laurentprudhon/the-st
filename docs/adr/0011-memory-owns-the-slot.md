@@ -1,9 +1,9 @@
-# Memory owns the slot: one counter, one owner equation, three client kinds
+# The System Control Unit owns the slot: one counter, one owner equation, three client kinds
 
 The memory subsystem is one counter and one rule. A 500 ns cycle holds one internal and one external
 slot; the internal slot has exactly one owner, decided by a single equation — **video while the
 horizontal display window is open, otherwise sound when `SREQ` is pending, otherwise refresh**. Video is
-*computed* from Memory's own counters into a 4-word fetch buffer, sound is *answered* on `SREQ` in the
+*computed* from the System Control Unit's own counters into a 4-word fetch buffer, sound is *answered* on `SREQ` in the
 next blanking slot, the CPU and any granted bus master are *answered* at the next external slot. A slot
 is arithmetic and never a record; refresh is filler and never a preemptor; the machine is bus-aware
 throughout, with no Level-1 step and no internal-share constant.
@@ -12,11 +12,21 @@ throughout, with no Level-1 step and no internal-share constant.
 Tickets: #20 (this design), #10 (walking skeleton), #26 (sound path), #27 (video), #28 (timers),
 #29 (disk), #30 (Blitter).
 
+> ### Correction — 2026-11-11 (ticket #31, owner's ruling)
+>
+> The virtual chip this file calls *Memory* is the **System Control Unit**, and the DRAM and the TOS
+> ROMs are no longer members with pins: they are plain data structures (`Ram`, `Rom`) inside it —
+> stores with no timeline, no record, no subscription and no wake. Every statement below about the
+> counter, the owner equation, the clients, the beam, the buffer or the leaf stands unchanged; only
+> the name and the store boundary moved. Owner's words: *"GSTMCU is too cryptic when you want to
+> understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
+> See [ADR 0014](0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
+
 ## Context
 
-- Memory is the one chip the walking skeleton cannot stub: every bus cycle's answering instant comes
+- The System Control Unit is the one chip the walking skeleton cannot stub: every bus cycle's answering instant comes
   from its slot schedule, and that instant *is* the CPU's wait state (ADR 0009). A skeleton built on a
-  provisional Memory would prove determinism of a timetable nobody decided.
+  a provisional System Control Unit would prove determinism of a timetable nobody decided.
 - The slot arithmetic was already established (`research/memory-bus-slots.md`, `documented`/`derived`
   throughout): 250 ns slots, 2 internal and 2 external clocks alternating, 128 internal slots per PAL
   line, video at exactly the internal supply rate during display, sound ≤3.2 slots/line, refresh ≈8.2.
@@ -82,17 +92,17 @@ Three consequences, each of which the model must reproduce:
 
 | Client | Kind | Served at |
 |---|---|---|
-| Video | **computed** — Memory's own counters, nothing on a wire | one word per cycle while the window is open; a group delivery on the 4th word |
+| Video | **computed** — the System Control Unit's own counters, nothing on a wire | one word per cycle while the window is open; a group delivery on the 4th word |
 | Sound | **answered** — `SREQ`, class 1 | first blanking internal slot after the assertion, up to 4 words back-to-back |
 | CPU / granted master | **answered** — a bus cycle, class 2 | next external slot boundary, then `DTACK` |
 | Refresh | **computed** — the row counter's expiry | next unclaimed blanking slot |
 
-- **Memory never initiates a sound fetch.** It answers one; the FIFO, the cadence and the refill
-  semantics are Sound's (#26), the *slot* is Memory's.
+- **The System Control Unit never initiates a sound fetch.** It answers one; the FIFO, the cadence and the refill
+  semantics are Sound's (#26), the *slot* is the System Control Unit's.
 - **No per-line plan, no lookahead device.** The ticket's "computed lookahead or per-fetch request"
   question dissolves: it is one timetable, and the client kind says how its demand reaches it.
 
-### 4. The 4-word fetch buffer lives in Memory
+### 4. The 4-word fetch buffer lives in the System Control Unit
 
 Owner's ruling: *"model the 4 words buffer inside memory instead of inside video to explain the 8-phase
 counter"*.
@@ -108,9 +118,9 @@ counter"*.
 
 ### 5. Refresh: an anchor, never a record, never a deadline
 
-- No wire, no event: refresh is Memory's own service. It is logged as an anchor on the refresh counter
+- No wire, no event: refresh is the System Control Unit's own service. It is logged as an anchor on the refresh counter
   (row index at each expiry).
-- **It is also not a wake.** Nothing outside Memory can observe it — it never preempts video, never
+- **It is also not a wake.** Nothing outside the System Control Unit can observe it — it never preempts video, never
   delays sound — so there is nothing to be resumed for. The row counter is computed on demand (ADR 0008
   §5: "a counter whose expiry changes nothing observable needs no wake"). Revision of 2026-11-09 below.
 - **7.8 µs stays `derived`** (512 rows ÷ 4 ms, the 41256 requirement); the reconstruction hard-wires the
@@ -120,7 +130,7 @@ counter"*.
 
 ### 6. The crossing boundary is the catalogue's rows, unchanged
 
-Out of Memory: the group delivery, `SLOAD`, `DE` (two subscribers), `BLANK`, one resolved `IPL0–IPL2`
+Out of the System Control Unit: the group delivery, `SLOAD`, `DE` (two subscribers), `BLANK`, one resolved `IPL0–IPL2`
 record, `FDINT`/`DINT`/`BINT`, `DTACK`/`BERR`, the register selects, and the `RDY` → `BR` relay for disk
 DMA. Never out: slot decisions, the owner equation, the phase counter, the DRAM address latch, the
 refresh counter, the buffer's occupancy, the per-word fetch addresses.
@@ -128,7 +138,7 @@ refresh counter, the buffer's occupancy, the per-word fetch addresses.
 ### 7. What this retires
 
 - **The Level 1 / Level 2 seam.** Owner: *"we should model level 2 right now, and level 2 only, no need
-  to introduce a first step witrh level 1 given our current design"*. Memory already computes every
+  to introduce a first step witrh level 1 given our current design"*. The System Control Unit already computes every
   instant from the counter, so a "4 clocks" Level 1 would be a second path, not a simpler one.
 - **The internal-share constant** the ticket intended to keep as a Level-2 hook: with no stretch, the
   share is structurally one slot per cycle and never varies.
@@ -142,8 +152,8 @@ refresh counter, the buffer's occupancy, the per-word fetch addresses.
 3. Refresh is deferred, never served inside a display window, and never a wake instant.
 4. Video's fill rate equals the phase counter's rate; its buffer never invents an instant.
 5. Every answering instant is an external slot boundary; the CPU's wait state *is* that instant.
-6. Memory initiates no sound fetch and owns no part of the sample clock.
-7. Nothing crosses out of Memory that is not a `design/crossings.md` row.
+6. The System Control Unit initiates no sound fetch and owns no part of the sample clock.
+7. Nothing crosses out of the System Control Unit that is not a `design/crossings.md` row.
 8. Anchors are logged where a value enters the address arithmetic, plus one per line; addresses themselves are arithmetic.
 
 ## Consequences
@@ -156,14 +166,14 @@ refresh counter, the buffer's occupancy, the per-word fetch addresses.
 - **#26** inherits the refill *rule* (first blanking internal slot after `SREQ`, up to four words,
   never inside a window) and keeps the FIFO depth (4 words, `inferred`) and the sample cadence.
 - **#27** inherits the delivery cadence: one group per four words at the 4th word's instant, 20 groups per
-  active line, 4 000/frame — and the buffer now lives on Memory's side of the boundary.
+  active line, 4 000/frame — and the buffer now lives on the System Control Unit's side of the boundary.
 - **#28** inherits `DE` → Timer B (200 counts/frame) and the single resolved `IPL` record; HBL/VBL
-  arbitration stays Memory's.
+  arbitration stays the System Control Unit's.
 - **#29** inherits the `$FF8609/0B/0D` split: the DMA address *counter* is the Disk chip's (a bus
-  master), Memory only muxes `dma_reg` onto the address bus in the external phase.
+  master), the System Control Unit only muxes `dma_reg` onto the address bus in the external phase.
 - **#30** inherits that the Blitter is an external master: it reaches RAM only through granted external
   slots, and its slot occupation is #30's question.
-- **`design/memory.md`** is the implementable shape; `research/memory-bus-slots.md` §7 and
+- **`design/system-control-unit.md`** is the implementable shape; `research/memory-bus-slots.md` §7 and
   `research/gstmcu-reconstructions.md` carry the dated corrections this ruling forces.
 - **Vocabulary**: *slot*, *owner equation*, *fetch buffer* and *answering instant* are used as defined
   here; `GLOSSARY.md` gains *Slot* and amends *Memory service* and *Accuracy level*.
@@ -185,8 +195,8 @@ refresh counter, the buffer's occupancy, the per-word fetch addresses.
   emulator precedent was checked: no emulator models CPU contention, and an invented rule is worse than a
   recorded gap.
 - **A Level 1 first step answering "4 clocks".** Rejected by the owner: it is a second path, not a
-  simpler one, since Memory already computes every instant from the counter.
-- **Video's 4-word buffer staying on Video's side.** Rejected by the owner: putting it in Memory is what
+  simpler one, since the System Control Unit already computes every instant from the counter.
+- **Video's 4-word buffer staying on Video's side.** Rejected by the owner: putting it in the System Control Unit is what
   explains the 8-phase counter.
 
 ## Falsifier
@@ -208,16 +218,33 @@ Owner's ruling: *"memory only needs to run, ie to synchronize with the system ti
 with external signals : sample CPU request, sample sound request, push to video. refresh is purely
 internal to memory, so nextDeadline should not be concerned by refresh."*
 
-The ADR as accepted listed refresh among Memory's four deadline counters, which contradicted §5's own
+The ADR as accepted listed refresh among the System Control Unit's four deadline counters, which contradicted §5's own
 reasoning: a counter whose expiry nothing outside the chip can observe is arithmetic, not an obligation
 (ADR 0008 §5). Amended in place:
 
 - **`nextDeadline` is the minimum over three**: the next group boundary (push to Video), the next refill
   slot owed (`SLOAD` to Sound), the next external slot owed (`DTACK` to the CPU or a granted master).
 - **Refresh leaves the wake list**: bookkeeping, computed on demand, anchored when logged.
-- **The general rule, stated once:** *a chip needs a wake only where it meets another chip.* Memory's
+- **The general rule, stated once:** *a chip needs a wake only where it meets another chip.* The System Control Unit's
   wakes are exactly its crossings — 4 000 group deliveries, ≤313 refills, and its bus answers.
-- Open point 1 of `design/memory.md` softens with it: the 7.8 µs figure now shapes only the per-line slot
+- Open point 1 of `design/system-control-unit.md` softens with it: the 7.8 µs figure now shapes only the per-line slot
   budget, never an instant.
 
-[ADR 0008](0008-the-schedulers-rules.md) §5's Memory line carries the matching correction.
+[ADR 0008](0008-the-schedulers-rules.md) §5's System Control Unit line carries the matching correction.
+
+## Revision — 2026-11-11 (ticket #31): renamed, and its stores moved out
+
+The chip is the **System Control Unit** (owner's ruling: *"GSTMCU is too cryptic when you want to
+understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*),
+and the DRAM and the TOS ROMs are stores inside it rather than members with pins
+([ADR 0014](0014-the-stores-are-data-structures.md)). Everything this ADR decided survives verbatim:
+
+- **§1–§3** — the counter, the slot grid, the owner equation and the three client kinds — are untouched:
+  they were never about the parts, they are about the timetable.
+- **§4's 4-word fetch buffer stays in the chip** and does not move into `Ram`: it is a timing
+  structure, filled one word per internal slot and drained as one group, so moving it would move a
+  delivery instant into a store that has none.
+- **§5's refresh** keeps its row counter, its 7.8 µs period and its slots; `Ram.Refresh(row)` is only
+  the store's half of it — the chosen row — and it is still not a deadline.
+- **§6's out-list is unchanged**, which is this ADR's own best evidence that the split is free: no
+  row of `design/crossings.md` was ever a DRAM or a ROM pin.

@@ -10,7 +10,17 @@ cleared, because colour 0 can change line by line.
 
 **Status**: accepted (2026-11-11), on the owner's word during ticket #27's session — *"ok for ADR
 0012"*. Ticket: #27. Depends on ADR 0001 (one timeline), 0004 (wires are logs), 0006 (subscriptions),
-0008 (write shapes, anchors, the wake rule) and 0011 (Memory owns the slot and the group delivery).
+0008 (write shapes, anchors, the wake rule) and 0011 (the System Control Unit owns the slot and the group delivery).
+
+> ### Correction — 2026-11-11 (ticket #31, owner's ruling)
+>
+> The virtual chip this file calls *Memory* is the **System Control Unit**, and the DRAM and the TOS
+> ROMs are no longer members with pins: they are plain data structures (`Ram`, `Rom`) inside it —
+> stores with no timeline, no record, no subscription and no wake. Every statement below about the
+> counter, the owner equation, the clients, the beam, the buffer or the leaf stands unchanged; only
+> the name and the store boundary moved. Owner's words: *"GSTMCU is too cryptic when you want to
+> understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
+> See [ADR 0014](0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
 
 ## Context
 

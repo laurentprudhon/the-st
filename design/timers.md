@@ -6,11 +6,21 @@ file is the shape the code takes, so #10 and the later device tickets have nothi
 Engine rules assumed: ADR 0001 (one time domain; revised here for the third crystal), ADR 0003 (a chip
 owns its clock), ADR 0004 (wires are append-only logs), ADR 0006 (subscriptions), ADR 0007 (no priority
 table), ADR 0008 (two write shapes, anchors not samples, a wake only where a chip meets another chip),
-ADR 0009 (the CPU's sampling side), ADR 0011 (Memory owns the slot).
+ADR 0009 (the CPU's sampling side), ADR 0011 (the System Control Unit owns the slot).
 
 Rates are `design/crossings.md`'s. The register map, the source numbering and the encoder's bit semantics
 are read from `hatari/src/mfp.c`, `neost/src/io/Mfp.cpp` and `steemsse-V4.2.0_R10/steem/mfp.cpp`, and
 from `design/board-inventory.md` §3.8 for the pins.
+
+> ### Correction — 2026-11-11 (ticket #31, owner's ruling)
+>
+> The virtual chip this file calls *Memory* is the **System Control Unit**, and the DRAM and the TOS
+> ROMs are no longer members with pins: they are plain data structures (`Ram`, `Rom`) inside it —
+> stores with no timeline, no record, no subscription and no wake. Every statement below about the
+> counter, the owner equation, the clients, the beam, the buffer or the leaf stands unchanged; only
+> the name and the store boundary moved. Owner's words: *"GSTMCU is too cryptic when you want to
+> understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
+> See [ADR 0014](../docs/adr/0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
 
 ## 1. What the chip is
 
@@ -19,9 +29,9 @@ registers, **the sixteen-source priority encoder** (pending, enable, mask, in-se
 source), the vector register and the acknowledge path, `GPIP`/`AER`/`DDR` with the eight port lines, and
 the **USART register file as a declared stub**.
 
-**Not members, and not Timers':** the `IPL0–IPL2` lanes and the arbitration between levels (**Memory's** —
-it drives those three pins, `board-inventory.md` §4.3); the VBL and HBL autovectors (Memory's line and
-frame counters); the address decode and `MFPCS` (Memory's); the RS-232 line drivers and the ACIA (out of
+**Not members, and not Timers':** the `IPL0–IPL2` lanes and the arbitration between levels (**the System Control Unit's** —
+it drives those three pins, `board-inventory.md` §4.3); the VBL and HBL autovectors (the System Control Unit's line and
+frame counters); the address decode and `MFPCS` (the System Control Unit's); the RS-232 line drivers and the ACIA (out of
 scope and Controllers').
 
 **The MFP has no `IPL` pins.** `IPL0–IPL2` belongs to the GSTMCU and the MFP to level 6 only, for all
@@ -31,7 +41,7 @@ sixteen of its sources, over the one `IRQ` line (`U203.32`).
 
 | Arrives as | Wire | Rate | How Timers treats it |
 |---|---|---|---|
-| `DE`, second subscriber | `Memory → Timers` (`TBI`, pin 20) | 200/frame | **event count** for Timer B: one count per active line, whatever the CPU is doing |
+| `DE`, second subscriber | `System Control Unit → Timers` (`TBI`, pin 20) | 200/frame | **event count** for Timer B: one count per active line, whatever the CPU is doing |
 | sound frame end | `SINT` (`U400.105`) | per frame end | sets source 15's pending bit at the record instant; **Timer A counts the edge 128 ticks later** (`TAI`, through the 74LS164) |
 | floppy / disk DMA completion | `FDINT`, `DINT` (one shared line) | per completion | sets source 7's pending bit; nothing else |
 | blitter completion | `BINT` | per blit | sets source 3's pending bit; nothing else |
@@ -97,7 +107,7 @@ with (d) **no source numbered *n* or above in service**. `IRQ` asserts exactly w
 
 | Source | Register bit | Atari line | Producer in v1 |
 |---|---|---|---|
-| 15 | `IPRA` 7 | `SINT` (STE sound-DMA active; mono detect is fixed here) | Memory/Sound |
+| 15 | `IPRA` 7 | `SINT` (STE sound-DMA active; mono detect is fixed here) | System Control Unit/Sound |
 | 14 | `IPRA` 6 | RS-232 ring indicator | **tied inactive-high** |
 | 13 | `IPRA` 5 | Timer A | its own counter |
 | 12 | `IPRA` 4 | USART receive buffer full | **stub, never sets** |
@@ -127,11 +137,11 @@ with (d) **no source numbered *n* or above in service**. `IRQ` asserts exactly w
   is *set* only when `VR` bit 3 = 1 (software EOI, the handler writes 0 to `ISR` at its end) and stays
   clear in automatic mode.
 - **A stale acknowledge is a bus error.** If nothing is selected at the acknowledge instant, Timers answers
-  nothing; Memory times the 6800-style cycle out and drives `BERR`; the CPU takes the **spurious vector
+  nothing; the System Control Unit times the 6800-style cycle out and drives `BERR`; the CPU takes the **spurious vector
   24 ($60)**. Steem and NeoST model this; Hatari leaves it a TODO. A debug assertion on the Timers side
   reports such an acknowledge as a conflict — it must never be a normal path.
-- **The `IPL` record is Memory's**, one three-lane record per level change, resolved by
-  `max(MFP 6, VBL 4, HBL 2)`. Timers never computes a level and Memory never learns a source.
+- **The `IPL` record is the System Control Unit's**, one three-lane record per level change, resolved by
+  `max(MFP 6, VBL 4, HBL 2)`. Timers never computes a level and the System Control Unit never learns a source.
 
 ## 6. The register file
 
@@ -168,7 +178,7 @@ why a write to `AER` or `DDR` is itself re-evaluated as a possible edge.
 | 3 | 3 | blitter done `BINT` | live (Blitter, #30) |
 | 4 | 6 | keyboard ACIA `N6850` | live (Controllers, #21) |
 | 5 | 7 | `FDINT` + `DINT` | live (Disk, #29) |
-| 7 | 15 | `SINT`, sound frame end | live (Sound/Memory), and `TAI` |
+| 7 | 15 | `SINT`, sound frame end | live (Sound/System Control Unit), and `TAI` |
 | 0, 1, 2, 6 | 0, 1, 2, 14 | printer busy, DCD, CTS, RI | **inputs tied inactive-high** — they read 1, never set a bit, and their sources are never selected |
 
 A `GPIP` read is a **sample**, never a wake: the pin level at the reader's instant, no record, no
@@ -210,7 +220,7 @@ case exactly.
 
 **Rate test (G5):** Timer B 200 counts a frame, of which one expiry per `TBDR` events; Timer C 200
 expiries; Timer A one per sound frame end; register writes ~20 idle; `GPIP` changes per completion. Total
-anchors sit in the same order as Memory's 313 line anchors and two orders below a per-tick log.
+anchors sit in the same order as the System Control Unit's 313 line anchors and two orders below a per-tick log.
 
 ## 9. What crosses out, and what never does
 
@@ -236,7 +246,7 @@ them here. A second source would fire twice and the digest would not see it (two
 3. **Which timer input `KHZ500` reaches is illegible in the inventory** (§4.3: "which of `TAI`/`TBI` it
    reaches is not legible"). v1 drives neither: nothing in the skeleton reads a 500 kHz reference, and
    `KHZ500`'s other job — the floppy's — is Disk's.
-4. **`SINT`'s driver is Memory in the catalogue, and the sound-DMA frame end is Sound's fact.** The split
+4. **`SINT`'s driver is the System Control Unit in the catalogue, and the sound-DMA frame end is Sound's fact.** The split
    stays as catalogued (#26 keeps the sound side); if #26 re-homes the record, only the `Driver` cell moves.
 5. **Timers' `nextDeadline` gained and lost a counter in one ticket:** §2's list is three (A, B, C) rather
    than ADR 0008 §5's four. That is a correction to that ADR, recorded there, not a silent change.

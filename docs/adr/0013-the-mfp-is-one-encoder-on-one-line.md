@@ -10,16 +10,26 @@ and the `max(6, 4, 2)` record stay with the chip that physically drives those th
 Tickets: #28 (this design), #10 (the walking skeleton), #16 (the logic-reconstruction pilot), #21
 (Controllers), #26 (Sound), #29 (Disk), #30 (Blitter).
 
+> ### Correction — 2026-11-11 (ticket #31, owner's ruling)
+>
+> The virtual chip this file calls *Memory* is the **System Control Unit**, and the DRAM and the TOS
+> ROMs are no longer members with pins: they are plain data structures (`Ram`, `Rom`) inside it —
+> stores with no timeline, no record, no subscription and no wake. Every statement below about the
+> counter, the owner equation, the clients, the beam, the buffer or the leaf stands unchanged; only
+> the name and the store boundary moved. Owner's words: *"GSTMCU is too cryptic when you want to
+> understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
+> See [ADR 0014](0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
+
 ## Context
 
 - The partition gave the MFP to one virtual chip — "timers A–D; interrupt priority encoder and vectoring;
   GPIP edge detection" (`design/subsystems-spec.md` §1) — and left the *behaviour* to this ticket. Eight
   sub-questions arrived with it: the four counters and their prescalers, Timer A's input edge, what Timers
-  owns versus what Memory owns, the register semantics, the vector and the acknowledge, the USART's fate,
+  owns versus what the System Control Unit owns, the register semantics, the vector and the acknowledge, the USART's fate,
   the four external inputs, and what is logged.
 - **The level question was already settled, and in the direction that makes this ADR small.** Ticket #20's
-  ruling: the MFP is level 6 only; VBL (4) and HBL (2) are autovectors Memory raises from its own line and
-  frame counters; Memory resolves the three into one three-lane record by `max()`. `crossings.md` §4. The
+  ruling: the MFP is level 6 only; VBL (4) and HBL (2) are autovectors the System Control Unit raises from its own line and
+  frame counters; the System Control Unit resolves the three into one three-lane record by `max()`. `crossings.md` §4. The
   physical basis is a pin table: `IPL0–IPL2` are `U400.33/.34/.35` and are driven by the GSTMCU alone; the
   MFP has no `IPL` pins and raises `IRQ` (`U203.32`) into it (`board-inventory.md` §4.3, corrected
   2026-11-05).
@@ -49,9 +59,9 @@ source numbered *n* or above is in service.** `IRQ` asserts exactly while such a
   instruction (an artefact of instruction-granularity emulation). The machine's ordering key is
   `(instant, seq)` (ADR 0007); at one instant the source number decides.
 
-### 2. The boundary: Timers never knows a level, Memory never knows a source
+### 2. The boundary: Timers never knows a level, the System Control Unit never knows a source
 
-| Timers owns | Memory owns |
+| Timers owns | System Control Unit owns |
 |---|---|
 | the sixteen pending bits, enables, masks, in-service bits | the arbitration between the three asserting levels |
 | **which source is selected** | the `IPL0–IPL2` lanes and the one three-lane record per level change |
@@ -69,7 +79,7 @@ as *inputs* — two new crossings, one per line — to reproduce what one chip a
   CPU will run, and a window race shows up as a recorded vector rather than as silence.
 - **State moves at the `IACK` cycle, never at `RTE`.** Pending clears when the vector is passed; in-service
   is set only when `VR` bit 3 = 1 (software end-of-interrupt) and stays clear in automatic mode.
-- **A stale acknowledge is a bus error**: Timers answers nothing, Memory times the 6800-style cycle out and
+- **A stale acknowledge is a bus error**: Timers answers nothing, the System Control Unit times the 6800-style cycle out and
   drives `BERR`, the CPU takes the spurious vector 24 ($60). Two of the three references model it; Hatari
   leaves it a `TODO`. A debug assertion reports the case, so a model bug cannot hide inside it.
 
@@ -106,7 +116,7 @@ as *inputs* — two new crossings, one per line — to reproduce what one chip a
 
 - **#10** gets a chip it can boot with: `IRQ` at 200 Hz from Timer C, the enable/mask/pending/in-service
   registers with their clear-on-zero semantics, the vector path, and one declared stub. What a Timers stub
-  may **not** fake: raise a VBL or an HBL (Memory's), assert an `IPL` lane (Memory's), or count `DE` twice
+  may **not** fake: raise a VBL or an HBL (the System Control Unit's), assert an `IPL` lane (the System Control Unit's), or count `DE` twice
   (one record, two subscribers).
 - **#16** inherits the encoder as its pilot subject, with this ADR as the answer it must reproduce from the
   RTL — the enable equations, not the `casez` arm order.
@@ -122,7 +132,7 @@ as *inputs* — two new crossings, one per line — to reproduce what one chip a
 - **A sixteen-entry priority table.** Rejected: the table *is* the bit positions, and two artefacts that can
   drift apart are one more than the design needs. The rule is also the assertion: a pending, enabled,
   unmasked source that is not selected while nothing at or above it is in service is a bug.
-- **The encoder hands Memory a level.** Rejected before it starts: a second `IPL` source inside Timers fires
+- **The encoder hands the System Control Unit a level.** Rejected before it starts: a second `IPL` source inside Timers fires
   twice, and the digest cannot see it (two identical runs).
 - **Freeze the source at `IRQ` assertion.** Rejected: it fabricates a handler call when software clears the
   pending bit in the window, which is exactly the case a raster demo provokes.

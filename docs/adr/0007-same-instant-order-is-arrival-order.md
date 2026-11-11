@@ -10,6 +10,16 @@ touching unrelated wires at the same tick — has no hardware rank, so the model
 **Status**: accepted (2026-11-06), on the owner's answers during ticket #7's grilling session.
 Tickets: #7 (scheduler), #11 (determinism), #6 (crossing catalogue).
 
+> ### Correction — 2026-11-11 (ticket #31, owner's ruling)
+>
+> The virtual chip this file calls *Memory* is the **System Control Unit**, and the DRAM and the TOS
+> ROMs are no longer members with pins: they are plain data structures (`Ram`, `Rom`) inside it —
+> stores with no timeline, no record, no subscription and no wake. Every statement below about the
+> counter, the owner equation, the clients, the beam, the buffer or the leaf stands unchanged; only
+> the name and the store boundary moved. Owner's words: *"GSTMCU is too cryptic when you want to
+> understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
+> See [ADR 0014](0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
+
 ## Context
 
 Ticket #7 was charted to fill in the priority table ADR 0003 had left deliberately empty, and the
@@ -27,7 +37,7 @@ the sources dissolved all three:
   delivery record lands at an `I` instant and the CPU's cycle at an `E` instant, 8 ticks apart. The tie
   exists only if the model rounds a group to a line boundary.
 - **The three `IPL` sources never reach the scheduler as three events.** VBL 4 and HBL 2 come from
-  Memory's own sync generator, the MFP's level 6 arrives over the `IRQ` wire, and Memory resolves them
+  the System Control Unit's own sync generator, the MFP's level 6 arrives over the `IRQ` wire, and the System Control Unit resolves them
   into **one** three-lane record: the highest asserting level wins (6 > 4 > 2, the 68000's own
   precedence, overview §3.1). That is a `max()`, not an ordering — and the CPU's acceptance is then its
   own mask comparison, again not an ordering.
@@ -48,10 +58,10 @@ the sources dissolved all three:
   1. **Resolvers.** `IPL` is a maximum over asserting levels; an open-collector net is an OR; a
      multi-driver tristate net is a reported conflict (ADR 0004). Value, not order.
   2. **The crossbar's phase.** Which client is served in which slot is a decode of the 8-phase counter
-     inside Memory (class 3: phase, not a wire). Distinct slots are distinct instants.
+     inside the System Control Unit (class 3: phase, not a wire). Distinct slots are distinct instants.
   3. **The CPU's mask.** A level is taken when it is strictly greater than `I2–I0`; level 7 ignores the
      mask. Instruction-level behaviour, inside one chip.
-- **Bus-grant order is request order.** `BR` is a level and Memory/CPU keep the pending requesters in
+- **Bus-grant order is request order.** `BR` is a level and the System Control Unit and the CPU keep the pending requesters in
   assertion order (earliest `BR` instant, `seq` breaking a same-instant tie). The grant goes to the
   head; `BG` released and `BGACK` released return the bus and admit the next. Two masters asserting
   `BGACK` in one instant is a **reported conflict**, named in the trace, not a silently arbitrated win.
