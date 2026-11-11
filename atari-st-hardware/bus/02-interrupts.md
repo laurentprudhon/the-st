@@ -2,6 +2,26 @@
 
 > The Atari ST interrupt system: 68000 exception handling, MFP interrupt controller, and GPU interrupt integration.
 
+> ### Correction — 2026-11-11 (ticket #28) — the levels are this machine's, not a catalogue's
+>
+> - **Three levels exist on this board**: **6** = the MFP (all sixteen of its sources, one `IRQ` line),
+>   **4** = vertical blank and **2** = horizontal blank, both raised by the GSTMCU as **autovectors**
+>   (`$70` and `$68`), and **7** = NMI (memory faults). There is no "level 1 = BLANK", no MFP source at
+>   level 4, and no "GPU" — level 4 is VBL, and the blitter's done line reaches the MFP as `GPI3`
+>   (source 3). See `atari-st-emulation/02-…-overview` §3.4 and `design/crossings.md` §4.
+> - **The MFP raises no VBL.** VBL is Memory's frame counter, HBL its line counter (`#20`'s ruling); the
+>   MFP contributes one `IRQ`, never an `IPL` lane.
+> - **The "MFP priority" column below is the chip's own source number** (15 highest → 0 lowest, matching
+>   `IPRA` bit 7 → `IPRB` bit 0). The "IPL" column beside it belongs to another wiring and is wrong here;
+>   the same for the second table's "68000 levels" list.
+> - **The raster figures are PAL television, not the ST's read**: 313 lines of 64 µs (312.5 on average)
+>   = 20.000 ms, 200 displayed, 15.625 kHz line rate, 32 MHz dot clock (16 MHz / 8 MHz pixel rates).
+>   625 lines, 576 visible and a 28.3226 MHz pixel clock describe a PAL *broadcast* raster, not the ST.
+> - **The vectors**: VBL handler = the level-4 autovector `$70`, HBL = the level-2 autovector `$68`; the
+>   MFP's handler comes from `VR` (`$FFFA17`): `vector = (VR & 0xF0) + source`, address `× 4`. So "MFP
+>   VBL (int 2) at `$000068`" and "`$000078` for the TOS clock" are both wrong for this machine — `$78`
+>   is the level-6 *autovector*, which the MFP never uses because it supplies a vector.
+
 ## Interrupt Categories
 
 ### 68000 Exceptions

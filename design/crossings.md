@@ -90,11 +90,22 @@ resumes).
 | Wire | Driver | Subscriber | Resolver | Class | Wake condition | Rate/frame | Basis |
 |---|---|---|---|---|---|---|---|
 | `IRQ` (U203.32) | Timers | Memory | single-driver, active low | 1 | the MFP has a pending, unmasked source | one per assertion | the MFP's 16 sources and its priority encoder are internal to Timers, one line carries them all |
-| `IPL0–IPL2` (33/34/35) | Memory | CPU | single-driver, 3 lanes | 1 | the **resolved level changes** | 1 + ~309 + one per MFP assertion | Memory arbitrates VBL 4, HBL 2 and the MFP's request 6 and drives the winner. HBL is suppressed during the VSYNC pulse: ~309 lines, to be confirmed against the timing tables |
+| `IPL0–IPL2` (33/34/35) | Memory | CPU | single-driver, 3 lanes | 1 | the **resolved level changes** | 1 + 313 + one per MFP assertion | Memory arbitrates VBL 4, HBL 2 and the MFP's request 6 and drives the winner. HBL is raised on **all 313 lines**, vertical blanking included — see the correction below |
 | `IACK` (83) | CPU | Timers | single-driver | 2 | the CPU acknowledges | one per acknowledge | part of the cycle `IPL` opened |
 | `D0–D7` vector | Timers | CPU | tristate bus | data | — | one per acknowledge | the MFP supplies its vector; autovector levels need no data |
 | `FDINT` 16, `DINT` 17, `BINT` 60, `SINT` 105 | Memory | Timers | single-driver, active low | 1 | floppy command done, disk DMA done, blit done, sound frame end | per completion | each sets an MFP pending bit; that is the whole behaviour |
 | `KHZ500` (6), `CLK8/4/2` (3/4/5), `SCLK`, `FCLK`, `CLK` | Memory / Video | — | **class 3** | — | never | — | phase only; no records, no subscriptions |
+
+**Correction — 2026-11-11** (ticket #28). The `IPL0–IPL2` row and §11 point 4 assumed HBL is suppressed
+during the VSYNC pulse, giving ~309 lines. **It is not suppressed.** The horizontal machine runs on all
+**313** lines, vertical blanking included: a PAL signal keeps its line-sync pulses through the
+vertical-sync lines, and the vendored reference schedules the HBL unconditionally once per line —
+`hatari/src/video.c`, `Video_InterruptHandler_HBL`: *"this occurs at the end of every line, on cycle 512
+(in 50 Hz)"*, with `Video_AddInterruptHBL` called for every `HblCounterVideo`. So the CPU sees **313**
+level-2 autovectors a frame, which is also what makes fullscreen/border demos possible (they act on HBLs
+inside the vertical blank). §10's idle total becomes **≈ 4 734** class-1 wakes. What stays open is the
+HBL's *position* inside the 2 048 ticks, which is `derived` from the same line ("cycle 512") and remains
+Memory's.
 
 ## 5. Bus ownership
 
@@ -165,7 +176,7 @@ Class-1 wakes per frame, by workload:
 
 | Workload | Wakes/frame | Dominant terms |
 |---|---|---|
-| GEM desktop, idle | **≈ 4 730** | video groups 4 000 · `DE` 400 (two subscribers) · HBL 309 · VBL 1 · Shifter/MFP register writes ~20 |
+| GEM desktop, idle | **≈ 4 734** | video groups 4 000 · `DE` 400 (two subscribers) · HBL 313 · VBL 1 · Shifter/MFP register writes ~20 |
 | Floppy load | ≈ 4 810 | + `RDY` ~60, `FDINT` ~20, disk selects |
 | Raster demo | ≈ 5 670 | + up to 939 Shifter register writes |
 
@@ -187,8 +198,9 @@ traffic, which is the property the design actually needs.
    crossing per active line, unverified at the pin level.
 3. **`TAI`'s edge** on the STE is the sound-frame-end signal, possibly through an added 74LS164 delay
    (§6.16); it decides whether Timer A counts the `*SINT` edge or a copy of it.
-4. **HBL during the VSYNC pulse** — the ~309 figure assumes suppression; the timing tables should
-   confirm it.
+4. **HBL during the VSYNC pulse — answered by #28 (2026-11-11).** There is no suppression: the
+   horizontal machine runs on all 313 lines, so the CPU sees 313 level-2 autovectors a frame. Evidence
+   and the corrected totals in §4's dated block.
 5. **The sound refill's exact slot — answered by #20 (ADR 0011).** It is a rule, not a slot number: the
    refill takes the **first blanking internal slot after `SREQ` is asserted**, up to four words
    back-to-back, and never enters a display window (`snden = ~hde1 & sreq`, `mcucontrol.v:95`). #26 keeps

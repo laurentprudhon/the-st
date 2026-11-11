@@ -34,6 +34,16 @@ service manual), Hatari's I/O dispatch tables (`ioMemTabSTE.c`) for register own
 Not virtual chips: analog tail (`U403` MC1377, `U405` RGB/mono mux, `U502–U507` DACs, filters, op-amps)
 and glue (`U302`, `U307`, `U509`, `U510`, `U512`, `U632`, `U304`, `U306`, `U511`, `U500`, `U501`).
 
+**Correction — 2026-11-11 (ticket #28).** The Timers row's pin list said `IPL0–IPL2`; **the MFP has no
+`IPL` pins**. It raises `IRQ` (`U203.32`) into the GSTMCU, which combines it with VBL (4) and HBL (2)
+and drives `IPL0–IPL2` itself (`board-inventory.md` §4.3, corrected 2026-11-05). The same row's "GPIP
+edge detection (HBL/VBL side channels)" is also wrong — HBL and VBL are Memory's counters and never
+reach the MFP. What `GPIP` carries on this board: the four external completions (`FDINT` and `DINT`
+share source 7, `BINT` is source 3, `SINT` is source 15 — the line the STE shares with mono detect, and
+also Timer A's event input), the keyboard ACIA (source 6) and the two RS-232 status lines (sources 1
+and 2). Sources and bit assignments: `atari-st-hardware/components/mfp/01-mc68901.md`'s dated block.
+The USART is a declared stub (RS-232 is out of scope on the map).
+
 ---
 
 ## 2. Signals that cross
