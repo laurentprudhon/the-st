@@ -80,7 +80,7 @@ The *interpretation* side — the Denise role. It receives a stream of bitplane 
 into pixels and colours; it does not decide when a fetch happens.
 
 - `U401`: `MD0–MD15` (fetched words arrive from Memory), `PD0–PD15` (palette/pixel path),
-  `MWE`/`MWD`/`MWK` (Super Hi-Res write path), `R0–R3`/`G0–G3`/`B0–B3` (12-bit RGB out),
+  `MWE`/`MWD`/`MWK` (the Microwire link to the LMC1992 — corrected 2026-11-09, no Super Hi-Res mode exists), `R0–R3`/`G0–G3`/`B0–B3` (12-bit RGB out),
   `MONO`/`COLOR`, `SCLK`, `FCLK`, `CLK`, `A1–A6`/`CS`/`LD`/`HD`/`R/W` (register interface);
 - `DCYC` arrives with the fetched word and `LOAD` latches it — **this is the video handshake**;
 - `SREQ` leaves the chip and `SLOAD` arrives — **this is the sound-DMA handshake**, and although both

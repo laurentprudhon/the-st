@@ -53,7 +53,16 @@ resumes).
 | `DE` — second subscriber: `TBI` (U203.20) | Memory | Timers | single-driver | 1 | the same write, counted by Timer B | 200 | one count per active line. Documented (`board-inventory.md` §6.15), not drawn in the redraw |
 | `BLANK` (U400.140) | Memory | Video (level read, no subscription) | single-driver | data | — | 313 records | Video is already running when blanking changes, so it reads the level; nothing starts |
 | `HSYNC` 143, `VSYNC` 142 | Memory | **nobody in the machine** | single-driver | data | — | 313 + 1 records | the host display stage is not a virtual chip; it reads the log per frame (ADR 0004) |
-| `MWE`, `MWD`, `MWK` | Memory | Video | single-driver | 1 | a Super Hi-Res write | ~0 | never exercised at functional level; kept so the pin set is complete |
+| `*MWE` (enable), `MWD` (data), `MWK` (bit clock) | Video | Sound (the LMC1992's Microwire port) | single-driver | 1 | one record per **completed Microwire message**; `MWK` itself is class 3 | ≤ 16 | `gstshifter.v` shifts a 16-bit field at 1 Mbit/s (a bit every 8 clocks), rotating the mask; Atari documents an 11-bit message (3-bit register number + 6-bit data) with `$07FF` as the mask |
+
+> **Correction — 2026-11-09** (ticket #27, `research/ste-super-hires.md`). This table's last row read
+> `MWE`/`MWD`/`MWK` | **Memory** | **Video** | "a Super Hi-Res write" | ~0 | "never exercised at
+> functional level; kept so the pin set is complete". All three of those cells were wrong: the three
+> signals are the **Microwire** link (MicroWire Enable/Data/clocK) that the **Shifter drives into the
+> LMC1992** (ST Magazine n°44 §"The GST Shifter"; the LMC1992's first three pins; Atari's own
+> `MWMASK`/`MWDATA` routine in the *STE Developer Addendum*), and **the STE has no Super Hi-Res mode at
+> all** — that name belongs to the TT Shifter. Driver and subscriber are therefore Video → Sound, and
+> the row belongs to the Microwire seam (#27, #26), not to a fourth resolution.
 
 > **Correction — 2026-11-09** (ADR 0011, ticket #20). The first row's basis line called the 4-word buffer
 > an approximation of the Shifter's. The buffer is now **Memory's own**: filled one word per 250 ns

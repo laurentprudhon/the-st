@@ -1,5 +1,13 @@
 # Super Hi-Res Display Mode
 
+> **Correction — 2026-11-09** (ticket #27, `research/ste-super-hires.md`). **This page describes a TT
+> mode, not an STE one.** The addresses it cites (`$FFC000`/`$FFC200`) are the TT Shifter's register
+> space — the STE's Shifter answers at `$FF82xx` — and Atari's own *STE Developer Addendum*
+> (5/25/1989) lists the STE's new graphics features with **no fourth resolution**: 4096 colours,
+> hardware horizontal/vertical scrolling, genlock. No vendored emulator (Hatari, Steem SSE, NeoST)
+> models a Super Hi-Res mode for the STE. Kept as an audit trail; **do not cite it for this machine.**
+> `disputed`.
+
 > The STe adds a Super Hi-Res mode: 640x480 resolution with 16 colors.
 
 ## Super Hi-Res Mode
