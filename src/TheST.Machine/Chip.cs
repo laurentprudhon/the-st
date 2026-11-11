@@ -1,25 +1,18 @@
 namespace TheST.Machine;
 
 /// <summary>
-/// What a suspended chip owes the machine (ADR 0006 invariant 3, ADR 0008 §5): exactly one pending
-/// read, or one awaited write. It exists so the debug assertion can compare the chips' own state with
-/// the queue and the subscription store instead of trusting one counter.
-/// </summary>
-internal enum ObligationKind : byte
-{
-    None = 0,
-
-    /// <summary>A read that will be answered by a record — a dated one (queued resume) or a subscription.</summary>
-    Read = 1,
-
-    /// <summary>An awaited write, whose writer resumes behind the receivers of its own record.</summary>
-    WriteAndWait = 2,
-}
-
-/// <summary>
 /// A virtual chip. Its whole route to the machine is five verbs over its own clock (ADR 0008 §1):
 /// <c>Advance</c>, <c>Write</c>, <c>await WriteAndWait</c>, <c>await ReadAt</c>, <c>await ReadNext</c>.
 /// No sleep, no lock, no yield, no host clock, no scheduler handle.
+///
+/// <para>
+/// <b>Several wakes, one resume.</b> A real chip waits on more than one thing at a time: the MFP owns
+/// four counters and four event inputs, and the System Control Unit owns both a beam and the bus. The
+/// engine therefore lets a chip hold <i>n</i> armed wakes; the first one to fire resumes it, and every
+/// other armed wake becomes stale and is dropped. That is a strict generalisation of ADR 0006's
+/// "exactly one pending read" — with one wake armed it is that rule exactly — and it is what lets a
+/// chip with a counter also subscribe to a wire.
+/// </para>
 /// </summary>
 public abstract class Chip
 {
@@ -28,6 +21,7 @@ public abstract class Chip
         Engine = engine;
         Id = id;
         Name = name;
+        WakeToken = 1;
     }
 
     internal Engine Engine { get; }
@@ -43,7 +37,25 @@ public abstract class Chip
     /// </summary>
     public long Clock { get; internal set; }
 
-    internal ObligationKind Obligation { get; set; }
+    /// <summary>How many wakes this chip is currently waiting for. Zero means it is running or finished.</summary>
+    public int Armed { get; private set; }
+
+    /// <summary>Bumped whenever a wake fires: every wake armed under an older token is stale.</summary>
+    internal long WakeToken { get; private set; }
+
+    /// <summary>Called by the engine when a wake is armed.</summary>
+    internal long Arm()
+    {
+        Armed++;
+        return WakeToken;
+    }
+
+    /// <summary>Called by the engine when a live wake fires: the resume owns the chip, the rest go stale.</summary>
+    internal void Disarm()
+    {
+        Armed = 0;
+        WakeToken++;
+    }
 
     /// <summary>
     /// <c>advance(n)</c> — the chip's internal work between two points of contact. The only way a chip
@@ -78,7 +90,47 @@ public abstract class Chip
     protected ReadNextAwaiter ReadNext(long from, Channel channel) => new(this, from, channel);
 
     /// <summary>A chip's own register anchor, stamped with its clock: never queued, never backdated (ADR 0008 §6).</summary>
-    protected void Anchor(ushort value) => Engine.AppendAnchor(this, Clock, value);
+    protected void Anchor(ushort value) => Engine.AppendAnchor(this, Clock, Channels.Register, value);
+
+    /// <summary>A named anchor log (ADR 0008 §6: a real chip declares one log per register or counter).</summary>
+    protected void Anchor(Channel channel, ushort value) => Engine.AppendAnchor(this, Clock, channel, value);
+
+    /// <summary>
+    /// <c>await WaitFor(t, wire)</c> — whichever comes first: the wire's next record, or the date. The
+    /// shape a chip with a counter and an input needs, and the reason the engine arms several wakes.
+    /// </summary>
+    protected WaitForAwaiter WaitFor(long instant, Channel channel, long afterSeq = long.MinValue)
+        => new(this, channel, instant, afterSeq);
+}
+
+/// <summary>The awaiter of "whichever comes first": a wire record or a date the chip computed.</summary>
+public readonly struct WaitForAwaiter : System.Runtime.CompilerServices.ICriticalNotifyCompletion
+{
+    readonly Chip _chip;
+    readonly Channel _channel;
+    readonly long _instant;
+
+    readonly long _afterSeq;
+
+    internal WaitForAwaiter(Chip chip, Channel channel, long instant, long afterSeq)
+    {
+        _chip = chip;
+        _channel = channel;
+        _instant = instant;
+        _afterSeq = afterSeq;
+    }
+
+    public WaitForAwaiter GetAwaiter() => this;
+
+    public bool IsCompleted => _instant <= _chip.Clock || _chip.Engine.Log(_channel).HasRecordAfter(_afterSeq);
+
+    public void GetResult()
+    {
+    }
+
+    public void OnCompleted(Action continuation) => _chip.Engine.WaitForEither(_chip, _instant, _channel, _afterSeq, continuation);
+
+    public void UnsafeOnCompleted(Action continuation) => OnCompleted(continuation);
 }
 
 /// <summary>The awaiter of <c>await WriteAndWait</c>. It always suspends — that is what it is for.</summary>

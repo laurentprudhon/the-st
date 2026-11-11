@@ -34,6 +34,9 @@ internal static class Program
             case "run":
                 return TraceRunCommand.Run(args[1..]);
 
+            case "boot":
+                return BootCommand.Run(args[1..]);
+
             case "-h":
             case "--help":
             case "help":
@@ -55,6 +58,8 @@ internal static class Program
 
               check-clocks                       G4: the clock arithmetic (ADR 0001)
               check-stores                       Ram / Rom: the pins, machine byte order, lane isolation
+              boot [--frames N] [--inject] [--out DIR] [--image PATH] [--trace]
+                                                 the machine's own trace: EmuTOS to the GEM desktop
               run [--frames N] [--inject] [--out DIR]
                                                  the synthetic trace; writes run.digest, run.state and
                                                  run.report into DIR (default runs/<stamp>/)

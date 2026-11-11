@@ -106,49 +106,46 @@ public sealed partial class Engine
         }
     }
 
-    // 2 — suspendedChips == pendingReads + pendingWriteAndWaits. Counted from two independent places:
-    // the chips' own obligation field on one side, the queue and the subscription store on the other.
-    // A chip suspended with nothing queued and nothing subscribed is a lost obligation, and it is the
-    // difference between the two sums.
+    // 2 — every suspended chip owns at least one live wake, and no live wake belongs to a chip that is
+    // not suspended. Counted from two independent places: the chips' own armed counter on one side, the
+    // queue plus the subscription store on the other. A chip suspended with nothing queued and nothing
+    // subscribed is a lost obligation, and it is the difference between the two sums.
     void AssertSuspendedChipsAreOwningSomething(long instant)
     {
+        IReadOnlyDictionary<Chip, int> live = LiveWakes();
+
         int suspended = 0;
         foreach (Chip chip in _chips)
         {
-            if (chip.Obligation != ObligationKind.None)
+            if (chip.Armed > 0)
             {
                 suspended++;
+                if (live.GetValueOrDefault(chip) <= 0)
+                {
+                    throw Fail(2, $"at {instant}: {chip.Name} is suspended on {chip.Armed} wake(s) and owns nothing");
+                }
             }
         }
 
-        int pendingReads = 0;
-        foreach (List<Subscriber> subscribers in _subscribers.Values)
+        foreach ((Chip chip, int count) in live)
         {
-            pendingReads += subscribers.Count;
-        }
-
-        int pendingWriteAndWaits = 0;
-        foreach ((Entry entry, _) in _queue.UnorderedItems)
-        {
-            switch (entry)
+            if (count > 0 && chip.Armed <= 0)
             {
-                case Resume { Obligation: ObligationKind.Read }:
-                    pendingReads++;
-                    break;
-                case Resume { Obligation: ObligationKind.WriteAndWait }:
-                    pendingWriteAndWaits++;
-                    break;
-                case ApplyWrite { Waiter: not null }:
-                    pendingWriteAndWaits++;
-                    break;
+                throw Fail(2, $"at {instant}: {chip.Name} has a live wake but believes it holds none");
             }
         }
 
-        if (suspended != pendingReads + pendingWriteAndWaits)
+        if (suspended == 0 && _queue.Count > 0)
         {
-            throw Fail(2,
-                $"at {instant}: {suspended} suspended chips, but {pendingReads} pending reads + " +
-                $"{pendingWriteAndWaits} pending awaited writes own nothing");
+            // nothing suspended but the queue is not empty: an entry whose chip was already resumed
+            // would be dropped, so this is only legal when every entry is an ApplyWrite.
+            foreach ((Entry entry, _) in _queue.UnorderedItems)
+            {
+                if (entry is Resume)
+                {
+                    throw Fail(2, $"at {instant}: a queued resume belongs to no suspended chip");
+                }
+            }
         }
     }
 

@@ -84,11 +84,14 @@ else
 fi
 
 # ---- ADR 0014's boundary falsifier -------------------------------------------------------
-step "ADR 0014 falsifier — no chip holds a store (Ram/Rom/MachineBytes outside the stores and the host layer)"
+# The stores are data inside the System Control Unit and the host layer's business, and nowhere
+# else: the SCU itself (they are its own decode's memory) and Machine.cs (the host's view) are the
+# two files allowed to name them. Every other chip in Chips/ is checked, which is the row's point.
+step "ADR 0014 falsifier — no chip holds a store (Ram/Rom/MachineBytes outside the stores, the SCU and the host)"
 boundary=$(grep -rnE '\b(Ram|Rom|MachineBytes)\b' --include='*.cs' src tools 2>/dev/null \
-    | grep -vE '^(src/TheST\.Machine/Stores/|tools/validation-harness/)' || true)
+    | grep -vE '^(src/TheST\.Machine/Stores/|tools/validation-harness/|src/TheST\.Machine/Chips/SystemControlUnit\.cs|src/TheST\.Machine/Machine\.cs)' || true)
 if [ -z "$boundary" ]; then
-    ok "0 references outside src/TheST.Machine/Stores/ and the host layer"
+    ok "0 references outside the stores, the System Control Unit and the host layer"
 else
     bad "a chip found a private handle on a store:"
     printf '%s\n' "$boundary"
@@ -160,6 +163,14 @@ if env -u DOTNET_SYSTEM_GLOBALIZATION_INVARIANT \
     fi
 else
     bad "the release build did not run — see $stampdir/release.log"
+fi
+
+# ---- the boot (#34's row; not green yet) --------------------------------------------------
+step "boot — EmuTOS to the GEM desktop (G3/G5/G6; #34's remaining work)"
+if harness Debug boot --frames 200 --out "$stampdir/boot" >"$stampdir/boot.log" 2>&1; then
+    ok "boot: reached the desktop"
+else
+    bad "boot: has not reached the desktop yet — see $stampdir/boot.log and $stampdir/boot/run.state"
 fi
 
 # ---- verdict -----------------------------------------------------------------------------

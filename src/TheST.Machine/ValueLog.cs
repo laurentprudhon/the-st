@@ -40,6 +40,33 @@ public sealed class ValueLog
         return index < 0 ? (ushort)0 : _records[index].Value;
     }
 
+    /// <summary>The first record with a sequence number greater than <paramref name="seq"/>, or -1.</summary>
+    public int IndexAfter(long seq)
+    {
+        int low = 0;
+        int high = _records.Count - 1;
+        int found = -1;
+
+        while (low <= high)
+        {
+            int middle = low + ((high - low) >> 1);
+            if (_records[middle].Seq > seq)
+            {
+                found = middle;
+                high = middle - 1;
+            }
+            else
+            {
+                low = middle + 1;
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>Whether a record was appended after the given sequence number — the subscription test.</summary>
+    public bool HasRecordAfter(long seq) => _records.Count > 0 && _records[^1].Seq > seq;
+
     /// <summary>Whether a chip asking to be woken at or after that instant would resolve on its own stack.</summary>
     public bool ChangesAtOrAfter(long instant) => IndexAtOrAfter(instant) >= 0;
 
