@@ -178,6 +178,14 @@ not a relay that could be collapsed away.
 | `ACC` | paddle network (LM556) | Controllers | single-driver | 1 | a paddle conversion | per conversion | the GSTMCU measures the pulse width |
 | IKBD serial data in | keyboard (off-board) | Controllers | single-driver | 1 | a key or mouse event | ~0 idle | the walking skeleton has to be typed on |
 
+> **Correction — 2026-11-11** (ticket #10, owner's ruling). The last row's basis line is superseded: the
+> walking skeleton is **not typed on**. Its Controllers chip is a stub — the ACIA decodes and answers
+> "transmitter empty, no received byte", no IKBD byte ever arrives, and EmuTOS gives up after its own
+> 300 ms timeout (`bios/ikbd.c:1041`). Typing, the mouse and the pads belong to
+> [#21](https://github.com/laurentprudhon/the-st/issues/21), with [#12](https://github.com/laurentprudhon/the-st/issues/12)
+> owning the window they would be typed into. The row itself — one class-1 crossing, driver the keyboard,
+> subscriber Controllers — stands unchanged; see `design/walking-skeleton.md` §1.
+
 ## 9. What is explicitly not a crossing
 
 Kept as a list because the ticket's requirement is that these are **invisible by construction**, not by
