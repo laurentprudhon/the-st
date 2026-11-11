@@ -6,7 +6,7 @@ with no source at or above it in service* — not a table, and everything the ma
 line plus the vector byte it answers an acknowledge with. The `IPL` lanes, the arbitration between levels,
 and the `max(6, 4, 2)` record stay with the chip that physically drives those three pins.
 
-**Status**: proposed (2026-11-11) — the owner's rulings during ticket #28; `accepted` only on his word.
+**Status**: accepted (2026-11-11), on the owner's word after ticket #28's grilling session.
 Tickets: #28 (this design), #10 (the walking skeleton), #16 (the logic-reconstruction pilot), #21
 (Controllers), #26 (Sound), #29 (Disk), #30 (Blitter).
 
