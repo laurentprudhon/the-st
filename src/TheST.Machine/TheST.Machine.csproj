@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The machine alone (design/walking-skeleton.md §3): the loop, the five verbs, the chips and the
+    stores. No Avalonia, no host clock, no console output, no NuGet package — CI is offline (ADR 0010).
+    InvariantGlobalization is required here: the build host has no ICU, so a built assembly must not
+    need one.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <RootNamespace>TheST.Machine</RootNamespace>
+    <AssemblyName>TheST.Machine</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

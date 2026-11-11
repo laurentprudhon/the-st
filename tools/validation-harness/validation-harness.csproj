@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The validation harness (design/validation.md §2). A headless console runner: no Avalonia, no
+    window, no host clock inside the machine. Debug builds carry the digest and the assertions; the
+    Release build is only ever used for timing (G8), and must run without the ICU variable.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TheST.Machine\TheST.Machine.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net11.0</TargetFramework>
+    <RootNamespace>TheST.Harness</RootNamespace>
+    <AssemblyName>validation-harness</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

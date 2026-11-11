@@ -7,9 +7,16 @@ time-driven, event-ordered system of virtual chips on a single timeline.
 *Not affiliated with, endorsed by, or sponsored by Atari. "Atari" and "ST" are trademarks of their
 respective owners; this is an independent, non-commercial emulator project.*
 
-**Status**: design phase. The architecture is decided and recorded in `docs/adr/`; no emulator code
-exists yet. The next artefact is a walking skeleton that boots the TOS image to the GEM desktop and
-proves the timing model before any device is complete.
+**Status**: design phase, with the walking skeleton under construction. The architecture is decided
+and recorded in `docs/adr/`. **Stage 1 is built** (ticket #33): the machine loop with its five verbs,
+the integer-tick clock arithmetic and the stores — `src/TheST.Machine/` and the harness
+`tools/validation-harness/`, whose `scripts/validate.sh` turns green. No chip boots yet; the boot
+(the System Control Unit, the 68000 core, Video, Timers and events) is stage 2.
+
+```sh
+dotnet build TheST.sln          # src/TheST.Machine + tools/validation-harness, no NuGet package
+scripts/validate.sh             # the gate: G4, G1 and G2, the stores, the digest's Debug-only rule
+```
 
 - Implementation: **C# on .NET 11**, native multiplatform — see
   [ADR 0002](docs/adr/0002-c-sharp-on-dotnet-native.md).
@@ -37,6 +44,9 @@ a switch.
 | `atari-st-emulation/` | Emulation techniques: 68000 core model, timing, chipset emulation strategies |
 | `research/` | Evidence gathered for specific decisions, each cited and dated |
 | `design/` | Board inventory and working design artefacts; `validation.md` is what a run must pass to prove the timing model |
+| `src/TheST.Machine/` | The machine itself: the loop, the five verbs, the virtual chips and the stores — no Avalonia, no host clock |
+| `tools/validation-harness/` | The instrument of `design/validation.md` §2: `check-clocks`, `check-stores`, `run` |
+| `scripts/` | `validate.sh` (the gate) and the EmuTOS rebuild recipe |
 | `tools/` | Measurement prototypes that back a decision (each with its own README) |
 | `steemsse-V4.2.0_R10/` | Source snapshot of Steem SSE v4.2.0 R10 (GPL-3.0), reference implementation |
 | `hatari/` | Captured source of the Hatari emulator, used as a reference implementation |
