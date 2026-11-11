@@ -1,6 +1,6 @@
 # Is there a "Super Hi-Res" mode on the Atari STE? — and what `MWE`/`MWD`/`MWK` really carry
 
-Research note for ticket [#27](https://github.com/laurentprudhon/the-st/issues/27), 2026-11-09.
+Research note for ticket [#27](https://github.com/laurentprudhon/the-st/issues/27), 2026-11-11.
 Claim labels: **`documented`** (a primary source states it), **`implemented`** (code does it),
 **`absent`** (the logic is not there), **`disputed`** (sources contradict each other).
 

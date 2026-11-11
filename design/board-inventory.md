@@ -134,7 +134,7 @@ Every package on the board that carries an active device, from the Section 7 par
 | Ref | Drawn on | Part number as printed | Package | Function |
 |---|---|---|---|---|
 | U400 | sheet 4 (centre) | **C300589-001** IC STE MCU GLUE 144P | 144-pin PGA/PLCC | **GSTMCU** — glue, MMU, DMA arbitration, video timing, DRAM control, pad/pen ADC, blitter control |
-| U401 | sheet 4 | **C300588-001** IC STESHFTR 84P NATIONAL | 84-pin PLCC | **GST Shifter** — bitplane shift, palette, DE/BLANK, Microwire controller (the "Super Hi-Res" label on this row was corrected 2026-11-09: no such mode exists on this board, see `research/ste-super-hires.md`) |
+| U401 | sheet 4 | **C300588-001** IC STESHFTR 84P NATIONAL | 84-pin PLCC | **GST Shifter** — bitplane shift, palette, DE/BLANK, Microwire controller (the "Super Hi-Res" label on this row was corrected 2026-11-11: no such mode exists on this board, see `research/ste-super-hires.md`) |
 | U300 | sheet 3 | **C398739-001** IC DMA CONTL 40P (list prints `0398739-001`) | 40-pin DIP | **DMA controller** — bus arbitration, disk/sound DMA, ACSI |
 | U101 | sheet 1 | **C101643** IC ST BLITTER CUSTOM 68 PIN | 68-pin PLCC | **Blitter** (discrete; merged into GSTMCU on later boards) |
 | U102 | sheet 1 | **C301163-002** IC TOS ROM 1.62 USA HI STE | 32-pin DIP | TOS 1.62 high ROM |
@@ -501,7 +501,7 @@ Sheet 4. Both edges resolved.
 | 78–84 | PD0 … PD6 | in | H | V |
 | 35, 52, 55, 72, 73, 76 | present on symbol, names illegible | — | — | U |
 
-> **Correction — 2026-11-09** (ticket #27, `research/ste-super-hires.md`). Pins 29–31 were read as `in`
+> **Correction — 2026-11-11** (ticket #27, `research/ste-super-hires.md`). Pins 29–31 were read as `in`
 > from `U400`. They are the **Microwire** link the Shifter *drives into the LMC1992* (MicroWire
 > Enable/Data/clocK — ST Magazine n°44 §"The GST Shifter"; the LMC1992's first three pins), so the
 > direction is `out`. The same page's §4.2 row carried the error with a "Super Hi-Res" purpose; **no
@@ -717,7 +717,7 @@ without a pin (`U400.HSYNC`).
 | CAS0L / CAS0H | U400.125, .126 → SIMM bank 0 low/high byte | |
 | CAS1L / CAS1H | U400.122, .123 → SIMM bank 1 low/high byte | |
 | WE | U400.121 → SIMM sockets | write enable, common to both banks |
-| MWE / MWD / MWK | U401.29, .30, .31 → U508 (LMC1992) | the **Microwire** link: MicroWire Enable (active low), Data, and bit clocK, driving the LMC1992's volume/tone registers. **Correction 2026-11-09** (ticket #27, `research/ste-super-hires.md`): this row previously read `← U400` and "shifter memory write path for Super Hi-Res" — the direction is out of the Shifter, and there is no Super Hi-Res mode on this board |
+| MWE / MWD / MWK | U401.29, .30, .31 → U508 (LMC1992) | the **Microwire** link: MicroWire Enable (active low), Data, and bit clocK, driving the LMC1992's volume/tone registers. **Correction 2026-11-11** (ticket #27, `research/ste-super-hires.md`): this row previously read `← U400` and "shifter memory write path for Super Hi-Res" — the direction is out of the Shifter, and there is no Super Hi-Res mode on this board |
 | MD0–MD15 | U401.56–71 | video data from RAM to shifter (16-bit fetch) |
 | DE | U400.141 → U401.54 | display enable, gates the video fetch slot. **Also reaches the MFP's `TBI` (U203.20)** per documentation, not per this redraw — see §6.15 |
 | BLANK | U400.140 → U403 / video output stage | blanking |

@@ -8,7 +8,7 @@ are the visible raster only — borders included, blanking excluded — at 840×
 mono. The border is palette colour 0 in colour modes and always black in mono, and it is *written*, not
 cleared, because colour 0 can change line by line.
 
-**Status**: accepted (2026-11-09), on the owner's word during ticket #27's session — *"ok for ADR
+**Status**: accepted (2026-11-11), on the owner's word during ticket #27's session — *"ok for ADR
 0012"*. Ticket: #27. Depends on ADR 0001 (one timeline), 0004 (wires are logs), 0006 (subscriptions),
 0008 (write shapes, anchors, the wake rule) and 0011 (Memory owns the slot and the group delivery).
 

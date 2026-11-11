@@ -19,7 +19,7 @@ virtual screen**.
 
 **Not members, and not Video's:** the 4-word fetch buffer and every fetch decision (Memory's, ADR 0011);
 the Microwire shift and `$FF8922`/`$FF8924` (**Sound's** — the pins are on the Shifter, the timeline is
-the audio one; `SREQ` precedent, owner's ruling 2026-11-05 and on #27, 2026-11-09); the `DE → LOAD`
+the audio one; `SREQ` precedent, owner's ruling 2026-11-05 and on #27, 2026-11-11); the `DE → LOAD`
 pipeline (`U304/U306`, Memory's); the analog tail (`U403`, `U405`, the DACs, the filters).
 
 **There is no fourth resolution on this board.** Super Hi-Res is the TT's; the `MWE`/`MWD`/`MWK` pins

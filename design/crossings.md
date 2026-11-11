@@ -53,7 +53,7 @@ resumes).
 | `DE` — second subscriber: `TBI` (U203.20) | Memory | Timers | single-driver | 1 | the same write, counted by Timer B | 200 | one count per active line. Documented (`board-inventory.md` §6.15), not drawn in the redraw |
 | `BLANK` (U400.140) | Memory | Video (level read, no subscription) | single-driver | data | — | 313 records | Video is already running when blanking changes, so it reads the level; nothing starts |
 | `HSYNC` 143, `VSYNC` 142 | Memory | **nobody in the machine** | single-driver | data | — | 313 + 1 records | the host display stage is not a virtual chip; it reads the log per frame (ADR 0004) |
-> **Correction — 2026-11-09** (ticket #27, `research/ste-super-hires.md`). This table's last row read
+> **Correction — 2026-11-11** (ticket #27, `research/ste-super-hires.md`). This table's last row read
 > `MWE`/`MWD`/`MWK` | **Memory** | **Video** | "a Super Hi-Res write" | ~0 | "never exercised at
 > functional level; kept so the pin set is complete". All three of those cells were wrong: the three
 > signals are the **Microwire** link (MicroWire Enable/Data/clocK) that the **Shifter drives into the
@@ -63,7 +63,7 @@ resumes).
 >
 > **And the row does not exist at all.** The LMC1992 is a *member* of Sound, so the Microwire wire never
 > leaves the virtual chip — the same case as `FDCS`/`FDRQ` inside Disk — and the two CPU-visible
-> registers (`$FF8922`, `$FF8924`) are Sound's, on the owner's ruling of 2026-11-09 (the `SREQ`
+> registers (`$FF8922`, `$FF8924`) are Sound's, on the owner's ruling of 2026-11-11 (the `SREQ`
 > precedent: the pins are on the Shifter's silicon, the logic belongs to the chip whose timeline it
 > serves). The CPU's write rides the `SNDCS` select row in §6. Nothing crosses here, so there is no row
 > and no rate.
@@ -115,7 +115,7 @@ mode (a release between words) expressible as a second transfer.
 |---|---|---|---|---|---|---|---|
 | `CS` on the Shifter (`A1–A6`, `LD`, `HD`) | Memory | Video | single-driver | 1 (write) / 2 (read) | a **write** to a Shifter register | ~10 idle, up to 939 in a raster demo | a write changes the target's future behaviour; a read only answers the cycle |
 | `MFPCS` | Memory | Timers | single-driver | 1 / 2 | a write to the MFP; reads answer | per access | the MFP's register file is its state |
-| `SNDCS` 19, `SNDIR` 18 | Memory | Sound | single-driver | 1 / 2 | a PSG or LMC write | per access | `SNDIR` is the Microwire direction line. **This row now carries `$FF8922`/`$FF8924` too**: the LMC1992 is a Sound member, so its two registers and the Microwire shift live inside Sound (owner's ruling on #27, 2026-11-09 — the same rule as `SREQ`: physical pins on the Shifter, logic owned by the chip whose timeline it serves) |
+| `SNDCS` 19, `SNDIR` 18 | Memory | Sound | single-driver | 1 / 2 | a PSG or LMC write | per access | `SNDIR` is the Microwire direction line. **This row now carries `$FF8922`/`$FF8924` too**: the LMC1992 is a Sound member, so its two registers and the Microwire shift live inside Sound (owner's ruling on #27, 2026-11-11 — the same rule as `SREQ`: physical pins on the Shifter, logic owned by the chip whose timeline it serves) |
 | `FCS` 136 | Memory | Disk | single-driver | 1 / 2 | a DMA-controller register access | tens | |
 | `JOYWE` 101, `JOYWL` 102 | Memory | Controllers | single-driver | 1 | a joystick port read select | per read | the strobe is the crossing, the data is not |
 | `N6850` 48 | Memory | Controllers | single-driver | 1 / 2 | a keyboard-ACIA access | per access | MIDI shares the pin and is out of scope |
