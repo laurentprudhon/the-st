@@ -152,9 +152,10 @@ with (d) **no source numbered *n* or above in service**. `IRQ` asserts exactly w
 Every one of these is logged as an anchor on every write (ADR 0008 §6): a register that changes only on a
 software write is logged on every write, value and register.
 
-`A0` is not decoded by the MFP — its register select is `A1–A5` — so all thirty-two registers sit at odd
-addresses and the even ones alias. A word access to an odd address is an address error on the 68000, so
-none of this is reachable in practice; the model stores bytes.
+`A0` is not decoded by the MFP — five register-select lines (`RS1–RS5`, pins 2–6) carry `A1–A5`
+(`derived`) — so all thirty-two registers sit at odd addresses and the even ones alias. A word access to
+an odd address is an address error on the 68000, so none of this is reachable in practice; the model
+stores bytes.
 
 ## 7. `GPIP`, `AER`, and the USART stub
 
