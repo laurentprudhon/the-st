@@ -98,6 +98,14 @@ derived figure must never turn a run red:
 |---|---|---|---|---|
 | **M1** | The owner boots the emulator in the UI and looks at it | The GEM desktop is on screen, drawn by the Shifter model through the host display stage | An output path that commits the right state and paints nothing — the one thing a headless probe cannot see | manual, once per session that changes the display path; never automated |
 
+> **Ruling 2026-11-11** (owner, before #10's session): **M1 is deferred to [#12](https://github.com/laurentprudhon/the-st/issues/12)**, the host
+> layer. The walking skeleton passes its gate headless — G1–G8 need no window — and the display path M1
+> would check (the blit, the canvas, the host's read of Video's committed screen) is #12's to build, not
+> the skeleton's. So #10 owns the machine's side of the display (Video committing a screen, frame
+> delivery as records) and #12 owns the pixels reaching a window, with M1 as its own manual row. Until
+> then the gate has **no pixel evidence at all**, which is exactly what §1 warns a green run does not
+> prove.
+
 ## 6. Deferred, with the owner that reopens it
 
 | Row | What it would prove | Why it is not in the gate | Reopens with |

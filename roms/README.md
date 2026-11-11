@@ -24,3 +24,10 @@ symbol came from), the objects' `-g` line info and the source tree.
 
 Policy: [`docs/adr/0010-tos-image-provisioning.md`](../docs/adr/0010-tos-image-provisioning.md) §6.
 Evidence: [`research/tos-rom-sourcing.md`](../research/tos-rom-sourcing.md).
+
+> **Ruling 2026-11-11** (owner, before #10's session): **the walking skeleton owns this packaging.** #10
+> delivers the 18 PAL `etos256<lang>.img` (built by `scripts/build-emutos-1.4.sh` and verified against
+> `emutos-1.4-manifest.json`, or fetched and verified — either route, but never an unverified image),
+> `emutos-src-1.4.tar.gz` (GPLv2 source) and `LICENSE.txt`, and this file stops saying the images are
+> absent once they are present. Nothing here is an Atari ROM: the "no image stored here" rule governs
+> TOS 1.62, which stays a hash-checked accept-list for user-supplied files.
