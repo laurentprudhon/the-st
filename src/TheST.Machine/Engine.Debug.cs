@@ -220,6 +220,20 @@ public sealed partial class Engine
                 $"at {instant}: the engine counts {claimed.Count} chip(s) with a live wake, the queue and " +
                 $"the subscription store hold {counted.Count}");
         }
+
+        // …and the counts themselves, chip by chip: the chip's own armed counter against what the queue
+        // and the subscription store can actually show for it. A wake armed twice and kept once is
+        // invisible to a presence test and obvious to this one.
+        foreach (Chip chip in _chips)
+        {
+            int fromQueue = recounted.GetValueOrDefault(chip);
+            if (fromQueue != chip.Armed)
+            {
+                throw Fail(2,
+                    $"at {instant}: {chip.Name} believes it holds {chip.Armed} wake(s); the queue and the " +
+                    $"subscription store hold {fromQueue}");
+            }
+        }
     }
 
     static InvalidOperationException Fail(int assertion, string detail) =>
