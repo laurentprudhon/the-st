@@ -193,10 +193,15 @@ public sealed partial class Engine
 
         OnRead(chip, instant);
 
-        long dateToken = chip.Arm();
-        _freshWakes[chip] = _freshWakes.GetValueOrDefault(chip) + 1;
-        ReadSuspensions++;
-        Enqueue(new Resume(chip, continuation, instant, dateToken));
+        if (instant != long.MaxValue)
+        {
+            // a chip that only wants the wire arms no date at all: a resume at the end of time would
+            // never fire, and would sit in the queue for the rest of the run
+            long dateToken = chip.Arm();
+            _freshWakes[chip] = _freshWakes.GetValueOrDefault(chip) + 1;
+            ReadSuspensions++;
+            Enqueue(new Resume(chip, continuation, instant, dateToken));
+        }
 
         long wireToken = chip.Arm();
         _freshWakes[chip] = _freshWakes.GetValueOrDefault(chip) + 1;

@@ -107,11 +107,24 @@ public sealed partial class Engine
     }
 
     // 2 — every suspended chip owns at least one live wake, and no live wake belongs to a chip that is
-    // not suspended. Counted from two independent places: the chips' own armed counter on one side, the
-    // queue plus the subscription store on the other. A chip suspended with nothing queued and nothing
-    // subscribed is a lost obligation, and it is the difference between the two sums.
+    // not suspended. Two sides, deliberately from different places: the chip's own armed counter (what
+    // it believes it is waiting for) against a count rebuilt from the queue and the subscription store
+    // (what the machine can actually see). The rebuilt count is sampled — a full walk of the queue every
+    // `RecountEvery` batches — because a boot queues ~15 000 entries a frame and walking it per batch is
+    // quadratic. The cheap side runs every batch; the independent side runs often enough to catch a
+    // drifted counter within a few hundred instants, and the digest still names the first differing one.
+    const int RecountEvery = 256;
+
+    long _batchesSinceRecount;
+
     void AssertSuspendedChipsAreOwningSomething(long instant)
     {
+        if (++_batchesSinceRecount >= RecountEvery)
+        {
+            _batchesSinceRecount = 0;
+            AssertLiveWakesMatchTheQueue(instant);
+        }
+
         IReadOnlyDictionary<Chip, int> live = LiveWakes();
 
         int suspended = 0;
@@ -146,6 +159,66 @@ public sealed partial class Engine
                     throw Fail(2, $"at {instant}: a queued resume belongs to no suspended chip");
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// The independent half: rebuild the live-wake count from the queue and the subscription store and
+    /// compare it with the engine's running counter. A wake armed and lost, or an entry whose chip was
+    /// resumed without its count being cleared, shows up here.
+    /// </summary>
+    void AssertLiveWakesMatchTheQueue(long instant)
+    {
+        var recounted = new Dictionary<Chip, int>();
+
+        foreach ((Entry entry, _) in _queue.UnorderedItems)
+        {
+            switch (entry)
+            {
+                case Resume resume when resume.Token == resume.Chip.WakeToken:
+                    recounted[resume.Chip] = recounted.GetValueOrDefault(resume.Chip) + 1;
+                    break;
+
+                case ApplyWrite { Waiter: { } waiter, WaiterToken: var token } when token == waiter.WakeToken:
+                    recounted[waiter] = recounted.GetValueOrDefault(waiter) + 1;
+                    break;
+            }
+        }
+
+        foreach (List<Subscriber> subscribers in _subscribers.Values)
+        {
+            foreach (Subscriber subscriber in subscribers)
+            {
+                if (subscriber.Token == subscriber.Chip.WakeToken)
+                {
+                    recounted[subscriber.Chip] = recounted.GetValueOrDefault(subscriber.Chip) + 1;
+                }
+            }
+        }
+
+        var counted = new HashSet<Chip>();
+        foreach ((Chip chip, int count) in recounted)
+        {
+            if (count > 0)
+            {
+                counted.Add(chip);
+            }
+        }
+
+        var claimed = new HashSet<Chip>();
+        foreach ((Chip chip, int count) in LiveWakes())
+        {
+            if (count > 0)
+            {
+                claimed.Add(chip);
+            }
+        }
+
+        if (!counted.SetEquals(claimed))
+        {
+            throw Fail(2,
+                $"at {instant}: the engine counts {claimed.Count} chip(s) with a live wake, the queue and " +
+                $"the subscription store hold {counted.Count}");
         }
     }
 

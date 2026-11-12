@@ -20,6 +20,41 @@ of triggers.
 > understand the machine, what about keeping only three letters of the name : SystemControlUnit ?"*
 > See [ADR 0014](0014-the-stores-are-data-structures.md) and `design/system-control-unit.md`.
 
+> ### Revision — 2026-11-12 (ticket #34's build, owner's ruling)
+>
+> Invariant 3 said *"a suspended coroutine has exactly one pending read, hence at most one
+> subscription"*. #34's build showed that no real chip of this machine fits it: the System Control Unit
+> owns its beam **and** answers the CPU's bus cycle, and Timers and events owns four counters **and**
+> answers the register selects. With one obligation one of the two must lose its own instant — either a
+> structural event is stamped at the instant the bus woke the chip (backdating, which invariant 1
+> forbids) or a bus answer waits for the next structural event, which invents the wait state this whole
+> ADR exists to avoid.
+>
+> **Owner's words: *"ok with the engine generalization."*** (2026-11-12, on the gap filed as a comment on
+> map #32.)
+>
+> What the engine does now: a chip arms **n** wakes under one continuation — dated resumes and
+> subscriptions — and the **first to fire resumes it**, sets its clock, and every other armed wake
+> becomes stale and is dropped. Invariant 3 becomes:
+>
+> > **3.** A suspended coroutine owns at least one pending wake, and each wake it arms is either a dated
+> > resume or a subscription on one wire. Wakes are fire-once: the first to fire owns the resume, and
+> > the rest are stale.
+>
+> Invariant 4 gains the discriminator the build needed: a subscription fires on a record at or after its
+> instant **and after the sequence number it had already seen** (`WaitFor(t, wire, afterSeq)`). Without
+> it, two records at one instant — or a chip re-arming at the instant a record landed — are
+> indistinguishable, and a chip resolves on the stale record and spins.
+>
+> Assertion 2 (`design/scheduler.md` §4) is restated with it: *every suspended chip owns at least one
+> live wake, and no live wake belongs to a chip that is not suspended* — counted from the chip's own
+> armed counter on one side and the engine's live-wake count on the other, with a sampled full recount
+> from the queue and the subscription store so the two sides stay independent.
+>
+> Cost: a chip may now hold several queue entries for one resume, so the queue carries stale entries
+> until they pop. The engine counts them (`stale_wakes`) and reports the number; nothing decides anything
+> by it.
+
 ## Context
 
 - ADR 0003 fixed the ordering, the queue and the ownership of a chip's clock, and left two things
@@ -108,8 +143,12 @@ a record and pushes the writer's own `Resume` behind its receivers (ADR 0008 §2
 1. Every read names the earliest instant it will accept — `ReadAt` exactly, `ReadNext` as `from` —
    and never earlier than the issuing chip's clock.
 2. Every queue entry is a `Resume` or an `ApplyWrite`.
-3. A suspended coroutine has exactly one pending read, hence at most one subscription.
-4. A record fires every subscription with `from <= instant`, each exactly once.
+3. A suspended coroutine owns at least one pending wake — a dated resume or a subscription on one wire —
+   and its wakes are fire-once: the first to fire owns the resume, the rest are stale. *(Revised
+   2026-11-12, above; it read "exactly one pending read, hence at most one subscription".)*
+4. A record fires every subscription whose `from <= instant` **and whose sequence number is below the
+   record's**, each exactly once. *(Revised 2026-11-12: the sequence discriminator is what makes two
+   records at one instant — or a chip re-arming at that instant — unambiguous.)*
 5. Order is total: `(instant, seq)`; a chip's newly created same-instant entries follow their creator.
 6. A chip's clock advances only to an instant it was resumed at, or by its own `advance`.
 7. No chip waits on another chip's *progress*: a subscription is answered by a record, never by a
