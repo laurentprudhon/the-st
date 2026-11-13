@@ -88,5 +88,6 @@ tools/validation-harness/bin/Debug/net11.0/validation-harness cpu-tests --dir te
     --quiet --out report.txt --failures failures.tsv
 ```
 
-`--failures` writes one tab-separated line per failure — opcode file, test name, first difference. Sort by
-the first column to see which file a fix should target; sort by the third to see which field.
+`--out` writes the per-file table; `--failures` writes up to 20 detail lines per opcode file, tab
+separated: opcode file, test name, first difference. Sort by the first column to see which file a fix
+should target, by the third to see which field.

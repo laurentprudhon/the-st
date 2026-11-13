@@ -58,6 +58,10 @@ tools/validation-harness/bin/Debug/net11.0/validation-harness cpu-tests --dir te
 - `transactions` lists the bus activity; the harness does not gate it, because the prefetch model
   differs (fetch-on-demand, ADR 0009 §4's gap).
 
+`--out FILE` writes the per-opcode table; `--failures FILE` writes up to 20 detail lines per opcode file
+(opcode, test name, first difference), which is what triage wants; `--file NAME` runs one opcode,
+`--limit N` caps the tests per file, `--show N` sets how many full failures are printed.
+
 ## What a failure means
 
 The harness runs each test against `SingleStepBus` from `TheST.Machine.Corpus` — plain RAM, one answer
