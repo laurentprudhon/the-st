@@ -51,7 +51,7 @@ sixteen of its sources, over the one `IRQ` line (`U203.32`).
 
 | Arrives as | Wire | Rate | How Timers and events treats it |
 |---|---|---|---|
-| `DE`, second subscriber | `System Control Unit → Timers and events` (`TBI`, pin 20) | 200/frame | **event count** for Timer B: one count per active line, whatever the CPU is doing |
+| `DE`, second subscriber | `System Control Unit → Timers and events` (`TBI`, pin 20) | 200 counts/frame (of the wire's 400 records: 200 asserting + 200 releasing) | **event count** for Timer B: one count per active line, counted on the asserting edge, whatever the CPU is doing |
 | sound frame end | `SINT` (`U400.105`) | per frame end | sets source 15's pending bit at the record instant; **Timer A counts the edge 128 ticks later** (`TAI`, through the 74LS164) |
 | floppy / disk DMA completion | `FDINT`, `DINT` (one shared line) | per completion | sets source 7's pending bit; nothing else |
 | blitter completion | `BINT` | per blit | sets source 3's pending bit; nothing else |

@@ -68,9 +68,20 @@ resumes).
 | `MD0–MD15` (U401.56–71) | System Control Unit | Video (samples, does not subscribe) | tristate bus | data | — | 16 000 records | 4 records per group; payload only |
 | `SREQ` (`U401.36` → U400.107; **driver: Sound**) | Sound | System Control Unit | single-driver, active low | 1 | the sample FIFO is about to underflow | ≤ 313 | one refill per line at 50 kHz (3.2 of 4 words consumed per line); ~125 at 25 kHz, ~63 at 12.5, ~31 at 6.25. A 4-word FIFO holds 1.25 lines at the top rate, so refills cannot exceed one per line |
 | `SLOAD` (U400.106 port group: 1 control lane + 16 data lanes) | System Control Unit | Sound | single-driver | 2 | answers the `SREQ` it just served | ≤ 313 | up to 4 words per refill, one internal slot (250 ns) each |
-| `DE` (U400.141) | System Control Unit | Video | single-driver | 1 | the display window opens | 200 | one per vertically active line; gates the fetch and the pixel output |
-| `DE` — second subscriber: `TBI` (U203.20) | System Control Unit | Timers and events | single-driver | 1 | the same write, counted by Timer B | 200 | one count per active line. Documented (`board-inventory.md` §6.15), not drawn in the redraw |
+| `DE` (U400.141) | System Control Unit | Video | single-driver | 1 | the display window opens (and, as a release record, closes) | 400 (200 asserting + 200 releasing) | one window per vertically active line, so **two** records a line: a level in an append-only log is its two edges (owner's ruling, 2026-11-13, below). Gates the fetch and the pixel output |
+| `DE` — second subscriber: `TBI` (U203.20) | System Control Unit | Timers and events | single-driver | 1 | the same write, counted by Timer B | 200 counts (of the 400 records) | one count per active line: **the assert edge** is what Timer B counts, the release carries no count. Documented (`board-inventory.md` §6.15), not drawn in the redraw |
 | `BLANK` (U400.140) | System Control Unit | Video (level read, no subscription) | single-driver | data | — | 313 records | Video is already running when blanking changes, so it reads the level; nothing starts |
+
+> **Ruling — 2026-11-13** (owner, on the third gap comment of #32: *"ok with 1"*). `DE`'s two rows above
+> said 200 records a frame, which an append-only log cannot express: a level is its two edges, so a model
+> that answers "what is `DE` at instant *t*" from the log emits **400 records a frame** — 200 asserting the
+> display window open, 200 releasing it. The row therefore reads 400, and the two per-wire rows are the
+> only place that changed: the class-1 wake table below already counted `DE` 400 with two subscribers, so
+> the budget never assumed 200. Timer B's own rate is unchanged at **200 a frame** because it counts the
+> asserting edges. The alternatives were rejected on their cost, not their correctness: one record per line
+> carrying the window's two instants in its lanes makes `DE`'s value composite and takes the level query
+> away from `ValueAt`; one record with no release leaves the level reading "open" for the rest of the frame,
+> which no reader of the past can undo without looking forward in time.
 | `HSYNC` 143, `VSYNC` 142 | System Control Unit | **nobody in the machine** | single-driver | data | — | 313 + 1 records | the host display stage is not a virtual chip; it reads the log per frame (ADR 0004) |
 > **Correction — 2026-11-11** (ticket #27, `research/ste-super-hires.md`). This table's last row read
 > `MWE`/`MWD`/`MWK` | **System Control Unit** | **Video** | "a Super Hi-Res write" | ~0 | "never exercised at

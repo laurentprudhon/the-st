@@ -41,7 +41,7 @@ are the Microwire link (`research/ste-super-hires.md`).
 |---|---|---|---|
 | **group delivery** | `LOAD`+`DCYC` | 4 000/frame | **subscription** (class 1): the only thing that starts the shifter |
 | **payload** | `MD0–MD15` | 16 000 records/frame | sampled at the delivery instant, never subscribed |
-| display window | `DE` | 200 records / 400 firings | **subscription** — it gates the write and feeds the pixel counter |
+| display window | `DE` | 400 records (200 asserting + 200 releasing) / 200 assert counts | **level read** at each group delivery in the build (`ValueAt`), which is one wake fewer than a subscription and is what `BLANK` gets; the design's "subscription" wording is the same information, not a different rate. Owner's ruling of 2026-11-13 fixed the record count (`crossings.md` §2) |
 | blanking | `BLANK` | 313 records | **level read at the pixel's instant**: `BLANK` asserted paints nothing |
 | register writes | `CS` on the Shifter | ~10 idle → 939 in a raster demo | **subscription**, one per write |
 | palette latch strobe | `LATCH` | — | internal: the palette record's instant *is* the load instant |
