@@ -104,16 +104,9 @@ internal static class TraceRunCommand
         };
 
 #if DEBUG
-        string digestPath = Path.Combine(directory, "run.digest");
-        var digest = new StringBuilder(engine.DigestWords.Count * 17);
-        foreach (ulong word in engine.DigestWords)
-        {
-            digest.Append(word.ToString("x16", CultureInfo.InvariantCulture)).Append('\n');
-        }
-
-        File.WriteAllText(digestPath, digest.ToString());
-        state.Add($"batches={engine.DigestWords.Count.ToString(CultureInfo.InvariantCulture)}");
-        state.Add("digest=run.digest");
+        int digestWords = DigestArtifacts.Write(directory, engine);
+        state.Add($"batches={digestWords.ToString(CultureInfo.InvariantCulture)}");
+        state.Add("digest=run.digest (run.batches: the sparse batch→instant index; run.tail: the last 8 batches)");
 #else
         // A Release build has no digest and no assertions at all (ADR 0008 §6) — the file's absence is
         // the evidence, and `scripts/validate.sh` asserts it.

@@ -71,6 +71,14 @@ cost is 2 × 3 s of **emulated** time (≈ 300 frames, ≈ 0.3 s of wall clock),
 with zero drives. The harness's default `N` is "frames to reach the desktop, then 100 more", so the
 probe is absorbed automatically and `run.report` names the 6 s and the zero drives.
 
+> **Measured — 2026-11-13 (#35).** `run.report` now reads these waits off the probe timeline instead of
+> asserting them: a run of frames whose program counter stays inside one 16-byte box is the ROM
+> waiting, and its length is the ROM's own `_hz_200` advanced over it. Before the desktop it finds
+> **4.0 s and 2.0 s in `clock.o`'s delay loop** and **3.0 s stopped in `_stop_until_interrupt`** — the
+> FDC interrupt the silent disk stub never answers — and **0.48 s in `ikbd.o`** for the keyboard. So
+> the 6 s above is the two delay loops alone, the FDC-interrupt wait is a further 3 s, and fact 3's
+> 300 ms timeout reads 480 ms in the model. `_drvbits` is `00` at the desktop: zero drives, measured.
+
 ## 2. ADR 0008's seven rules
 
 All seven are obeyed **as written**; the skeleton bends none of them, because each is an invariant the

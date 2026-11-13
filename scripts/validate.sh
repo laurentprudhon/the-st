@@ -4,11 +4,11 @@
 #
 # Rows run here:  G4 (check-clocks), G1 and G2 on the synthetic trace, the stage-1 half of G3
 # (assertions 1, 2, 6 and 7 must stay silent through every run), G7 (retention under a live reader),
-# ADR 0008 §6's "never release" (the digest is absent from a Release build), and ADR 0014's falsifier
-# (no chip holds a store).
+# ADR 0008 §6's "never release" (the digest is absent from a Release build), ADR 0014's falsifier
+# (no chip holds a store), the boot to the GEM desktop (G5, G6), G1/G2 on that boot, and G8 — the
+# frame budget, in Release, with the host and the crossing count it was measured at.
 #
-# Rows NOT run here, and who owns them: G8 is #35's and M1 is the owner's (the pixels have no
-# automatic witness). Everything else — including the boot to the GEM desktop — runs here.
+# Rows NOT run here, and who owns them: M1 is the owner's (the pixels have no automatic witness).
 #
 # CI is permanently offline (ADR 0010): this script is the verdict, run by hand. Exit code 0 = pass.
 # ============================================================================================
@@ -118,10 +118,13 @@ harness Debug run --frames 100 --out "$stampdir/g1-a" >"$stampdir/g1-a.log" 2>&1
     || bad "a run failed — see $stampdir/g1-*.log"
 
 if [ -f "$stampdir/g1-a/run.digest" ] && [ -f "$stampdir/g1-b/run.digest" ]; then
-    if cmp -s "$stampdir/g1-a/run.digest" "$stampdir/g1-b/run.digest"; then
+    # `diff` is the one-line answer validation.md §4 asks for: the first differing batch, the instant
+    # it drained at (from the sparse run.batches index), and each run's tail. `cmp` could only say
+    # "byte 12 345 678".
+    if harness Debug diff --a "$stampdir/g1-a" --b "$stampdir/g1-b" | tee "$stampdir/g1-diff.log" | grep -q 'identical'; then
         ok "G1: $(wc -l <"$stampdir/g1-a/run.digest") digest words, identical"
     else
-        bad "G1: the streams differ — $(cmp "$stampdir/g1-a/run.digest" "$stampdir/g1-b/run.digest" 2>&1 | head -1)"
+        bad "G1: the streams differ — $(head -3 "$stampdir/g1-diff.log" | tr '\n' ' ')"
     fi
 else
     bad "G1: no run.digest was produced"
@@ -129,10 +132,10 @@ fi
 
 step "G2 — the same stream with host scheduling perturbed (--inject)"
 if harness Debug run --frames 100 --inject --out "$stampdir/g2-inject" >"$stampdir/g2.log" 2>&1; then
-    if cmp -s "$stampdir/g1-a/run.digest" "$stampdir/g2-inject/run.digest"; then
+    if harness Debug diff --a "$stampdir/g1-a" --b "$stampdir/g2-inject" | tee "$stampdir/g2-diff.log" | grep -q 'identical'; then
         ok "G2: identical to G1's stream (yields, allocation noise, collections, frame pacing)"
     else
-        bad "G2: injection changed the stream — $(cmp "$stampdir/g1-a/run.digest" "$stampdir/g2-inject/run.digest" 2>&1 | head -1)"
+        bad "G2: injection changed the stream — $(head -3 "$stampdir/g2-diff.log" | tr '\n' ' ')"
     fi
 else
     bad "G2: the injected run failed — see $stampdir/g2.log"
@@ -218,10 +221,10 @@ step "G1 on the machine's own trace — two boots, byte-identical digest"
 harness Debug boot --frames 300 --out "$stampdir/boot-g1a" >"$stampdir/boot-g1a.log" 2>&1; g1a=$?
 harness Debug boot --frames 300 --out "$stampdir/boot-g1b" >"$stampdir/boot-g1b.log" 2>&1; g1b=$?
 if { [ "$g1a" -eq 0 ] || [ "$g1a" -eq 2 ]; } && { [ "$g1b" -eq 0 ] || [ "$g1b" -eq 2 ]; }; then
-    if cmp -s "$stampdir/boot-g1a/run.digest" "$stampdir/boot-g1b/run.digest"; then
+    if harness Debug diff --a "$stampdir/boot-g1a" --b "$stampdir/boot-g1b" | tee "$stampdir/boot-g1-diff.log" | grep -q 'identical'; then
         ok "G1: $(wc -l <"$stampdir/boot-g1a/run.digest") digest words, identical"
     else
-        bad "G1 on the boot: the streams differ — $(cmp "$stampdir/boot-g1a/run.digest" "$stampdir/boot-g1b/run.digest" 2>&1 | head -1)"
+        bad "G1 on the boot: the streams differ — $(head -3 "$stampdir/boot-g1-diff.log" | tr '\n' ' ')"
     fi
 else
     bad "G1 on the boot: a run failed — see $stampdir/boot-g1*.log"
@@ -230,23 +233,48 @@ fi
 step "G2 on the machine's own trace — the same stream with host scheduling perturbed"
 harness Debug boot --frames 300 --inject --out "$stampdir/boot-g2" >"$stampdir/boot-g2.log" 2>&1; g2=$?
 if [ "$g2" -eq 0 ] || [ "$g2" -eq 2 ]; then
-    if cmp -s "$stampdir/boot-g1a/run.digest" "$stampdir/boot-g2/run.digest"; then
+    if harness Debug diff --a "$stampdir/boot-g1a" --b "$stampdir/boot-g2" | tee "$stampdir/boot-g2-diff.log" | grep -q 'identical'; then
         ok "G2 on the boot: identical to G1's stream"
     else
-        bad "G2 on the boot: injection changed the stream — $(cmp "$stampdir/boot-g1a/run.digest" "$stampdir/boot-g2/run.digest" 2>&1 | head -1)"
+        bad "G2 on the boot: injection changed the stream — $(head -3 "$stampdir/boot-g2-diff.log" | tr '\n' ' ')"
     fi
 else
     bad "G2 on the boot: the injected run failed — see $stampdir/boot-g2.log"
+fi
+
+# ---- G8: the frame budget -----------------------------------------------------------------
+# Release, because a Debug frame carries the per-instant digest and the seven assertions: its wall
+# time is a measurement of the instruments (validation.md §2). The row is the mean wall time of one
+# frame against the 5 ms of the 20 ms budget, and it is reported with n, the host, the core count and
+# the crossing count the run actually had — the same mean on another host means nothing (§4), which
+# is why the numbers are printed beside the verdict and kept in run.state.
+step "G8 — the frame budget (Release: mean frame <= 5 ms of the 20 ms frame)"
+harness Release boot --frames 800 --out "$stampdir/g8" >"$stampdir/g8.log" 2>&1
+g8state="$stampdir/g8/run.state"
+if [ ! -f "$g8state" ]; then
+    bad "G8: the Release boot produced no run.state — see $stampdir/g8.log"
+else
+    mean=$(grep -E '^frame_mean_ms=' "$g8state" | cut -d= -f2)
+    n=$(grep -E '^frame_n=' "$g8state" | cut -d= -f2)
+    cpu=$(grep -E '^cpu=' "$g8state" | cut -d= -f2)
+    cores=$(grep -E '^cores=' "$g8state" | cut -d= -f2)
+    pops=$(grep -E '^pops_per_frame=' "$g8state" | cut -d= -f2)
+    percycle=$(grep -E '^pops_per_bus_cycle=' "$g8state" | cut -d= -f2)
+    g8=$(grep -E '^g8=' "$g8state" | cut -d= -f2)
+    if [ "$g8" = "green" ]; then
+        ok "G8: ${mean} ms a frame of 20.00 (budget 5.00) — n ${n}, ${cpu} × ${cores}, ${pops} pops a frame (${percycle} a bus cycle)"
+    else
+        bad "G8: ${mean} ms a frame of 20.00 (budget 5.00) — n ${n}, ${cpu} × ${cores}, ${pops} pops a frame (${percycle} a bus cycle); see $stampdir/g8/run.report"
+    fi
 fi
 
 # ---- verdict -----------------------------------------------------------------------------
 echo
 if [ "$fail" -eq 0 ]; then
     echo "PASS — G1 and G2 green on the synthetic trace and on EmuTOS's own boot; G3's assertions"
-    echo "       silent through both; G4; G5 and G6 on a boot that reaches the GEM desktop; G7;"
+    echo "       silent through both; G4; G5, G6 and G8 on a boot that reaches the GEM desktop; G7;"
     echo "       the stores' boundary intact; no digest in Release."
-    echo "       Not proven here: G8 (the frame budget), and M1 (the owner's eyes). Those are #35's"
-    echo "       and the manual row's."
+    echo "       Not proven here: M1 (the owner's eyes). That row is #12's and is never automated."
     exit 0
 fi
 

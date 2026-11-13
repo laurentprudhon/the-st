@@ -43,6 +43,9 @@ internal static class Program
             case "cpu-tests":
                 return CpuTestsCommand.Run(args[1..]);
 
+            case "diff":
+                return DiffCommand.Run(args[1..]);
+
             case "-h":
             case "--help":
             case "help":
@@ -67,6 +70,10 @@ internal static class Program
               check-retention                    G7: a log is truncated only where no reader can still ask
               boot [--frames N] [--inject] [--out DIR] [--image PATH] [--trace]
                                                  the machine's own trace: EmuTOS to the GEM desktop
+              diff --a DIR --b DIR
+                                                 compare two runs' digest streams: the first differing
+                                                 batch, the instant it drained at, and each run's tail
+                                                 (G1/G2's one-line diff)
               cpu-tests [--dir DIR] [--file NAME] [--limit N] [--show N] [--quiet] [--out FILE]
                                                  the 680x0 corpus against the core, one instruction at a
                                                  time (default dir: tests/680x0/v1)

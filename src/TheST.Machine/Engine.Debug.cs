@@ -28,6 +28,51 @@ public sealed partial class Engine
     /// <summary>The digest stream so far: one word per batch drained, in batch order.</summary>
     public IReadOnlyList<ulong> DigestWords => _digestWords;
 
+    // ---- the batch index and the tail: what §4 asks to report when G1 or G2 fails --------------
+    // A digest word per batch names the first differing *batch*; these two name the instant and the
+    // shape of it. The index is sparse because a boot drains tens of thousands of batches a frame —
+    // one line per 1 024 batches answers "which instant is line 12 345 678" in a binary search, and
+    // costs a few hundred kilobytes rather than a second copy of the digest. The tail keeps the last
+    // few batches' records whole, because the one thing a reader wants after a mismatch is the
+    // records, and a fold cannot be undone.
+    const int BatchIndexEvery = 1024;
+    const int TailBatches = 8;
+
+    readonly List<(long Batch, long Instant)> _batchIndex = [];
+
+    // A ring of eight batches, never allocated in the loop: the list a batch writes into is the one
+    // its eighth predecessor used, cleared as it comes round again. A Debug boot drains ~30 000
+    // batches a frame, so a fresh list per batch would be a GC storm in the instrument.
+    readonly List<Record>[] _tailRecords = new List<Record>[TailBatches];
+    readonly long[] _tailInstants = new long[TailBatches];
+    int _tailNext;
+    List<Record> _batchRecords = [];
+
+    /// <summary>Batch index → instant, one entry every <see cref="BatchIndexEvery"/> batches.</summary>
+    public IReadOnlyList<(long Batch, long Instant)> BatchIndex => _batchIndex;
+
+    /// <summary>The last few batches, records and all — the stream a mismatch is read from.</summary>
+    public IReadOnlyList<(long Instant, Record[] Records)> Tail
+    {
+        get
+        {
+            var tail = new List<(long, Record[])>(TailBatches);
+            for (int offset = 0; offset < TailBatches; offset++)
+            {
+                int slot = (_tailNext + offset) % TailBatches;
+                if (_tailRecords[slot] is { } records)
+                {
+                    tail.Add((_tailInstants[slot], [.. records]));
+                }
+            }
+
+            return tail;
+        }
+    }
+
+    /// <summary>Batches drained so far: one digest word each.</summary>
+    public long Batches => _digestWords.Count;
+
     // ---- assertion bookkeeping ---------------------------------------------------------------
     long _previousInstant = long.MinValue;   // 1
     bool _inResume;                          // 6
@@ -45,6 +90,17 @@ public sealed partial class Engine
     partial void BeforeBatch(long instant)
     {
         ResetDigest();
+
+        if (_digestWords.Count % BatchIndexEvery == 0)
+        {
+            _batchIndex.Add((_digestWords.Count, instant));
+        }
+
+        // the batch about to be drained writes into the ring slot its eighth predecessor vacated
+        _batchRecords = _tailRecords[_tailNext] ??= [];
+        _batchRecords.Clear();
+        _tailInstants[_tailNext] = instant;
+        _tailNext = (_tailNext + 1) % TailBatches;
 
         // 1 — the queue head never moves backwards. Fails at the instant it happens, not 4 000
         // batches later in a digest diff.
@@ -73,6 +129,8 @@ public sealed partial class Engine
         {
             _recordsThisResume++;
         }
+
+        _batchRecords.Add(record);
     }
 
     partial void BeforeResume(Chip chip)
