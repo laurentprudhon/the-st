@@ -17,8 +17,21 @@ public sealed partial class Engine
     public const int WriteCapPerResume = 64;
 
     readonly PriorityQueue<Entry, Key> _queue = new();
-    readonly Dictionary<Channel, ValueLog> _logs = [];
-    readonly Dictionary<Channel, List<Subscriber>> _subscribers = [];
+
+    // Array-indexed tables, not dictionaries: a Channel is (kind, id), both ids are assigned once and
+    // bounded by the catalogue, so a lookup is a subscript (1.4 ns) instead of a dictionary probe over
+    // a struct key (7.0 ns). On the ~92 M record appends and ~45 M subscriber lookups a run that is the
+    // difference the profile calls "array-indexed channel tables" (#38). One array per kind per table,
+    // because the kinds' id spaces are disjoint — an internal id is the chip's id and its slot.
+    ValueLog?[] _wireLogs = new ValueLog?[64];
+    ValueLog?[] _internalLogs = new ValueLog?[256];
+    SubscriberSet?[] _wireSubscribers = new SubscriberSet?[64];
+    SubscriberSet?[] _internalSubscribers = new SubscriberSet?[256];
+
+    // The created logs, in creation order, for the reports and assertions that walk every log. The
+    // arrays are the lookup; this is the enumeration, and nothing decides anything by its order.
+    readonly List<ValueLog> _allLogs = [];
+
     readonly List<Chip> _chips = [];
 
     // Live wakes per chip, kept incrementally: assertion 2's second witness must not walk the queue
@@ -58,7 +71,7 @@ public sealed partial class Engine
     public IReadOnlyList<Chip> Chips => _chips;
 
     /// <summary>Every log this engine has touched. Order is irrelevant: nothing decides anything by it.</summary>
-    public IReadOnlyCollection<ValueLog> Logs => _logs.Values;
+    public IReadOnlyCollection<ValueLog> Logs => _allLogs;
 
     /// <summary>Records retained across every log — the memory the machine's history actually occupies.</summary>
     public long RetainedRecords
@@ -66,7 +79,7 @@ public sealed partial class Engine
         get
         {
             long retained = 0;
-            foreach (ValueLog log in _logs.Values)
+            foreach (ValueLog log in _allLogs)
             {
                 retained += log.Count;
             }
@@ -81,7 +94,7 @@ public sealed partial class Engine
         get
         {
             long discarded = 0;
-            foreach (ValueLog log in _logs.Values)
+            foreach (ValueLog log in _allLogs)
             {
                 discarded += log.Discarded;
             }
@@ -95,13 +108,37 @@ public sealed partial class Engine
     /// <summary>The append-only log of a wire or of a chip's internal register. Created on first use.</summary>
     public ValueLog Log(Channel channel)
     {
-        if (!_logs.TryGetValue(channel, out ValueLog? log))
+        if (channel.Kind == ChannelKind.Wire)
         {
-            log = new ValueLog(channel);
-            _logs.Add(channel, log);
+            EnsureSlots(ref _wireLogs, channel.Id);
+            return _wireLogs[channel.Id] ??= NewLog(channel);
         }
 
+        EnsureSlots(ref _internalLogs, channel.Id);
+        return _internalLogs[channel.Id] ??= NewLog(channel);
+    }
+
+    ValueLog NewLog(Channel channel)
+    {
+        var log = new ValueLog(channel);
+        _allLogs.Add(log);
         return log;
+    }
+
+    /// <summary>
+    /// Grows a channel table so that <paramref name="id"/> is addressable. Runs at most a handful of
+    /// times in a run — the catalogue's ids are assigned once, at load, and never renumbered.
+    /// </summary>
+    static void EnsureSlots<T>(ref T?[] table, int id) where T : class
+    {
+        if (id < table.Length)
+        {
+            return;
+        }
+
+        var grown = new T?[Math.Max(id + 1, table.Length * 2)];
+        Array.Copy(table, grown, table.Length);
+        table = grown;
     }
 
     /// <summary>
@@ -167,9 +204,10 @@ public sealed partial class Engine
     {
         long watermark = MachineTime;
 
-        if (_subscribers.TryGetValue(channel, out List<Subscriber>? subscribers))
+        SubscriberSet? set = SubscribersFor(channel);
+        if (set is not null)
         {
-            foreach (Subscriber subscriber in subscribers)
+            foreach (Subscriber subscriber in set.Pending)
             {
                 if (subscriber.From < watermark)
                 {
@@ -202,7 +240,7 @@ public sealed partial class Engine
         long started = System.Diagnostics.Stopwatch.GetTimestamp();
         TrimCalls++;
 
-        foreach (ValueLog log in _logs.Values)
+        foreach (ValueLog log in _allLogs)
         {
             long watermark = RetentionWatermark(log.Channel);
             if (_sampleFloor < watermark)
@@ -291,7 +329,7 @@ public sealed partial class Engine
         _freshWakes[chip] = _freshWakes.GetValueOrDefault(chip) + 1;
         Subscriptions++;
 
-        List<Subscriber> subscribers = SubscribersOf(channel);
+        List<Subscriber> subscribers = SubscribersOf(channel).Pending;
         int index = 0;
         while (index < subscribers.Count && subscribers[index].From <= from)
         {
@@ -330,7 +368,7 @@ public sealed partial class Engine
         long wireToken = chip.Arm();
         _freshWakes[chip] = _freshWakes.GetValueOrDefault(chip) + 1;
         Subscriptions++;
-        SubscribersOf(channel).Add(new Subscriber(chip.Clock, chip, continuation, wireToken, afterSeq));
+        SubscribersOf(channel).Pending.Add(new Subscriber(chip.Clock, chip, continuation, wireToken, afterSeq));
     }
 
     /// <summary>
@@ -420,11 +458,13 @@ public sealed partial class Engine
     /// </summary>
     void FireSubscriptions(Channel channel, long t, long seq)
     {
-        if (!_subscribers.TryGetValue(channel, out List<Subscriber>? subscribers))
+        SubscriberSet? set = SubscribersFor(channel);
+        if (set is null)
         {
             return;
         }
 
+        List<Subscriber> subscribers = set.Pending;
         for (int index = 0; index < subscribers.Count;)
         {
             Subscriber subscriber = subscribers[index];
@@ -466,15 +506,50 @@ public sealed partial class Engine
         _queue.Enqueue(entry, new Key(entry.Instant, _seq++));
     }
 
-    List<Subscriber> SubscribersOf(Channel channel)
+    /// <summary>
+    /// A channel's pending subscribers, or <c>null</c> when it has never had one — which is the fire
+    /// path's whole test, and the common answer: a record's channel usually has one subscriber or none.
+    /// </summary>
+    SubscriberSet? SubscribersFor(Channel channel)
     {
-        if (!_subscribers.TryGetValue(channel, out List<Subscriber>? subscribers))
+        if (channel.Kind == ChannelKind.Wire)
         {
-            subscribers = [];
-            _subscribers.Add(channel, subscribers);
+            return channel.Id < _wireSubscribers.Length ? _wireSubscribers[channel.Id] : null;
         }
 
-        return subscribers;
+        return channel.Id < _internalSubscribers.Length ? _internalSubscribers[channel.Id] : null;
+    }
+
+    SubscriberSet SubscribersOf(Channel channel)
+    {
+        if (channel.Kind == ChannelKind.Wire)
+        {
+            EnsureSlots(ref _wireSubscribers, channel.Id);
+            return _wireSubscribers[channel.Id] ??= new SubscriberSet(channel);
+        }
+
+        EnsureSlots(ref _internalSubscribers, channel.Id);
+        return _internalSubscribers[channel.Id] ??= new SubscriberSet(channel);
+    }
+
+    /// <summary>Every channel that has ever held a subscriber — for the assertions, which walk them all.</summary>
+    IEnumerable<SubscriberSet> SubscriberSets()
+    {
+        foreach (SubscriberSet? set in _wireSubscribers)
+        {
+            if (set is not null)
+            {
+                yield return set;
+            }
+        }
+
+        foreach (SubscriberSet? set in _internalSubscribers)
+        {
+            if (set is not null)
+            {
+                yield return set;
+            }
+        }
     }
 
     // ---- Debug-only instruments ------------------------------------------------------------
@@ -535,6 +610,17 @@ public sealed partial class Engine
     {
         public int CompareTo(Key other) =>
             Instant != other.Instant ? Instant.CompareTo(other.Instant) : Seq.CompareTo(other.Seq);
+    }
+
+    /// <summary>
+    /// One channel's pending subscribers, in registration order. It carries the channel because the
+    /// assertions report what a chip is waiting on, and a table slot is otherwise anonymous.
+    /// </summary>
+    sealed class SubscriberSet(Channel channel)
+    {
+        public Channel Channel { get; } = channel;
+
+        public List<Subscriber> Pending { get; } = [];
     }
 
     readonly record struct Subscriber(long From, Chip Chip, Action Continuation, long Token, long AfterSeq);

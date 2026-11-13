@@ -257,9 +257,9 @@ public sealed partial class Engine
             }
         }
 
-        foreach (List<Subscriber> subscribers in _subscribers.Values)
+        foreach (SubscriberSet set in SubscriberSets())
         {
-            foreach (Subscriber subscriber in subscribers)
+            foreach (Subscriber subscriber in set.Pending)
             {
                 if (subscriber.Token == subscriber.Chip.WakeToken)
                 {
@@ -317,13 +317,13 @@ public sealed partial class Engine
             parts.Add($"queue head {key.Instant}");
         }
 
-        foreach ((Channel channel, List<Subscriber> subscribers) in _subscribers)
+        foreach (SubscriberSet set in SubscriberSets())
         {
-            foreach (Subscriber subscriber in subscribers)
+            foreach (Subscriber subscriber in set.Pending)
             {
                 if (ReferenceEquals(subscriber.Chip, chip))
                 {
-                    parts.Add($"subscribed to {channel.Name} from {subscriber.From} (seq after {subscriber.AfterSeq}, token {subscriber.Token}, chip token {chip.WakeToken})");
+                    parts.Add($"subscribed to {set.Channel.Name} from {subscriber.From} (seq after {subscriber.AfterSeq}, token {subscriber.Token}, chip token {chip.WakeToken})");
                 }
             }
         }

@@ -94,6 +94,12 @@ pendingReads(cont)                          // one per suspended coroutine (inva
   stack and never registers — so a write cannot re-enter its own firing pass.
 - **Registration order is firing order.** No rank.
 - **Removal only on reset/shutdown.** Nothing abandons a read mid-run.
+- **The table is an array, not a dictionary** (#38). A `Channel` is `(kind, id)` and both ids are assigned
+  once, in catalogue order, so `subs` and the logs are two arrays per kind: a lookup is a subscript
+  (1.4 ns) rather than a dictionary probe over a struct key (7.0 ns). On the boot's ~92 M record appends
+  and ~45 M fire-path lookups that bought **1.13 ms a frame** over six *alternating* adjacent pairs
+  (0.13–2.79 ms, all six positive); the `Map` above is the shape, and the array is how the shape is
+  spelled. A slot is `null` until its channel is first used, so nothing preallocates a log per wire.
 - **Publishes:**
   - `retentionWatermark(wire) = min(from)` over `subs[wire]` — the log may never truncate across it
     (ADR 0004); with no subscriber, the UI's trace window decides.
