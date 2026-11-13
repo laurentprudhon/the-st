@@ -318,6 +318,7 @@ public sealed class SystemControlUnit : Chip
         {
             _vbl = true;
             _blank = true;
+            VblRecords++;
             Write(lineEnd, Wires.Blank, 0x0001, 0x0001);
             BlankRecords++;
             Write(lineEnd, Wires.Vsync, 0x0001, 0x0001);

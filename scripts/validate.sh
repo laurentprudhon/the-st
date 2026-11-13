@@ -7,8 +7,8 @@
 # ADR 0008 §6's "never release" (the digest is absent from a Release build), and ADR 0014's falsifier
 # (no chip holds a store).
 #
-# Rows NOT run here, and who owns them: G3's remaining assertions, G5, G6, G7 and G8 are #34's and
-# #35's, and M1 is deferred to #12. Nothing here boots an image.
+# Rows NOT run here, and who owns them: G8 is #35's and M1 is the owner's (the pixels have no
+# automatic witness). Everything else — including the boot to the GEM desktop — runs here.
 #
 # CI is permanently offline (ADR 0010): this script is the verdict, run by hand. Exit code 0 = pass.
 # ============================================================================================
@@ -178,21 +178,75 @@ else
     bad "the release build did not run — see $stampdir/release.log"
 fi
 
-# ---- the boot (#34's row; not green yet) --------------------------------------------------
-step "boot — EmuTOS to the GEM desktop (G3/G5/G6; #34's remaining work)"
-if harness Debug boot --frames 200 --out "$stampdir/boot" >"$stampdir/boot.log" 2>&1; then
-    ok "boot: reached the desktop"
+# ---- the boot: the desktop, and the boot's half of G3, G5 and G6 ---------------------------
+# 800 frames is the measured boot with room to spare: EmuTOS reaches the desktop at frame 574 on
+# this image, and the harness runs 150 more frames to let the AES event loop settle before it reads
+# the OS's own counters. `boot` exits 0 only when the desktop was reached AND G5 and G6 are green,
+# so this row is three gate rows in one run. Debug, because G3's assertions exist only there.
+step "boot — EmuTOS to the GEM desktop (G5, G6), assertions silent through it (G3)"
+if harness Debug boot --frames 800 --out "$stampdir/boot" >"$stampdir/boot.log" 2>&1; then
+    desktop=$(grep -oE 'reached the desktop at [0-9]+' "$stampdir/boot/run.report" | head -1)
+    ok "boot: ${desktop:-reached the desktop}"
+    if grep -q "ASSERTION" "$stampdir/boot.log" "$stampdir/boot/run.state" 2>/dev/null; then
+        bad "G3 on the boot: an assertion fired — see $stampdir/boot.log"
+    else
+        ok "G3 on the boot: no assertion fired from reset to the desktop"
+    fi
+    g5=$(grep -E '^g5=' "$stampdir/boot/run.state" | cut -d= -f2)
+    g6=$(grep -E '^g6=' "$stampdir/boot/run.state" | cut -d= -f2)
+    if [ "$g5" = "green" ]; then
+        ok "G5: $(grep -cE '^  .* ok$' "$stampdir/boot/run.report") rates match the catalogue"
+    else
+        bad "G5: $g5 — $(grep -E 'MISMATCH' "$stampdir/boot/run.report" | head -3 | tr '\n' ';')"
+    fi
+    if [ "$g6" = "green" ]; then
+        ok "G6: $(grep -E '_frclock' "$stampdir/boot/run.report" | head -1 | sed 's/^  //')"
+    else
+        bad "G6: $g6 — see $stampdir/boot/run.report"
+    fi
 else
-    bad "boot: has not reached the desktop yet — see $stampdir/boot.log and $stampdir/boot/run.state"
+    bad "boot: see $stampdir/boot.log and $stampdir/boot/run.state"
+fi
+
+# ---- G1 / G2 on the machine's own trace ----------------------------------------------------
+# The synthetic trace above proves the scheduler's determinism; this proves it on EmuTOS's boot,
+# where the workload is real (a ROM's instruction mix, the beam, the MFP, the RAM refresh, the RTC
+# detection waits). 300 frames is the digest's cost, not its coverage: a Debug boot is ~0.55 s a
+# frame and 364 MB of digest at 800, and the row above already runs the boot to the desktop. Exit
+# code 2 here means "the desktop is not reached", which is expected at 300 and not this row's claim.
+step "G1 on the machine's own trace — two boots, byte-identical digest"
+harness Debug boot --frames 300 --out "$stampdir/boot-g1a" >"$stampdir/boot-g1a.log" 2>&1; g1a=$?
+harness Debug boot --frames 300 --out "$stampdir/boot-g1b" >"$stampdir/boot-g1b.log" 2>&1; g1b=$?
+if { [ "$g1a" -eq 0 ] || [ "$g1a" -eq 2 ]; } && { [ "$g1b" -eq 0 ] || [ "$g1b" -eq 2 ]; }; then
+    if cmp -s "$stampdir/boot-g1a/run.digest" "$stampdir/boot-g1b/run.digest"; then
+        ok "G1: $(wc -l <"$stampdir/boot-g1a/run.digest") digest words, identical"
+    else
+        bad "G1 on the boot: the streams differ — $(cmp "$stampdir/boot-g1a/run.digest" "$stampdir/boot-g1b/run.digest" 2>&1 | head -1)"
+    fi
+else
+    bad "G1 on the boot: a run failed — see $stampdir/boot-g1*.log"
+fi
+
+step "G2 on the machine's own trace — the same stream with host scheduling perturbed"
+harness Debug boot --frames 300 --inject --out "$stampdir/boot-g2" >"$stampdir/boot-g2.log" 2>&1; g2=$?
+if [ "$g2" -eq 0 ] || [ "$g2" -eq 2 ]; then
+    if cmp -s "$stampdir/boot-g1a/run.digest" "$stampdir/boot-g2/run.digest"; then
+        ok "G2 on the boot: identical to G1's stream"
+    else
+        bad "G2 on the boot: injection changed the stream — $(cmp "$stampdir/boot-g1a/run.digest" "$stampdir/boot-g2/run.digest" 2>&1 | head -1)"
+    fi
+else
+    bad "G2 on the boot: the injected run failed — see $stampdir/boot-g2.log"
 fi
 
 # ---- verdict -----------------------------------------------------------------------------
 echo
 if [ "$fail" -eq 0 ]; then
-    echo "PASS — G4, G1 and G2 green on the synthetic trace; assertions 1, 2, 6 and 7 silent;"
+    echo "PASS — G1 and G2 green on the synthetic trace and on EmuTOS's own boot; G3's assertions"
+    echo "       silent through both; G4; G5 and G6 on a boot that reaches the GEM desktop; G7;"
     echo "       the stores' boundary intact; no digest in Release."
-    echo "       Not proven here: G1/G2 over a TOS boot (the stream is the fixture's, not the machine's),"
-    echo "       G3's remaining assertions, G5–G8, and M1. Those are #34's, #35's and #12's."
+    echo "       Not proven here: G8 (the frame budget), and M1 (the owner's eyes). Those are #35's"
+    echo "       and the manual row's."
     exit 0
 fi
 

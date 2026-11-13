@@ -152,11 +152,22 @@ internal static class BootCommand
         var clock = System.Diagnostics.Stopwatch.StartNew();
         var random = new Random(20261111);
 
+        // G5 measures rates over whole frames, and never over the desktop's own settling. The window is
+        // the four frames after the first frame on the desktop: enough that a wrong rate cannot land on
+        // the right number by accident, short enough to stay inside the boot's cost.
+        const int RateWindow = 4;
+        RateSample? rateFrom = null;
+        RateSample? rateTo = null;
+        int lastFrame = 0;
+        long frclockAtDesktop = 0;
+        int desktopPcFrames = 0;
+
         try
         {
             for (int frame = 1; frame <= frames; frame++)
             {
                 machine.Engine.Run(frame * frameTicks);
+                lastFrame = frame;
 
                 if (inject)
                 {
@@ -210,16 +221,34 @@ internal static class BootCommand
                     break;
                 }
 
-                if (pc >= desktopStart && pc < desktopStart + 0x20000)
+                if (desktopFrames < 0 && pc >= desktopStart && pc < desktopStart + 0x20000)
                 {
-                    if (desktopFrames < 0)
+                    desktopFrames = frame;
+                    frclockAtDesktop = machine.PeekLong(Frclock);
+                }
+
+                if (desktopFrames > 0)
+                {
+                    if (pc >= desktopStart && pc < desktopStart + 0x20000)
                     {
-                        desktopFrames = frame;
+                        desktopPcFrames++;
                     }
 
-                    if (frame - desktopFrames >= 50)
+                    // The rate window is whole frames once the desktop is up — the PC wanders through the
+                    // AES event loop and in and out of the desktop's text, so the window is a frame count,
+                    // not a condition on the program counter.
+                    if (frame == desktopFrames + 1)
                     {
-                        break;   // 50 frames on the desktop is the boot's own settle time
+                        rateFrom = RateSample.Of(machine);
+                    }
+                    else if (frame == desktopFrames + 1 + RateWindow)
+                    {
+                        rateTo = RateSample.Of(machine);
+                    }
+
+                    if (frame - desktopFrames >= 150)
+                    {
+                        break;   // 150 frames on the desktop: the AES event loop's own settle time
                     }
                 }
             }
@@ -237,6 +266,69 @@ internal static class BootCommand
         }
 
         uint glApid = machine.PeekLong(symbols.TryGetValue("_gl_apid", out uint apid) ? apid : 0xE32A);
+
+        // ---- G5 and G6, the two rows a boot is the only way to prove ---------------------------------
+        var gate = new List<string>();
+        var g5 = new List<string>();
+        var g6 = new List<string>();
+        bool g5Green = false;
+        bool g6Green = false;
+
+        if (rateFrom is { } from && rateTo is { } to)
+        {
+            long windowFrames = RateWindow;
+            g5Green = true;
+            foreach ((string name, long measured, long designed) in new[]
+            {
+                ("video groups", (to.Groups - from.Groups) / windowFrames, 4_000),
+                ("DE records", (to.DeRecords - from.DeRecords) / windowFrames, 400),
+                ("video chunks", (to.Chunks - from.Chunks) / windowFrames, 4_000),
+                ("Timer B counts", (to.TimerBCounts - from.TimerBCounts) / windowFrames, 200),
+                ("HBL (per 2 frames)", (to.Hbl - from.Hbl) * 2 / windowFrames, 625),
+                ("VBL", (to.Vbl - from.Vbl) / windowFrames, 1),
+            })
+            {
+                bool exact = measured == designed;
+                g5Green &= exact || name == "VBL";   // VBL's own row is G6's business, never a rate gate
+                g5.Add($"  {name,-16} {measured,8} / frame   catalogue {designed,6}   {(exact ? "ok" : "MISMATCH")}");
+            }
+        }
+        else
+        {
+            g5.Add("  no rate window: the boot never reached the desktop, so no frame was measured");
+        }
+
+        long framesOnDesktop = desktopFrames < 0 ? 0 : lastFrame - desktopFrames;
+        if (desktopFrames >= 0)
+        {
+            long frclockAtEnd = machine.PeekLong(Frclock);
+            long frclockAdvanced = frclockAtEnd - frclockAtDesktop;
+            bool apidNonZero = glApid != 0;
+            bool pcSeenOnDesktop = desktopPcFrames > 0;
+            bool frclockOk = Math.Abs(frclockAdvanced - framesOnDesktop) <= 1;
+
+            g6Green = apidNonZero && pcSeenOnDesktop && frclockOk;
+            g6.Add($"  _frclock         advanced {frclockAdvanced} over {framesOnDesktop} frames on the desktop {(frclockOk ? "(±1: ok)" : "(MISMATCH)")}");
+            g6.Add($"  _gl_apid         {glApid:x8} {(apidNonZero ? "(non-zero: ok)" : "(zero: MISMATCH)")}");
+            g6.Add($"  pc in desktop text  {desktopPcFrames} of {framesOnDesktop} frames sampled in [{desktopStart:x6}, {desktopStart + 0x20000:x6}) {(pcSeenOnDesktop ? "(ok)" : "(never: MISMATCH)")}");
+            g6.Add($"  pc at the end    {machine.Cpu.PC:x6} (the AES event loop waits inside the BIOS's evnt_multi, so this need not be the desktop's own text)");
+            g6.Add($"  _nvbls           {lastNvbls} (the vbl queue's slot count, ARRAY_SIZE(vbl_list) = 8 — reported, never a frame counter)");
+        }
+        else
+        {
+            g6.Add("  the boot never reached the desktop");
+        }
+
+        if (desktopFrames >= 0)
+        {
+            gate.Add($"g5={(g5Green ? "green" : "red")}");
+            gate.Add($"g6={(g6Green ? "green" : "red")}");
+        }
+        else
+        {
+            gate.Add("g5=not measured");
+            gate.Add("g6=not measured");
+        }
 
         var state = new List<string>
         {
@@ -293,6 +385,10 @@ internal static class BootCommand
             $"subscriptions={machine.Engine.Subscriptions.ToString(CultureInfo.InvariantCulture)}",
             $"awaited_writes={machine.Engine.AwaitWriteSuspensions.ToString(CultureInfo.InvariantCulture)}",
             $"stale_wakes={machine.Engine.StaleWakes.ToString(CultureInfo.InvariantCulture)}",
+            $"frames_run={lastFrame.ToString(CultureInfo.InvariantCulture)}",
+            $"_frclock_at_desktop={frclockAtDesktop.ToString(CultureInfo.InvariantCulture)}",
+            $"g5={(desktopFrames < 0 ? "not measured" : g5Green ? "green" : "red")}",
+            $"g6={(desktopFrames < 0 ? "not measured" : g6Green ? "green" : "red")}",
         };
 
 #if DEBUG
@@ -347,6 +443,21 @@ internal static class BootCommand
             "  registered; no key ever arrives, and TOS gives up after its own 300 ms timeout.",
         };
 
+        int factsAt = report.FindIndex(line => line.StartsWith("the two boot facts", StringComparison.Ordinal));
+        if (factsAt >= 0)
+        {
+            List<string> section =
+            [
+                "G5 — per-chip rates over the four frames after the desktop is up (design/crossings.md):",
+                .. g5,
+                string.Empty,
+                "G6 — the machine's own clocks, read from the OS (design/validation.md §3):",
+                .. g6,
+                string.Empty,
+            ];
+            report.InsertRange(factsAt, section);
+        }
+
         File.WriteAllLines(Path.Combine(directory, "run.report"), report);
 
         foreach (string line in state)
@@ -355,7 +466,36 @@ internal static class BootCommand
         }
 
         Console.WriteLine($"wrote {directory}");
-        return desktopFrames >= 0 ? 0 : 2;
+
+        if (desktopFrames < 0)
+        {
+            Console.Error.WriteLine("boot: never reached the desktop — see run.state and probes.log");
+            return 2;
+        }
+
+        if (!g5Green || !g6Green)
+        {
+            Console.Error.WriteLine($"boot: reached the desktop at frame {desktopFrames}, but G5 is {(g5Green ? "green" : "red")} and G6 is {(g6Green ? "green" : "red")} — see run.report");
+            return 1;
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// The counters G5 differences: every structural rate the catalogue states per frame, read from the
+    /// chips that produce it. A sample is a whole-frame boundary; the row divides two samples by the
+    /// number of frames between them, so a rate that is right per frame cannot be right by accident.
+    /// </summary>
+    readonly record struct RateSample(long Groups, long DeRecords, long Chunks, long TimerBCounts, long Hbl, long Vbl)
+    {
+        internal static RateSample Of(MachineModel machine) => new(
+            machine.SystemControlUnit.GroupDeliveries,
+            machine.SystemControlUnit.DeRecords,
+            machine.Video.ChunkWrites,
+            machine.Timers.DeCounts,
+            machine.SystemControlUnit.HblRecords,
+            machine.SystemControlUnit.VblRecords);
     }
 
     static bool ManifestAccepts(string manifestPath, string file, string sha256)
