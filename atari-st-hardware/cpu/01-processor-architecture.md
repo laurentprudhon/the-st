@@ -1,302 +1,234 @@
 # MC68000 Processor
 
-> The Motorola MC68000 is the main CPU of the Atari ST. This document details the processor's architecture, registers, pins, bus cycles, interrupt system, and timing.
+> The CPU of this machine: what it exposes on its pins, what it does at reset, and how it talks on
+> the bus. The programmer's model and the instruction set are in
+> [02-mc68000-tutorial.md](./02-mc68000-tutorial.md) — this page is the hardware view, and it
+> deliberately does not repeat the instruction tables.
+>
+> Corrected 2026-11-12: the previous version gave the 68000 a `VBR`, an `A0` pin, a 32-clock bus
+> cycle and a per-instruction timing table, none of which are true of this part. The fabricated pin
+> numbers are gone rather than repaired: they differ per package, and a wrong pin number is worse
+> than none.
 
-## Processor Overview
+## 1. The part in this machine
 
-The Atari ST uses the **Motorola MC68000P8** running at **8 MHz** (16 MHz in Mega STE). This is a 16/32-bit CISC processor with:
+| Property | Value |
+|---|---|
+| Part | Motorola **MC68000** (later runs MC68HC000; CMOS, same instruction set and bus behaviour) |
+| Package | 64-pin DIP in the ST/STe; 68-pin PGA and PLCC exist and are electrically the same part |
+| Clock | **8 MHz** in ST, STe and Mega ST; **16 MHz** in Mega STE |
+| Data bus | 16 bits (`D0–D15`) |
+| Address bus | 24 bits (`A1–A23`), 16 MB of space |
+| Speed | 0.5 µs per minimum bus cycle (4 clocks at 8 MHz) |
+| Not present | cache, MMU, FPU, `VBR`, restartable "68010" bus-error frames, any 68020 extension |
 
-- **16 external data pins** (D0-D15, 16-bit data bus)
-- **24 external address pins** (A0-A23, 24-bit address bus → 16 MB address space)
-- **8 external interrupt levels** (IPL0-IPL2, with autovectoring for levels 1-7)
-- 16 × 32-bit general-purpose registers
-- 5 control registers (68010-compatible: SR, USP, two stack pointers, VBR)
-- **Bus cycles** at 8 MHz with 4 phase times (32 clock cycles)
+The 68008 (8-bit bus) and the 68010/68020 are different parts. Nothing in this machine runs them;
+code that probes for their instructions must trap as *illegal instruction* — see
+[02-mc68000-tutorial.md](./02-mc68000-tutorial.md) §12.
 
-### ST-Specific 68000 Variant
+## 2. Programmer's model
 
-The exact chip used varies by model and production run:
-- **MC68000P8** - Standard 8 MHz CMOS version
-- **MC68000P8B** - Binned 8 MHz version (faster timing)
-- **MC68EC000** - Embedded version (later production runs)
-- **mc68008** - 8-bit data bus variant (very limited, prototype)
-
-All are functionally compatible for emulator purposes.
-
-## Register Map
-
-### General-Purpose Registers (16 × 32-bit)
-
-| Register | Description |
-|------|------|
-| D0-D7 | Data registers (used for arithmetic, data movement, as addresses) |
-| A0-A5 | Address registers (general purpose) |
-| A6 | Frame pointer (convention) |
-| A7 | Stack pointer (SP) |
-
-Note: The upper 16 bits of each register are sign-extended in the 68000. Writing to D0-D7 as 16-bit values leaves the upper 16 bits unchanged, but writing as 32-bit clears the upper half.
-
-### Status Register (SR) - 16-bit
+| Register | Width | Role |
+|---|---|---|
+| `D0–D7` | 32 | data; byte/word writes touch only that part |
+| `A0–A6` | 32 | addresses; **all** writes are 32-bit, a word write sign-extends |
+| `A7` | 32 | stack pointer: `SSP` in supervisor mode, `USP` in user mode |
+| `PC` | 32 | address of the next instruction word to be *fetched* |
+| `SR` | 16 | flags, interrupt mask, supervisor and trace bits |
 
 ```
-Bits [15]: T (Trace) - set to trap after next instruction
-Bits [14]: - (reserved, always 1)
-Bits [13]: S (Supervisor) - 1 = supervisor mode
-Bits [12-8]: I (Interrupt Priority Level) - 0-7 (7 = NMI)
-Bits [7]: X ( Extend) - carry/borrow for shift/add carry
-Bits [6]: 0
-Bits [5]: V (Overflow) - arithmetic overflow
-Bits [4]: C (Carry) - add/digit carry
-Bits [3]: 0
-Bit [2]: Z (Zero) - result was zero
-Bit [1]: N (Negative) - result is negative
-Bits [0]: 0
+15  14  13  12 11 10   9  8  7  6  5   4   3   2   1   0
+ T   –   S   I2 I1 I0   –  –  –  –  –   X   N   Z   V   C
 ```
 
-### Control Registers
+`S`=1 supervisor, `T`=1 trace, `I2–I0` interrupt mask, and the condition codes `X N Z V C`
+(`CCR` = the low byte). Unimplemented bits read as 0. The 68000 has **no `VBR` and no `ISP`**: the
+exception vector table is fixed at address 0 and there are exactly two stack pointers, `USP` and
+`SSP`, one of which `A7` names at any moment. Privileged instructions are `MOVE` to `SR`,
+`ANDI/ORI/EORI` to `SR`, `STOP`, `RESET`, `RTE`, `MOVE USP`.
 
-| Register | Purpose | Access |
-|------|------|-|--------|
-| SR (Status Register) | Control flags, IPL, mode | MOVE.W to/from SR |
-| USP (User Stack Pointer) | User mode stack pointer | MOVE.L USP, An / An, USP |
-| VBR (Vector Base Register) | Exception vector table base | MOVE.L #addr, VBR (68010+) |
+## 3. Pins and signals
 
-Only available in supervisor mode via privileged instructions:
-- `MOVE.W <ea>, SR`
-- `ANDI.W #data, SR`
-- `ORI.W #data, SR`
-- `EORI.W #data, SR`
-- `MOVE.L #addr, VBR`
+Pin numbers are omitted on purpose: they are package-dependent (the DIP, the PGA and the PLCC all
+differ) and belong in the datasheet or the board schematic, not in a table that will silently rot.
 
-## Pinout (68-pin DIP)
+### Buses and strobes
 
-### Pin Designation
+| Signal | Dir | Meaning |
+|---|---|---|
+| `A1–A23` | out | word address. **There is no `A0`**: the byte position is encoded by the strobes |
+| `D0–D15` | bidir | `D15–D8` carries the byte at an even address, `D7–D0` the byte at an odd one |
+| `AS` | out | address strobe, active low, asserted one state after the address is valid |
+| `UDS`, `LDS` | out | upper/lower data strobe, active low: which byte(s) of `D0–D15` this cycle transfers |
+| `R/W` | out | 1 = read, 0 = write |
 
-```
-Pin   Signal      Dir    Description
-──────────────────────────────────────────────────────────────
-1     Vcc         PWR    +5V supply
-2     GND         GND    Ground
-3     DTACK       Input  Done Acknowledge (active low)
-4     VPA         IO     Vertical Parity Acknowledge
-5     AS          Output Address Strobe (active low)
-6     E           Output Enable (clock)
-7     LDAH        Output Lower Data Strobe (active low)
-8     UDAH        Output Upper Data Strobe (active low)
-9     DS0         Output Data Strobe 0 (active low)
-10    DS1         Output Data Strobe 1 (active low)
-11    BERR        Input  Bus Error (active low)
-12    Vcc         PWR    +5V
-13    BGACK       Input  Bus Grant Acknowledge (active low)
-14    BR          Input  Bus Request (active low)
-15    BG          Output Bus Grant (active low)
-16    R_W         Output Read / Write (high = Read)
-17    Vcc         PWR    +5V
-18    A14         Out    Address bit 14
-19    A15         Out    Address bit 15
-20    A16         Out    Address bit 16
-21    A17         Out    Address bit 17
-22    A18         Out    Address bit 18
-23    A19         Out    Address bit 19
-24    A20         Out    Address bit 20
-25    A21         Out    Address bit 21
-26    FC2         Out    Function Code bit 2 (high = supervisor)
-27    FC1         Out    Function Code bit 1
-28    FC0         Out    Function Code bit 0
-29    A22         Out    Address bit 22
-30    GND         GND    Ground
-31    A23         Out    Address bit 23 (MSB, sign extension bit)
-...
-2     GND                         (pins 2, 30, 36, 44, 52, 58, 64)
-```
+| `UDS` | `LDS` | `R/W` | Transfer |
+|---|---|---|---|
+| 0 | 0 | 1 | read word from an even address |
+| 0 | 1 | 1 | read byte at an even address (on `D15–D8`) |
+| 1 | 0 | 1 | read byte at an odd address (on `D7–D0`) |
+| 0 | 0 | 0 | write word |
+| 0 | 1 | 0 | write byte at an even address |
+| 1 | 0 | 0 | write byte at an odd address |
+| 1 | 1 | — | no transfer |
 
-The full pinout in two groups:
+Because a word or long access must start at an even address, `A1`=1 always means "byte access at an
+odd address". That is the whole byte-selection mechanism: the 68000 never puts a byte address on an
+`A0` line, which is why an ST schematic decodes `UDS`/`LDS` rather than `A0`.
 
-#### Left side (top to bottom, pins 1-31):
-```
-Vcc, GND, DTACK, VPA, AS, E, LDAH, UDAH, DS0, DS1, BERR, Vcc
-BGACK, BR, BG, R_W, Vcc, A14, A15, A16, A17, A18, A19, A20
-A21, FC2, FC1, FC0, A22, GND, A23
-```
+### Function codes
 
-#### Right side (top to bottom, pins 32-64):
-```
-D0, D1, D2, D3, D4, D5, D6, D7, D8, D9, D10, D11, D12, D13, D14, D15
-A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, GND
-CLK, !RESET, !HALT, Vcc, IPL0, IPL1, IPL2
-```
+| `FC2` | `FC1` | `FC0` | Cycle |
+|---|---|---|---|
+| 0 | 0 | 1 | user data |
+| 0 | 1 | 0 | user program |
+| 1 | 0 | 1 | supervisor data |
+| 1 | 1 | 0 | supervisor program |
+| 1 | 1 | 1 | CPU space — the interrupt acknowledge cycle (§6) |
+| other | | | not generated by the 68000 |
 
-### Signal Groups
+`FC2` distinguishes supervisor (1) from user (0); the pair `FC1 FC0` is `01` for a data access and
+`10` for a program fetch; `111` is CPU space. The ST uses them mostly to recognise the `FC`=111
+IACK cycle.
 
-#### Address Bus (A0-A23) - 24 lines
-| Pin | Signal | Width | Description |
-|------|--------|-
------|---------|
-| 2+15 | A0-A7 | 8 bits | Lower address (byte select for D0-D7) |
-| 18-32 | A8-A23 | 16 bits | Upper address |
+### Control
 
-The ST uses all 24 address lines for a **16 MB address space**: $000000-$FFFFFF.
+| Signal | Dir | Meaning |
+|---|---|---|
+| `CLK` | in | 8 MHz CPU clock (from the 32 MHz master, divided by 4) |
+| `DTACK` | in | slave acknowledge: this cycle's data is valid, or has been taken |
+| `BERR` | in | bus error: abort this cycle, enter the bus-error exception |
+| `HALT` | in | stop at the end of the current cycle, three-state the bus, wait |
+| `RESET` | in/out | system reset; also driven by the `RESET` instruction (124 clocks) |
+| `E` | out | 6800-style enable clock, `CLK`/10: low 6 clocks, high 4 |
+| `VPA` | in | 6800 device acknowledge — autovectors interrupts, stretches the cycle to `E` |
+| `VMA` | out | 6800 device select, asserted in response to `VPA` |
 
-#### Data Bus (D0-D15) - 16 lines, bidirectional
-| Pin | Signal | Description |
-|-----|--------|------|
-| 2+11 | D0-D7 | Lower byte (byte address $X0, $X1, ..., $X7) |
-| 32+11 | D8-D15 | Upper byte (byte address $X8, $X9, ..., $XF) |
+`E`, `VPA` and `VMA` exist for 6800 peripherals; the ST uses `VPA` only as the autovector
+handshake (§6), and does not use `E`/`VMA`.
 
-Note: A0 is used as the **byte select signal** when D0 is paired with D8. When A0 is low, D0-D7 are selected; when A0 is high, D8-D15 are selected.
+### Interrupts and bus arbitration
 
-#### Bus Control Signals
-| Signal | Pin | Dir | Description |
-|--------|-----|-----|------|
-| !AS | 5 | Out | Address Strobe - active low during address phase |
-| !LDAH / !UDAH | 7, 8 | Out | Upper/Lower Data Strobe - byte enables for data bus |
-| DS0/DS1 | 9, 10 | Out | Data Strobe - active during data phase |
-| E | 6 | Out | Clock enable (driven by oscillator) |
-| DTACK | 3 | In | Done Acknowledge - peripheral confirms data ready |
+| Signal | Dir | Meaning |
+|---|---|---|
+| `IPL2–IPL0` | in | interrupt level, active low: `000` = level 7, `111` = level 0 (no request) |
+| `BR` | in | bus request from another master |
+| `BG` | out | bus grant, asserted at the end of the current bus cycle |
+| `BGACK` | in | grant acknowledge: the other master now owns the bus |
 
-#### Function Code (FC0-FC2)
-| Pin | Signal | Description |
-|-----|--------|------|
-| 26 | FC2 | 1 = supervisor mode, 0 = user mode |
-| 27 | FC1 | 1 = data access, 0 = program access |
-| 28 | FC0 | 1 = data access (I/O or memory), 0 = program (instructions) |
+## 4. Reset
 
-Combined function codes:
-| FC2 | FC1 | FC0 | Meaning |
-|-----|-----|-----|---------|
-| 0 | 0 | 0 | User program fetch |
-| 0 | 0 | 1 | User data access (I/O or memory) |
-| 0 | 1 | 0 | User data access (I/O or memory) |
-| 0 | 1 | 1 | User data access (I/O or memory) |
-| 1 | 0 | 0 | Supervisor program fetch |
-| 1 | 00 | 1 | Supervisor data (I/O or mem) |
-| 1 | 1 | 0 | Supervisor data (I/O or mem) |
-| 1 | 1 | 1 | Supervisor data (I/O or mem) |
+The CPU's own sequence, on `RESET` asserted for at least 10 clocks:
 
-#### Interrupt Control
-| Signal | Pin | Dir | Description |
-|--------|-----|-----|------|
-| IPL0 | 61 | In | Interrupt level 0 (NMI) |
-| IPL1 | 62 | In | Interrupt level 1 (BLANK) |
-| IPL2 | 33 | In | Interrupt level 2 (HBLANK from Glue) |
-| BR | 14 | In | Bus Request (from DMA) |
-| BG | 15 | Out | Bus Grant (acknowledge to DMA) |
-| BGACK | 13 | In | Bus Grant Acknowledge |
+1. `S`=1, `T`=0, `I`=7 — i.e. `SR` reads back as `$2700`;
+2. `SSP` ← long at `$000000`;
+3. `PC` ← long at `$000004`;
+4. execution starts at that `PC`. **No stack frame is pushed**; no other register is defined, and
+   software must not assume zeros anywhere else.
 
-#### Control
-| Signal | Pin | Dir | Description |
-|--------|-----|-----|------|
-| CLK | 60 | In | 8 MHz system clock |
-| !RESET | 38 | In | Active low reset |
-| !HALT | 37 | In | Halt processor (active low) |
-| BERR | 11 | In | Bus Error (active low) |
+The `RESET` *instruction* is a different thing: it pulses the `RESET` pin for 124 clocks to reset the
+peripherals, and does not disturb the CPU's registers.
 
-## Reset Sequence
+Where those four vector bytes come from on this board — RAM at 0, written before the CPU is let out
+of reset — belongs to the boot description
+([../../atari-st-software/boot-os/01-boot-process.md](../../atari-st-software/boot-os/01-boot-process.md))
+and to the memory map ([../memory/01-memory-map.md](../memory/01-memory-map.md)).
 
-Upon reset, the MC68000:
+## 5. Bus cycles
 
-1. Initializes SR to `$2700` (supervisor mode, IPL=7, trace=0)
-2. Sets initial SSP (supervisor stack pointer) from address `$000000` (4 bytes)
-3. Sets PC (program counter) from address `$000004` (4 bytes)
-4. Begins executing from the address in `$000004-$000007`
+One cycle is **four clock periods** — eight states `S0–S7`, two states per clock — and no more,
+unless the slave asks for wait states:
 
-TOS ROM places the initial bootstrap code at `$004000-$004400` (the "warm boot" entry point) or `$002000` (ROM bootstrap). The exact vectors are:
+| State | Event |
+|---|---|
+| `S0` | bus idle; address still high-impedance; the previous cycle ends |
+| `S1` | address, `FC` and `R/W` driven, valid from here until `S0` of the next cycle |
+| `S2` | on the rising edge: `AS` asserted, plus `UDS`/`LDS` for the bytes in play |
+| `S3–S5` | the CPU waits, inserting whole clocks, until `DTACK` or `BERR` is sampled |
+| `S6` | the transfer: read — the device drives data, latched at the end of `S6`; write — the CPU drives it |
+| `S7` | strobes negated, cycle over |
 
-| Address | Content |
-|-- --|----|
-| $000000 | Initial SSP (4 bytes) |
-| $000004 | Initial PC (4 bytes) |
-| $000008 | Bus error vector |
-| $00000C | Address error vector |
-| ... | ... (continues through exception table) |
+`DTACK` and `BERR` are sampled on the falling edge of each clock while the cycle sits in `S3–S5`.
+Each clock `DTACK` is late adds a full clock: that is how the ST's GLUE and MMU make slow ROM and
+slow I/O, and how an absent device produces a bus error rather than a hang.
 
-## Bus Cycles
+A **long** access is two word cycles, high word first, at `addr` then `addr+2`, for reads and writes
+alike; the bus never moves 32 bits at once. A **read-modify-write** instruction (`ADD.W Dn,(An)`,
+`BSET`, `TAS`) is a read cycle followed by a write cycle to the same address with no arbitration in
+between — that gap-free pair is what makes `TAS` usable as a lock. `TAS` inserts one extra dead
+clock before its write; `CLR` performs a read before its write, so it can still bus-error on absent
+memory; `MOVEM` runs one cycle per register; `MOVEP` runs one byte cycle per transferred byte, on
+every second address.
 
-The 68000 uses **phase-based bus cycles**. Each bus cycle takes 4 phase times (32 clock cycles at 8 MHz = 4 us).
+**Arbitration.** `BR` is sampled every cycle. The CPU finishes the current bus cycle, asserts `BG`
+and three-states the bus; the other master asserts `BGACK` and drives it; when both drop, the CPU
+resumes. Asserting `HALT` alone parks the CPU at the end of the current cycle with the bus released,
+and releasing it reruns the interrupted cycle. `HALT` with `BERR` reruns the faulting cycle instead
+of taking the bus error ("rerun mode"). A bus error while an exception is being processed is a double
+bus fault and leaves the CPU halted until `RESET`.
 
-### Read Cycle Sequence
+`RESET` and `HALT` asserted together reset the machine and leave the CPU parked until `HALT` is
+released.
 
-```
-Phase 1 (t0-t7):  A0-A23 placed on address bus
-Phase 2 (t8-15):  AS goes low, FC0-FC2 placed on bus
-Phase 3 (t16-23): DS0/DS1, LDAH/UDAH strobe data phase
-Phase 4 (t24-31): Data on D0-D15, DTACK must arrive by t32
-```
+## 6. Interrupt interface
 
-### Write Cycle Sequence
+The CPU side only; the board's wiring is in [../bus/02-interrupts.md](../bus/02-interrupts.md).
 
-```
-Phase 1 (t0-t7):  A0-A23 placed on address bus
-Phase 2 (t8-15):  AS goes low, FC0-FC2 placed on bus
-Phase 3 (t16-23): D0-D15 placed, R_W stays high
-Phase 4 (t24-31): AS goes low again, data written
-```
+- An interrupt of level *L* is taken when *L* > `I2–I0`. Level 7 is the exception: never masked, and
+  edge-triggered (recognised on the transition to 7). Levels 1–6 are level-sensitive and must remain
+  asserted until the acknowledge.
+- Recognition happens between instructions, so latency = the remainder of the current instruction +
+  the acknowledge cycle + the exception sequence.
+- The acknowledge is one CPU-space cycle: `FC`=111, `A23–A4` all ones, `A3–A1` = *L*, read. If the
+  board answers with `DTACK` and a vector number on `D7–D0`, that vector is used; if it answers with
+  `VPA`, the CPU **autovectors** (`24 + L`); if it answers with `BERR`, the spurious interrupt
+  (vector 24) is taken.
+- On this board: the MFP supplies a vector through `DTACK` (level 6), while VBL (level 4, `$70`) and
+  HBL (level 2, `$68`) are autovectored — the level-6 autovector `$78` is *not* how an MFP handler is
+  reached.
+- Entry pushes `PC` then `SR` (6 bytes) and jumps through `4 × vector`; see
+  [02-mc68000-tutorial.md](./02-mc68000-tutorial.md) §6–§7 for the full sequence, the 14-byte bus
+  error frame, and the trace-versus-interrupt priority.
 
-### DMA Cycle
+## 7. Timing
 
-- DMA chip takes over bus after BGACK from CPU
-- DMA can generate its own address (only A1 used, rest from DMA)
-- DMA data transfer uses D0-D7 for lower byte, D8-D15 for upper byte
-- DMA DTACK is generated by the DMA chip (not the peripheral)
+One clock is 125 ns at 8 MHz; the minimum bus cycle is 4 clocks (500 ns) and a long access is 1 µs.
+A cycle stretched by one wait state is 625 ns.
 
-## Instruction Timing (Approximate)
+Per-instruction totals are not tabulated here. They are the sum of the bus cycles the instruction
+performs, and the verified effective-address table plus the cost rules are in
+[02-mc68000-tutorial.md](./02-mc68000-tutorial.md) §9; the exhaustive matrix, including the
+data-dependent `MUL`/`DIV` ranges and the exception entries, is Appendix D of the MC68000
+Programmer's Reference Manual. Any figure used as a golden in this project has to come from there or
+from measurement on the machine, not from a secondary table.
 
-| Instruction | Cycles (at 8 MHz) | Notes |
-|------|--------|------|
-| ABCD, NBCD | 15 | Byte arithmetic |
-| ADD/L/DIV/MUL/SUB | 23-121 | Varies by addressing mode |
-| ADDQ | 2-6 | Quick add |
-| AND/EOR/OR | 2-30 | Varies by addressing mode |
-| Bcc | 12-25 | Branch (taken/not taken) |
-| JSR | 11-12 | Jump to subroutine |
-| JMP | 9 | Jump |
-| LEA | 3-6 | Load effective address |
-| MOVE | 2-10 | Register-to-register |
-| MOVE.L to SR | 4 | Load status register |
-| MOVE.L to USP | 4 | Load user stack pointer |
-| PEA | 4-10 | Push effective address |
-| RTE | 30 | Return from exception |
-| RTS | 10 | Return from subroutine |
-| TRAP | 38 | Software trap |
-| NOP | 1 | No operation |
-| MOVEQ | 1 | Quick move immediate |
+## 8. Addressing modes
 
-At 8 MHz, a 2-cycle instruction takes 1 us. A 38-cycle TRAP takes 4.75 us.
+Twelve forms, encoded in one 6-bit field. Full treatment, including which modes each instruction
+accepts: [02-mc68000-tutorial.md](./02-mc68000-tutorial.md) §3.
 
-## Clock and Oscillator
+| Form | Syntax | Extension words | Example |
+|---|---|---|---|
+| data register direct | `Dn` | 0 | `MOVE.W D0,D1` |
+| address register direct | `An` | 0 | `MOVE.W D0,A1` |
+| register indirect | `(An)` | 0 | `MOVE.W (A0),D0` |
+| post-increment | `(An)+` | 0 | `MOVE.W (A0)+,D0` |
+| pre-decrement | `-(An)` | 0 | `MOVE.W D0,-(A7)` |
+| displacement | `d16(An)` | 1 | `MOVE.W 8(A0),D0` |
+| indexed | `d8(An,Xn)` | 2 | `MOVE.W 8(A0,D1.W),D0` |
+| absolute short | `(xxx).W` | 1 | `MOVE.W $1234,D0` |
+| absolute long | `(xxx).L` | 2 | `MOVE.W $00123456,D0` |
+| PC with displacement | `d16(PC)` | 1 | `LEA 8(PC),A0` |
+| PC with index | `d8(PC,Xn)` | 2 | `LEA 8(PC,D1.W),A0` |
+| immediate | `#imm` | 1 (byte/word) or 2 (long) | `MOVE.L #$12345678,D0` |
 
-The MC68000 is driven by an **8.000 MHz crystal** (Y1) connected to the CLK pin. Some timing values:
-
-| Clock | Frequency | Period |
-|------|--------|----------|
-| Main clock (CLK) | 8.000 MHz | 125 ns |
-| Phase time (t) | 8.000 MHz | 125 ns |
-| Bus cycle | 2.000 MHz | 500 ns (4 phases × 125 ns) |
-| RAM refresh | ~15.6 kHz | Depends on DRAM |
-
-## Exceptions and Interrupts
-
-See [bus/02-interrupts.md](../bus/02-interrupts.md) for the ST-specific interrupt system.
-
-## Addressing Modes
-
-The 68000 supports 13 addressing modes. Key ones used in ST programming:
-
-| Mode | Syntax | Example | Bytes/cycle |
-|------|--------|-|------|------|
-| Register | Dn / An | `MOVE.D0, D1` | 1/2 |
-| Register Direct | Dn / An | `ADD D0, D1` | 1/2 |
-| Address Register Indirect | (An) | `MOVE (A0), D0` | 1/2 |
-| Address Register Indirect with Displacement | (d16, An) | `MOVE 8(A0), D0` | 3/4 |
-| Address Register Indirect with Index | (d8, An, Xn.w) | `MOVE (8, D0.W), D1` | 3/4/6 |
-| Absolute Short | (d16) | `MOVE.L #(long), D0` | 3/4 |
-| Absolute Long | (d32) | `MOVE.L #long, D0` | 5/6 |
-| Program Counter | (d16, PC) | `MOVE.L (d16, PC), D0` | 3/4/6 |
-| Immediate | #data | `MOVE.L #value, D0` | 3 |
+Two rules that catch people out: `(An)+`/`-(An)` step by 2 even for byte operands, so the stack never
+misaligns; and the base for a PC-relative operand is the address of the *extension word*, not of the
+next instruction.
 
 ## References
 
-- [Atari ST Internals, Ch. 1.1 - The 68000 Processor (PDF)](https://www.atarimania.com/documents/Atari-ST-Internals.pdf)
-- [Motorola MC68000 User's Manual](https://www.nxp.com/docs/en/user-manual/MC68000UM.pdf) (NXP)
-- [68000 Assembly for the Atari ST - ChibiAkumas](https://www.chibiakumas.com/68000/atarist.php)
+- [Atari ST Internals, Ch. 1.1 — The 68000 Processor (PDF)](https://www.atarimania.com/documents/Atari-ST-Internals.pdf)
+- [M68000 8-/16-/32-bit Microprocessors User's Manual (NXP)](https://www.nxp.com/docs/en/reference-manual/MC68000UM.pdf)
+- [68000 Assembly for the Atari ST — ChibiAkumas](https://www.chibiakumas.com/68000/atarist.php)
 - [Atari ST Bus Guide](https://atariwiki.org/wiki/Wiki.jsp?page=Bus)

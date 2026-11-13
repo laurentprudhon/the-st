@@ -8,7 +8,7 @@
 - [System Overview](./architecture/01-system-overview.md) - Physical layout, models, and design philosophy
 - [Motherboard and Electronic Components](./architecture/02-motherboard-and-electronic-components.md) - Analysis of ST motherboard board-level components
 - [Processor Architecture](./cpu/01-processor-architecture.md) - MC68000/CPU details, pins, registers
-- [The 68000, a compact exhaustive tutorial](./cpu/02-mc68000-tutorial.md) - Addressing modes, every instruction by family, flags, exceptions, interrupts, bus cycles, timing
+- [The 68000, a compact exhaustive tutorial](./cpu/02-mc68000-tutorial.md) - Glossary first, then addressing modes, every instruction by family with what it does, flags, exceptions, interrupts, bus cycles, timing, with diagrams
 - [Custom Silicon](./architecture/05-custom-silicon.md) - The four Atari-designed chips: Glue, MMU, DMA, and Shifter
 
 ### Components
