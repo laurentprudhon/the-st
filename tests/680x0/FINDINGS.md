@@ -6,7 +6,8 @@ with `validation-harness cpu-tests` in a Debug build.
 | Run | Tests | Passed | Opcode files fully green |
 |---|---|---|---|
 | the whole corpus, first measurement of the core as it stood | 1 000 060 | 319 315 (31.9 %) | 0 of 124 |
-| the whole corpus, after this session's fixes | 1 000 060 | **887 989 (88.8 %)** | **30 of 124** |
+| the whole corpus, after the 2026-11-13 second session's fixes | 1 000 060 | 887 989 (88.8 %) | 30 of 124 |
+| the whole corpus, after the 2026-11-13 third session's fixes (rows 28–35) | 1 000 060 | **957 309 (95.7 %)** | **42 of 124** |
 | the vendored sample (24 tests per file, `tests/680x0/v1`) | 2 976 | 2 657 (89.3 %) | 73 of 124 |
 
 The sample tracks the whole corpus to within a point, which is what it is for: a two-second check instead
@@ -55,6 +56,7 @@ care why a flag is wrong as long as the branch lands).
 | 32 | `CHK` 5 % — its flags | the flags were not written at all | `Z`, `V` and `C` always cleared; `N` **set** by the `Dn < 0` trap, **cleared** by the `Dn > bound` trap, left alone when there is no trap; X untouched, comparison signed |
 | 33 | the boot's first VBL took an address error at `0x004EB9` and panicked every frame | `ADDQ`/`SUBQ` to memory resolved the effective address *twice* (once to read, once to write), so the following instruction's opcode word was fetched as a second displacement — the victim was EmuTOS's `subq.w #1,_vblsem.w`, whose second "displacement" was the `4eb9` of the next `jsr` | resolve the address once, `ReadAt`/`WriteAt` against it |
 | 34 | `Bcc` 38 tests, all the `xxFF` forms | a displacement of `0xFF` was read as a 32-bit long displacement (a 68020 form that the 68000 does not have) | `0xFF` is −1 |
+| 35 | `CMPA.w/l` 5 512 / 5 615 — the flags changed on an instruction that faulted | the branch had no fault guard after its source read, so a faulted operand was still compared | `if (_busFaulted) return;` after the read |
 
 ## What is still open
 
