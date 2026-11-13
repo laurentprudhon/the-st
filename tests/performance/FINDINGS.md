@@ -111,15 +111,33 @@ Cheap, design-neutral, measurable (nothing here moves an instant, a record or an
 | change | recovered |
 |---|---|
 | retention every 256 batches instead of every 16 (`RetentionEvery`) | ~5 ms a frame |
-| a last-record fast path in `ValueLog`'s searches (99.7 → 1.9 ns for the newest-record read, most of 68.6 M searches) | ~3 ms |
-| array-indexed log and subscriber tables in place of `Dictionary<Channel, …>` (1.8 ms) and a one-subscriber inline slot in place of `Dictionary<Channel, List<Subscriber>>` (≈ half of the 6 ms fire path) | ~4 ms |
-| **together** | **65 → ~50 ms a frame** |
+| a last-record fast path in `ValueLog`'s searches (99.7 → 1.9 ns for the newest-record read, most of 68.6 M searches) | ~3 ms → **0.90 ms measured** |
+| array-indexed log and subscriber tables in place of `Dictionary<Channel, …>` (1.8 ms) and a one-subscriber inline slot in place of `Dictionary<Channel, List<Subscriber>>` (≈ half of the 6 ms fire path) | ~4 ms → **1.13 ms measured**, slot **reverted** |
+| **together** | **65 → ~50 ms a frame** → **34.3 → ~30.7 ms measured** on the laptop host |
 
 **The fast path, measured rather than projected** (2026-11-13, laptop host, ten *alternating* adjacent
 pairs): **0.90 ms a frame** — 29.32 ms a frame in `validate.sh` against 31.45 before it. Nine of the ten
 pairs favoured it and one was −0.41 ms. The ~3 ms above was extrapolated from the 99.7 ns of a search over
 **10 000** records; the boot's logs hold a few hundred, so a search is ~8 probes and not ~20, and the
 fast path can only remove what the walk actually cost. The projection was a share, not a measurement.
+
+**The array tables, measured**: **1.13 ms a frame**, six alternating pairs, all six positive (0.13–2.79).
+That is the dictionary half of the "~4 ms" row above; the inline slot was supposed to be the other half.
+
+**The one-subscriber inline slot was implemented, measured, and reverted** — it is a pessimization on this
+engine, both ways it can be written:
+
+| spelling | allocation | pairs | result |
+|---|---|---|---|
+| single slot, **reclaimed** when a wire drops back to one waiter | 22.78 → **26.77 MB** a frame | 8, all negative | **3.9 ms slower** |
+| single slot, list kept once created (no reclaim) | 22.92 MB a frame | 4, all negative | **0.99 ms slower** |
+
+The first spelling allocates a `List` per burst on a wire that oscillates between one and two waiters —
+4 MB a frame of garbage to save one dereference. The second spelling removes the garbage and is still
+~1 ms slower: `Count` and the indexer become branches (`_many is null ? _one : _many[index]`) on the hot
+fire loop, and the three-field set is a worse cache line than the list pointer it replaced. The row's
+"≈ half of the 6 ms fire path" assumed the dictionary was still in front of the list; after the array
+tables there is no dictionary left to remove, and what remains does not pay for itself.
 
 And the wall those do not touch: **17.2 GB is allocated inside continuations, 380 B per resume** —
 async state-machine boxes plus a `Resume` object for every wake. At the engine's measured 88 ns
