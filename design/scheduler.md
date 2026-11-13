@@ -125,8 +125,14 @@ pendingReads(cont)                          // one per suspended coroutine (inva
   record once anything was trimmed in between; `SystemControlUnit`'s bus exchange and `TimersAndEvents`'
   `DE` scan both stored indices and both broke the moment retention ran (a dead bus: three cycles
   started, no answer, the CPU suspended).
-- **Cadence is an implementation detail**: every 16 batches, fine enough that the retained window tracks
-  the machine, coarse enough not to walk the logs per instant. G7 (`check-retention`) proves the rule
+- **Cadence is an implementation detail**: every 128 batches (#38; 16 before). Trimming less often only
+  *retains more*, so the cadence can never change an answer — it was 1 848 trims and ~2.7 ms a frame of
+  bookkeeping at 16, for a machine that retains a few hundred records. Measured against 256 in three
+  interleaved pairs (256 retains 1 522 records and reallocates more: GC 1.26 vs 0.54 ms a frame), 128 won
+  every pair by 2.7–5.0 ms; then 16 against 128 in three adjacent interleaved pairs on a quiet host
+  (i7-12700H × 20 cores), 34.14 / 34.04 / 33.20 ms against 32.46 / 32.02 / 32.05 — 128 again won every
+  pair, by 1.15–2.02 ms. Both digests were unchanged by the switch on both hosts (boot 10 801 972 words,
+  synthetic 95 999, sha256 `ffd761fc…` and `9b92d3ae…` on each). G7 (`check-retention`) proves the rule
   rather than the cadence.
 
 ## 4. Debug assertions (all off in release)
