@@ -223,8 +223,11 @@ public sealed partial class M68000
             return;
         }
 
-        // MOVEP sits in the bit-operation block's space: mode 001 with a non-zero operation field
-        if ((op & 0x0100) != 0 && mode == 1 && size != 0)
+        // MOVEP sits in the bit-operation block's space: mode 001 (address-register direct, which no bit
+        // operation can use) with bit 8 set. Its own bits 7-6 are the form, so a word form has size 0 —
+        // testing size here sent every MOVEP.w memory → register into the bit-operation path instead,
+        // where it silently did nothing.
+        if ((op & 0x0100) != 0 && mode == 1)
         {
             await MovepAsync(op);
             return;
@@ -419,7 +422,8 @@ public sealed partial class M68000
         uint address = GetA(addressReg) + (uint)(short)await FetchAsync();
         if (_busFaulted) return;
 
-        bool toMemory = form <= 1;
+        // Bits 7-6: 00 and 01 are memory → register (word, long), 10 and 11 are register → memory.
+        bool toMemory = form >= 2;
         bool isLong = (form & 1) != 0;
 
         if (toMemory)
@@ -461,7 +465,7 @@ public sealed partial class M68000
             }
 
             if (_busFaulted) return;
-            _d[dataReg] = value;
+            _d[dataReg] = isLong ? value : (_d[dataReg] & 0xFFFF0000) | value;
         }
 
         Clocks(2);
@@ -521,10 +525,22 @@ public sealed partial class M68000
         // CHK
         if ((op & 0x01C0) == 0x0180)   // CHK (bits 8-6 = 110)
         {
-            uint bound = (uint)(short)(await ReadEaAsync(mode, reg, 1) & 0xFFFF);
+            // The flags are the corpus's, and they are not the PRM's "undefined": Z, V and C are always
+            // cleared, N is *set* when the trap is Dn < 0, *cleared* when it is Dn > bound, and left
+            // alone when there is no trap at all; X is untouched. The comparison is signed.
+            int bound = (short)(await ReadEaAsync(mode, reg, 1) & 0xFFFF);
+            if (_busFaulted) return;
             int value = (short)(_d[(op >> 9) & 0x7] & 0xFFFF);
-            if (value < 0 || value > (int)bound)
+
+            _sr = (ushort)(_sr & ~(FlagZ | FlagV | FlagC));
+            if (value < 0)
             {
+                _sr = (ushort)(_sr | FlagN);
+                await EnterExceptionAsync(6, 0);
+            }
+            else if (value > bound)
+            {
+                _sr = (ushort)(_sr & ~FlagN);
                 await EnterExceptionAsync(6, 0);
             }
 
@@ -694,26 +710,8 @@ public sealed partial class M68000
                     uint nv = mode == 0 ? _d[reg] & 0xFF : await ReadAtAsync(nbcdAddress, 0);
                     if (_busFaulted) return;
 
-                    int extend = (_sr & FlagX) != 0 ? 1 : 0;
-                    int low = 0 - (int)(nv & 0x0F) - extend;
-                    int high = 0 - (int)((nv >> 4) & 0x0F);
-                    if (low < 0)
-                    {
-                        low += 10;
-                        high -= 1;
-                    }
-
-                    bool carry = high < 0;
-                    if (carry)
-                    {
-                        high += 10;
-                    }
-
-                    uint nbcdResult = (uint)(((high & 0x0F) << 4) | (low & 0x0F));
-
-                    _sr = (ushort)(carry ? _sr | (FlagC | FlagX) : _sr & ~(FlagC | FlagX));
-                    _sr = (ushort)((nbcdResult == 0 && !carry) ? _sr | FlagZ : _sr & ~FlagZ);
-                    _sr = (ushort)((nbcdResult & 0x80) != 0 ? _sr | FlagN : _sr & ~FlagN);
+                    BcdCore(nv, 0, subtract: true, (_sr & FlagX) != 0, out uint nbcdResult, out bool carry, out bool overflow);
+                    SetBcdFlags(nbcdResult, carry, overflow);
 
                     if (mode == 0)
                     {
@@ -825,10 +823,20 @@ public sealed partial class M68000
     }
 
     /// <summary>
-    /// MOVEM registers → memory (0x4880 word, 0x48C0 long; UM §4.6). The predecrement form stores A7
-    /// first at the highest address and D0 last — the mask walked downwards, the base decremented once
-    /// per register before its store. Every other form stores upwards in mask order, D0 first, and leaves
-    /// the base register alone unless it is (An)+. The width is in bytes, as in the other direction.
+    /// MOVEM registers → memory (0x4880 word, 0x48C0 long; UM §4.6). The predecrement form stores the
+    /// highest register at the highest address and D0 last, at the lowest — so memory reads upwards in
+    /// register order while the base decrements once per store. Every other form stores upwards in mask
+    /// order, D0 first, and leaves the base register alone unless it is (An)+. The width is in bytes, as
+    /// in the other direction.
+    ///
+    /// The predecrement form's mask is **reversed**: bit n selects register 15−n, not register n. That is
+    /// not a typo and not this core's invention — it is how the 68000 encodes the list for −(An)
+    /// (the assembler writes `movem.l d2-d7/a2-a6,-(sp)` as 0x48E7 0x3F3E, the bit-reversal of the
+    /// 0x7CFC it writes for the same list in the other modes), and it is what makes the mnemonic's list
+    /// mean the same thing in both directions: a save of that list and a restore of 0x7CFC agree.
+    /// EmuTOS's `_memmove` relies on it, and 528 of the corpus's clean predecrement tests pin it. Read
+    /// straight, the save lands one register off and `_memmove` restores a clobbered A6 — which is
+    /// exactly how this core's boot died inside `doprintf`.
     /// </summary>
     async ValueTask MovemToMemoryAsync(ushort op)
     {
@@ -852,11 +860,13 @@ public sealed partial class M68000
 
         if (predecrement)
         {
-            for (int bit = 15; bit >= 0; bit--)
+            // Bit upwards (the address travels downwards, so the first store is the highest address) and
+            // the register reversed: bit 0 is A7, bit 15 is D0.
+            for (int bit = 0; bit < 16; bit++)
             {
                 if ((mask & (1 << bit)) == 0) continue;
                 address -= (uint)bytes;
-                await StoreMovemAsync(address, bit, size);
+                await StoreMovemAsync(address, 15 - bit, size);
                 if (_busFaulted) return;
             }
 
@@ -1107,20 +1117,48 @@ public sealed partial class M68000
             return;
         }
 
-        uint current = await ReadEaAsync(mode, reg, size);
+        if (mode == 0)
+        {
+            uint inRegister = _d[reg] & SizeMask(size);
+            uint registerResult;
+            if ((op & 0x0100) != 0)
+            {
+                registerResult = (inRegister - (uint)data) & SizeMask(size);
+                SetSubFlags((uint)data, inRegister, registerResult, size);
+            }
+            else
+            {
+                registerResult = (inRegister + (uint)data) & SizeMask(size);
+                SetAddFlags((uint)data, inRegister, registerResult, size);
+            }
+
+            _d[reg] = (_d[reg] & ~SizeMask(size)) | registerResult;
+            Clocks(1);
+            return;
+        }
+
+        // The memory form is the one read-modify-write whose operand can carry extension words, so its
+        // address is resolved once here and the store goes to that address: resolving it a second time
+        // (as ReadEaAsync + WriteEaAsync would) fetched the *next instruction's* opcode word as a second
+        // displacement, wrote to it and skipped a word — which is how EmuTOS's VBL handler died on its
+        // first `subq.w #1,_vblsem.w`, with an address error at 0x004EB9 (the following `jsr` word).
+        uint addAddress = await EaAddressAsync(mode, reg, size);
+        if (_busFaulted) return;
+
+        uint current = await ReadAtAsync(addAddress, size);
         if (_busFaulted) return;
         uint result;
         if ((op & 0x0100) != 0)
         {
             result = (current - (uint)data) & SizeMask(size);
-            await WriteEaAsync(mode, reg, size, result);
+            await WriteAtAsync(addAddress, size, result);
             if (_busFaulted) return;
             SetSubFlags((uint)data, current, result, size);
         }
         else
         {
             result = (current + (uint)data) & SizeMask(size);
-            await WriteEaAsync(mode, reg, size, result);
+            await WriteAtAsync(addAddress, size, result);
             if (_busFaulted) return;
             SetAddFlags((uint)data, current, result, size);
         }
@@ -1140,12 +1178,10 @@ public sealed partial class M68000
         {
             displacement = (short)await FetchAsync();
         }
-        else if (displacement == 0xFF)
-        {
-            displacement = (int)await FetchLongAsync();
-        }
         else if (displacement >= 0x80)
         {
+            // the 68000 has no 32-bit branch form: 0xFF is a displacement of −1, not an escape (adding
+            // the 68020's long form here turned every "branch back one byte" into a four-byte read)
             displacement -= 0x100;
         }
 
@@ -1405,6 +1441,7 @@ public sealed partial class M68000
         if (size == 3)   // CMPA
         {
             uint value = (op & 0x0100) != 0 ? await ReadEaAsync(mode, reg, 2) : (uint)(short)(await ReadEaAsync(mode, reg, 1) & 0xFFFF);
+            if (_busFaulted) return;
             uint destination = GetA((op >> 9) & 0x7);
             SetCompareFlags(value, destination, destination - value, 2);
             Clocks(1);
@@ -1491,8 +1528,67 @@ public sealed partial class M68000
     }
 
     /// <summary>
-    /// ABCD / SBCD / NBCD — packed BCD, with the extend bit as the carry in. Z is cleared by a non-zero
-    /// result and never set, so a multi-digit chain keeps the Z of its first digit.
+    /// The arithmetic all three packed-BCD instructions share (ABCD, SBCD, NBCD — UM §4.2): a binary
+    /// add or subtract of the two bytes with X as the carry in, then a decimal adjust on each nibble.
+    /// Written from the corpus, which pins the behaviour on operands that are *not* valid BCD (0xBD +
+    /// 0xBD) — the adjust follows the binary sum's carry through both nibbles rather than adding the
+    /// decimal digits, so a digit sum of 26 still lands on a legal-looking byte. The flags are the
+    /// other half of the same finding: X and C take the decimal carry/borrow, V takes FX68K's overflow
+    /// of the *adjusted* high nibble (a nibble that stayed under 8 while the binary byte went negative),
+    /// and Z is the one flag a BCD instruction never sets — it only clears, so a multi-digit chain
+    /// keeps the Z of its first digit.
+    /// </summary>
+    static void BcdCore(uint source, uint destination, bool subtract, bool extend, out uint result, out bool carry, out bool overflow)
+    {
+        int extension = extend ? 1 : 0;
+        int sourceByte = (int)(source & 0xFF);
+        int destinationByte = (int)(destination & 0xFF);
+        int binary;
+        bool lowAdjust;
+        int highNibble;
+
+        if (subtract)
+        {
+            bool borrow = sourceByte + extension > destinationByte;
+            binary = (destinationByte - sourceByte - extension) & 0xFF;
+            lowAdjust = (sourceByte & 0xF) + extension > (destinationByte & 0xF);
+            int adjusted = (binary - (lowAdjust ? 6 : 0)) & 0x1FF;
+            highNibble = ((adjusted >> 4) - (borrow ? 6 : 0)) & 0xFF;
+            overflow = (highNibble & 8) == 0 && (binary & 0x80) != 0;
+            result = (uint)(((highNibble & 0xF) << 4) + (adjusted & 0xF));
+            carry = (highNibble & 0x10) != 0 || borrow;
+        }
+        else
+        {
+            int sum = sourceByte + destinationByte + extension;
+            bool survived = sum > 0xFF;
+            binary = sum & 0xFF;
+            lowAdjust = (sourceByte & 0xF) + extension + (destinationByte & 0xF) > 0xF || (binary & 0xF) > 9;
+            int adjusted = (binary + (lowAdjust ? 6 : 0)) & 0x1FF;
+            bool highCarry = survived || (adjusted & 0xF0) > 0x90 || (adjusted & 0x100) != 0;
+            highNibble = ((adjusted >> 4) + (highCarry ? 6 : 0)) & 0xFF;
+            overflow = (highNibble & 8) != 0 && (binary & 0x80) == 0;
+            result = (uint)(((highNibble & 0xF) << 4) + (adjusted & 0xF));
+            carry = (highNibble & 0x10) != 0 || survived;
+        }
+    }
+
+    /// <summary>The BCD flags: C and X the decimal carry, V the adjusted-nibble overflow, N the result's
+    /// bit 7, Z cleared only (never set) by a non-zero result.</summary>
+    void SetBcdFlags(uint result, bool carry, bool overflow)
+    {
+        _sr = (ushort)(carry ? _sr | (FlagC | FlagX) : _sr & ~(FlagC | FlagX));
+        _sr = (ushort)(overflow ? _sr | FlagV : _sr & ~FlagV);
+        _sr = (ushort)((result & 0x80) != 0 ? _sr | FlagN : _sr & ~FlagN);
+        if (result != 0)
+        {
+            _sr = (ushort)(_sr & ~FlagZ);
+        }
+    }
+
+    /// <summary>
+    /// ABCD / SBCD — packed BCD between two bytes, with the extend bit as the carry in; -(Ay),-(Ax)
+    /// for the memory form (both bytes read before either is written, the source first).
     /// </summary>
     async ValueTask BcdAsync(ushort op, bool subtract)
     {
@@ -1516,53 +1612,8 @@ public sealed partial class M68000
             destination = _d[destinationReg] & 0xFF;
         }
 
-        int extend = (_sr & FlagX) != 0 ? 1 : 0;
-        int low = (int)(destination & 0x0F);
-        int high = (int)((destination >> 4) & 0x0F);
-        int sourceLow = (int)(source & 0x0F);
-        int sourceHigh = (int)((source >> 4) & 0x0F);
-        bool carry;
-
-        if (subtract)
-        {
-            low -= sourceLow + extend;
-            high -= sourceHigh;
-            if (low < 0)
-            {
-                low += 10;
-                high -= 1;
-            }
-
-            carry = high < 0;
-            if (carry)
-            {
-                high += 10;
-            }
-        }
-        else
-        {
-            low += sourceLow + extend;
-            if (low > 9)
-            {
-                low -= 10;
-                high += 1;
-            }
-
-            high += sourceHigh;
-            carry = high > 9;
-            if (carry)
-            {
-                high -= 10;
-            }
-        }
-
-        uint result = (uint)(((high & 0x0F) << 4) | (low & 0x0F));
-
-        _sr = (ushort)(carry ? _sr | (FlagC | FlagX) : _sr & ~(FlagC | FlagX));
-        if (result != 0)
-        {
-            _sr = (ushort)(_sr & ~FlagZ);
-        }
+        BcdCore(source, destination, subtract, (_sr & FlagX) != 0, out uint result, out bool carry, out bool overflow);
+        SetBcdFlags(result, carry, overflow);
 
         if (predecrement)
         {

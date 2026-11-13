@@ -48,21 +48,29 @@ care why a flag is wrong as long as the branch lands).
 | 25 | `MOVEM` stores executed as `NBCD`, and the boot's inlined `memset` "cleared" one zero byte per instruction | the `0x48xx` block never dispatched the store form: `EXT.W`/`EXT.L` occupied the only slots, and everything else fell through to `NBCD` | dispatch `(op & 0xFF80) == 0x4880` with `mode >= 2` in that block, before `PEA`/`NBCD` |
 | 26 | a word `MOVEM` moved every register by one byte, a long by two; `(An)+`/`-(An)` moved the base twice | the transfer width was the EA helper's size *index* (1 = word, 2 = long) reused as a byte count, and the base register was handed to the helper that advances it per operand | a byte width (2/4) for the address arithmetic, the base register handled here, `(An)+` advanced by the 2-byte access the corpus measures |
 | 27 | every static bit operation (`BTST #n,<ea>` and the `BCHG/BCLR/BSET` forms) left the flags as they were, and the following branch took the wrong path | bit 8 was read as "immediate form", so the `0x08xx` block fell into the immediate-arithmetic path, where operation field `4` means nothing | the `0x08xx` block is the static form (bit number in the following extension word), bit 8 selects the register form |
+| 28 | `MOVEM` to `-(An)` wrote the *wrong registers*: a save of `d2-d7/a2-a6` restored one register off, so a subroutine that pushed fifteen registers got a clobbered `A6` back | the predecrement form's mask is **reversed** — bit n selects register 15−n — and the core read it straight | walk the bits upwards, store `15 − bit`; 528 of the corpus's clean predecrement tests pin it |
+| 29 | every `MOVEP` test failed (16 130), in both directions | the direction bit was inverted (`form <= 1` for memory → register, which is `form >= 2`), and the dispatch demanded a non-zero size field, so the *word* memory → register form never reached `MOVEP` at all and was executed as a bit operation, silently doing nothing | `form >= 2` is the store; `mode 001` with bit 8 set is `MOVEP` whatever its bits 7-6 are |
+| 30 | `MOVEP.w` memory → register truncated the data register | the loaded word was assigned to the whole register | keep the high half: `(Dn & 0xFFFF0000) \| value` |
+| 31 | `ABCD`/`SBCD`/`NBCD` 25 % — the value wrong on any operand that is not valid BCD, and Z/V wrong | the decimal digit-by-digit chain cannot express a nibble sum ≥ 20 (`0xBD + 0xBD`), and Z was set from a carry | the FX68K chain: binary add/subtract with X, then adjust each nibble from the *binary* carry; `C = X` = the decimal carry, `V` = the adjusted high nibble's overflow, `N` = bit 7, `Z` cleared only by a non-zero result |
+| 32 | `CHK` 5 % — its flags | the flags were not written at all | `Z`, `V` and `C` always cleared; `N` **set** by the `Dn < 0` trap, **cleared** by the `Dn > bound` trap, left alone when there is no trap; X untouched, comparison signed |
+| 33 | the boot's first VBL took an address error at `0x004EB9` and panicked every frame | `ADDQ`/`SUBQ` to memory resolved the effective address *twice* (once to read, once to write), so the following instruction's opcode word was fetched as a second displacement — the victim was EmuTOS's `subq.w #1,_vblsem.w`, whose second "displacement" was the `4eb9` of the next `jsr` | resolve the address once, `ReadAt`/`WriteAt` against it |
+| 34 | `Bcc` 38 tests, all the `xxFF` forms | a displacement of `0xFF` was read as a 32-bit long displacement (a 68020 form that the 68000 does not have) | `0xFF` is −1 |
 
 ## What is still open
 
-30 opcode files are green; the 94 that are not are dominated by four families:
+Measured 2026-11-13 (third session) against the whole corpus, after rows 28–34:
 
 | Family | State | What it needs |
 |---|---|---|
-| `MOVEM.w/l` | 21–22 / 24 per file | green except for the exception-frame bytes below (3 in each file, all in the group-0 frame's access-address/status words) |
-| `MOVEP.w/l` | 0 % | the four forms are decoded but the byte order/pairing does not match the corpus yet |
-| `ABCD`/`SBCD`/`NBCD` | ~25 % | the BCD chain's Z rule and the carry-out of the high digit |
-| `CHK` | 5 % | its two exception paths and the bound comparison |
-| the rest | 50–97 % | one-bit flag differences on instructions whose access faulted, and the frame conventions below |
+| `MOVEP.w/l`, `ABCD`, `SBCD`, `NBCD` | green | — |
+| `MOVEM.w/l` | 7 556 / 8 065 | the residue is the exception frame's access-address/status words (the conventions below), not the transfer |
+| `CHK` | 7 990 / 8 065 | the same frame words on its two trap paths |
+| everything else | one-bit flag differences on instructions whose access faulted, and the frame conventions below |
 
-The sample (`v1`, 2 976 tests) reads **2 696 passed (90.6 %)** after the three CPU fixes of
-2026-11-13's second session; the whole corpus has not been re-measured since them.
+The remaining failures across the corpus are dominated by one class: **the group-0/2 frame's own words**
+(the saved `pc` from the two-word prefetch, and the status word's access class — see the three
+conventions below). That is design work — the real prefetch queue, ADR 0009 §4 — not a bug list.
+
 
 ## Three things the corpus fixes that the manuals leave to the implementation
 

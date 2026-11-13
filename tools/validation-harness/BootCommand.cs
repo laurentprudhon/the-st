@@ -109,7 +109,7 @@ internal static class BootCommand
         {
             if (traceWriter is not null)
             {
-                traceWriter.WriteLine($"{instant} {pc:x6} {opcode:x4} sr={machine.Cpu.SR:x4} d0={machine.Cpu.PeekD(0):x8} a7={machine.Cpu.PeekA(7):x8}");
+                traceWriter.WriteLine($"{instant} {pc:x6} {opcode:x4} sr={machine.Cpu.SR:x4} d0={machine.Cpu.PeekD(0):x8} d1={machine.Cpu.PeekD(1):x8} a0={machine.Cpu.PeekA(0):x8} a1={machine.Cpu.PeekA(1):x8} a6={machine.Cpu.PeekA(6):x8} a7={machine.Cpu.PeekA(7):x8}");
             }
 
             ring.Enqueue($"{instant} {pc:x6} {opcode:x4}");
