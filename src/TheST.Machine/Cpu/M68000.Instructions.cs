@@ -64,8 +64,11 @@ public sealed partial class M68000
 
             case 6:
             {
+                // (d8, An, Xn): the displacement is the brief extension word's low byte, the index its
+                // top bits — forgetting the index here makes every indexed operand point elsewhere
                 ushort extension = await FetchAsync();
-                return GetA(reg) + (uint)ExtensionDisplacement(extension);
+                if (_busFaulted) return 0;
+                return GetA(reg) + (uint)ExtensionDisplacement(extension) + IndexValue(extension);
             }
 
             case 7:
@@ -82,7 +85,8 @@ public sealed partial class M68000
                     case 3:
                     {
                         ushort extension = await FetchAsync();
-                        return _pc - 2 + (uint)ExtensionDisplacement(extension);
+                        if (_busFaulted) return 0;
+                        return _pc - 2 + (uint)ExtensionDisplacement(extension) + IndexValue(extension);
                     }
                 }
 
@@ -142,6 +146,7 @@ public sealed partial class M68000
         }
 
         uint word = await FetchAsync();
+        if (_busFaulted) return 0;
         return size == 0 ? (word & 0xFF) : word;
     }
 
@@ -212,13 +217,21 @@ public sealed partial class M68000
         int reg = op & 0x7;
         int operation = (op >> 9) & 0x7;
 
-        if (size == 3 && operation == 0 && mode == 7 && reg == 4)
+        if ((op & 0x0100) == 0 && mode == 7 && reg == 4 && size <= 1 && (operation == 0 || operation == 1 || operation == 5))
         {
-            await ImmediateToCcrOrSrAsync(op);
+            await ImmediateToCcrOrSrAsync(op, operation);
             return;
         }
 
-        if (operation == 4)
+        // MOVEP sits in the bit-operation block's space: mode 001 with a non-zero operation field
+        if ((op & 0x0100) != 0 && mode == 1 && size != 0)
+        {
+            await MovepAsync(op);
+            return;
+        }
+
+        // the bit operations: bit 8 selects register/immediate, bits 7-6 are the operation itself
+        if ((op & 0x0100) != 0)
         {
             await BitOperationAsync(op, size, mode, reg);
             return;
@@ -279,6 +292,7 @@ public sealed partial class M68000
         }
 
         await WriteAtAsync(address, size, computed);
+        if (_busFaulted) return;
         if (operation == 3) SetAddFlags(immediate, current, computed, size);
         else if (operation == 2) SetSubFlags(immediate, current, computed, size);
         else SetLogicFlags(computed, size);
@@ -303,24 +317,35 @@ public sealed partial class M68000
         else await WriteLongAsync(address, value);
     }
 
-    async ValueTask ImmediateToCcrOrSrAsync(ushort op)
+    /// <summary>
+    /// ORI / ANDI / EORI to CCR and to SR — the same three operations on the status register, with the
+    /// SR forms privileged and their unused bits written back as zero.
+    /// </summary>
+    async ValueTask ImmediateToCcrOrSrAsync(ushort op, int operation)
     {
+        const ushort DefinedSr = 0xA71F;
+
         uint immediate = await FetchAsync();
-        if ((op & 0x00FF) == 0x3C)
-        {
-            _sr = (ushort)((_sr & 0xFF00) | (int)(immediate & 0xFF));   // ORI to CCR
-        }
-        else
-        {
-            if (!Supervisor)
-            {
-                await EnterExceptionAsync(8, 0);
-                return;
-            }
+        if (_busFaulted) return;
 
-            _sr = (ushort)(_sr | immediate);                        // ORI to SR
+        bool toStatusRegister = ((op >> 6) & 0x1) != 0;
+        if (toStatusRegister && !Supervisor)
+        {
+            await EnterExceptionAsync(8, 0);
+            return;
         }
 
+        ushort mask = toStatusRegister ? DefinedSr : (ushort)0x00FF;
+        ushort value = (ushort)(immediate & mask);
+
+        _sr = operation switch
+        {
+            0 => (ushort)(_sr | value),                    // ORI
+            1 => (ushort)(_sr & (value | ~mask)),          // ANDI
+            _ => (ushort)(_sr ^ value),                    // EORI
+        };
+
+        _sr = (ushort)(_sr & DefinedSr);
         Clocks(2);
     }
 
@@ -334,8 +359,8 @@ public sealed partial class M68000
 
         if (mode == 0)
         {
+            // a bit operation on a data register is always long, whatever the operation field says
             int bit = (int)(bitNumber & 31);
-            if (size == 0) bit &= 7;
             uint value = _d[reg];
             bool set = ((value >> bit) & 1) != 0;
 
@@ -369,9 +394,71 @@ public sealed partial class M68000
         if (operation != 0)
         {
             await WriteAtAsync(address, 0, updated);
+            if (_busFaulted) return;
         }
 
         _sr = (ushort)(wasSet ? _sr & ~FlagZ : _sr | FlagZ);
+        Clocks(2);
+    }
+
+    /// <summary>
+    /// MOVEP — alternating bytes between a data register and memory, high byte first, odd addresses
+    /// skipped (UM §4.2). Its four forms are bits 7-6: 10 and 11 are Dn to memory, word then long.
+    /// </summary>
+    async ValueTask MovepAsync(ushort op)
+    {
+        int dataReg = (op >> 9) & 0x7;
+        int addressReg = op & 0x7;
+        int form = (op >> 6) & 0x3;
+
+        uint address = GetA(addressReg) + (uint)(short)await FetchAsync();
+        if (_busFaulted) return;
+
+        bool toMemory = form <= 1;
+        bool isLong = (form & 1) != 0;
+
+        if (toMemory)
+        {
+            uint value = _d[dataReg];
+            if (isLong)
+            {
+                await WriteByteAsync(address, (byte)(value >> 24));
+                await WriteByteAsync(address + 2, (byte)(value >> 16));
+                await WriteByteAsync(address + 4, (byte)(value >> 8));
+                await WriteByteAsync(address + 6, (byte)value);
+            }
+            else
+            {
+                await WriteByteAsync(address, (byte)(value >> 8));
+                await WriteByteAsync(address + 2, (byte)value);
+            }
+
+            if (_busFaulted) return;
+        }
+        else
+        {
+            uint value = 0;
+            if (isLong)
+            {
+                value = (uint)await ReadByteAsync(address) << 24;
+                if (_busFaulted) return;
+                value |= (uint)await ReadByteAsync(address + 2) << 16;
+                if (_busFaulted) return;
+                value |= (uint)await ReadByteAsync(address + 4) << 8;
+                if (_busFaulted) return;
+                value |= await ReadByteAsync(address + 6);
+            }
+            else
+            {
+                value = (uint)await ReadByteAsync(address) << 8;
+                if (_busFaulted) return;
+                value |= await ReadByteAsync(address + 2);
+            }
+
+            if (_busFaulted) return;
+            _d[dataReg] = value;
+        }
+
         Clocks(2);
     }
 
@@ -394,6 +481,7 @@ public sealed partial class M68000
             }
 
             uint status = await ReadEaAsync(mode, reg, 1);
+            if (_busFaulted) return;
             _sr = (ushort)status;
             Clocks(1);
             return;
@@ -402,6 +490,7 @@ public sealed partial class M68000
         if ((op & 0xFFC0) == 0x44C0)
         {
             uint condition = await ReadEaAsync(mode, reg, 1);
+            if (_busFaulted) return;
             _sr = (ushort)((_sr & 0xFF00) | (int)(condition & 0xFF));
             Clocks(1);
             return;
@@ -410,6 +499,7 @@ public sealed partial class M68000
         if ((op & 0xFFC0) == 0x42C0)
         {
             await WriteEaAsync(mode, reg, 1, (uint)(_sr & 0xFF));
+            if (_busFaulted) return;
             Clocks(1);
             return;
         }
@@ -424,7 +514,7 @@ public sealed partial class M68000
         }
 
         // CHK
-        if ((op & 0x01C0) == 0x0180 && size == 3)
+        if ((op & 0x01C0) == 0x0180)   // CHK (bits 8-6 = 110)
         {
             uint bound = (uint)(short)(await ReadEaAsync(mode, reg, 1) & 0xFFFF);
             int value = (short)(_d[(op >> 9) & 0x7] & 0xFFFF);
@@ -439,20 +529,56 @@ public sealed partial class M68000
 
         switch ((op >> 8) & 0xF)
         {
-            case 0x0:   // MOVE from SR
+            case 0x0:   // NEGX / MOVE from SR
             {
                 int destinationMode = (op >> 3) & 0x7;
                 int destinationReg = op & 0x7;
                 int sz = (op >> 6) & 0x3;
-                if (sz == 1) await WriteEaAsync(destinationMode, destinationReg, 1, _sr);
-                else await EnterExceptionAsync(4, 0);   // MOVE from CCR / MOVE to CCR is 68010+
-                Clocks(1);
+
+                if (sz != 3)   // NEGX: 0 - operand - X
+                {
+                    uint negxAddress = destinationMode == 0 ? 0 : await EaAddressAsync(destinationMode, destinationReg, sz);
+                    if (_busFaulted) return;
+
+                    uint negxValue = destinationMode == 0
+                        ? _d[destinationReg] & SizeMask(sz)
+                        : await ReadAtAsync(negxAddress, sz);
+                    if (_busFaulted) return;
+
+                    uint extend = (uint)((_sr & FlagX) != 0 ? 1 : 0);
+                    uint negxResult = (0 - negxValue - extend) & SizeMask(sz);
+
+                    if (destinationMode == 0)
+                    {
+                        _d[destinationReg] = (_d[destinationReg] & ~SizeMask(sz)) | negxResult;
+                    }
+                    else
+                    {
+                        await WriteAtAsync(negxAddress, sz, negxResult);
+                        if (_busFaulted) return;
+                    }
+
+                    SetSubFlags(negxValue + extend, 0, negxResult, sz);
+                    Clocks(1);
+                    return;
+                }
+
+                if (sz == 3)
+                {
+                    await WriteEaAsync(destinationMode, destinationReg, 1, (uint)(_sr & 0xA71F));
+                    if (_busFaulted) return;
+                    Clocks(1);
+                    return;
+                }
+
+                await EnterExceptionAsync(4, 0);   // MOVE from CCR is 68010+
                 return;
             }
 
             case 0x2:   // CLR
             {
                 await WriteEaAsync(mode, reg, size, 0);
+                if (_busFaulted) return;
                 _sr = (ushort)((_sr & ~(FlagN | FlagV | FlagC)) | FlagZ);
                 Clocks(1);
                 return;
@@ -460,9 +586,25 @@ public sealed partial class M68000
 
             case 0x4:   // NEG
             {
-                uint value = await ReadEaAsync(mode, reg, size);
+                // the operand is addressed once: addressing it again to write would re-read the
+                // displacement word and move the destination
+                uint negAddress = mode == 0 ? 0 : await EaAddressAsync(mode, reg, size);
+                if (_busFaulted) return;
+
+                uint value = mode == 0 ? _d[reg] & SizeMask(size) : await ReadAtAsync(negAddress, size);
+                if (_busFaulted) return;
+
                 uint result = (0 - value) & SizeMask(size);
-                await WriteEaAsync(mode, reg, size, result);
+                if (mode == 0)
+                {
+                    _d[reg] = (_d[reg] & ~SizeMask(size)) | result;
+                }
+                else
+                {
+                    await WriteAtAsync(negAddress, size, result);
+                    if (_busFaulted) return;
+                }
+
                 SetSubFlags(value, 0, result, size);
                 Clocks(1);
                 return;
@@ -470,9 +612,23 @@ public sealed partial class M68000
 
             case 0x6:   // NOT
             {
-                uint value = await ReadEaAsync(mode, reg, size);
+                uint notAddress = mode == 0 ? 0 : await EaAddressAsync(mode, reg, size);
+                if (_busFaulted) return;
+
+                uint value = mode == 0 ? _d[reg] & SizeMask(size) : await ReadAtAsync(notAddress, size);
+                if (_busFaulted) return;
+
                 uint result = ~value & SizeMask(size);
-                await WriteEaAsync(mode, reg, size, result);
+                if (mode == 0)
+                {
+                    _d[reg] = (_d[reg] & ~SizeMask(size)) | result;
+                }
+                else
+                {
+                    await WriteAtAsync(notAddress, size, result);
+                    if (_busFaulted) return;
+                }
+
                 SetLogicFlags(result, size);
                 Clocks(1);
                 return;
@@ -514,22 +670,76 @@ public sealed partial class M68000
                     return;
                 }
 
-                await EnterExceptionAsync(4, 0);   // NBCD is not used by TOS
-                return;
+                // NBCD: 0 - operand - X, in packed BCD (UM §4.2)
+                {
+                    uint nbcdAddress = mode == 0 ? 0 : await EaAddressAsync(mode, reg, 0);
+                    if (_busFaulted) return;
+
+                    uint nv = mode == 0 ? _d[reg] & 0xFF : await ReadAtAsync(nbcdAddress, 0);
+                    if (_busFaulted) return;
+
+                    int extend = (_sr & FlagX) != 0 ? 1 : 0;
+                    int low = 0 - (int)(nv & 0x0F) - extend;
+                    int high = 0 - (int)((nv >> 4) & 0x0F);
+                    if (low < 0)
+                    {
+                        low += 10;
+                        high -= 1;
+                    }
+
+                    bool carry = high < 0;
+                    if (carry)
+                    {
+                        high += 10;
+                    }
+
+                    uint nbcdResult = (uint)(((high & 0x0F) << 4) | (low & 0x0F));
+
+                    _sr = (ushort)(carry ? _sr | (FlagC | FlagX) : _sr & ~(FlagC | FlagX));
+                    _sr = (ushort)((nbcdResult == 0 && !carry) ? _sr | FlagZ : _sr & ~FlagZ);
+                    _sr = (ushort)((nbcdResult & 0x80) != 0 ? _sr | FlagN : _sr & ~FlagN);
+
+                    if (mode == 0)
+                    {
+                        _d[reg] = (_d[reg] & 0xFFFFFF00) | nbcdResult;
+                    }
+                    else
+                    {
+                        await WriteAtAsync(nbcdAddress, 0, nbcdResult);
+                        if (_busFaulted) return;
+                    }
+
+                    Clocks(1);
+                    return;
+                }
             }
 
             case 0xA:   // TST / TAS
             {
-                if ((op & 0x00C0) == 0x00C0 && mode == 0)
+                if ((op & 0x00C0) == 0x00C0)   // TAS: a read-modify-write, in a register or in memory
                 {
-                    byte value = (byte)(_d[reg] & 0xFF);   // TAS
-                    SetLogicFlags(value, 0);
-                    _d[reg] = (_d[reg] & 0xFFFFFF00) | (uint)(value | 0x80);
+                    if (mode == 0)
+                    {
+                        byte registerValue = (byte)(_d[reg] & 0xFF);
+                        SetLogicFlags(registerValue, 0);
+                        _d[reg] = (_d[reg] & 0xFFFFFF00) | (uint)(registerValue | 0x80);
+                    }
+                    else
+                    {
+                        uint tasAddress = await EaAddressAsync(mode, reg, 0);
+                        if (_busFaulted) return;
+                        uint tasValue = await ReadByteAsync(tasAddress);
+                        if (_busFaulted) return;
+                        SetLogicFlags(tasValue, 0);
+                        await WriteByteAsync(tasAddress, (byte)(tasValue | 0x80));
+                    }
+
                     Clocks(1);
                     return;
                 }
 
                 uint current = await ReadEaAsync(mode, reg, size);
+                if (_busFaulted) return;
                 SetLogicFlags(current, size);
                 Clocks(1);
                 return;
@@ -589,8 +799,11 @@ public sealed partial class M68000
 
         int last = -1;
 
-        for (int bit = 0; bit < 16; bit++)
+        for (int step = 0; step < 16; step++)
         {
+            // the predecrement form stores the registers in the reverse order — A7 first, at the
+            // highest address, D0 last — so its mask is walked downwards (UM §4.6)
+            int bit = predecrement ? 15 - step : step;
             if ((mask & (1 << bit)) == 0) continue;
             int index = predecrement ? bit : 15 - bit;
             uint value = index < 8 ? _d[index] : GetA(index - 8);
@@ -649,7 +862,9 @@ public sealed partial class M68000
 
             case 0x4E75:   // RTS
             {
-                _pc = await ReadLongAsync(_sspOrUsp());
+                _pc = await ReadLongAsync(A7);
+                if (_busFaulted) return;
+                A7 += 4;
                 Clocks(1);
                 return;
             }
@@ -661,9 +876,11 @@ public sealed partial class M68000
             case 0x4E77:   // RTR
             {
                 ushort status = await ReadWordAsync(A7);
+                if (_busFaulted) return;
                 A7 += 2;
                 _sr = (ushort)((_sr & 0xFF00) | (status & 0xFF));
                 _pc = await ReadLongAsync(A7);
+                if (_busFaulted) return;
                 A7 += 4;
                 Clocks(1);
                 return;
@@ -705,22 +922,30 @@ public sealed partial class M68000
         {
             A7 = GetA(reg);
             uint value = await ReadLongAsync(A7);
+            if (_busFaulted) return;
             A7 += 4;
             SetA(reg, value);
             Clocks(2);
             return;
         }
 
-        if ((op & 0xFFF0) == 0x4E60)   // MOVE An,USP
+        if ((op & 0xFFF0) == 0x4E60)   // MOVE An,USP (bit 3 clear) / MOVE USP,An (bit 3 set)
         {
-            _usp = GetA(op & 0x7);
-            Clocks(1);
-            return;
-        }
+            if (!Supervisor)
+            {
+                await EnterExceptionAsync(8, 0);
+                return;
+            }
 
-        if ((op & 0xFFF0) == 0x4E68)   // MOVE USP,An
-        {
-            SetA(op & 0x7, _usp);
+            if ((op & 0x0008) != 0)
+            {
+                SetA(op & 0x7, _usp);
+            }
+            else
+            {
+                _usp = GetA(op & 0x7);
+            }
+
             Clocks(1);
             return;
         }
@@ -763,8 +988,10 @@ public sealed partial class M68000
         }
 
         ushort status = await ReadWordAsync(A7);
+        if (_busFaulted) return;
         A7 += 2;
         uint pc = await ReadLongAsync(A7);
+        if (_busFaulted) return;
         A7 += 4;
 
         bool wasSupervisor = (_sr & 0x2000) != 0;
@@ -818,31 +1045,35 @@ public sealed partial class M68000
             }
 
             await WriteEaAsync(mode, reg, 0, Condition(condition) ? 0xFFu : 0x00u);
+            if (_busFaulted) return;
             Clocks(1);
             return;
         }
 
         if (mode == 1)
         {
-            // an address register is never affected by flags
-            uint value = GetA(reg) + (uint)((op & 0x0100) != 0 ? -data : data);
-            SetA(reg, size == 1 ? (uint)(short)(value & 0xFFFF) : value);
+            // an address register is never affected by flags, and the whole 32-bit register takes part
+            // whatever the size field says (UM: byte and word are the same as long here)
+            SetA(reg, GetA(reg) + (uint)((op & 0x0100) != 0 ? -data : data));
             Clocks(1);
             return;
         }
 
         uint current = await ReadEaAsync(mode, reg, size);
+        if (_busFaulted) return;
         uint result;
         if ((op & 0x0100) != 0)
         {
             result = (current - (uint)data) & SizeMask(size);
             await WriteEaAsync(mode, reg, size, result);
+            if (_busFaulted) return;
             SetSubFlags((uint)data, current, result, size);
         }
         else
         {
             result = (current + (uint)data) & SizeMask(size);
             await WriteEaAsync(mode, reg, size, result);
+            if (_busFaulted) return;
             SetAddFlags((uint)data, current, result, size);
         }
 
@@ -907,12 +1138,16 @@ public sealed partial class M68000
             return;
         }
 
-        if ((op & 0x01C0) == 0x00C0 && size != 3)   // OR Dn,<ea>
+        if (((op >> 6) & 0x4) != 0 && size != 3)   // OR Dn,<ea> (opmode 100)
         {
             uint value = _d[(op >> 9) & 0x7] & SizeMask(size);
-            uint current = await ReadEaAsync(mode, reg, size);
+            uint address = await EaAddressAsync(mode, reg, size);
+            if (_busFaulted) return;
+            uint current = await ReadAtAsync(address, size);
+            if (_busFaulted) return;
             uint result = current | value;
-            await WriteEaAsync(mode, reg, size, result);
+            await WriteAtAsync(address, size, result);
+            if (_busFaulted) return;
             SetLogicFlags(result, size);
             Clocks(1);
             return;
@@ -925,6 +1160,7 @@ public sealed partial class M68000
         }
 
         uint source = await ReadEaAsync(mode, reg, size);
+        if (_busFaulted) return;
         uint destination = _d[(op >> 9) & 0x7] & SizeMask(size);
         uint combined = destination | source;
         _d[(op >> 9) & 0x7] = (_d[(op >> 9) & 0x7] & ~SizeMask(size)) | (combined & SizeMask(size));
@@ -998,12 +1234,16 @@ public sealed partial class M68000
             return;
         }
 
-        if ((op & 0x01C0) == 0x00C0 && size != 3)   // SUB Dn,<ea>
+        if (((op >> 6) & 0x4) != 0 && size != 3)   // SUB Dn,<ea>
         {
             uint value = _d[(op >> 9) & 0x7] & SizeMask(size);
-            uint current = await ReadEaAsync(mode, reg, size);
+            uint address = await EaAddressAsync(mode, reg, size);
+            if (_busFaulted) return;
+            uint current = await ReadAtAsync(address, size);
+            if (_busFaulted) return;
             uint result = (current - value) & SizeMask(size);
-            await WriteEaAsync(mode, reg, size, result);
+            await WriteAtAsync(address, size, result);
+            if (_busFaulted) return;
             SetSubFlags(value, current, result, size);
             Clocks(1);
             return;
@@ -1018,6 +1258,7 @@ public sealed partial class M68000
         }
 
         uint source = await ReadEaAsync(mode, reg, size);
+        if (_busFaulted) return;
         uint destination = _d[(op >> 9) & 0x7] & SizeMask(size);
         uint difference = (destination - source) & SizeMask(size);
         _d[(op >> 9) & 0x7] = (_d[(op >> 9) & 0x7] & ~SizeMask(size)) | difference;
@@ -1055,7 +1296,15 @@ public sealed partial class M68000
         if (subtract) SetSubFlags(source + extended, destination, result, size);
         else SetAddFlags(source + extended, destination, result, size);
 
-        _d[destinationReg] = (_d[destinationReg] & ~SizeMask(size)) | result;
+        if (predecrement)
+        {
+            await WriteAtAsync(GetA(destinationReg), size, result);
+            if (_busFaulted) return;
+        }
+        else
+        {
+            _d[destinationReg] = (_d[destinationReg] & ~SizeMask(size)) | result;
+        }
 
         Clocks(2);
     }
@@ -1080,20 +1329,26 @@ public sealed partial class M68000
             uint sourceAddress = GetA(reg);
             SetA(reg, sourceAddress + delta);
             uint source = await ReadAtAsync(sourceAddress, size);
+            if (_busFaulted) return;
             uint destinationAddress = GetA((op >> 9) & 0x7);
             SetA((op >> 9) & 0x7, destinationAddress + delta);
             uint destination = await ReadAtAsync(destinationAddress, size);
-            SetSubFlags(source, destination, (destination - source) & SizeMask(size), size);
+            if (_busFaulted) return;
+            SetCompareFlags(source, destination, (destination - source) & SizeMask(size), size);
             Clocks(2);
             return;
         }
 
-        if ((op & 0x01C0) == 0x0040 && size != 3)   // EOR Dn,<ea>
+        if ((op & 0x0100) != 0 && size != 3)   // EOR Dn,<ea>
         {
             uint value = _d[(op >> 9) & 0x7] & SizeMask(size);
-            uint current = await ReadEaAsync(mode, reg, size);
+            uint address = await EaAddressAsync(mode, reg, size);
+            if (_busFaulted) return;
+            uint current = await ReadAtAsync(address, size);
+            if (_busFaulted) return;
             uint result = current ^ value;
-            await WriteEaAsync(mode, reg, size, result);
+            await WriteAtAsync(address, size, result);
+            if (_busFaulted) return;
             SetLogicFlags(result, size);
             Clocks(1);
             return;
@@ -1103,14 +1358,15 @@ public sealed partial class M68000
         {
             uint value = (op & 0x0100) != 0 ? await ReadEaAsync(mode, reg, 2) : (uint)(short)(await ReadEaAsync(mode, reg, 1) & 0xFFFF);
             uint destination = GetA((op >> 9) & 0x7);
-            SetSubFlags(value, destination, destination - value, 2);
+            SetCompareFlags(value, destination, destination - value, 2);
             Clocks(1);
             return;
         }
 
         uint operand = await ReadEaAsync(mode, reg, size);
+        if (_busFaulted) return;
         uint current2 = _d[(op >> 9) & 0x7] & SizeMask(size);
-        SetSubFlags(operand, current2, (current2 - operand) & SizeMask(size), size);
+        SetCompareFlags(operand, current2, (current2 - operand) & SizeMask(size), size);
         Clocks(1);
     }
 
@@ -1146,12 +1402,16 @@ public sealed partial class M68000
             return;
         }
 
-        if ((op & 0x01C0) == 0x00C0 && size != 3)   // AND Dn,<ea>
+        if (((op >> 6) & 0x4) != 0 && size != 3)   // AND Dn,<ea>
         {
             uint value = _d[(op >> 9) & 0x7] & SizeMask(size);
-            uint current = await ReadEaAsync(mode, reg, size);
+            uint address = await EaAddressAsync(mode, reg, size);
+            if (_busFaulted) return;
+            uint current = await ReadAtAsync(address, size);
+            if (_busFaulted) return;
             uint result = current & value;
-            await WriteEaAsync(mode, reg, size, result);
+            await WriteAtAsync(address, size, result);
+            if (_busFaulted) return;
             SetLogicFlags(result, size);
             Clocks(1);
             return;
@@ -1161,6 +1421,7 @@ public sealed partial class M68000
         {
             bool signed = (op & 0x0100) != 0;
             uint source = await ReadEaAsync(mode, reg, 1);
+            if (_busFaulted) return;
             uint destination = _d[(op >> 9) & 0x7] & 0xFFFF;
 
             _d[(op >> 9) & 0x7] = signed
@@ -1173,6 +1434,7 @@ public sealed partial class M68000
         }
 
         uint operand = await ReadEaAsync(mode, reg, size);
+        if (_busFaulted) return;
         uint destination2 = _d[(op >> 9) & 0x7] & SizeMask(size);
         uint combined = destination2 & operand;
         _d[(op >> 9) & 0x7] = (_d[(op >> 9) & 0x7] & ~SizeMask(size)) | combined;
@@ -1180,9 +1442,12 @@ public sealed partial class M68000
         Clocks(1);
     }
 
+    /// <summary>
+    /// ABCD / SBCD / NBCD — packed BCD, with the extend bit as the carry in. Z is cleared by a non-zero
+    /// result and never set, so a multi-digit chain keeps the Z of its first digit.
+    /// </summary>
     async ValueTask BcdAsync(ushort op, bool subtract)
     {
-        int size = 0;
         int sourceReg = op & 0x7;
         int destinationReg = (op >> 9) & 0x7;
         bool predecrement = (op & 0x0008) != 0;
@@ -1192,8 +1457,10 @@ public sealed partial class M68000
 
         if (predecrement)
         {
-            source = await PredecrementAsync(sourceReg, size);
-            destination = await PredecrementAsync(destinationReg, size);
+            source = await PredecrementAsync(sourceReg, 0);
+            if (_busFaulted) return;
+            destination = await PredecrementAsync(destinationReg, 0);
+            if (_busFaulted) return;
         }
         else
         {
@@ -1201,40 +1468,62 @@ public sealed partial class M68000
             destination = _d[destinationReg] & 0xFF;
         }
 
-        int carry = (_sr & FlagX) != 0 ? 1 : 0;
-        int result;
-        bool overflow;
+        int extend = (_sr & FlagX) != 0 ? 1 : 0;
+        int low = (int)(destination & 0x0F);
+        int high = (int)((destination >> 4) & 0x0F);
+        int sourceLow = (int)(source & 0x0F);
+        int sourceHigh = (int)((source >> 4) & 0x0F);
+        bool carry;
 
         if (subtract)
         {
-            result = (int)(destination & 0x0F) - (int)(source & 0x0F) - carry;
-            if (result < 0) result += 10;
-            int high = (int)((destination >> 4) & 0x0F) - (int)((source >> 4) & 0x0F) - (destination & 0x0F) < (source & 0x0F) + carry ? 1 : 0;
-            overflow = high < 0;
-            if (high < 0) high += 10;
-            result = ((high & 0x0F) << 4) | (result & 0x0F);
-            _sr = (ushort)(overflow ? _sr | (FlagC | FlagX) : _sr & ~(FlagC | FlagX));
+            low -= sourceLow + extend;
+            high -= sourceHigh;
+            if (low < 0)
+            {
+                low += 10;
+                high -= 1;
+            }
+
+            carry = high < 0;
+            if (carry)
+            {
+                high += 10;
+            }
         }
         else
         {
-            result = (int)(destination & 0x0F) + (int)(source & 0x0F) + carry;
-            if (result > 9) result += 6;
-            int high = (int)((destination >> 4) & 0x0F) + (int)((source >> 4) & 0x0F) + (result > 0x0F ? 1 : 0);
-            overflow = high > 9;
-            if (overflow) high += 6;
-            result = ((high & 0x0F) << 4) | (result & 0x0F);
-            _sr = (ushort)(overflow ? _sr | (FlagC | FlagX) : _sr & ~(FlagC | FlagX));
+            low += sourceLow + extend;
+            if (low > 9)
+            {
+                low -= 10;
+                high += 1;
+            }
+
+            high += sourceHigh;
+            carry = high > 9;
+            if (carry)
+            {
+                high -= 10;
+            }
         }
 
-        _sr = (ushort)((_sr & ~FlagZ) | (result == 0 ? FlagZ : 0));
+        uint result = (uint)(((high & 0x0F) << 4) | (low & 0x0F));
+
+        _sr = (ushort)(carry ? _sr | (FlagC | FlagX) : _sr & ~(FlagC | FlagX));
+        if (result != 0)
+        {
+            _sr = (ushort)(_sr & ~FlagZ);
+        }
 
         if (predecrement)
         {
-            _d[destinationReg] = (_d[destinationReg] & 0xFFFFFF00) | (uint)(result & 0xFF);
+            await WriteAtAsync(GetA(destinationReg), 0, result);
+            if (_busFaulted) return;
         }
         else
         {
-            _d[destinationReg] = (_d[destinationReg] & 0xFFFFFF00) | (uint)(result & 0xFF);
+            _d[destinationReg] = (_d[destinationReg] & 0xFFFFFF00) | result;
         }
 
         Clocks(2);
@@ -1252,12 +1541,16 @@ public sealed partial class M68000
             return;
         }
 
-        if ((op & 0x01C0) == 0x00C0 && size != 3)   // ADD Dn,<ea>
+        if (((op >> 6) & 0x4) != 0 && size != 3)   // ADD Dn,<ea>
         {
             uint value = _d[(op >> 9) & 0x7] & SizeMask(size);
-            uint current = await ReadEaAsync(mode, reg, size);
+            uint address = await EaAddressAsync(mode, reg, size);
+            if (_busFaulted) return;
+            uint current = await ReadAtAsync(address, size);
+            if (_busFaulted) return;
             uint result = (current + value) & SizeMask(size);
-            await WriteEaAsync(mode, reg, size, result);
+            await WriteAtAsync(address, size, result);
+            if (_busFaulted) return;
             SetAddFlags(value, current, result, size);
             Clocks(1);
             return;
@@ -1272,6 +1565,7 @@ public sealed partial class M68000
         }
 
         uint source = await ReadEaAsync(mode, reg, size);
+        if (_busFaulted) return;
         uint destination = _d[(op >> 9) & 0x7] & SizeMask(size);
         uint sum = (destination + source) & SizeMask(size);
         _d[(op >> 9) & 0x7] = (_d[(op >> 9) & 0x7] & ~SizeMask(size)) | sum;
@@ -1284,43 +1578,44 @@ public sealed partial class M68000
     async ValueTask LineEAsync(ushort op)
     {
         int size = (op >> 6) & 0x3;
-        int mode = (op >> 3) & 0x7;
-
-        int kind = (op >> 3) & 0x3;
         bool left = (op & 0x0100) != 0;
 
-        if (mode == 0 || mode == 1)   // register shift
+        if (size != 3)
         {
+            // a register shift: bits 5-3 are 000 (count in the opcode) or 100 (count in a data
+            // register), and the operation is bits 4-3
             int reg = op & 0x7;
-            int count = (op >> 9) & 0x7;
+            bool registerCount = (op & 0x0020) != 0;
+            int kind = (op >> 3) & 0x3;
 
-            if (count == 0) count = 8;
+            int count = registerCount ? (int)(_d[(op >> 9) & 0x7] & 63) : ((op >> 9) & 0x7);
+            if (!registerCount && count == 0)
+            {
+                count = 8;
+            }
 
-            uint value = mode == 0
-                ? _d[reg] & SizeMask(size)
-                : (uint)(short)(_d[reg] & 0xFFFF);
-
+            uint value = _d[reg] & SizeMask(size);
             uint result = Shift(value, count, size, kind, left);
-            if (mode == 0)
-            {
-                _d[reg] = (_d[reg] & ~SizeMask(size)) | (result & SizeMask(size));
-            }
-            else
-            {
-                _d[reg] = (_d[reg] & 0xFFFF0000) | (result & 0xFFFF);
-            }
-
+            _d[reg] = (_d[reg] & ~SizeMask(size)) | (result & SizeMask(size));
             return;
         }
 
-        // memory shift by one: the size field is the direction's own encoding
+        // a memory shift is one word, by one: bits 5-3 are the addressing mode and bits 10-9 the kind
+        int mode = (op >> 3) & 0x7;
         int memoryKind = (op >> 9) & 0x3;
         await MemoryShiftAsync(mode, op & 0x7, memoryKind, left);
     }
 
     /// <summary>
     /// One shift or rotate, <paramref name="kind"/> 0 = arithmetic, 1 = logical, 2 = rotate through
-    /// extend, 3 = rotate. <paramref name="left"/> is the direction bit; flags are the 68000's.
+    /// extend, 3 = rotate. <paramref name="left"/> is the direction bit.
+    ///
+    /// <para>
+    /// The flag rules are the ones the corpus pins down: the shifting kinds move the last bit out into
+    /// C <i>and</i> X; the rotate-through-extend kinds move it into X alone; a plain rotate leaves X
+    /// untouched. V is set only by a left arithmetic or logical shift whose sign changed, and N and Z
+    /// are left alone when the count is zero.
+    /// </para>
     /// </summary>
     uint Shift(uint value, int count, int size, int kind, bool left)
     {
@@ -1330,14 +1625,15 @@ public sealed partial class M68000
         uint result = value & mask;
         bool carry = (_sr & FlagC) != 0;
         bool extend = (_sr & FlagX) != 0;
+        bool overflow = false;
 
-        count &= bits - 1 == 0 ? 31 : 63;
+        count &= 63;
+
         if (count == 0)
         {
-            carry = false;
+            _sr = (ushort)(_sr & ~FlagC);   // a zero count clears C and touches nothing else
+            return result;
         }
-
-        bool overflow = false;
 
         for (int step = 0; step < count; step++)
         {
@@ -1358,7 +1654,7 @@ public sealed partial class M68000
 
                     break;
 
-                case 1:   // LSL / LSR
+                case 1:   // LSL / LSR (V is not affected by a logical shift)
                     if (left)
                     {
                         carry = (result & sign) != 0;
@@ -1375,18 +1671,19 @@ public sealed partial class M68000
                 case 2:   // ROXL / ROXR
                     if (left)
                     {
-                        carry = (result & sign) != 0;
-                        result = (result << 1) & mask;
-                        if (extend) result |= 1;
+                        bool outBit = (result & sign) != 0;
+                        result = ((result << 1) & mask) | (extend ? 1u : 0u);
+                        extend = outBit;
+                        carry = outBit;
                     }
                     else
                     {
-                        carry = (result & 1) != 0;
-                        result >>= 1;
-                        if (extend) result |= sign;
+                        bool outBit = (result & 1) != 0;
+                        result = (result >> 1) | (extend ? sign : 0u);
+                        extend = outBit;
+                        carry = outBit;
                     }
 
-                    extend = carry;
                     break;
 
                 default:   // ROL / ROR
@@ -1405,20 +1702,17 @@ public sealed partial class M68000
             }
         }
 
-        if (kind == 0 && !left)
+        _sr = (ushort)(carry ? _sr | FlagC : _sr & ~FlagC);
+
+        if (kind == 0 || kind == 1)
         {
-            // an arithmetic right shift keeps the sign, and V is always cleared
-            if ((value & sign) != 0)
-            {
-                for (int i = 0; i < count && i < bits; i++)
-                {
-                    result |= sign;
-                }
-            }
+            _sr = (ushort)(carry ? _sr | FlagX : _sr & ~FlagX);   // a shift moves the bit into X too
+        }
+        else if (kind == 2)
+        {
+            _sr = (ushort)(extend ? _sr | FlagX : _sr & ~FlagX);
         }
 
-        _sr = (ushort)(carry ? _sr | FlagC : _sr & ~FlagC);
-        _sr = (ushort)((kind == 2) ? (extend ? _sr | FlagX : _sr & ~FlagX) : _sr & ~FlagX);
         _sr = (ushort)((result & mask) == 0 ? _sr | FlagZ : _sr & ~FlagZ);
         _sr = (ushort)((result & sign) != 0 ? _sr | FlagN : _sr & ~FlagN);
         _sr = (ushort)(overflow ? _sr | FlagV : _sr & ~FlagV);
@@ -1431,6 +1725,7 @@ public sealed partial class M68000
     {
         uint address = await EaAddressAsync(mode, reg, 1);
         uint value = await ReadWordAsync(address);
+        if (_busFaulted) return;
         uint result = Shift(value, 1, 1, kind, left);
         await WriteWordAsync(address, (ushort)result);
     }

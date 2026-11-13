@@ -28,6 +28,18 @@ accept-list (`roms/tos-hashes.json`) and refuses anything else.
 See docs/adr/0010-tos-image-provisioning.md.
 
 
+The 680x0 single-step corpus
+----------------------------
+
+`tests/680x0/` carries a sample of Thomas Harte's 68000 single-step test set, vendored as test data
+from `SingleStepTests/680x0` at commit `e0d5ece` (2024-05-13). Upstream declares no licence; the corpus
+is used here for local verification only and is not built into, shipped with or licensed as part of
+The ST. The full corpus is fetched on demand by `scripts/fetch-680x0-tests.sh` and never committed.
+
+    Author:  Thomas Harte <thomas.harte@gmail.com>
+    Source:  https://github.com/SingleStepTests/680x0
+
+
 Vendored third-party sources
 ----------------------------
 

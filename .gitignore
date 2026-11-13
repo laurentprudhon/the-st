@@ -78,3 +78,7 @@ roms/tos162*.img
 
 ## Validation-harness runs (design/validation.md §2): machine-generated, never committed.
 runs/
+
+## The 680x0 corpus is vendored as a sample (tests/680x0/v1); the whole 194 MB set is fetched on
+## demand by scripts/fetch-680x0-tests.sh and never committed.
+tests/680x0/full/

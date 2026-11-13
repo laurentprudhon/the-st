@@ -36,6 +36,14 @@ public sealed partial class M68000 : Chip
     // the fault a bus cycle reports, read by the caller — never an exception
     uint _faultAddress;
 
+    // the fault's own detail, for the group-0 frame (design/cpu-core.md §7): which word was being
+    // executed, whether the access was a write, and whether the fault was the fetch of an odd
+    // program counter rather than a data access
+    ushort _opcode;
+    bool _faultWrite;
+    bool _faultIsFetch;
+    bool _addressError;
+
     // ---- reported, never gated -----------------------------------------------------------
     public long Instructions { get; private set; }
     public long BusCycles { get; private set; }
@@ -175,6 +183,16 @@ public sealed partial class M68000 : Chip
         if (destination < source) _sr |= (ushort)(FlagC | FlagX);
     }
 
+    /// <summary>
+    /// A comparison's flags: N, Z, V and C as a subtraction, and X untouched (CMP, CMPA, CMPM).
+    /// </summary>
+    void SetCompareFlags(uint source, uint destination, uint result, int size)
+    {
+        bool extend = (_sr & FlagX) != 0;
+        SetSubFlags(source, destination, result, size);
+        _sr = (ushort)(extend ? _sr | FlagX : _sr & ~FlagX);
+    }
+
     bool Condition(int condition)
     {
         bool c = (_sr & FlagC) != 0;
@@ -217,6 +235,18 @@ public sealed partial class M68000 : Chip
     /// </summary>
     async ValueTask<BusResult> Cycle(uint address, int size, bool isWrite, ushort writeData, bool isCpuSpace = false)
     {
+        // an address error is not a bus cycle: a word access at an odd address never reaches the
+        // wire, and the group-0 frame records what it was trying to reach (ADR 0009 §7)
+        if (!isCpuSpace && size == 1 && (address & 1) != 0)
+        {
+            _faultAddress = address;
+            _faultWrite = isWrite;
+            _faultIsFetch = false;
+            _addressError = true;
+            _busFaulted = true;
+            return new BusResult(0, true, false);
+        }
+
         long asserted = Clock;
 
         ushort control = (ushort)(
@@ -380,19 +410,29 @@ public sealed partial class M68000 : Chip
 
             if (_busFaulted)
             {
-                await TakeFaultAsync(_faultAddress, false);
+                await TakeFaultAsync(_faultAddress, _addressError);
                 _busFaulted = false;
                 continue;
             }
 
             Instructions++;
+            _opcode = opcode;
             Observer?.Invoke(Clock, opcode, _pc - 2);
             await ExecuteAsync(opcode);
 
             if (_busFaulted)
             {
-                await TakeFaultAsync(_faultAddress, false);
+                await TakeFaultAsync(_faultAddress, _addressError);
                 _busFaulted = false;
+                continue;
+            }
+
+            // the prefetch's own address error: the two words the hardware fetches after the
+            // instruction land on an odd program counter (a branch to an odd address)
+            if ((_pc & 1) != 0)
+            {
+                _faultIsFetch = true;
+                await TakeFaultAsync(_pc, true);
                 continue;
             }
 
@@ -469,34 +509,39 @@ public sealed partial class M68000 : Chip
             _sr = (ushort)((_sr & ~0x0700) | (level << 8));   // the mask is I2–I0, bits 8–10
         }
 
-        uint returnPc = _pc;
+        // the saved program counter: the next word the instruction had not read — or, for the
+        // prefetch's fault, the word the two-word prefetch was fetching (the 68000's own rule)
         bool group0 = vector == 2 || vector == 3;
+
+        // the saved program counter: a group-0 frame saves the word the fetch-on-demand core had not
+        // read yet (see tests/680x0/FINDINGS.md); every other frame saves the next instruction
+        uint returnPc = group0 ? (_faultIsFetch ? _pc - 4 : _pc - 2) : _pc;
 
         if (group0)
         {
-            _ssp -= 2;
-            await WriteWordAsync(_ssp, (ushort)(returnPc >> 16));
-            _ssp -= 2;
-            await WriteWordAsync(_ssp, (ushort)returnPc);
-            _ssp -= 2;
-            await WriteWordAsync(_ssp, oldSr);
-            _ssp -= 2;
-            await WriteWordAsync(_ssp, 0);
-            _ssp -= 2;
-            await WriteWordAsync(_ssp, (ushort)(_faultAddress & 0xFFFF));
-            _ssp -= 2;
-            await WriteWordAsync(_ssp, (ushort)(_faultAddress >> 16));
-            _ssp -= 2;
-            await WriteWordAsync(_ssp, 0);
+            // the seven-word frame, lowest address first: the status word, the access address, the
+            // instruction, the status register, the program counter. The writes are in the
+            // hardware's own order (Ijor's bus trace), which is why they do not ascend.
+            ushort status = BusStatusWord(oldSr);
+            uint frame = _ssp - 14;
+            _ssp = frame;
+
+            await WriteWordAsync(frame + 12, (ushort)returnPc);
+            await WriteWordAsync(frame + 8, oldSr);
+            await WriteWordAsync(frame + 10, (ushort)(returnPc >> 16));
+            await WriteWordAsync(frame + 6, _opcode);
+            await WriteWordAsync(frame + 4, (ushort)(_faultAddress & 0xFFFF));
+            await WriteWordAsync(frame, status);
+            await WriteWordAsync(frame + 2, (ushort)(_faultAddress >> 16));
         }
         else
         {
-            _ssp -= 2;
-            await WriteWordAsync(_ssp, (ushort)(returnPc >> 16));
-            _ssp -= 2;
-            await WriteWordAsync(_ssp, (ushort)returnPc);
-            _ssp -= 2;
-            await WriteWordAsync(_ssp, oldSr);
+            // the six-byte frame, lowest address first: status register, program counter high, low
+            uint frame = _ssp - 6;
+            _ssp = frame;
+            await WriteWordAsync(frame + 4, (ushort)returnPc);
+            await WriteWordAsync(frame + 2, (ushort)(returnPc >> 16));
+            await WriteWordAsync(frame, oldSr);
         }
 
         if (_busFaulted)
@@ -520,6 +565,45 @@ public sealed partial class M68000 : Chip
     {
         _busFaulted = false;   // the fault is being taken, not still pending
         _faultAddress = address;
+        _addressError = false;
         await EnterExceptionAsync(addressError ? 3 : 2, 0);
+        _faultIsFetch = false;
+    }
+
+    /// <summary>
+    /// The group-0 frame's first word: the instruction being executed, its low five bits replaced by
+    /// the access's own detail — read/write, program or data, supervisor or user (design/cpu-core.md
+    /// §7). The corpus is the oracle for the bit layout, which the 68000 manuals leave implicit.
+    /// </summary>
+    ushort BusStatusWord(ushort statusBefore)
+    {
+        ushort status = (ushort)(_opcode & ~0x1Fu);
+
+        if (_faultIsFetch)
+        {
+            status |= 0x10 | 0x08 | 0x02;   // a read, in program space
+        }
+        else
+        {
+            // The corpus records the read bit for every instruction except a plain MOVE or a MOVEM
+            // store writing to memory: its reference implementation classifies the access by the
+            // instruction's own operand handling, not by the direction of this one cycle. The corpus
+            // is the oracle here, and the difference is recorded in tests/680x0/README.md.
+            bool plainMove = (_opcode >> 12) is 1 or 2 or 3;
+            bool movemStore = (_opcode & 0xFF80) == 0x4880;
+            if (!_faultWrite || !(plainMove || movemStore))
+            {
+                status |= 0x10;
+            }
+
+            status |= 0x01;                 // data space
+        }
+
+        if ((statusBefore & 0x2000) != 0)
+        {
+            status |= 0x04;                 // the access was made in supervisor mode
+        }
+
+        return status;
     }
 }

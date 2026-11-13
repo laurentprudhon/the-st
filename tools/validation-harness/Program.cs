@@ -37,6 +37,9 @@ internal static class Program
             case "boot":
                 return BootCommand.Run(args[1..]);
 
+            case "cpu-tests":
+                return CpuTestsCommand.Run(args[1..]);
+
             case "-h":
             case "--help":
             case "help":
@@ -60,6 +63,9 @@ internal static class Program
               check-stores                       Ram / Rom: the pins, machine byte order, lane isolation
               boot [--frames N] [--inject] [--out DIR] [--image PATH] [--trace]
                                                  the machine's own trace: EmuTOS to the GEM desktop
+              cpu-tests [--dir DIR] [--file NAME] [--limit N] [--show N] [--quiet] [--out FILE]
+                                                 the 680x0 corpus against the core, one instruction at a
+                                                 time (default dir: tests/680x0/v1)
               run [--frames N] [--inject] [--out DIR]
                                                  the synthetic trace; writes run.digest, run.state and
                                                  run.report into DIR (default runs/<stamp>/)
