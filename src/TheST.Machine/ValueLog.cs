@@ -176,8 +176,34 @@ public sealed class ValueLog
     /// <summary>Whether a chip asking to be woken at or after that instant would resolve on its own stack.</summary>
     public bool ChangesAtOrAfter(long instant) => IndexAtOrAfter(instant) >= 0;
 
+    /// <summary>
+    /// The record a sample names, in <c>log2(Count)</c> probes — or in none at all, which is the case
+    /// that matters: a reader asking "what does the wire hold now" names the newest record almost every
+    /// time, and the newest record answering "the last at or before this instant" *is* the binary
+    /// search's own answer, reached without walking (99.7 ns → 1.9 ns, #38's micro-benchmark). The two
+    /// shortcuts below are the same two comparisons the search would end on; they change no answer.
+    /// </summary>
     int Search(long instant, bool atOrBefore)
     {
+        if (_count == 0)
+        {
+            return -1;
+        }
+
+        if (atOrBefore)
+        {
+            // nothing is later than the newest record: if it qualifies, it is the last one that does
+            if (_records[_head + _count - 1].Instant <= instant)
+            {
+                return _count - 1;
+            }
+        }
+        else if (_records[_head].Instant >= instant)
+        {
+            // nothing is earlier than the oldest record: if it qualifies, it is the first one that does
+            return 0;
+        }
+
         int low = 0;
         int high = _count - 1;
         int found = -1;

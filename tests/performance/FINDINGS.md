@@ -115,6 +115,12 @@ Cheap, design-neutral, measurable (nothing here moves an instant, a record or an
 | array-indexed log and subscriber tables in place of `Dictionary<Channel, …>` (1.8 ms) and a one-subscriber inline slot in place of `Dictionary<Channel, List<Subscriber>>` (≈ half of the 6 ms fire path) | ~4 ms |
 | **together** | **65 → ~50 ms a frame** |
 
+**The fast path, measured rather than projected** (2026-11-13, laptop host, ten *alternating* adjacent
+pairs): **0.90 ms a frame** — 29.32 ms a frame in `validate.sh` against 31.45 before it. Nine of the ten
+pairs favoured it and one was −0.41 ms. The ~3 ms above was extrapolated from the 99.7 ns of a search over
+**10 000** records; the boot's logs hold a few hundred, so a search is ~8 probes and not ~20, and the
+fast path can only remove what the walk actually cost. The projection was a share, not a measurement.
+
 And the wall those do not touch: **17.2 GB is allocated inside continuations, 380 B per resume** —
 async state-machine boxes plus a `Resume` object for every wake. At the engine's measured 88 ns
 suspend/resume floor, 45.2 M continuations is 4.0 s of the run before any work happens, and 77.6 M pops
