@@ -230,8 +230,11 @@ public sealed partial class M68000
             return;
         }
 
-        // the bit operations: bit 8 selects register/immediate, bits 7-6 are the operation itself
-        if ((op & 0x0100) != 0)
+        // the bit operations: bit 8 selects the register form (BITNUM in Dn), the 0x08xx block is the
+        // static form (bit number in the instruction word's bits 11-9). Reading bit 8 as "immediate"
+        // sent every static form (BTST #0,D1 and friends) down the immediate-arithmetic path instead,
+        // where operation 4 means nothing and the flags were left as they were.
+        if ((op & 0x0100) != 0 || (op & 0x0F00) == 0x0800)
         {
             await BitOperationAsync(op, size, mode, reg);
             return;
@@ -354,6 +357,8 @@ public sealed partial class M68000
         int operation = (op >> 6) & 0x3;   // 0 BTST, 1 BCHG, 2 BCLR, 3 BSET
         bool registerBit = (op & 0x0100) != 0;
 
+        // the static form carries its bit number in the extension word that follows the opcode (which
+        // is why it is a 4-byte instruction); only the register form takes it from a data register
         uint bitNumber = registerBit ? _d[(op >> 9) & 0x7] : (uint)(await FetchAsync() & 0xFF);
         if (_busFaulted) return;
 
@@ -660,6 +665,17 @@ public sealed partial class M68000
                     return;
                 }
 
+                // MOVEM registers → memory shares this block with EXT: 0x4880/0x48C0 with a mode and a
+                // register is the transfer, and only its mode-0 form (0x4880-0x4887/0x48C0-0x48C7) is
+                // EXT.W/EXT.L Dn. Without this the instruction fell through to NBCD below, which is
+                // exactly the shape of "memset wrote one zero byte per movem and walked its pointer
+                // down through the stack".
+                if ((op & 0xFF80) == 0x4880 && (op & 0x0038) >= 0x10)
+                {
+                    await MovemToMemoryAsync(op);
+                    return;
+                }
+
                 if ((op & 0xFFC0) == 0x4840)   // PEA <ea>
                 {
                     uint effective = await EaAddressAsync(mode, reg, 2);
@@ -757,82 +773,120 @@ public sealed partial class M68000
         await EnterExceptionAsync(4, 0);   // illegal / unimplemented
     }
 
+    /// <summary>
+    /// MOVEM memory → registers (0x4C80 word, 0x4CC0 long; UM §4.6). Mask bit n is Dn for n in 0–7 and
+    /// A(n−8) above that, and the transfer walks the mask upwards, so memory is read in that same order.
+    /// The width is 2 or 4 **bytes** for the address arithmetic; the shared effective-address helper wants
+    /// a size *index* (1 = word, 2 = long). Conflating the two moved every register by half its width,
+    /// which no flag or register comparison could see until the drift walked a stack into a return address.
+    /// </summary>
     async ValueTask MovemToRegistersAsync(ushort op)
     {
-        int size = (op & 0x0040) != 0 ? 2 : 1;
+        int size = (op & 0x0040) != 0 ? 2 : 1;   // the helper's vocabulary: 1 = word, 2 = long
+        int bytes = size == 2 ? 4 : 2;
         int mode = (op >> 3) & 0x7;
         int reg = op & 0x7;
         ushort mask = await FetchAsync();
         if (_busFaulted) return;
 
-        uint address = await EaAddressAsync(mode, reg, size);
+        // register-direct, and the predecrement form, do not exist for this direction
+        if (mode is 0 or 1 or 4)
+        {
+            await EnterExceptionAsync(4, 0);
+            return;
+        }
+
+        // (An)+ is the one form whose base register moves, and it moves by the transfer's total, which
+        // the helper would get wrong (it advances by a single operand's width), so it is kept here.
+        // The corpus pins the granularity: a word transfer advances An by two bytes even when its access
+        // faults, a long transfer only once its four bytes have been read (a fault on the first word of
+        // a long transfer leaves An where it was). That is two 2-byte bus cycles, not one 4-byte access.
+        uint address = mode == 3 ? GetA(reg) : await EaAddressAsync(mode, reg, size);
         if (_busFaulted) return;
 
         for (int bit = 0; bit < 16; bit++)
         {
             if ((mask & (1 << bit)) == 0) continue;
-            int index = 15 - bit;
+            if (mode == 3) SetA(reg, address + 2);
+
             uint value = size == 2 ? await ReadLongAsync(address) : await ReadWordAsync(address);
             if (_busFaulted) return;
+            if (mode == 3 && size == 2) SetA(reg, address + 4);
 
-            if (index < 8) _d[index] = size == 2 ? value : (uint)(short)(value & 0xFFFF);
-            else SetA(index - 8, size == 2 ? value : (uint)(short)(value & 0xFFFF));
+            uint loaded = size == 2 ? value : (uint)(short)(value & 0xFFFF);
+            if (bit < 8) _d[bit] = loaded;
+            else SetA(bit - 8, loaded);
 
-            address += (uint)size;
+            address += (uint)bytes;
         }
 
-        SetA(reg, address);
+        if (mode == 3) SetA(reg, address);
         Clocks(3);
     }
 
+    /// <summary>
+    /// MOVEM registers → memory (0x4880 word, 0x48C0 long; UM §4.6). The predecrement form stores A7
+    /// first at the highest address and D0 last — the mask walked downwards, the base decremented once
+    /// per register before its store. Every other form stores upwards in mask order, D0 first, and leaves
+    /// the base register alone unless it is (An)+. The width is in bytes, as in the other direction.
+    /// </summary>
     async ValueTask MovemToMemoryAsync(ushort op)
     {
         int size = (op & 0x0040) != 0 ? 2 : 1;
+        int bytes = size == 2 ? 4 : 2;
         int mode = (op >> 3) & 0x7;
         int reg = op & 0x7;
         ushort mask = await FetchAsync();
         if (_busFaulted) return;
 
-        bool predecrement = mode == 4;
-        uint address = await EaAddressAsync(mode, reg, size);
-        if (_busFaulted) return;
-
-        int last = -1;
-
-        for (int step = 0; step < 16; step++)
+        // register-direct, and the PC-relative and immediate forms, are not in this direction
+        if (mode is 0 or 1 || (mode == 7 && reg >= 2))
         {
-            // the predecrement form stores the registers in the reverse order — A7 first, at the
-            // highest address, D0 last — so its mask is walked downwards (UM §4.6)
-            int bit = predecrement ? 15 - step : step;
-            if ((mask & (1 << bit)) == 0) continue;
-            int index = predecrement ? bit : 15 - bit;
-            uint value = index < 8 ? _d[index] : GetA(index - 8);
-
-            if (predecrement)
-            {
-                address -= (uint)size;
-                if (size == 2) await WriteLongAsync(address, value);
-                else await WriteWordAsync(address, (ushort)value);
-            }
-            else
-            {
-                if (size == 2) await WriteLongAsync(address, value);
-                else await WriteWordAsync(address, (ushort)value);
-                address += (uint)size;
-            }
-
-            if (_busFaulted) return;
-            last = index;
+            await EnterExceptionAsync(4, 0);
+            return;
         }
 
-        _ = last;
+        bool predecrement = mode == 4;
+        uint address = mode is 3 or 4 ? GetA(reg) : await EaAddressAsync(mode, reg, size);
+        if (_busFaulted) return;
 
-        if (predecrement || mode == 3)
+        if (predecrement)
         {
-            SetA(reg, address);   // predecrement and postincrement both move the base
+            for (int bit = 15; bit >= 0; bit--)
+            {
+                if ((mask & (1 << bit)) == 0) continue;
+                address -= (uint)bytes;
+                await StoreMovemAsync(address, bit, size);
+                if (_busFaulted) return;
+            }
+
+            SetA(reg, address);
+        }
+        else
+        {
+            for (int bit = 0; bit < 16; bit++)
+            {
+                if ((mask & (1 << bit)) == 0) continue;
+                if (mode == 3) SetA(reg, address + 2);
+
+                await StoreMovemAsync(address, bit, size);
+                if (_busFaulted) return;
+                if (mode == 3 && size == 2) SetA(reg, address + 4);
+
+                address += (uint)bytes;
+            }
+
+            if (mode == 3) SetA(reg, address);
         }
 
         Clocks(3);
+    }
+
+    async ValueTask StoreMovemAsync(uint address, int bit, int size)
+    {
+        uint value = bit < 8 ? _d[bit] : GetA(bit - 8);
+        if (size == 2) await WriteLongAsync(address, value);
+        else await WriteWordAsync(address, (ushort)value);
     }
 
     async ValueTask MiscAsync(ushort op)
@@ -965,12 +1019,6 @@ public sealed partial class M68000
         {
             _pc = await EaAddressAsync(mode, reg, 2);
             Clocks(1);
-            return;
-        }
-
-        if ((op & 0xFFC0) == 0x4C80)   // MOVEM registers → memory
-        {
-            await MovemToMemoryAsync(op);
             return;
         }
 

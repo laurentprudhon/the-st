@@ -45,6 +45,9 @@ care why a flag is wrong as long as the branch lands).
 | 22 | every byte operation on an odd address read the even byte | the corpus bus ignored the lane bits: A0 is not on the address bus, so a byte access is A1–A23 plus a lane | `address += control & 1` for a non-word access |
 | 23 | `CMP`/`CMPA`/`CMPM` changed X | they were computed as a plain subtraction | `SetCompareFlags` saves and restores X |
 | 24 | `NEG`/`NOT` to memory wrote the wrong address | the operand was addressed twice, re-reading the displacement word | address once, then `ReadAt`/`WriteAt` |
+| 25 | `MOVEM` stores executed as `NBCD`, and the boot's inlined `memset` "cleared" one zero byte per instruction | the `0x48xx` block never dispatched the store form: `EXT.W`/`EXT.L` occupied the only slots, and everything else fell through to `NBCD` | dispatch `(op & 0xFF80) == 0x4880` with `mode >= 2` in that block, before `PEA`/`NBCD` |
+| 26 | a word `MOVEM` moved every register by one byte, a long by two; `(An)+`/`-(An)` moved the base twice | the transfer width was the EA helper's size *index* (1 = word, 2 = long) reused as a byte count, and the base register was handed to the helper that advances it per operand | a byte width (2/4) for the address arithmetic, the base register handled here, `(An)+` advanced by the 2-byte access the corpus measures |
+| 27 | every static bit operation (`BTST #n,<ea>` and the `BCHG/BCLR/BSET` forms) left the flags as they were, and the following branch took the wrong path | bit 8 was read as "immediate form", so the `0x08xx` block fell into the immediate-arithmetic path, where operation field `4` means nothing | the `0x08xx` block is the static form (bit number in the following extension word), bit 8 selects the register form |
 
 ## What is still open
 
@@ -52,11 +55,14 @@ care why a flag is wrong as long as the branch lands).
 
 | Family | State | What it needs |
 |---|---|---|
+| `MOVEM.w/l` | 21–22 / 24 per file | green except for the exception-frame bytes below (3 in each file, all in the group-0 frame's access-address/status words) |
 | `MOVEP.w/l` | 0 % | the four forms are decoded but the byte order/pairing does not match the corpus yet |
-| `MOVEM.w/l` | ~20 % | the register-list order and the word-to-long sign extension |
 | `ABCD`/`SBCD`/`NBCD` | ~25 % | the BCD chain's Z rule and the carry-out of the high digit |
 | `CHK` | 5 % | its two exception paths and the bound comparison |
 | the rest | 50–97 % | one-bit flag differences on instructions whose access faulted, and the frame conventions below |
+
+The sample (`v1`, 2 976 tests) reads **2 696 passed (90.6 %)** after the three CPU fixes of
+2026-11-13's second session; the whole corpus has not been re-measured since them.
 
 ## Three things the corpus fixes that the manuals leave to the implementation
 

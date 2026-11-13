@@ -398,11 +398,17 @@ public sealed class SystemControlUnit : Chip
         ushort control = log[at + 2].Value;
         ushort writeData = log[at + 3].Value;
 
-        uint address = ((uint)addressHigh << 16) | addressLow;
-        bool isWrite = (control & 0x0100) != 0;
-        bool isCpuSpace = ((control >> 12) & 0x7) == 7;
+        // the address bus carries the even address; A0 never reaches it, so a byte access announces
+        // its lane in the control word and the chip must put it back to reach the register it named
         int size = (control >> 4) & 0x1;
         int lane = control & 0xF;
+
+        // A24-A31 are not on the bus: a 68000 hands the chips $FFFF8001 for a short absolute address
+        // and the chip decodes $FF8001. Without the mask every "$FFxxxx" comparison in the decode is
+        // false, and the whole I/O page reads as nothing at all.
+        uint address = (((uint)addressHigh << 16) | addressLow | (uint)(size == 0 ? (lane & 1) : 0)) & 0x00FFFFFF;
+        bool isWrite = (control & 0x0100) != 0;
+        bool isCpuSpace = ((control >> 12) & 0x7) == 7;
 
         ushort data = isWrite ? writeData : (ushort)0;
         bool faulted = false;
@@ -472,7 +478,7 @@ public sealed class SystemControlUnit : Chip
 
     void Access(uint address, int size, bool isWrite, int lane, ushort writeValue, ref ushort data, ref bool faulted)
     {
-        if (address < 0x800000)
+        if (address < 0x400000)
         {
             if (_romAtZero && address < 8 && !isWrite)
             {
@@ -482,10 +488,16 @@ public sealed class SystemControlUnit : Chip
                 return;
             }
 
-            // the address decoder uses only the bits the population needs, so an address past the
-            // top of the 1 MB aliases back into it — which is exactly what EmuTOS's pattern test
-            // reads to size the banks (memory.S)
-            AccessRam(address, size, isWrite, lane, writeValue, ref data);
+            // the GSTMCU's MMU decides which physical cell a logical address reaches; past the two
+            // banks' logical total there is no RAM on this machine at all, which is a bus error
+            int physical = TranslateRam(address);
+            if (physical < 0)
+            {
+                faulted = true;
+                return;
+            }
+
+            AccessRam(physical, size, isWrite, lane, writeValue, ref data);
             return;
         }
 
@@ -495,15 +507,17 @@ public sealed class SystemControlUnit : Chip
             return;
         }
 
-        if (address >= 0xFC0000)
-        {
-            AccessRom(address - 0xFC0000, size, isWrite, lane, ref data);   // and at $FC0000
-            return;
-        }
-
+        // the I/O page comes first: the ROM's second window starts at $FC0000 and would otherwise
+        // swallow every register access from $FF8000 up, silenty reading ROM bytes instead
         if (address >= 0xFF8000)
         {
             AccessIo(address, size, isWrite, lane, writeValue, ref data, ref faulted);
+            return;
+        }
+
+        if (address >= 0xFC0000)
+        {
+            AccessRom(address - 0xFC0000, size, isWrite, lane, ref data);   // and at $FC0000
             return;
         }
 
@@ -516,11 +530,51 @@ public sealed class SystemControlUnit : Chip
         faulted = true;
     }
 
-    void AccessRam(uint address, int size, bool isWrite, int lane, ushort writeValue, ref ushort data)
+    // ---- the MMU's decode ------------------------------------------------------------------
+    // A logical bank size comes from $FF8001 (bits 3-2 for bank 0; the GSTMCU gives both banks the
+    // same size, which is Hatari's STMemory_MMU_ConfToBank on an STE), the population is two 512 KB
+    // banks, and each bank cell is reached by the address bits the DRAMs actually have. This is
+    // STMemory_MMU_Translate_Addr_STE ported: with a 512 KB bank $40008 and $8 are different cells,
+    // with a 128 KB bank they are the same one — and that difference is exactly what EmuTOS's pattern
+    // test in bios/memory.S reads to size the machine.
+    const int RamBankBytes = 512 * 1024;
+
+    static int MmuBankBytes(int code) => code switch
     {
-        int bank = (int)((address >> 19) & 1);
-        int row = (int)((address >> 9) & 0x1FF);
-        int column = (int)((address >> 1) & 0x1FF);
+        0 => 128 * 1024,
+        1 => 512 * 1024,
+        2 => 2 * 1024 * 1024,
+        _ => 0,                                  // 3 is not a size the GSTMCU decodes
+    };
+
+    /// <summary>The physical byte a logical address reaches, or -1 if the MMU does not decode it.</summary>
+    int TranslateRam(uint address)
+    {
+        // the MMU decodes the 4 MB below the I/O page and nothing above it
+        if (address >= 0x400000) return -1;
+
+        int logicalBank = MmuBankBytes((_memConfig >> 2) & 0x3);
+        if (logicalBank == 0) logicalBank = 128 * 1024;   // an undecoded config still answers the low bank
+        int total = 2 * logicalBank;
+
+        if (address < logicalBank) return (int)(address & (RamBankBytes - 1));
+        if (address < total) return RamBankBytes + (int)((address - logicalBank) & (RamBankBytes - 1));
+
+        // Below 4 MB the strobes still come out, so a logical address past the configured banks aliases
+        // onto the population by the bits the DRAMs have — which is what lets EmuTOS's early stack sit
+        // at $602E0206 while the machine still reports a 1 MB configuration.
+        return (int)(address & (2 * RamBankBytes - 1));
+    }
+
+    void AccessRam(int physical, int size, bool isWrite, int lane, ushort writeValue, ref ushort data)
+    {
+        // RAS0/RAS1 pick the bank, then the word's 18 remaining bits are 9 row bits (latched on RAS)
+        // and 9 column bits (latched on CAS). Splitting them one bit off makes bit 9 belong to both,
+        // and then a 512 KB bank wraps every 256 KB — which reads as "the RAM is half its size".
+        int bank = physical >> 19;
+        int word = (physical >> 1) & 0x3FFFF;
+        int row = (word >> 9) & 0x1FF;
+        int column = word & 0x1FF;
 
         if (size == 0)
         {
@@ -732,10 +786,12 @@ public sealed class SystemControlUnit : Chip
             return _rom.Read((int)((address & 0x3FFFE) >> 1));
         }
 
-        int bank = (int)((address >> 19) & 1);
-        int row = (int)((address >> 9) & 0x1FF);
-        int column = (int)((address >> 1) & 0x1FF);
-        return _ram.Read(bank, row, column);
+        int physical = TranslateRam(address);
+        if (physical < 0) return 0xFFFF;   // nothing drives the bus there
+
+        int bank = physical >> 19;
+        int word = (physical >> 1) & 0x3FFFF;
+        return _ram.Read(bank, (word >> 9) & 0x1FF, word & 0x1FF);
     }
 
 }
