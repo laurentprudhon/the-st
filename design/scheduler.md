@@ -106,11 +106,17 @@ pendingReads(cont)                          // one per suspended coroutine (inva
   millions of records; without this the tree's memory is unbounded (`ValueLog._records` was
   append-only for ever, and a Debug boot was OOM-killed past ~400 frames at 2.6 GB).
 - **The watermark is the minimum over subscribers *and* live sampling windows** (ADR 0004's
-  2026-11-07 revision). A subscriber's `from` is a floor, but three readers take no subscription and
+  2026-11-07 revision) — **and it is per log** (#41): each log is trimmed against the minimum `from` of
+  *its own* subscribers, because only they can ask it anything, with the machine-wide sampling floor
+  applied to every log. A subscriber's `from` is a floor, but three readers take no subscription and
   still ask for an instant in the past: the CPU's `IPL` sample for the end of an instruction, the video
   chip's four `MD` words behind a group delivery, and any `ReadAt` at or before the chip's own clock.
   They announce the instant with `Engine.NoteSampled(instant)`; the floor holds until the batch ends,
   by which time the sample has been answered on the reader's own stack.
+  <br>One minimum over *every* wire was the first implementation, and it let the slowest waiter in the
+  machine size the memory of all logs: on the boot `bus` held 383 792 records while its own readers never
+  needed more than 80, because a Timers and events waiter sat 3.84 frames in the past on `MFPCS`.
+  Measured, and the reason the watermark is per log.
 - **Truncation keeps one base record** — the newest at or before the watermark. That record is what
   keeps invariant 5 true for every instant from the watermark onwards: the answer to a sample in that
   range is either in the retained window or *is* the base. A sample older than the window returns

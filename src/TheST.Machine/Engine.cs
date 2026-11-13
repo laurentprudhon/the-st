@@ -143,16 +143,25 @@ public sealed partial class Engine
     long _batchesSinceRetention;
 
     /// <summary>
-    /// A wire's log must retain back to the earliest instant a live reader may still sample
-    /// (ADR 0004's 2026-11-07 revision). A subscriber with <c>from</c> may fire on the first record at
-    /// or after it and then reads that record, so its <c>from</c> is a floor on what it still needs;
-    /// with no subscriber waiting anywhere, nothing older than the present can be asked for.
+    /// A wire's log must retain back to the earliest instant a live reader may still sample (ADR 0004's
+    /// 2026-11-07 revision) — <b>and only that wire's readers, because only they can ask it anything.</b>
+    /// A subscriber of this wire with <c>from</c> may fire on the first record at or after it and then
+    /// reads that record, so its <c>from</c> is a floor on what this log still needs; with no subscriber
+    /// waiting on this wire, nothing older than the present can be asked of it by a subscription. The
+    /// sample floor is machine-wide and covers the readers that sample a wire without subscribing.
+    ///
+    /// <para>
+    /// This used to be one minimum over <i>every</i> wire's subscribers, applied to every log — so the
+    /// slowest waiter in the machine sized the memory of all logs. On the boot that was four orders of
+    /// magnitude too conservative: `bus` held 383 792 records because a Timers and events waiter sat 3.84
+    /// frames in the past on `MFPCS`, while the bus's own readers never needed more than 80 (#41).
+    /// </para>
     /// </summary>
-    long RetentionWatermark()
+    long RetentionWatermark(Channel channel)
     {
-        long watermark = long.MaxValue;
+        long watermark = MachineTime;
 
-        foreach (List<Subscriber> subscribers in _subscribers.Values)
+        if (_subscribers.TryGetValue(channel, out List<Subscriber>? subscribers))
         {
             foreach (Subscriber subscriber in subscribers)
             {
@@ -163,15 +172,9 @@ public sealed partial class Engine
             }
         }
 
-        return watermark == long.MaxValue ? MachineTime : watermark;
+        return watermark;
     }
 
-    /// <summary>
-    /// Discards each log's history before the retention watermark, keeping one base record at or
-    /// before it so that every sample from the watermark onwards still answers exactly what the wire
-    /// carried (ADR 0004 invariant 5). Called from the loop, not from a debug partial: retention is
-    /// part of the machine, not an instrument.
-    /// </summary>
     /// <summary>Ticks spent draining batches, in the debug instruments, and in retention — reported.</summary>
     public long DrainTicks { get; private set; }
 
@@ -182,18 +185,25 @@ public sealed partial class Engine
 
     public long TrimTicks { get; private set; }
 
+    /// <summary>
+    /// Discards each log's history before <i>its own</i> retention watermark, keeping one base record at
+    /// or before it so that every sample from that watermark onwards still answers exactly what the wire
+    /// carried (ADR 0004 invariant 5). Called from the loop, not from a debug partial: retention is part
+    /// of the machine, not an instrument.
+    /// </summary>
     void TrimLogs()
     {
         long started = System.Diagnostics.Stopwatch.GetTimestamp();
         TrimCalls++;
-        long watermark = RetentionWatermark();
-        if (_sampleFloor < watermark)
-        {
-            watermark = _sampleFloor;
-        }
 
         foreach (ValueLog log in _logs.Values)
         {
+            long watermark = RetentionWatermark(log.Channel);
+            if (_sampleFloor < watermark)
+            {
+                watermark = _sampleFloor;
+            }
+
             log.TrimTo(watermark);
         }
 

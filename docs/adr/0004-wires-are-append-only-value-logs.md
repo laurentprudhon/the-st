@@ -124,6 +124,10 @@ on the bus answer). So the semantic bound this ADR demands is:
 
 > a wire's log must retain back to the earliest instant a live reader may still sample, and the
 > retention watermark is the minimum over **subscribers and live sampling windows**.
+>
+> *(Per wire — the minimum over **that wire's** subscribers, since only they can ask it anything, with
+> the machine's sampling floor applied to every log. Clarified 2026-11-13 by #41, which measured one
+> minimum over all wires keeping 383 792 records on `bus` where its own readers needed 80.)*
 
 Nothing else changes: the record shape, the resolver taxonomy and the no-deletion rule stand. The
 sampling form is `SampleWithInstant(wire, t) -> (value, changedAt)` and lives on the wire's log, not on
