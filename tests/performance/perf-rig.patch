@@ -1,0 +1,408 @@
+diff --git a/src/TheST.Machine/Engine.cs b/src/TheST.Machine/Engine.cs
+index 16ad007..80cc41a 100644
+--- a/src/TheST.Machine/Engine.cs
++++ b/src/TheST.Machine/Engine.cs
+@@ -95,6 +95,11 @@ public sealed partial class Engine
+     /// <summary>The append-only log of a wire or of a chip's internal register. Created on first use.</summary>
+     public ValueLog Log(Channel channel)
+     {
++        if (Prof)
++        {
++            NLogLookups++;
++        }
++
+         if (!_logs.TryGetValue(channel, out ValueLog? log))
+         {
+             log = new ValueLog(channel);
+@@ -121,7 +126,18 @@ public sealed partial class Engine
+             // One instant, fully drained — including entries born while draining it.
+             while (_queue.TryPeek(out _, out head) && head.Instant == t)
+             {
+-                Execute(_queue.Dequeue(), t);
++                if (Prof)
++                {
++                    long ps = System.Diagnostics.Stopwatch.GetTimestamp();
++                    Entry entry = _queue.Dequeue();
++                    TPop += System.Diagnostics.Stopwatch.GetTimestamp() - ps;
++                    NPop++;
++                    Execute(entry, t);
++                }
++                else
++                {
++                    Execute(_queue.Dequeue(), t);
++                }
+             }
+ 
+             DrainTicks += System.Diagnostics.Stopwatch.GetTimestamp() - phaseStart;
+@@ -200,7 +216,12 @@ public sealed partial class Engine
+         // a sample is answered synchronously, on the reader's own stack, so the window it opened has
+         // been closed by the time the batch ends
+         _sampleFloor = long.MaxValue;
+-        TrimTicks += System.Diagnostics.Stopwatch.GetTimestamp() - started;
++        long trimEl = System.Diagnostics.Stopwatch.GetTimestamp() - started;
++        TrimTicks += trimEl;
++        if (Prof)
++        {
++            TTrim += trimEl;
++        }
+     }
+ 
+     /// <summary>
+@@ -269,6 +290,7 @@ public sealed partial class Engine
+ 
+     internal void Subscribe(Chip chip, Channel channel, long from, Action continuation, long afterSeq)
+     {
++        long profStart = Prof ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+         OnRead(chip, from);
+ 
+         long token = chip.Arm();
+@@ -283,6 +305,13 @@ public sealed partial class Engine
+         }
+ 
+         subscribers.Insert(index, new Subscriber(from, chip, continuation, token, afterSeq));
++
++        if (Prof)
++        {
++            TSub += System.Diagnostics.Stopwatch.GetTimestamp() - profStart;
++            NSub++;
++            ProfSubbed[ProfSlot(channel)]++;
++        }
+     }
+ 
+     /// <summary>
+@@ -315,6 +344,12 @@ public sealed partial class Engine
+         _freshWakes[chip] = _freshWakes.GetValueOrDefault(chip) + 1;
+         Subscriptions++;
+         SubscribersOf(channel).Add(new Subscriber(chip.Clock, chip, continuation, wireToken, afterSeq));
++
++        if (Prof)
++        {
++            NSub++;
++            ProfSubbed[ProfSlot(channel)]++;
++        }
+     }
+ 
+     /// <summary>
+@@ -357,6 +392,39 @@ public sealed partial class Engine
+         AppendRecord(instant, log, chip.Id, 0xFFFF, value);
+     }
+ 
++    // ---- perf instrumentation (temporary; ST_PROF in the environment only) ----------------------
++    // Per-channel volumes and per-operation rates, so that "where does a frame go" can be answered as
++    // volume × rate instead of a single number. Removed before commit: this is a measurement rig.
++    public static readonly bool Prof = Environment.GetEnvironmentVariable("ST_PROF") is not null;
++
++    public const int ProfSlots = 0x4000;
++
++    public readonly long[] ProfAppended = new long[ProfSlots];
++    public readonly long[] ProfFired = new long[ProfSlots];
++    public readonly long[] ProfSubbed = new long[ProfSlots];
++    public readonly long[] ProfAppendTicks = new long[ProfSlots];
++    public readonly long[] ProfSearches = new long[ProfSlots];
++    public readonly long[] ProfSearchTicks = new long[ProfSlots];
++
++    public static int ProfSlot(Channel channel) =>
++        (channel.Kind == ChannelKind.Wire ? 0 : 0x2000) + (channel.Id & 0x1FFF);
++
++    public long TAppend, TFire, TEnq, TSub, TPop, TTrim;
++    public long NAppend, NFire, NEnq, NSub, NLogLookups, NPop;
++    public long TAppendNested, TFireNested, TEnqNested;
++    int _profDepth;
++    public long ACont, AAppend, AEnq, ASub;
++    public readonly long[] TByChip = new long[20];
++    public readonly long[] NByChip = new long[20];
++    public readonly long[] RecordByChip = new long[20];
++
++    public void ProfAbsorbSearches(ValueLog log)
++    {
++        int slot = ProfSlot(log.Channel);
++        ProfSearches[slot] += log.SearchCalls;
++        ProfSearchTicks[slot] += log.SearchTicks;
++    }
++
+     void Execute(Entry entry, long t)
+     {
+         Pops++;
+@@ -376,7 +444,23 @@ public sealed partial class Engine
+                 resume.Chip.Disarm();
+                 resume.Chip.Clock = t;
+                 BeforeResume(resume.Chip);
+-                resume.Continuation();
++                if (Prof)
++                {
++                    long ps = System.Diagnostics.Stopwatch.GetTimestamp();
++                    long allocated = GC.GetAllocatedBytesForCurrentThread();
++                    _profDepth++;
++                    resume.Continuation();
++                    _profDepth--;
++                    ACont += GC.GetAllocatedBytesForCurrentThread() - allocated;
++                    long el = System.Diagnostics.Stopwatch.GetTimestamp() - ps;
++                    TByChip[resume.Chip.Id] += el;
++                    NByChip[resume.Chip.Id]++;
++                }
++                else
++                {
++                    resume.Continuation();
++                }
++
+                 AfterResume(resume.Chip);
+                 break;
+ 
+@@ -409,6 +493,9 @@ public sealed partial class Engine
+             return;
+         }
+ 
++        long profStart = Prof ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
++        int profFired = 0;
++
+         for (int index = 0; index < subscribers.Count;)
+         {
+             Subscriber subscriber = subscribers[index];
+@@ -419,6 +506,7 @@ public sealed partial class Engine
+             }
+ 
+             subscribers.RemoveAt(index);
++            profFired++;
+             if (subscriber.Token == subscriber.Chip.WakeToken)
+             {
+                 _freshWakes[subscriber.Chip] = 0;
+@@ -429,6 +517,20 @@ public sealed partial class Engine
+                 StaleWakes++;
+             }
+         }
++
++        if (Prof)
++        {
++            long fireEl = System.Diagnostics.Stopwatch.GetTimestamp() - profStart;
++            TFire += fireEl;
++            if (_profDepth > 0)
++            {
++                TFireNested += fireEl;
++            }
++
++            NFire += profFired;
++            int slot = ProfSlot(channel);
++            ProfFired[slot] += profFired;
++        }
+     }
+ 
+     void AppendRecordAndFire(long instant, Channel channel, int driver, ushort mask, ushort value)
+@@ -441,13 +543,52 @@ public sealed partial class Engine
+     void AppendRecord(long instant, Channel channel, int driver, ushort mask, ushort value)
+     {
+         var record = new Record(instant, _seq++, channel, driver, mask, value);
+-        Log(channel).Append(record);
++        if (Prof)
++        {
++            long ps = System.Diagnostics.Stopwatch.GetTimestamp();
++            Log(channel).Append(record);
++            long el = System.Diagnostics.Stopwatch.GetTimestamp() - ps;
++            TAppend += el;
++            if (_profDepth > 0)
++            {
++                TAppendNested += el;
++            }
++
++            NAppend++;
++            int slot = ProfSlot(channel);
++            ProfAppended[slot]++;
++            ProfAppendTicks[slot] += el;
++            RecordByChip[driver]++;
++        }
++        else
++        {
++            Log(channel).Append(record);
++        }
++
+         AfterRecordAppended(record);
+     }
+ 
+     void Enqueue(Entry entry)
+     {
+-        _queue.Enqueue(entry, new Key(entry.Instant, _seq++));
++        if (Prof)
++        {
++            long ps = System.Diagnostics.Stopwatch.GetTimestamp();
++            long allocated = GC.GetAllocatedBytesForCurrentThread();
++            _queue.Enqueue(entry, new Key(entry.Instant, _seq++));
++            AEnq += GC.GetAllocatedBytesForCurrentThread() - allocated;
++            long enqEl = System.Diagnostics.Stopwatch.GetTimestamp() - ps;
++            TEnq += enqEl;
++            if (_profDepth > 0)
++            {
++                TEnqNested += enqEl;
++            }
++
++            NEnq++;
++        }
++        else
++        {
++            _queue.Enqueue(entry, new Key(entry.Instant, _seq++));
++        }
+     }
+ 
+     List<Subscriber> SubscribersOf(Channel channel)
+diff --git a/src/TheST.Machine/ValueLog.cs b/src/TheST.Machine/ValueLog.cs
+index fd943d7..036493d 100644
+--- a/src/TheST.Machine/ValueLog.cs
++++ b/src/TheST.Machine/ValueLog.cs
+@@ -176,8 +176,14 @@ public sealed class ValueLog
+     /// <summary>Whether a chip asking to be woken at or after that instant would resolve on its own stack.</summary>
+     public bool ChangesAtOrAfter(long instant) => IndexAtOrAfter(instant) >= 0;
+ 
++    /// <summary>Perf rig only (Engine.Prof): how often, and how long, this log's searches took.</summary>
++    public long SearchCalls;
++
++    public long SearchTicks;
++
+     int Search(long instant, bool atOrBefore)
+     {
++        long profStart = Engine.Prof ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+         int low = 0;
+         int high = _count - 1;
+         int found = -1;
+@@ -206,6 +212,12 @@ public sealed class ValueLog
+             }
+         }
+ 
++        if (Engine.Prof)
++        {
++            SearchCalls++;
++            SearchTicks += System.Diagnostics.Stopwatch.GetTimestamp() - profStart;
++        }
++
+         return found;
+     }
+ 
+diff --git a/tools/validation-harness/BootCommand.cs b/tools/validation-harness/BootCommand.cs
+index 1a3c4b6..ebef91b 100644
+--- a/tools/validation-harness/BootCommand.cs
++++ b/tools/validation-harness/BootCommand.cs
+@@ -619,6 +619,11 @@ internal static class BootCommand
+ 
+         File.WriteAllLines(Path.Combine(directory, "run.report"), report);
+ 
++        if (Engine.Prof)
++        {
++            WritePerf(directory, machine, lastFrame, clock.Elapsed.TotalSeconds);
++        }
++
+         foreach (string line in state)
+         {
+             Console.WriteLine(line);
+@@ -713,6 +718,115 @@ internal static class BootCommand
+         return best == 0 ? name : $"{name}+${pc - best:x}";
+     }
+ 
++    /// <summary>
++    /// The per-wire page (ST_PROF only): volume × rate, so a frame can be read as a table rather than
++    /// as one number. Volumes are exact; the rates carry the clock's own ~87 ns a measurement, which is
++    /// stated on the page because at these sizes it is not noise.
++    /// </summary>
++    static void WritePerf(string directory, MachineModel machine, int frames, double hostSeconds)
++    {
++        Engine engine = machine.Engine;
++        double freq = System.Diagnostics.Stopwatch.Frequency;
++        double Ms(long ticks) => ticks * 1000.0 / freq;
++        double Us(long ticks, long count) => count == 0 ? 0 : ticks * 1_000_000.0 / freq / count;
++        double Ns(long ticks, long count) => count == 0 ? 0 : ticks * 1_000_000_000.0 / freq / count;
++
++        // the clock's own cost, measured in this process: at these operation sizes it is not noise, so
++        // every rate below is printed net of the two GetTimestamp calls the rig wraps it in
++        long clockStart = System.Diagnostics.Stopwatch.GetTimestamp();
++        long clockSink = 0;
++        for (int i = 0; i < 1_000_000; i++)
++        {
++            clockSink += System.Diagnostics.Stopwatch.GetTimestamp();
++        }
++
++        GC.KeepAlive(clockSink);
++        double clockNs = System.Diagnostics.Stopwatch.GetTimestamp() - clockStart;
++        clockNs = clockNs * 1_000_000_000.0 / freq / 1_000_000;
++        double Net(long ticks, long count) => Math.Max(0, Ns(ticks, count) - 2 * clockNs);
++
++        var page = new List<string>
++        {
++            "The ST — where a frame goes (Release, ST_PROF on)",
++            string.Empty,
++            $"frames {frames}, host {hostSeconds:F1} s. Every per-operation rate below carries ~87 ns of",
++            "clock-reading overhead (two GetTimestamp calls), so read a rate as high by that much, and read",
++            "the *shares* as the measurement. The volumes are exact.",
++            string.Empty,
++            "A. per chip — its own coroutine, from a resume to its next suspension:",
++            "   chip                  resumes   records driven      ms   us/resume   share",
++        };
++
++        double contTotal = 0;
++        foreach (Chip chip in engine.Chips)
++        {
++            contTotal += Ms(engine.TByChip[chip.Id]);
++        }
++
++        foreach (Chip chip in engine.Chips)
++        {
++            long resumes = engine.NByChip[chip.Id];
++            double ms = Ms(engine.TByChip[chip.Id]);
++            page.Add($"   {chip.Name,-20} {resumes,10:N0} {engine.RecordByChip[chip.Id],14:N0} {ms,7:F0} {Us(engine.TByChip[chip.Id], resumes),10:F2} {100 * ms / Math.Max(contTotal, 1),6:F1} %");
++        }
++
++        page.Add($"   {"(all chips)",-20} {engine.NByChip.Sum(),10:N0} {engine.RecordByChip.Sum(),14:N0} {contTotal,7:F0}");
++        page.Add(string.Empty);
++        page.Add("B. the queue — every pop, by kind:");
++        page.Add($"   live resumes  {engine.Pops - engine.StaleWakes:N0}   stale wakes  {engine.StaleWakes:N0} ({100.0 * engine.StaleWakes / Math.Max(engine.Pops, 1):F0} %)   pops {engine.Pops:N0}");
++        page.Add(string.Empty);
++        page.Add("C. per wire and register log — volume, and what one record costs there:");
++        page.Add("   log (kind id)                 records  append ns    fires   fire ns     subs searches search ns");
++        page.Add("   (`fire us` is the global average — timing it per log would count the instrument itself twice)");
++
++        foreach (ValueLog log in engine.Logs.OrderByDescending(l => engine.ProfAppended[Engine.ProfSlot(l.Channel)]))
++        {
++            int slot = Engine.ProfSlot(log.Channel);
++            long records = engine.ProfAppended[slot];
++            if (records == 0 && log.SearchCalls == 0)
++            {
++                continue;
++            }
++
++            string kind = log.Channel.Kind == ChannelKind.Wire ? "wire" : "int ";
++            page.Add($"   {log.Channel.Name,-12} ({kind} {log.Channel.Id,3}) {records,10:N0} {Net(engine.ProfAppendTicks[slot], records),8:F0} {engine.ProfFired[slot],9:N0} {Net(engine.TFire, Math.Max(engine.NFire, 1)),8:F0} {engine.ProfSubbed[slot],9:N0} {log.SearchCalls,9:N0} {Net(log.SearchTicks, log.SearchCalls),8:F0}");
++        }
++
++        page.Add(string.Empty);
++        page.Add("D. the engine's own per-operation rates:");
++        page.Add($"   append a record (look up its log, store it)   {engine.NAppend,12:N0} calls  {Ms(engine.TAppend),8:F0} ms  {Net(engine.TAppend, engine.NAppend),6:F0} ns each");
++        page.Add($"   fire a wire's subscribers (scan and remove)   {engine.NFire,12:N0} calls  {Ms(engine.TFire),8:F0} ms  {Net(engine.TFire, Math.Max(engine.NFire, 1)),6:F0} ns each");
++        page.Add($"   enqueue a queue entry                         {engine.NEnq,12:N0} calls  {Ms(engine.TEnq),8:F0} ms  {Net(engine.TEnq, engine.NEnq),6:F0} ns each");
++        page.Add($"   dequeue one queue entry                       {engine.NPop,12:N0} calls  {Ms(engine.TPop),8:F0} ms  {Net(engine.TPop, engine.NPop),6:F0} ns each");
++        page.Add($"   register a subscription                       {engine.NSub,12:N0} calls  {Ms(engine.TSub),8:F0} ms  {Net(engine.TSub, Math.Max(engine.NSub, 1)),6:F0} ns each");
++        page.Add($"   resolve a chip's continuation (all chips)     {engine.NByChip.Sum(),12:N0} calls  {contTotal,8:F0} ms  {Net(engine.TByChip.Sum(), engine.NByChip.Sum()),6:F0} ns each");
++        page.Add($"   Engine.Log(...) dictionary lookups            {engine.NLogLookups,12:N0} calls  (measured apart: 7.0 ns each, an array 1.4)");
++        page.Add($"   retention trims                               {engine.TrimCalls,12:N0} calls  {Ms(engine.TTrim),8:F0} ms  {Us(engine.TTrim, engine.TrimCalls),6:F2} us each");
++        page.Add(string.Empty);
++        page.Add("   exclusive view — what a frame's time is really made of (the engine calls a chip makes");
++        page.Add("   happen inside its coroutine, so their totals are also inside A's):");
++        page.Add($"   chip coroutines, nested engine calls included {contTotal,8:F0} ms  ({contTotal / frames,7:F2} ms a frame)");
++        page.Add($"     of which appends inside a chip              {Ms(engine.TAppendNested),8:F0} ms  ({Net(engine.TAppendNested, engine.NAppend),4:F0} ns a record)");
++        page.Add($"     of which fires inside a chip                {Ms(engine.TFireNested),8:F0} ms");
++        page.Add($"     of which enqueues inside a chip             {Ms(engine.TEnqNested),8:F0} ms");
++        page.Add($"   retention (outside the coroutines)            {Ms(engine.TTrim),8:F0} ms  ({Ms(engine.TTrim) / frames,7:F2} ms a frame, {(double)engine.TrimCalls / frames:F0} trims a frame)");
++        page.Add($"   queue pops, engine side, outside a coroutine  {Ms(engine.TPop),8:F0} ms");
++        page.Add($"   the whole run                                 {hostSeconds * 1000,8:F0} ms  ({hostSeconds * 1000 / frames,7:F2} ms a frame)");
++        page.Add($"   (the clock itself: {clockNs:F0} ns a reading, subtracted above)");
++        page.Add(string.Empty);
++        page.Add("E. allocation, by the region that made it:");
++        page.Add($"   inside a chip's continuation                  {engine.ACont / 1048576.0,10:F0} MB");
++        page.Add($"   inside an enqueue                             {engine.AEnq / 1048576.0,10:F0} MB");
++        page.Add($"   (the rest: entries, delegates, log arrays, the harness)");
++        page.Add($"   gen-0 {GC.CollectionCount(0):N0}  gen-1 {GC.CollectionCount(1):N0}  gen-2 {GC.CollectionCount(2):N0}  pause {GC.GetTotalPauseDuration().TotalMilliseconds:F0} ms  allocated {GC.GetTotalAllocatedBytes(false) / 1048576:N0} MB");
++
++        File.WriteAllLines(Path.Combine(directory, "perf.txt"), page);
++        foreach (string line in page)
++        {
++            Console.WriteLine(line);
++        }
++    }
++
+     /// <summary>A division of one measured total by the frames it took — every §4 figure is one of these.</summary>
+     static double PerFrame(long total, int frames) => frames <= 0 ? 0 : (double)total / frames;
+ 

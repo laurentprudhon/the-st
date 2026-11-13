@@ -1,0 +1,68 @@
+The ST — where a frame goes (Release, ST_PROF on)
+
+frames 724, host 72.6 s. Every per-operation rate below carries ~87 ns of
+clock-reading overhead (two GetTimestamp calls), so read a rate as high by that much, and read
+the *shares* as the measurement. The volumes are exact.
+
+A. per chip — its own coroutine, from a resume to its next suspension:
+   chip                  resumes   records driven      ms   us/resume   share
+   CPU                  10,432,005     51,501,939   26699       2.56   52.5 %
+   SystemControlUnit    27,513,211     35,753,608   20517       0.75   40.3 %
+   Video                 2,892,000        144,620    1518       0.52    3.0 %
+   TimersAndEvents       4,357,867      4,370,362    2116       0.49    4.2 %
+   (all chips)          45,195,083     91,770,529   50850
+
+B. the queue — every pop, by kind:
+   live resumes  45,752,363   stale wakes  31,871,755 (41 %)   pops 77,624,118
+
+C. per wire and register log — volume, and what one record costs there:
+   log (kind id)                 records  append ns    fires   fire ns     subs searches search ns
+   (`fire us` is the global average — timing it per log would count the instrument itself twice)
+   bus          (wire   1) 51,501,939        0 27,513,210      106 27,513,212 1,337,827       15
+   MD           (wire   4) 21,069,772        0         0      106         0 13,731,615        0
+   answer       (wire   2) 10,300,387        0 10,300,387      106 10,300,388 21,938,601        0
+   timer D      (int  3330)  4,353,103        0         0      106         0 1,324,529        0
+   group        (wire   3)  2,892,000        0 2,892,000      106 2,892,001 1,337,591        0
+   IPL          (wire   9)    457,316        0   131,618      106   131,618 6,090,716        0
+   HSYNC        (wire   7)    452,500        0         0      106         0 1,337,823        0
+   DE           (wire   5)    289,200        0         0      106         0 4,229,591        0
+   line         (int  2816)    226,251        0         0      106         0 1,337,827        0
+   pixel counter (int  3072)    144,600        0         0      106         0 1,337,591        0
+   refresh      (int  2817)     57,105        0         0      106         0 1,337,827        0
+   IRQ          (wire  10)      5,726        0         0      106         0 1,323,846        0
+   MFPCS        (wire  14)      4,740        0 4,357,403      106 4,357,868 1,334,133        0
+   register     (int  3328)      2,944        0         0      106         0 1,333,799        0
+   VSYNC        (wire   8)      2,892      128         0      106         0 1,337,827        0
+   timer C      (int  3329)      2,863        0         0      106         0 1,323,846        0
+   IRQ          (int  3333)      2,863        0         0      106         0 1,323,846        0
+   acknowledge  (int  3334)      2,863        0         0      106         0 1,323,846        0
+   BLANK        (wire   6)      1,445        0         0      106         0 1,336,431        0
+   palette      (int  3073)         19        0         0      106         0 1,333,132        0
+   shifter      (int  3074)          1     2498         0      106         0 1,333,137        0
+
+D. the engine's own per-operation rates:
+   append a record (look up its log, store it)     91,770,529 calls      7230 ms       0 ns each
+   fire a wire's subscribers (scan and remove)     45,194,618 calls     10400 ms     106 ns each
+   enqueue a queue entry                           77,624,120 calls      4232 ms       0 ns each
+   dequeue one queue entry                         77,624,118 calls      6231 ms       0 ns each
+   register a subscription                         45,195,087 calls         0 ms       0 ns each
+   resolve a chip's continuation (all chips)       45,195,083 calls     50850 ms    1001 ns each
+   Engine.Log(...) dictionary lookups             234,539,511 calls  (measured apart: 7.0 ns each, an array 1.4)
+   retention trims                                  1,337,827 calls      4077 ms    3.05 us each
+
+   exclusive view — what a frame's time is really made of (the engine calls a chip makes
+   happen inside its coroutine, so their totals are also inside A's):
+   chip coroutines, nested engine calls included    50850 ms  (  70.23 ms a frame)
+     of which appends inside a chip                  5843 ms  (   0 ns a record)
+     of which fires inside a chip                    9351 ms
+     of which enqueues inside a chip                 4020 ms
+   retention (outside the coroutines)                4077 ms  (   5.63 ms a frame, 1848 trims a frame)
+   queue pops, engine side, outside a coroutine      6231 ms
+   the whole run                                    72641 ms  ( 100.33 ms a frame)
+   (the clock itself: 62 ns a reading, subtracted above)
+
+E. allocation, by the region that made it:
+   inside a chip's continuation                       17226 MB
+   inside an enqueue                                      0 MB
+   (the rest: entries, delegates, log arrays, the harness)
+   gen-0 1,890  gen-1 1,517  gen-2 1,177  pause 1772 ms  allocated 19,481 MB
