@@ -149,6 +149,7 @@ internal static class BootCommand
         long firstNvbls = -1;
         long lastNvbls = -1;
         var probes = new List<string>();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
         var random = new Random(20261111);
 
         try
@@ -190,10 +191,13 @@ internal static class BootCommand
                     // loop spins on, and the MFP's TCDCR/TCDR + IERA/IMRA say whether the tick was ever
                     // programmed and enabled.
                     probes.Add(
-                        $"frame {frame,5}  pc {pc:x6}  nvbls {nvbls,5}  " +
+                        $"t {clock.Elapsed.TotalSeconds,7:F1}s  frame {frame,5}  pc {pc:x6}  nvbls {nvbls,5}  " +
+                        $"queue {machine.Engine.QueueCount,6}  retained {machine.Engine.RetainedRecords,9}  " +
                         $"frclock {machine.PeekLong(Frclock),6}  hz200 {machine.PeekLong(HZ200),6}  " +
                         $"tcdcr {machine.Timers.Register(0x1D, 0, false, machine.Engine.MachineTime):x2}  tcdr {machine.Timers.Register(0x23, 0, false, machine.Engine.MachineTime):x2}  " +
                         $"iera {machine.Timers.Register(0x07, 0, false, machine.Engine.MachineTime):x2}  imra {machine.Timers.Register(0x13, 0, false, machine.Engine.MachineTime):x2}  " +
+                        $"ierb {machine.Timers.Register(0x09, 0, false, machine.Engine.MachineTime):x2}  imrb {machine.Timers.Register(0x15, 0, false, machine.Engine.MachineTime):x2}  " +
+                        $"isrb {machine.Timers.Register(0x11, 0, false, machine.Engine.MachineTime):x2}  iprb {machine.Timers.Register(0x0D, 0, false, machine.Engine.MachineTime):x2}  " +
                         $"mfpw {machine.Timers.RegisterWrites,5}  tc {machine.Timers.TimerCExpiries,5}  irq {machine.Timers.IrqAssertions,4}  " +
                         $"sr {machine.Cpu.SR:x4}  ipl {machine.SystemControlUnit.ResolvedLevelAt(machine.Engine.MachineTime)}  " +
                         $"inkernel={machine.Cpu.Instructions,10}  " +

@@ -444,31 +444,52 @@ public sealed partial class M68000 : Chip
 
     async ValueTask WaitForStop()
     {
-        // STOP: the loop yields until the level can be taken; the sampling below decides
-        await WaitFor(long.MaxValue, Wires.Ipl, Engine.Log(Wires.Ipl).Count > 0 ? Engine.Log(Wires.Ipl)[^1].Seq : long.MinValue);
-        _stopped = false;
-        await CheckInterruptAsync();
+        // A stopped CPU leaves STOP only by *taking* an interrupt — never by any wake. Two samples per
+        // level: one at the change, and, when the level is takeable but younger than the four-clock
+        // window, one four clocks later. Without the second sample a STOP that wakes exactly on the
+        // level's own record declines the interrupt for ever (the rule defers it to "one instruction
+        // later", and a stopped CPU has no next instruction): the boot's first VBL wait, and later the
+        // ACSI wait's `while (hz_200 < next_acsi_time) stop_until_interrupt();`, both froze there.
+        while (true)
+        {
+            long seq = Engine.Log(Wires.Ipl).Count > 0 ? Engine.Log(Wires.Ipl)[^1].Seq : long.MinValue;
+            int level = Engine.ValueAt(Wires.Ipl, Clock) & 0x7;
+            bool takeable = level != 0 && (level > InterruptMask || level == 7);
+            await WaitFor(takeable ? Clock + 4 * TicksPerCpuClock : long.MaxValue, Wires.Ipl, seq);
+
+            _stopped = false;
+            if (await CheckInterruptAsync())
+            {
+                return;
+            }
+
+            _stopped = true;
+        }
     }
 
     // ---- interrupts and exceptions -------------------------------------------------------
 
-    async ValueTask CheckInterruptAsync()
+    /// <summary>
+    /// Takes the interrupt the <c>IPL</c> lanes present, if one is takeable. Returns whether an
+    /// interrupt was actually entered — the STOP loop must stay stopped when this answers false.
+    /// </summary>
+    async ValueTask<bool> CheckInterruptAsync()
     {
         int level = Engine.ValueAt(Wires.Ipl, Clock) & 0x7;
         if (level == 0)
         {
-            return;
+            return false;
         }
 
         if (level <= InterruptMask && level != 7)
         {
-            return;
+            return false;
         }
 
         long changedAt = LastIplChangeAt(Clock);
         if (Clock - changedAt < 4 * TicksPerCpuClock)
         {
-            return;   // the pin changed too late: taken one instruction later, by the rule
+            return false;   // the pin changed too late: taken one instruction later, by the rule
         }
 
         InterruptsTaken++;
@@ -486,6 +507,7 @@ public sealed partial class M68000 : Chip
         }
 
         await EnterExceptionAsync(vector, level);
+        return true;
     }
 
     long LastIplChangeAt(long instant)
