@@ -113,7 +113,12 @@ Cheap, design-neutral, measurable (nothing here moves an instant, a record or an
 | retention every 256 batches instead of every 16 (`RetentionEvery`) | ~5 ms a frame |
 | a last-record fast path in `ValueLog`'s searches (99.7 → 1.9 ns for the newest-record read, most of 68.6 M searches) | ~3 ms → **0.90 ms measured** |
 | array-indexed log and subscriber tables in place of `Dictionary<Channel, …>` (1.8 ms) and a one-subscriber inline slot in place of `Dictionary<Channel, List<Subscriber>>` (≈ half of the 6 ms fire path) | ~4 ms → **1.13 ms measured**, slot **reverted** |
-| **together** | **65 → ~50 ms a frame** → **34.3 → ~30.7 ms measured** on the laptop host |
+| **together** | **65 → ~50 ms a frame** → **34.3 → ~30.2 ms measured** on the laptop host |
+
+The row above is 256-against-16; what shipped is **128** against 16, measured at **2.09 ms a frame** over
+four *alternating* adjacent pairs (1.08–3.52, all four positive). Every figure in this section was taken
+with alternating pair order: this host drifts ~2 ms across a session, and pairs run A-then-B credit B
+with that drift — the same six pairs read 1.15–2.02 that way and 1.08–3.52 alternating.
 
 **The fast path, measured rather than projected** (2026-11-13, laptop host, ten *alternating* adjacent
 pairs): **0.90 ms a frame** — 29.32 ms a frame in `validate.sh` against 31.45 before it. Nine of the ten

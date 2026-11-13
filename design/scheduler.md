@@ -135,11 +135,13 @@ pendingReads(cont)                          // one per suspended coroutine (inva
   *retains more*, so the cadence can never change an answer — it was 1 848 trims and ~2.7 ms a frame of
   bookkeeping at 16, for a machine that retains a few hundred records. Measured against 256 in three
   interleaved pairs (256 retains 1 522 records and reallocates more: GC 1.26 vs 0.54 ms a frame), 128 won
-  every pair by 2.7–5.0 ms; then 16 against 128 in three adjacent interleaved pairs on a quiet host
-  (i7-12700H × 20 cores), 34.14 / 34.04 / 33.20 ms against 32.46 / 32.02 / 32.05 — 128 again won every
-  pair, by 1.15–2.02 ms. Both digests were unchanged by the switch on both hosts (boot 10 801 972 words,
-  synthetic 95 999, sha256 `ffd761fc…` and `9b92d3ae…` on each). G7 (`check-retention`) proves the rule
-  rather than the cadence.
+  every pair by 2.7–5.0 ms; then 16 against 128 in four *alternating* adjacent pairs on a quiet host
+  (i7-12700H × 20 cores): 33.42 / 32.47 / 32.27 / 34.81 ms against 31.47 / 31.39 / 30.46 / 31.29 — 128
+  again won every pair, by 1.08–3.52 ms (mean 2.09). Alternating is what makes the pair mean anything:
+  this host drifts ~2 ms over a session, so an A-then-B ordering silently credits B with the drift, and
+  the first six pairs taken that way read 1.15–2.02 where the alternating ones read 1.08–3.52. Both
+  digests were unchanged by the switch on both hosts (boot 10 801 972 words, synthetic 95 999, sha256
+  `ffd761fc…` and `9b92d3ae…` on each). G7 (`check-retention`) proves the rule rather than the cadence.
 
 ## 4. Debug assertions (all off in release)
 
