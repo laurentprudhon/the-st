@@ -490,6 +490,7 @@ public sealed partial class M68000 : Chip
 
     long LastIplChangeAt(long instant)
     {
+        Engine.NoteSampled(instant);   // a live sampling window: the answer is a record, not a subscription
         ValueLog log = Engine.Log(Wires.Ipl);
         int index = log.IndexAtOrBefore(instant);
         return index < 0 ? 0 : log[index].Instant;

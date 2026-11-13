@@ -75,7 +75,7 @@ public sealed class SystemControlUnit : Chip
     // the bus
     long _assertionInstant = -1;
     long _answerInstant = -1;
-    int _assertionIndex = -1;
+    long _assertionSeq = -1;
     long _busSeenSeq = long.MinValue;
 
     // interrupts
@@ -133,10 +133,13 @@ public sealed class SystemControlUnit : Chip
 
             if (_answerInstant >= 0 && Clock >= _answerInstant)
             {
-                PerformBusCycle(_answerInstant);
+                // The cycle is answered at the instant this chip is actually awake, never at the
+                // earliest slot it could have been: a record stamped before the batch being drained
+                // is backdated, and the resume it fires lands in the past and never runs.
+                PerformBusCycle(Clock);
                 _answerInstant = -1;
                 _assertionInstant = -1;
-                _assertionIndex = -1;
+                _assertionSeq = -1;
             }
 
             long due = NextEvent();
@@ -159,7 +162,12 @@ public sealed class SystemControlUnit : Chip
             if (record.Mask == 0xFF00 && _answerInstant < 0)
             {
                 _assertionInstant = record.Instant;
-                _assertionIndex = index;
+
+                // The exchange's four records are held by sequence number, never by index: retention
+                // discards records from the oldest end, so an index captured now and used at the next
+                // external slot names a different record once anything was trimmed in between (the
+                // first symptom was a dead bus: three cycles started, no answer, the CPU suspended).
+                _assertionSeq = record.Seq;
                 _answerInstant = NextExternalSlot(record.Instant);
             }
 
@@ -387,7 +395,7 @@ public sealed class SystemControlUnit : Chip
     void PerformBusCycle(long instant)
     {
         ValueLog log = Engine.Log(Wires.Bus);
-        int at = _assertionIndex;
+        int at = log.IndexAt(_assertionSeq);
         if (at < 0 || at + 3 >= log.Count)
         {
             return;
@@ -432,7 +440,7 @@ public sealed class SystemControlUnit : Chip
                 RecomputeIpl(Clock);
             }
 
-            if (level == 6 && _machine.Timers.TryVector(out byte vector))
+            if (level == 6 && _machine.Timers.TryVector(instant, out byte vector))
             {
                 data = vector;
                 vectorProvided = true;
@@ -457,7 +465,7 @@ public sealed class SystemControlUnit : Chip
             return;
         }
 
-        Access(address, size, isWrite, lane, data, ref data, ref faulted);
+        Access(instant, address, size, isWrite, lane, data, ref data, ref faulted);
 
         if (faulted)
         {
@@ -476,7 +484,7 @@ public sealed class SystemControlUnit : Chip
         }
     }
 
-    void Access(uint address, int size, bool isWrite, int lane, ushort writeValue, ref ushort data, ref bool faulted)
+    void Access(long instant, uint address, int size, bool isWrite, int lane, ushort writeValue, ref ushort data, ref bool faulted)
     {
         if (address < 0x400000)
         {
@@ -511,7 +519,7 @@ public sealed class SystemControlUnit : Chip
         // swallow every register access from $FF8000 up, silenty reading ROM bytes instead
         if (address >= 0xFF8000)
         {
-            AccessIo(address, size, isWrite, lane, writeValue, ref data, ref faulted);
+            AccessIo(instant, address, size, isWrite, lane, writeValue, ref data, ref faulted);
             return;
         }
 
@@ -598,7 +606,7 @@ public sealed class SystemControlUnit : Chip
         data = size == 0 ? _rom.ReadByte(word, (Lane)lane) : _rom.Read(word);
     }
 
-    void AccessIo(uint address, int size, bool isWrite, int lane, ushort writeValue, ref ushort data, ref bool faulted)
+    void AccessIo(long instant, uint address, int size, bool isWrite, int lane, ushort writeValue, ref ushort data, ref bool faulted)
     {
         // ---- the Blitter is absent: $FF8A00–$FF8A3F faults (walking-skeleton.md §1) --------
         if (address >= 0xFF8A00 && address <= 0xFF8A3F)
@@ -610,7 +618,14 @@ public sealed class SystemControlUnit : Chip
         // ---- the MFP: $FFFA01–$FFFA3F, odd bytes ------------------------------------------
         if (address >= 0xFFFA00 && address <= 0xFFFA3F)
         {
-            data = _machine.Timers.Register((int)(address - 0xFFFA00), writeValue, isWrite);
+            // The select is a crossing, not a function call (crossings.md: MFPCS, one record per
+            // access): the record is what wakes the chip, which then re-arms its counters' deadlines.
+            // Without it a chip suspended on an old deadline never learns that software just
+            // programmed a new one — which is how the 200 Hz tick stayed dead while TCDCR/TCDR read
+            // back 0x51/192 and IERA/IMRA both said Timer C was enabled and unmasked.
+            int index = (int)(address - 0xFFFA00) & 0x3F;
+            data = _machine.Timers.Register(index, writeValue, isWrite, instant);
+            Write(instant, Wires.MfpSelect, 0xFFFF, (ushort)((index << 8) | (isWrite ? 0x80 : 0x00)));
             return;
         }
 
@@ -719,8 +734,13 @@ public sealed class SystemControlUnit : Chip
 
     // ---- interrupts -----------------------------------------------------------------------
 
-    /// <summary>Timers and events asserts or releases <c>IRQ</c>: level 6, nothing else.</summary>
-    public void SetMfpInterrupt(bool asserted)
+    /// <summary>
+    /// Timers and events asserts or releases <c>IRQ</c>: level 6, nothing else. The instant is the
+    /// MFP's — the chip that drove the line — never this chip's own clock: the System Control Unit may
+    /// still be suspended at an older instant when the MFP asserts, and an <c>IPL</c> record stamped
+    /// there is a record dated before the batch being drained, which resumes the CPU in the past.
+    /// </summary>
+    public void SetMfpInterrupt(bool asserted, long instant)
     {
         int level = asserted ? 6 : 0;
         if (level == _mfpLevel)
@@ -729,7 +749,7 @@ public sealed class SystemControlUnit : Chip
         }
 
         _mfpLevel = level;
-        RecomputeIpl(Clock);
+        RecomputeIpl(instant);
     }
 
     /// <summary><c>max(6, 4, 2)</c> — one three-lane record per change (crossings.md §4).</summary>

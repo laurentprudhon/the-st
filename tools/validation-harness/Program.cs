@@ -31,6 +31,9 @@ internal static class Program
             case "check-stores":
                 return StoreChecks.Run();
 
+            case "check-retention":
+                return RetentionChecks.Run();
+
             case "run":
                 return TraceRunCommand.Run(args[1..]);
 
@@ -61,6 +64,7 @@ internal static class Program
 
               check-clocks                       G4: the clock arithmetic (ADR 0001)
               check-stores                       Ram / Rom: the pins, machine byte order, lane isolation
+              check-retention                    G7: a log is truncated only where no reader can still ask
               boot [--frames N] [--inject] [--out DIR] [--image PATH] [--trace]
                                                  the machine's own trace: EmuTOS to the GEM desktop
               cpu-tests [--dir DIR] [--file NAME] [--limit N] [--show N] [--quiet] [--out FILE]

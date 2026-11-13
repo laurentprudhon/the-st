@@ -99,6 +99,30 @@ pendingReads(cont)                          // one per suspended coroutine (inva
     (ADR 0004); with no subscriber, the UI's trace window decides.
   - `subscribers(wire)` — compared against `design/crossings.md` in debug builds.
 
+### 3a. How retention is done (#34)
+
+- **A log is a window over one array**, with a head offset: discarding from the oldest end is a pointer
+  move, and the array compacts when the head has eaten half of it. A long boot appends tens of
+  millions of records; without this the tree's memory is unbounded (`ValueLog._records` was
+  append-only for ever, and a Debug boot was OOM-killed past ~400 frames at 2.6 GB).
+- **The watermark is the minimum over subscribers *and* live sampling windows** (ADR 0004's
+  2026-11-07 revision). A subscriber's `from` is a floor, but three readers take no subscription and
+  still ask for an instant in the past: the CPU's `IPL` sample for the end of an instruction, the video
+  chip's four `MD` words behind a group delivery, and any `ReadAt` at or before the chip's own clock.
+  They announce the instant with `Engine.NoteSampled(instant)`; the floor holds until the batch ends,
+  by which time the sample has been answered on the reader's own stack.
+- **Truncation keeps one base record** — the newest at or before the watermark. That record is what
+  keeps invariant 5 true for every instant from the watermark onwards: the answer to a sample in that
+  range is either in the retained window or *is* the base. A sample older than the window returns
+  "nothing" (0), which is not a wrong value — the past is unreachable, not misreported.
+- **Cursors are sequence numbers, never indices.** An index saved across a suspension names a different
+  record once anything was trimmed in between; `SystemControlUnit`'s bus exchange and `TimersAndEvents`'
+  `DE` scan both stored indices and both broke the moment retention ran (a dead bus: three cycles
+  started, no answer, the CPU suspended).
+- **Cadence is an implementation detail**: every 16 batches, fine enough that the retained window tracks
+  the machine, coarse enough not to walk the logs per instant. G7 (`check-retention`) proves the rule
+  rather than the cadence.
+
 ## 4. Debug assertions (all off in release)
 
 | # | Assertion | Catches |

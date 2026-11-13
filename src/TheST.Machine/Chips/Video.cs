@@ -111,7 +111,10 @@ public sealed class Video : Chip
             LineAnchors++;
         }
 
-        // the four words the System Control Unit put on MD0–MD15 at this instant
+        // the four words the System Control Unit put on MD0–MD15 at this instant. Four records, not
+        // one: this is a live sampling window, so retention may not pass the delivery instant while
+        // this read runs (ADR 0004's revision).
+        Engine.NoteSampled(instant);
         ValueLog md = Engine.Log(Wires.Md);
         int first = md.IndexAtOrBefore(instant) - 3;
         if (first < 0)

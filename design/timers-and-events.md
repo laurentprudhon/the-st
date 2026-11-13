@@ -108,9 +108,18 @@ arrive). The hardware calls each input a *source*; the thing that arrives on it 
 (`GLOSSARY.md`). Nothing at this stage knows about priority *levels* — those belong to the System
 Control Unit, and this chip never computes one.
 
-**Selected source / selected event** = the highest-numbered source that is (a) pending, (b) enabled,
-(c) unmasked, and with (d) **no source numbered *n* or above in service**. `IRQ` asserts exactly while
-such a source exists.
+**Selected source / selected event** = the highest-numbered source that is (a) pending, (b) enabled in
+`IER`, (c) enabled in `IMR`, and with (d) **no source numbered *n* or above in service**. `IRQ` asserts
+exactly while such a source exists.
+
+> **Correction — 2026-11-13 (ticket #34).** (c) read *unmasked* until the boot proved the polarity
+> wrong. `IMR` is a **second enable**, not a mask, whatever its name says: EmuTOS's
+> `enable_mfp_interrupt()` sets *both* the `IER` and the `IMR` bit for a source, and Hatari's
+> `MFP_UpdateIRQ()` tests `(IPRA & IMRA) | (IPRB & IMRB)` before asking which source is selected. With
+> the bit required clear, every interrupt the ROM enables is invisible: Timer C expired four times a
+> frame while `IRQ` never asserted, `hz_200` never moved, and every BIOS wait loop that spins on it
+> (the ACSI probe's `while (hz_200 < next_acsi_time)`) hung for ever. Two independent witnesses, one
+> rule: **pending ∧ IER ∧ IMR**.
 
 - The number *is* the priority: source *n* is `IPRA` bit *n−8* for *n* ≥ 8, else `IPRB` bit *n*. So
   "highest number" is a bit position, never a ranked list, and no sixteen-entry table is written down.

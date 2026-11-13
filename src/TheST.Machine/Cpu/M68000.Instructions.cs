@@ -505,11 +505,17 @@ public sealed partial class M68000
             return;
         }
 
-        if ((op & 0xFFC0) == 0x42C0)
+        // MOVE from CCR (0x42C0–0x42FF, i.e. the whole 0x42xx block with operand size 11) is a 68010
+        // instruction: on this 68000 it is not an instruction at all. Executing it was not a cosmetic
+        // problem — EmuTOS's _detect_cpu probes exactly here first (bios/processor.S: MOVEW_CCR_D0,
+        // commented "legal on 68010+") and only an illegal-instruction trap tells it "68000". With the
+        // probe silently succeeding, _mcpu came back non-zero, _longframe was set, and every exception
+        // frame afterwards carried a word the 68000 does not push: the first BIOS trap read its
+        // argument two bytes high (a0 = $74CA0000 instead of $000074CA) and the ROM panicked at
+        // _getmpb, about 170 frames into the boot.
+        if ((op & 0xFF00) == 0x4200 && ((op >> 6) & 0x3) == 0x3)
         {
-            await WriteEaAsync(mode, reg, 1, (uint)(_sr & 0xFF));
-            if (_busFaulted) return;
-            Clocks(1);
+            await EnterExceptionAsync(4, 0);
             return;
         }
 
@@ -1426,6 +1432,21 @@ public sealed partial class M68000
         if ((op & 0x0100) != 0 && size != 3)   // EOR Dn,<ea>
         {
             uint value = _d[(op >> 9) & 0x7] & SizeMask(size);
+
+            // EOR Dn,Dm — mode 000 is a *register* destination, not an address. Without this case the
+            // EA helper answered "no address" (0) and the instruction read and wrote low memory
+            // instead: EmuTOS's monitor-detect loop (`eor.b d0,d1` over two GPIP reads) set its flags
+            // from whatever byte sits at address 0, `blt` never stopped branching, and the boot span
+            // for ever inside detect_monitor_change at frame 258.
+            if (mode == 0)
+            {
+                uint registerResult = (_d[reg] ^ value) & SizeMask(size);
+                _d[reg] = (_d[reg] & ~SizeMask(size)) | registerResult;
+                SetLogicFlags(registerResult, size);
+                Clocks(1);
+                return;
+            }
+
             uint address = await EaAddressAsync(mode, reg, size);
             if (_busFaulted) return;
             uint current = await ReadAtAsync(address, size);

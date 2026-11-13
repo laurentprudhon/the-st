@@ -3,8 +3,9 @@
 # scripts/validate.sh — the gate of design/validation.md §3, as far as stage 1 can carry it.
 #
 # Rows run here:  G4 (check-clocks), G1 and G2 on the synthetic trace, the stage-1 half of G3
-# (assertions 1, 2, 6 and 7 must stay silent through every run), ADR 0008 §6's "never release" (the
-# digest is absent from a Release build), and ADR 0014's falsifier (no chip holds a store).
+# (assertions 1, 2, 6 and 7 must stay silent through every run), G7 (retention under a live reader),
+# ADR 0008 §6's "never release" (the digest is absent from a Release build), and ADR 0014's falsifier
+# (no chip holds a store).
 #
 # Rows NOT run here, and who owns them: G3's remaining assertions, G5, G6, G7 and G8 are #34's and
 # #35's, and M1 is deferred to #12. Nothing here boots an image.
@@ -81,6 +82,18 @@ if harness Debug check-stores | tee "$stampdir/check-stores.log"; then
     ok "stores"
 else
     bad "stores"
+fi
+
+# ---- G7: retention never truncates under a live reader -----------------------------------
+# The one failure a digest structurally cannot see: a log truncated under a live sampler changes an
+# answer while the record stream stays identical, so two runs agree and both are wrong (ADR 0004's
+# 2026-11-07 revision). check-retention tests the log's algebra and runs a sampler 1 000 ticks into
+# the past while a writer keeps appending and retention keeps trimming.
+step "G7 — retention never truncates under a live reader (ADR 0004's revision)"
+if harness Debug check-retention | tee "$stampdir/check-retention.log"; then
+    ok "G7"
+else
+    bad "G7"
 fi
 
 # ---- ADR 0014's boundary falsifier -------------------------------------------------------

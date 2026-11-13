@@ -100,8 +100,11 @@ public sealed class TimersAndEvents : Chip
         }
     }
 
-    int _deIndex;
-    int _sintIndex;
+    // Both cursors are sequence numbers, never indices: retention discards records from the oldest
+    // end, so an index saved across a suspension names a different record — or no record at all —
+    // once anything was trimmed in between (it threw IndexOutOfRange on the DE log).
+    long _deSeq = long.MinValue;
+    long _sintSeq = long.MinValue;
 
     /// <summary>
     /// Events that arrive as records are counted from the logs at each of this chip's own wakes: a
@@ -111,21 +114,33 @@ public sealed class TimersAndEvents : Chip
     void CountEventRecords()
     {
         ValueLog de = Engine.Log(Wires.De);
-        while (_deIndex < de.Count && de[_deIndex].Instant <= Clock)
+        for (int index = de.IndexAfter(_deSeq); index >= 0 && index < de.Count; index = de.IndexAfter(_deSeq))
         {
-            if ((de[_deIndex].Value & 0x0001) != 0)
+            Record record = de[index];
+            if (record.Instant > Clock)
             {
-                CountDe(de[_deIndex].Instant);
+                break;
             }
 
-            _deIndex++;
+            if ((record.Value & 0x0001) != 0)
+            {
+                CountDe(record.Instant);
+            }
+
+            _deSeq = record.Seq;
         }
 
         ValueLog sint = Engine.Log(Wires.SoundFrameEnd);
-        while (_sintIndex < sint.Count && sint[_sintIndex].Instant <= Clock)
+        for (int index = sint.IndexAfter(_sintSeq); index >= 0 && index < sint.Count; index = sint.IndexAfter(_sintSeq))
         {
-            SignalCompletion(15, sint[_sintIndex].Instant);
-            _sintIndex++;
+            Record record = sint[index];
+            if (record.Instant > Clock)
+            {
+                break;
+            }
+
+            SignalCompletion(15, record.Instant);
+            _sintSeq = record.Seq;
         }
     }
 
@@ -142,8 +157,16 @@ public sealed class TimersAndEvents : Chip
     /// <summary>
     /// One byte register access. <paramref name="offset"/> is the address's low byte
     /// (<c>$FFFA00</c> + offset); every register is at an odd address and the even ones alias.
+    ///
+    /// <para>
+    /// <paramref name="instant"/> is the bus cycle's instant, never the chip's own clock: the System
+    /// Control Unit answers an MFP cycle inside the CPU's exchange (a class-2 leaf), so this chip may
+    /// still be suspended at an older instant when its register file changes. Stamping a counter's
+    /// new deadline, or the <c>IRQ</c> it raises, with a stale clock would backdate a record and
+    /// restart the 200 Hz tick from the wrong instant.
+    /// </para>
     /// </summary>
-    public ushort Register(int offset, ushort value, bool isWrite)
+    public ushort Register(int offset, ushort value, bool isWrite, long instant)
     {
         int index = offset & 0x3F;
         byte data = (byte)(value & 0xFF);
@@ -160,67 +183,67 @@ public sealed class TimersAndEvents : Chip
         {
             case 0x01:   // GPIP
                 _r[0x01] = data;
-                EvaluateEdges();
+                EvaluateEdges(instant);
                 return 0;
 
             case 0x03:   // AER
                 _r[0x03] = data;
-                EvaluateEdges();
+                EvaluateEdges(instant);
                 return 0;
 
             case 0x05:   // DDR
                 _r[0x05] = data;
-                EvaluateEdges();
+                EvaluateEdges(instant);
                 return 0;
 
             case 0x07:   // IERA — clears the pending bits it disables
                 _r[0x07] = data;
                 _enabled = (ushort)((_enabled & 0x00FF) | (data << 8));
                 _pending = (ushort)(_pending & (ushort)~((data ^ 0xFF) << 8));
-                UpdateIrq();
+                UpdateIrq(instant);
                 return 0;
 
             case 0x09:   // IERB
                 _r[0x09] = data;
                 _enabled = (ushort)((_enabled & 0xFF00) | data);
                 _pending &= (ushort)(0xFF00 | (data ^ 0xFF));
-                UpdateIrq();
+                UpdateIrq(instant);
                 return 0;
 
             case 0x0B:   // IPRA: value = old & written
                 _r[0x0B] = (byte)(_r[0x0B] & data);
                 _pending = (ushort)((_pending & 0x00FF) | (_r[0x0B] << 8));
-                UpdateIrq();
+                UpdateIrq(instant);
                 return 0;
 
             case 0x0D:   // IPRB
                 _r[0x0D] = (byte)(_r[0x0D] & data);
                 _pending = (ushort)((_pending & 0xFF00) | _r[0x0D]);
-                UpdateIrq();
+                UpdateIrq(instant);
                 return 0;
 
             case 0x0F:   // ISRA
                 _r[0x0F] = (byte)(_r[0x0F] & data);
                 _inService = (ushort)((_inService & 0x00FF) | (_r[0x0F] << 8));
-                UpdateIrq();
+                UpdateIrq(instant);
                 return 0;
 
             case 0x11:   // ISRB
                 _r[0x11] = (byte)(_r[0x11] & data);
                 _inService = (ushort)((_inService & 0xFF00) | _r[0x11]);
-                UpdateIrq();
+                UpdateIrq(instant);
                 return 0;
 
             case 0x13:   // IMRA
                 _r[0x13] = data;
                 _masked = (ushort)((_masked & 0x00FF) | (data << 8));
-                UpdateIrq();
+                UpdateIrq(instant);
                 return 0;
 
             case 0x15:   // IMRB
                 _r[0x15] = data;
                 _masked = (ushort)((_masked & 0xFF00) | data);
-                UpdateIrq();
+                UpdateIrq(instant);
                 return 0;
 
             case 0x17:   // VR
@@ -231,7 +254,7 @@ public sealed class TimersAndEvents : Chip
             case 0x1B:   // TBCR
             case 0x1D:   // TCDCR
                 _r[index] = data;
-                RestartCounters();
+                RestartCounters(instant);
                 return 0;
 
             case 0x1F:   // TADR
@@ -239,7 +262,7 @@ public sealed class TimersAndEvents : Chip
             case 0x23:   // TCDR
             case 0x25:   // TDDR
                 _r[index] = data;
-                RestartCounters();
+                RestartCounters(instant);
                 return 0;
 
             case 0x29:   // UCR
@@ -313,8 +336,12 @@ public sealed class TimersAndEvents : Chip
         _ => 0,
     };
 
-    void RestartCounters()
+    void RestartCounters(long instant)
     {
+        // Every deadline below starts at the write's instant, never at the chip's own clock: the System
+        // Control Unit performs the write inside the CPU's cycle, so this chip may not have run yet at
+        // that instant. Restarting the 200 Hz tick from a stale clock shifts the whole machine's tick.
+
         // Timer C: interval mode on its own prescaler (the OS's 200 Hz tick)
         int cField = (_r[0x1D] >> 4) & 0x07;
         int cDivider = Divider(cField);
@@ -325,7 +352,7 @@ public sealed class TimersAndEvents : Chip
         {
             _cRemainder = 0;
             long ticks = MfpClock.TicksFor((long)cData * cDivider, ref _cRemainder);
-            _cExpiry = Clock + Math.Max(1, ticks);
+            _cExpiry = instant + Math.Max(1, ticks);
         }
         else
         {
@@ -342,7 +369,7 @@ public sealed class TimersAndEvents : Chip
         {
             _dRemainder = 0;
             long ticks = MfpClock.TicksFor((long)dData * dDivider, ref _dRemainder);
-            _dExpiry = Clock + Math.Max(1, ticks);
+            _dExpiry = instant + Math.Max(1, ticks);
         }
         else
         {
@@ -363,7 +390,7 @@ public sealed class TimersAndEvents : Chip
             {
                 long remainder = 0;
                 long ticks = MfpClock.TicksFor((long)bData * bDivider, ref remainder);
-                _bExpiry = Clock + Math.Max(1, ticks);
+                _bExpiry = instant + Math.Max(1, ticks);
             }
             else
             {
@@ -378,7 +405,7 @@ public sealed class TimersAndEvents : Chip
     {
         TimerCExpiries++;
         Anchor(Channels.Slot(1, "timer C"), (ushort)_cCounter);
-        SetPending(5);
+        SetPending(5, Clock);
 
         int cDivider = Divider((_r[0x1D] >> 4) & 0x07);
         long ticks = MfpClock.TicksFor((long)_cCounter * cDivider, ref _cRemainder);
@@ -409,19 +436,19 @@ public sealed class TimersAndEvents : Chip
             _bCounter = _r[0x21] == 0 ? 256 : _r[0x21];
             TimerBExpiries++;
             Anchor(Channels.Slot(3, "timer B"), (ushort)instant);
-            SetPending(8);
+            SetPending(8, instant);
         }
     }
 
     public void SignalCompletion(int source, long instant)
     {
         Anchor(Channels.Slot(4, "event"), (ushort)((source << 8) | 1));
-        SetPending(source);
+        SetPending(source, instant);
     }
 
     // ---- the event selector ---------------------------------------------------------------
 
-    void SetPending(int source)
+    void SetPending(int source, long instant)
     {
         int bit = source >= 8 ? source - 8 : source;
         ushort set = (ushort)(source >= 8 ? (1 << (8 + bit)) : (1 << bit));
@@ -431,12 +458,18 @@ public sealed class TimersAndEvents : Chip
         }
 
         _pending |= set;
+
+        // the pending registers read back what is pending: a handler reads IPRB to find out why it was
+        // entered, and a write to an IPR clears only the bits it names ("old & written")
+        _r[0x0B] = (byte)(_pending >> 8);
+        _r[0x0D] = (byte)_pending;
+
         if (!_irqAsserted && (Connected() & set) != 0)
         {
             Anchor(Channels.Slot(5, "IRQ"), (ushort)source);
         }
 
-        UpdateIrq();
+        UpdateIrq(instant);
     }
 
     void ClearPending(int source)
@@ -448,8 +481,21 @@ public sealed class TimersAndEvents : Chip
         _r[0x0D] = (byte)_pending;
     }
 
-    /// <summary>pending ∧ enabled ∧ ¬masked — the candidates, before the in-service filter.</summary>
-    ushort Connected() => (ushort)(_pending & _enabled & (ushort)~_masked);
+    /// <summary>
+    /// pending ∧ IER ∧ IMR — the candidates, before the in-service filter.
+    ///
+    /// <para>
+    /// <b>IMR is a second enable, not a mask</b>, whatever its name suggests. Two independent
+    /// witnesses: EmuTOS's <c>enable_mfp_interrupt</c> sets <i>both</i> the IER and the IMR bit
+    /// (<c>mfp-&gt;ierb |= mask; mfp-&gt;imrb |= mask;</c>), and Hatari's <c>MFP_UpdateIRQ</c> tests
+    /// <c>(IPRA &amp; IMRA) | (IPRB &amp; IMRB)</c> before asking which source is selected. Requiring the
+    /// IMR bit to be <i>clear</i> — which is what this chip did until the boot stopped here — makes
+    /// every interrupt the ROM enables permanently invisible: Timer C expired four times a frame and
+    /// <c>IRQ</c> never once went low, so <c>hz_200</c> stayed 0 and the BIOS's ACSI wait loop in
+    /// <c>acsi_begin()</c> spun on <c>hz_200 &lt; next_acsi_time</c> forever.
+    /// </para>
+    /// </summary>
+    ushort Connected() => (ushort)(_pending & _enabled & _masked);
 
     /// <summary>
     /// The selected source: the highest-numbered candidate with no source numbered at or above it in
@@ -493,7 +539,7 @@ public sealed class TimersAndEvents : Chip
         return -1;
     }
 
-    void UpdateIrq()
+    void UpdateIrq(long instant)
     {
         bool asserted = Selected() >= 0;
         if (asserted == _irqAsserted)
@@ -507,15 +553,15 @@ public sealed class TimersAndEvents : Chip
             IrqAssertions++;
         }
 
-        Write(Clock, Wires.Irq, 0x0001, (ushort)(asserted ? 0 : 1));   // active low
-        _scu.SetMfpInterrupt(asserted);
+        Write(instant, Wires.Irq, 0x0001, (ushort)(asserted ? 0 : 1));   // active low
+        _scu.SetMfpInterrupt(asserted, instant);
     }
 
     /// <summary>
     /// The acknowledge instant: the vector byte names the source selected <i>now</i>; pending clears and
     /// in-service is set here, never at <c>RTE</c> (ADR 0013).
     /// </summary>
-    public bool TryVector(out byte vector)
+    public bool TryVector(long instant, out byte vector)
     {
         int source = Selected();
         if (source < 0)
@@ -538,14 +584,14 @@ public sealed class TimersAndEvents : Chip
 
         ExecutedAcknowledges++;
         Anchor(Channels.Slot(6, "acknowledge"), (ushort)((source << 8) | vector));
-        UpdateIrq();
+        UpdateIrq(instant);
         return true;
     }
 
     /// <summary>The GPIP line levels — sampled by a read, never a wake.</summary>
     public byte Gpip => _r[0x01];
 
-    void EvaluateEdges()
+    void EvaluateEdges(long instant)
     {
         // a level change on an input line sets its pending bit when GPIP ⊕ AER falls to zero
         ushort level = (ushort)(_r[0x01] & 0xFF);
@@ -562,7 +608,7 @@ public sealed class TimersAndEvents : Chip
 
             if (((level ^ aer) & (1 << bit)) == 0)
             {
-                SetPending(bit);   // GPIP bit n is source n for n < 8
+                SetPending(bit, instant);   // GPIP bit n is source n for n < 8
             }
         }
     }

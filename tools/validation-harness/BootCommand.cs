@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using TheST.Machine;
@@ -16,6 +17,23 @@ internal static class BootCommand
     const string DefaultImage = "roms/emutos-1.4/etos256uk.img";
     const string DefaultManifest = "roms/emutos-1.4-manifest.json";
 
+    /// <summary>EmuTOS's own sysvars, from the image's .sym (etos256uk.sym): LONGs at these addresses.</summary>
+    const uint Frclock = 0x466;
+    const uint Vbclock = 0x462;
+    const uint HZ200 = 0x4BA;
+
+    /// <summary>
+    /// The ROM's own panic record (bios/vectors.S: any_vec dumps the registers, the exception number and
+    /// 16 words of stack here before jmp dopanic). <c>_proc_lives</c> is the magic 0x12345678 that says a
+    /// panic happened at all — the fastest way to tell "the ROM gave up" from "the ROM is waiting".
+    /// </summary>
+    const uint ProcLives = 0x380;
+    const uint ProcEnum = 0x3C4;
+    const uint ProcStack = 0x3CC;
+    const uint ProcDregs = 0x384;
+    const uint ProcAregs = 0x3A4;
+    const uint ProcUsp = 0x3C8;
+
     internal static int Run(string[] args)
     {
         int frames = 400;
@@ -23,6 +41,7 @@ internal static class BootCommand
         string? directory = null;
         string image = DefaultImage;
         bool trace = false;
+        bool ringAtEnd = false;
         int probeEvery = 25;
 
         for (int index = 0; index < args.Length; index++)
@@ -43,6 +62,10 @@ internal static class BootCommand
 
                 case "--trace":
                     trace = true;
+                    break;
+
+                case "--ring":
+                    ringAtEnd = true;    // append the last 40 instructions to probes.log
                     break;
 
                 case "--probe-every":
@@ -149,7 +172,9 @@ internal static class BootCommand
                     }
                 }
 
-                long nvbls = machine.PeekLong(symbols["_nvbls"]);
+                // _nvbls is a WORD (include/tosvars.h: the number of slots in the vbl queue, ARRAY_SIZE
+                // = 8), not a long — reading four bytes there shows the next sysvar's high half too.
+                long nvbls = machine.PeekWord(symbols["_nvbls"]);
                 if (firstNvbls < 0)
                 {
                     firstNvbls = nvbls;
@@ -160,7 +185,19 @@ internal static class BootCommand
 
                 if (frame % probeEvery == 0 || frame <= 5)
                 {
-                    probes.Add($"frame {frame,5}  pc {pc:x6}  nvbls {nvbls,5}  inkernel={machine.Cpu.Instructions,10}");
+                    // The boot's progress is read from EmuTOS's own variables, not from a guess: _frclock
+                    // and _vbclock are the VBL counters, _hz_200 the 200 Hz tick that every BIOS wait
+                    // loop spins on, and the MFP's TCDCR/TCDR + IERA/IMRA say whether the tick was ever
+                    // programmed and enabled.
+                    probes.Add(
+                        $"frame {frame,5}  pc {pc:x6}  nvbls {nvbls,5}  " +
+                        $"frclock {machine.PeekLong(Frclock),6}  hz200 {machine.PeekLong(HZ200),6}  " +
+                        $"tcdcr {machine.Timers.Register(0x1D, 0, false, machine.Engine.MachineTime):x2}  tcdr {machine.Timers.Register(0x23, 0, false, machine.Engine.MachineTime):x2}  " +
+                        $"iera {machine.Timers.Register(0x07, 0, false, machine.Engine.MachineTime):x2}  imra {machine.Timers.Register(0x13, 0, false, machine.Engine.MachineTime):x2}  " +
+                        $"mfpw {machine.Timers.RegisterWrites,5}  tc {machine.Timers.TimerCExpiries,5}  irq {machine.Timers.IrqAssertions,4}  " +
+                        $"sr {machine.Cpu.SR:x4}  ipl {machine.SystemControlUnit.ResolvedLevelAt(machine.Engine.MachineTime)}  " +
+                        $"inkernel={machine.Cpu.Instructions,10}  " +
+                        $"stack={string.Join(",", Enumerable.Range(0, 6).Select(k => machine.PeekLong(machine.Cpu.PeekA(7) + (uint)(k * 4)).ToString("x6")))}");
                 }
 
                 if (machine.Cpu.Halted)
@@ -185,7 +222,7 @@ internal static class BootCommand
         }
         catch (Exception failure)
         {
-            Console.Error.WriteLine($"boot FAILED — {failure.Message}");
+            Console.Error.WriteLine($"boot FAILED — {failure}");   // the stack, not just the message: an index in an emulator is a bug report
             File.WriteAllLines(Path.Combine(directory, "failure.log"), ring);
             foreach (string line in ring)
             {
@@ -228,6 +265,23 @@ internal static class BootCommand
             $"deskstart={desktopStart.ToString("x6", CultureInfo.InvariantCulture)}",
             $"_nvbls={lastNvbls.ToString(CultureInfo.InvariantCulture)}",
             $"_nvbls_first={firstNvbls.ToString(CultureInfo.InvariantCulture)}",
+            $"_frclock={machine.PeekLong(Frclock).ToString(CultureInfo.InvariantCulture)}",
+            $"_vbclock={machine.PeekLong(Vbclock).ToString(CultureInfo.InvariantCulture)}",
+            $"_hz_200={machine.PeekLong(HZ200).ToString(CultureInfo.InvariantCulture)}",
+            $"panic_lives={machine.PeekLong(ProcLives):x8}",
+            $"panic_enum={machine.PeekLong(ProcEnum)}",
+            $"panic_stack={string.Join(",", Enumerable.Range(0, 8).Select(k => machine.PeekLong(ProcStack + (uint)(k * 4)).ToString("x8")))}",
+            "panic_dregs=" + string.Join(",", Enumerable.Range(0, 8).Select(k => machine.PeekLong(ProcDregs + (uint)(k * 4)).ToString("x8"))),
+            "panic_aregs=" + string.Join(",", Enumerable.Range(0, 8).Select(k => machine.PeekLong(ProcAregs + (uint)(k * 4)).ToString("x8"))),
+            $"panic_usp={machine.PeekLong(ProcUsp):x8}",
+            $"queue_count={machine.Engine.QueueCount}",
+            $"drain_ms={(machine.Engine.DrainTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency):F0}",
+            $"instrument_ms={(machine.Engine.InstrumentTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency):F0}",
+            $"trim_calls={machine.Engine.TrimCalls}",
+            $"trim_ms={(machine.Engine.TrimTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency):F0}",
+            $"records_retained={machine.Engine.RetainedRecords.ToString(CultureInfo.InvariantCulture)}",
+            $"records_discarded={machine.Engine.DiscardedRecords.ToString(CultureInfo.InvariantCulture)}",
+            "retention=" + string.Join(";", machine.Engine.Logs.Where(l => l.Discarded > 0).OrderByDescending(l => l.Discarded).Take(8).Select(l => $"{l.Channel.Name}:{l.Discarded}:{l.OldestInstant}")),
             $"_gl_apid={glApid.ToString("x8", CultureInfo.InvariantCulture)}",
             $"queue_pops={machine.Engine.Pops.ToString(CultureInfo.InvariantCulture)}",
             $"fast_path_reads={machine.Engine.FastPathReads.ToString(CultureInfo.InvariantCulture)}",
@@ -253,6 +307,12 @@ internal static class BootCommand
 #endif
 
         File.WriteAllLines(Path.Combine(directory, "run.state"), state);
+        if (ringAtEnd)
+        {
+            probes.Add("last instructions:");
+            probes.AddRange(ring);
+        }
+
         File.WriteAllLines(Path.Combine(directory, "probes.log"), probes);
         traceWriter?.Flush();
 

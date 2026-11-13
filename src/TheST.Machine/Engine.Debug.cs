@@ -91,6 +91,20 @@ public sealed partial class Engine
         }
     }
 
+    // 1 (second half) — a record is never dated before the batch being drained. A chip may be behind
+    // machine time, so its own clock is not the test; the *machine's* present is. A record stamped in
+    // the past rewrites history that is already drawn, and the resume it fires lands in a batch that
+    // has already been drained — the chip then stays suspended owning nothing (assertion 2's failure
+    // was the symptom, a backdated IPL record written by the System Control Unit was the cause).
+    // Wire writes only: an internal anchor is stamped with the chip's own clock by design (ADR 0008 §6).
+    partial void OnWireWrite(Chip chip, long instant)
+    {
+        if (instant < MachineTime)
+        {
+            throw Fail(1, $"{chip.Name}'s write at {instant} is dated before the batch being drained ({MachineTime})");
+        }
+    }
+
     // 7 — no read, write or anchor earlier than the issuing chip's own clock.
     partial void OnWrite(Chip chip, long instant) => AssertNotBackdated(chip, instant, "write");
 
@@ -135,7 +149,7 @@ public sealed partial class Engine
                 suspended++;
                 if (live.GetValueOrDefault(chip) <= 0)
                 {
-                    throw Fail(2, $"at {instant}: {chip.Name} is suspended on {chip.Armed} wake(s) and owns nothing");
+                    throw Fail(2, $"at {instant}: {chip.Name} is suspended on {chip.Armed} wake(s) and owns nothing — {WhereIs(chip)}");
                 }
             }
         }
@@ -234,6 +248,29 @@ public sealed partial class Engine
                     $"subscription store hold {fromQueue}");
             }
         }
+    }
+
+    /// <summary>A one-line account of everything the machine holds for that chip — for a failed assertion.</summary>
+    string WhereIs(Chip chip)
+    {
+        var parts = new List<string>();
+        if (_queue.TryPeek(out Entry? head, out Key key))
+        {
+            parts.Add($"queue head {key.Instant}");
+        }
+
+        foreach ((Channel channel, List<Subscriber> subscribers) in _subscribers)
+        {
+            foreach (Subscriber subscriber in subscribers)
+            {
+                if (ReferenceEquals(subscriber.Chip, chip))
+                {
+                    parts.Add($"subscribed to {channel.Name} from {subscriber.From} (seq after {subscriber.AfterSeq}, token {subscriber.Token}, chip token {chip.WakeToken})");
+                }
+            }
+        }
+
+        return parts.Count == 0 ? "nothing queued, nothing subscribed" : string.Join("; ", parts);
     }
 
     static InvalidOperationException Fail(int assertion, string detail) =>
