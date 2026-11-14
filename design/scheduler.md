@@ -55,7 +55,9 @@ Resume(cont, chip, t)
 ApplyWrite(wire, t, driver, mask, value)
 ```
 
-Key: `(t, seq)` — `seq` monotonic, assigned at insertion. No chip rank, no priority (ADR 0007).
+Key: `(t, seq)` — `seq` monotonic, assigned at insertion: the queue's **arrival** counter, read by
+nothing but the same-instant tie-break. Records have their own counter (ADR 0007's 2026-11-14 revision,
+#39), so how many entries a frame queues cannot renumber a record or move the digest.
 
 ```
 while Q not empty:
@@ -171,6 +173,15 @@ phase), **Blitter** (each access is a read; cooperative mode is a count).
 ## 5. The digest
 
 - **Batch = one instant, fully drained.**
+- **Two folds, one per question.** `run.digest` mixes each record's instant, its **seq**, its channel and
+  its driver/mask/value — the record stream *with* identity, the number a commit quotes. `run.stream`
+  mixes the same fields **without** the seq (#39). A change that only alters how many queue entries a
+  frame has must leave `run.stream` byte-identical; a change that moves an instant, a record or an
+  ordering moves both. `run.stream` is what ADR 0008 §7 condition 6 is witnessed against.
+- **The identity digest is re-blessed once**, by #39's split: boot `ffd761fc…` → `eaf7ecf1…`, synthetic
+  `9b92d3ae…` → `58fcdddf…`, with `run.stream` byte-identical across the split (`688ef97b…`) and
+  `pops_per_frame` unchanged at 107 215.6. Both folds are host-independent — they matched byte-for-byte
+  on two hosts.
 - **Digest = incremental fold over the records appended in the batch**, wire and internal alike, in
   append order — including the internal register logs, which is why no state walk is needed.
 - **Contract:** same image, twice, byte-identical streams at T=1; later T=1 vs T>1 identical.

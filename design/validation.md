@@ -39,9 +39,12 @@ clock inside the machine:
 - boots one `roms/emutos-1.4/etos256<lang>.img` (the 18 images, the manifest and `LICENSE.txt` are
   #10's packaging job; the language is fixed by argument so a run is reproducible),
 - runs exactly `N` emulated frames (default: enough to reach the desktop and then 100 more),
-- writes three files into `runs/<stamp>/`: `run.digest` (the per-instant fold stream, one hex word per
-  batch), `run.state` (the probe values: committed registers and logs, plus the OS variables named in
-  G6), and `run.report` (one page — the §3 tables with measured values filled in),
+- writes the run's files into `runs/<stamp>/`: `run.digest` (the per-instant fold stream, one hex word
+  per batch, identity included) and `run.stream` (the same batches folded **without** the record's seq —
+  the witness a queue-contents change must leave byte-identical, #39), `run.batches` and `run.tail` (the
+  sparse instant index and the last eight batches' records, for reading a mismatch), `run.state` (the
+  probe values: committed registers and logs, plus the OS variables named in G6), and `run.report` (one
+  page — the §3 tables with measured values filled in),
 - is driven by `scripts/validate.sh`, which runs the gates, prints the report and exits 0 or 1.
 
 > **Note — 2026-11-11** (ticket #10, delivered). The packaging is in the tree: the 18 PAL images, the
@@ -68,7 +71,7 @@ second way to fail and no coverage. The only pixel-level evidence is the owner's
 
 | Row | Assertion | Instrument | Pass condition | Failure it catches | Status |
 |---|---|---|---|---|---|
-| **G1** | Same image, twice, byte-identical digest stream at T=1 | Two headless runs, same image, same `N`; compare `run.digest` files | Files identical, byte for byte | The model read host state: a pool, a dictionary's iteration order, allocation timing, `DateTime.Now`, a race the run happened to win | automated |
+| **G1** | Same image, twice, byte-identical digest stream at T=1 | Two headless runs, same image, same `N`; compare `run.digest` **and** `run.stream` | Both files identical, byte for byte | The model read host state: a pool, a dictionary's iteration order, allocation timing, `DateTime.Now`, a race the run happened to win | automated |
 | **G2** | The same stream with host scheduling perturbed | Third run with `--inject`: yields, GC pressure, allocation noise, frame pacing — **only** what ADR 0008 §6 allows | Identical to G1's stream | The leak G1 cannot see: a host dependency that is *stable* within one process and differs across pacing. Nothing may touch an instant, a record's contents or `seq` | automated |
 | **G3** | The seven scheduler assertions silent, and #9's two CPU assertions silent | Debug build, whole run; the harness fails the row on the first assertion | No assertion fires from boot to desktop | A chip suspended with nothing queued (lost obligation); a `nextDeadline` not queued; a backdated instant; a subscription nobody catalogued; a dead class-1 row; a loop with no suspension in it; a CPU access list disagreeing with its M68000UM chapter-7 row; a nested-entry budget overrun | automated |
 | **G4** | The clock arithmetic is ADR 0001's | Pure arithmetic unit test; no emulation | Frame = 640 000 ticks; every clock is 32 MHz ÷ 2ⁿ; the four dividers give exactly 1 000 / 500 / 250 / 125 samples per frame; no period is a floating-point value (the type is integer ticks) | A float period sneaking into the sound clock; an accumulator that does not carry; a frame length drifting from 640 000; a mixed-up divider | automated |

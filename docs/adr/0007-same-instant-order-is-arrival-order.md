@@ -75,6 +75,23 @@ the sources dissolved all three:
 1. Order is total by `(instant, seq)`; no other field participates.
 2. Two entries at one instant from chips that the catalogue says exchange nothing are ordered by
    arrival, and **no behaviour may depend on which came first**.
+
+> ### Revision — 2026-11-14 (ticket #39, owner's ruling): two counters, one consumer each
+>
+> This ADR's "`seq` is monotonic and assigned at insertion" is an **arrival** counter, and it is the
+> queue's alone: its only reader is `Key.CompareTo`, the same-instant tie-break. Records carry a
+> **second**, independent counter, and *that* one is ADR 0006 invariant 4's subscription discriminator,
+> the logs' sequence searches and the digest's identity word. The two used to be one stream, so every
+> queue entry consumed a number a record could then not have: removing one queue entry renumbered every
+> later record and moved the digest, which made ADR 0008 §7's condition 6 ("leaves the digest stream
+> identical") unwitnessable for any change that removes entries — #40 and the leaf both do.
+>
+> Nothing observable moved when they were split, and that is measured rather than argued: the boot's
+> 10 801 972-word record stream folded *without* identity (`run.stream`) is byte-identical across the
+> split, `sha256 688ef97b…`, while the identity digest moved once — `ffd761fc…` → `eaf7ecf1…` — and is
+> re-blessed. `pops_per_frame` stayed at 107 215.6 and the gate's assertions stayed silent. From this
+> commit on, a change in how many queue entries a frame has must leave `run.stream` byte-identical and
+> the identity digest untouched; a change that moves an instant, a record or an ordering moves both.
 3. A wire's value at an instant is a function of the records at that instant, never of their order,
    except where the resolver is single-driver (last record wins) or a conflict is reported.
 4. The queue head is non-decreasing; ties are resolved inside the firing of the instant.

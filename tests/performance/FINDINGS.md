@@ -144,6 +144,28 @@ fire loop, and the three-field set is a worse cache line than the list pointer i
 "≈ half of the 6 ms fire path" assumed the dictionary was still in front of the list; after the array
 tables there is no dictionary left to remove, and what remains does not pay for itself.
 
+## 7. The sequence counter split (#39): measured, not projected
+
+`Engine.Enqueue` and `Engine.AppendRecord` drew from one counter, so every queue entry consumed a number
+a record could not have. Consequence: **any change that removes queue entries renumbers every later record
+and moves the digest**, which made ADR 0008 §7's condition 6 unwitnessable for #40 and for the leaf.
+
+#39's ruling split them: an **arrival** counter for the queue key (read only by `Key.CompareTo`) and a
+**record** counter for `Record.Seq` (the subscription discriminator, the logs' sequence searches, the
+digest). The measurement is the proof, on this host, in one adjacent pair of 300-frame Debug boots:
+
+| | before the split | after |
+|---|---|---|
+| `run.digest` — identity included | `ffd761fc…` | **`eaf7ecf1…`** (moved once, re-blessed) |
+| `run.stream` — identity excluded | `688ef97b…` | **`688ef97b…`** (byte-identical, 10 801 972 words) |
+| `pops_per_frame` | 140 133.6 | 140 133.6 |
+| `stale_wakes_per_frame` | 54 830.4 | 54 830.4 |
+| gate assertions | silent | silent |
+
+So the records, their instants and their order are untouched; only their names changed. `run.stream` is now
+the witness any queue-contents change must satisfy — and it costs four `Mix` calls per record in a Debug
+build that is not the measured one, so the frame budget does not see it.
+
 And the wall those do not touch: **17.2 GB is allocated inside continuations, 380 B per resume** —
 async state-machine boxes plus a `Resume` object for every wake. At the engine's measured 88 ns
 suspend/resume floor, 45.2 M continuations is 4.0 s of the run before any work happens, and 77.6 M pops

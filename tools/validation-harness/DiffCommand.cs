@@ -56,34 +56,24 @@ internal static class DiffCommand
             return 1;
         }
 
-        long differedAt = -1;
-        long batches = 0;
-        string? wordA = null;
-        string? wordB = null;
+        long differedAt = CompareWords(pathA, pathB, out long batches, out string? wordA, out string? wordB);
 
-        using (var first = new StreamReader(pathA))
-        using (var second = new StreamReader(pathB))
+        // the identity-free fold as well (#39): a queue-contents change may move run.digest's words but
+        // never this file's, so G1/G2 compare both and *say which one* moved.
+        string streamA = Path.Combine(a, "run.stream");
+        string streamB = Path.Combine(b, "run.stream");
+        if (differedAt >= 0 && File.Exists(streamA) && File.Exists(streamB))
         {
-            while (true)
+            long streamDifferedAt = CompareWords(streamA, streamB, out _, out string? streamWordA, out string? streamWordB);
+            if (streamDifferedAt < 0)
             {
-                string? lineA = first.ReadLine();
-                string? lineB = second.ReadLine();
-
-                if (lineA is null && lineB is null)
-                {
-                    break;
-                }
-
-                batches++;
-                if (differedAt < 0 && (lineA is null || lineB is null || !string.Equals(lineA, lineB, StringComparison.Ordinal)))
-                {
-                    differedAt = batches - 1;
-                    wordA = lineA;
-                    wordB = lineB;
-                }
-
-                // keep reading to the end: the batch count is part of the answer (a truncated run and
-                // a differing run are different failures)
+                Console.WriteLine("  run.stream is identical: the records, their instants and their order did not move —");
+                Console.WriteLine("  only their identity did (#39's two counters). Nothing to diagnose here.");
+            }
+            else
+            {
+                Console.WriteLine($"  run.stream ALSO DIFFERS, first at batch {Program.Number(streamDifferedAt)}: {streamWordA} vs {streamWordB} —");
+                Console.WriteLine("  a record, an instant or an ordering moved. That is the bug; read the records below.");
             }
         }
 
@@ -101,6 +91,41 @@ internal static class DiffCommand
         PrintTail(a, "a");
         PrintTail(b, "b");
         return 1;
+    }
+
+    /// <summary>Compares two word-per-line streams; -1 when identical, else the first differing batch.</summary>
+    static long CompareWords(string pathA, string pathB, out long batches, out string? wordA, out string? wordB)
+    {
+        long differedAt = -1;
+        batches = 0;
+        wordA = null;
+        wordB = null;
+
+        using var first = new StreamReader(pathA);
+        using var second = new StreamReader(pathB);
+        while (true)
+        {
+            string? lineA = first.ReadLine();
+            string? lineB = second.ReadLine();
+
+            if (lineA is null && lineB is null)
+            {
+                break;
+            }
+
+            batches++;
+            if (differedAt < 0 && (lineA is null || lineB is null || !string.Equals(lineA, lineB, StringComparison.Ordinal)))
+            {
+                differedAt = batches - 1;
+                wordA = lineA;
+                wordB = lineB;
+            }
+
+            // keep reading to the end: the batch count is part of the answer (a truncated run and a
+            // differing run are different failures)
+        }
+
+        return differedAt;
     }
 
     /// <summary>The instant that batch drained at, from the sparse index — or a bracket when the batch sits between two entries.</summary>

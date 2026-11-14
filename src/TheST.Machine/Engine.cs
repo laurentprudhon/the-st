@@ -38,7 +38,15 @@ public sealed partial class Engine
     // (a boot queues tens of thousands of entries a frame, and a per-batch scan is quadratic).
     readonly Dictionary<Chip, int> _freshWakes = [];
 
-    long _seq;
+    // Two counters, one consumer each — #39's ruling. `_arrival` numbers queue entries and is read
+    // by nothing but `Key.CompareTo`, the same-instant tie-break (ADR 0007: "the emitter sequence,
+    // assigned at insertion"). `_recordSeq` numbers records and is read by the subscription
+    // discriminator (`WaitFor(t, wire, afterSeq)`, ADR 0006 invariant 4), the logs' sequence searches
+    // and the digest. They used to be one stream, which made every queue entry a number a record
+    // could not have: any change that removed entries renumbered the records and moved the digest,
+    // so "fewer wakes, identical trace" was unwitnessable by construction.
+    long _arrival;
+    long _recordSeq;
 
     /// <summary>The instant of the batch being drained — always the queue's head while the loop runs.</summary>
     public long MachineTime { get; private set; }
@@ -489,21 +497,21 @@ public sealed partial class Engine
 
     void AppendRecordAndFire(long instant, Channel channel, int driver, ushort mask, ushort value)
     {
-        long seq = _seq;
+        long seq = _recordSeq;
         AppendRecord(instant, channel, driver, mask, value);
         FireSubscriptions(channel, instant, seq);
     }
 
     void AppendRecord(long instant, Channel channel, int driver, ushort mask, ushort value)
     {
-        var record = new Record(instant, _seq++, channel, driver, mask, value);
+        var record = new Record(instant, _recordSeq++, channel, driver, mask, value);
         Log(channel).Append(record);
         AfterRecordAppended(record);
     }
 
     void Enqueue(Entry entry)
     {
-        _queue.Enqueue(entry, new Key(entry.Instant, _seq++));
+        _queue.Enqueue(entry, new Key(entry.Instant, _arrival++));
     }
 
     /// <summary>

@@ -115,8 +115,9 @@ while Q not empty:
 
 ### Ordering, stated once
 
-The queue is totally ordered by `(instant, emitter sequence)`; `seq` is a monotonic counter assigned at
-insertion (the chip-priority field is gone — ADR 0007: the machine has no priority table). A chip that
+The queue is totally ordered by `(instant, emitter sequence)`; `seq` is a monotonic *arrival* counter
+assigned at insertion — a second, independent counter from the record's, since #39's ruling (ADR 0007)
+— and the chip-priority field is gone: the machine has no priority table. A chip that
 writes "now" while running at instant *t* lands after the records it appended before suspending, because
 those were applied inline — which is the same-tick rule, no barrier and no participant count.
 Subscriptions fired by one write are pushed in registration order, so a double firing is stable too.
@@ -148,7 +149,9 @@ a record and pushes the writer's own `Resume` behind its receivers (ADR 0008 §2
    2026-11-12, above; it read "exactly one pending read, hence at most one subscription".)*
 4. A record fires every subscription whose `from <= instant` **and whose sequence number is below the
    record's**, each exactly once. *(Revised 2026-11-12: the sequence discriminator is what makes two
-   records at one instant — or a chip re-arming at that instant — unambiguous.)*
+   records at one instant — or a chip re-arming at that instant — unambiguous. Revised 2026-11-14, #39:
+   "the record's sequence number" is the record counter's, which no queue entry draws from; the queue's
+   key has its own arrival counter — see ADR 0007's revision.)*
 5. Order is total: `(instant, seq)`; a chip's newly created same-instant entries follow their creator.
 6. A chip's clock advances only to an instant it was resumed at, or by its own `advance`.
 7. No chip waits on another chip's *progress*: a subscription is answered by a record, never by a
