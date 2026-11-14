@@ -527,7 +527,11 @@ internal static class BootCommand
 
 #if DEBUG
         int digestWords = DigestArtifacts.Write(directory, machine.Engine);
+        string digestSha = DigestArtifacts.Sha256(Path.Combine(directory, "run.digest"));
+        string streamSha = DigestArtifacts.Sha256(Path.Combine(directory, "run.stream"));
         state.Add($"batches={digestWords.ToString(CultureInfo.InvariantCulture)}");
+        state.Add($"digest_sha256={digestSha}");
+        state.Add($"stream_sha256={streamSha}");
         state.Add("digest=run.digest (run.batches: the sparse batch→instant index; run.tail: the last 8 batches)");
 #else
         state.Add("digest=absent (release build)");
@@ -592,6 +596,8 @@ internal static class BootCommand
         report.Add($"  retention               {Program.Number(machine.Engine.RetainedRecords)} records retained of {Program.Number(machine.Engine.RetainedRecords + machine.Engine.DiscardedRecords)} appended; {Program.Number(machine.Engine.TrimCalls)} trims in {machine.Engine.TrimTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency:F0} ms");
 #if DEBUG
         report.Add($"  digest stream           {Program.Number(digestWords)} words, one per batch; run.batches names their instants, run.tail the last 8 batches' records");
+        report.Add($"  digest sha256           {digestSha} (run.digest: the record stream, identity included)");
+        report.Add($"  stream sha256           {streamSha} (run.stream: the same records without their seq — #39's witness)");
 #else
         report.Add("  digest stream           absent — a Release build carries no digest and no assertion (ADR 0008 §6)");
 #endif

@@ -8,6 +8,9 @@
 // names a *batch number*, never an instant, and a fold cannot be undone to recover its records.
 //
 //   run.digest   the contract: one hex word per batch, in batch order (this is compared, never read)
+//   run.stream   the same batches, folded without the record's seq (#39): a change that only moves
+//                how many queue entries a frame has must leave this file byte-identical, so the
+//                witness ADR 0008 §7 condition 6 asks for is a `cmp` rather than a reading
 //   run.batches  a sparse index, one line every 1 024 batches: `<batch> <instant>` — it turns a
 //                differing line into an instant in a binary search, and costs ~20 000 lines for a
 //                whole boot rather than a second copy of a 364 MB digest
@@ -18,6 +21,7 @@
 // ============================================================================================
 
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 using TheST.Machine;
 
@@ -30,13 +34,8 @@ internal static class DigestArtifacts
     {
         Directory.CreateDirectory(directory);
 
-        var digest = new StringBuilder(engine.DigestWords.Count * 17);
-        foreach (ulong word in engine.DigestWords)
-        {
-            digest.Append(word.ToString("x16", CultureInfo.InvariantCulture)).Append('\n');
-        }
-
-        File.WriteAllText(Path.Combine(directory, "run.digest"), digest.ToString());
+        WriteWords(directory, "run.digest", engine.DigestWords);
+        WriteWords(directory, "run.stream", engine.StreamWords);
 
         var index = new StringBuilder(engine.BatchIndex.Count * 32);
         foreach ((long batch, long instant) in engine.BatchIndex)
@@ -67,6 +66,21 @@ internal static class DigestArtifacts
 
         File.WriteAllText(Path.Combine(directory, "run.tail"), tail.ToString());
         return engine.DigestWords.Count;
+    }
+
+    /// <summary>The sha256 of an artefact, lowercase hex — what a commit message quotes.</summary>
+    internal static string Sha256(string path)
+        => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
+
+    static void WriteWords(string directory, string name, IReadOnlyList<ulong> words)
+    {
+        var text = new StringBuilder(words.Count * 17);
+        foreach (ulong word in words)
+        {
+            text.Append(word.ToString("x16", CultureInfo.InvariantCulture)).Append('\n');
+        }
+
+        File.WriteAllText(Path.Combine(directory, name), text.ToString());
     }
 }
 #endif

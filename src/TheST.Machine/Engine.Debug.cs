@@ -28,6 +28,20 @@ public sealed partial class Engine
     /// <summary>The digest stream so far: one word per batch drained, in batch order.</summary>
     public IReadOnlyList<ulong> DigestWords => _digestWords;
 
+    // ---- the record-stream fold: the same batches, without the record's identity --------------
+    // #39's ruling split the queue's arrival counter from the record counter, so a change that
+    // removes queue entries no longer renumbers records. This second fold is what makes that
+    // mechanical rather than argued: it mixes everything a record *is* — its instant, its channel,
+    // its driver, its mask and its value — and nothing that merely names it. A change that alters
+    // how many queue entries a frame has must leave this stream byte-identical while the identity
+    // digest above is free to move; a change that moves an instant, a record or an ordering moves
+    // both. ADR 0008 §7 condition 6 is witnessed against this fold.
+    readonly List<ulong> _streamWords = [];
+    ulong _stream = FnvOffset;
+
+    /// <summary>The record-stream fold so far: one word per batch, identity excluded.</summary>
+    public IReadOnlyList<ulong> StreamWords => _streamWords;
+
     // ---- the batch index and the tail: what §4 asks to report when G1 or G2 fails --------------
     // A digest word per batch names the first differing *batch*; these two name the instant and the
     // shape of it. The index is sparse because a boot drains tens of thousands of batches a frame —
@@ -90,6 +104,7 @@ public sealed partial class Engine
     partial void BeforeBatch(long instant)
     {
         ResetDigest();
+        _stream = FnvOffset;
 
         if (_digestWords.Count % BatchIndexEvery == 0)
         {
@@ -115,6 +130,7 @@ public sealed partial class Engine
     partial void AfterBatch(long instant)
     {
         _digestWords.Add(_digest);
+        _streamWords.Add(_stream);
         AssertSuspendedChipsAreOwningSomething(instant);   // 2
     }
 
@@ -124,6 +140,11 @@ public sealed partial class Engine
         _digest = Mix(_digest, (ulong)record.Seq);
         _digest = Mix(_digest, ((ulong)(byte)record.Channel.Kind << 8) | record.Channel.Id);
         _digest = Mix(_digest, ((ulong)(uint)record.Driver << 32) | ((ulong)record.Mask << 16) | record.Value);
+
+        // the identity-free fold: the same record, minus its seq (#39)
+        _stream = Mix(_stream, (ulong)record.Instant);
+        _stream = Mix(_stream, ((ulong)(byte)record.Channel.Kind << 8) | record.Channel.Id);
+        _stream = Mix(_stream, ((ulong)(uint)record.Driver << 32) | ((ulong)record.Mask << 16) | record.Value);
 
         if (_inResume)
         {
