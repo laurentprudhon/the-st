@@ -112,9 +112,8 @@ public sealed class Video : Chip
         }
 
         // the four words the System Control Unit put on MD0–MD15 at this instant. Four records, not
-        // one: this is a live sampling window, so retention may not pass the delivery instant while
-        // this read runs (ADR 0004's revision).
-        Engine.NoteSampled(instant);
+        // one: the ring's capacity covers four words plus the base, and this is the read that makes
+        // `MD`'s floor five rather than one (FINDINGS §10).
         ValueLog md = Engine.Log(Wires.Md);
         int first = md.IndexAtOrBefore(instant) - 3;
         if (first < 0)

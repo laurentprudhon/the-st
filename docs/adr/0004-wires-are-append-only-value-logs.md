@@ -132,3 +132,38 @@ on the bus answer). So the semantic bound this ADR demands is:
 Nothing else changes: the record shape, the resolver taxonomy and the no-deletion rule stand. The
 sampling form is `SampleWithInstant(wire, t) -> (value, changedAt)` and lives on the wire's log, not on
 the scheduler — the scheduler holds the queue and subscriptions and answers no value questions.
+
+## Revision — 2026-11-14 (ticket #43)
+
+**The rule is unchanged; the storage is a fixed ring.** A record may still be discarded only once no
+reader can still ask for its instant — what changed is that the act is no longer a periodic decision
+(the 128-batch retention pass, its watermark walk and its `_sampleFloor`) but a structural one: the log
+is `ValueLog.Capacity` = 256 records, and appending past the window overwrites the oldest record and
+counts it. The three properties the earlier revisions bought are kept, one for one:
+
+- **A sample older than the window answers "nothing" (0), never a wrong value.** The ring tests the
+  instant against `OldestInstant` *before* it looks at any slot. Without that test a wrapped slot would
+  answer a newer record's value — a wrong answer with an unchanged record stream, which is exactly the
+  failure this ADR's revisions exist to prevent.
+- **The past stays unreachable, not misreported.** `IndexAtOrBefore` of an instant below the window is
+  `-1`, and `ValueAt` is `0`; nothing rescales, renumbers or shifts a record.
+- **Cursors are sequence numbers.** Unchanged, and now load-bearing: a cursor below the window names
+  the oldest held record, which cannot be told from a cursor that is genuinely there, so the engine
+  gains a debug assertion (`#43`'s rule 3) that no answer and no cursor was read from outside the
+  window.
+
+**The capacity is derived, not chosen.** The bound this ADR has always wanted is now a number:
+`capacity ≥ records appended during the longest reader lag, per log`, where a reader's lag is exact when
+its chip holds a date (`DateInstant − From`) and declared when it does not — four subscriptions arm
+`long.MaxValue` and carry no date (`answer`, `group`, `IPL`, `MFPCS`), and each is bounded by a timeout
+the engine arms beside it. The census in `tests/performance/FINDINGS.md` §10 measures the need at 1–5
+records on every log of the boot and of the synthetic trace, and at 66 for the worst timed arm: 256 is
+that worst case with a 3.9× margin.
+
+**The falsifier changes with it.** The 2026-11-07 text said "if record retention ever needs a hard count
+bound to stay inside memory, the engine is producing far more records than the catalogue predicts: fix
+the model, not the buffer". The hard bound is now the design, so the falsifier is the same claim turned
+around: **a log whose reader needs more than `Capacity` records is a model bug** — a wire appending far
+above its catalogue rate, or a reader that has stopped consuming — and it must be caught by the
+assertion, never by a silent wrong answer. G7 (`check-window`) is that property's automated witness; the
+`TrimTo`/`Compact`/`Grow`/`RetentionEvery` machinery and the sampling floor it fed are deleted.

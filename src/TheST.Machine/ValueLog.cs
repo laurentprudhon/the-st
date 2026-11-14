@@ -1,32 +1,46 @@
 namespace TheST.Machine;
 
 /// <summary>
-/// An append-only log of <see cref="Record"/>s, in append order (ADR 0004). One type serves a wire and
+/// A fixed-size ring of <see cref="Record"/>s, in append order (ADR 0004). One type serves a wire and
 /// a chip's internal register log; the difference is the subscribers, not the storage. Records are
 /// never coalesced, never rewritten and never reordered, and a read never returns a value a later
 /// record would change.
 ///
 /// <para>
-/// <b>Retention.</b> ADR 0004's retention rule is semantic: a record may be discarded once no reader
-/// can still ask for an instant at or before it. <see cref="TrimTo"/> is that act and nothing more —
-/// it discards only from the oldest end, and it always keeps one record at or before the watermark,
-/// so the wire's value at every instant from the watermark onwards is still answerable. A reader
-/// asking for an earlier instant than the log retains gets "nothing" (0), never a wrong value:
-/// discarding history makes the past unreachable, it never makes it lie.
+/// <b>Capacity.</b> <see cref="Capacity"/> records, for every log. A record is overwritten only once a
+/// reader can no longer ask for the instant it is stamped at — and a reader asking for an instant
+/// older than <see cref="OldestInstant"/> gets "nothing" (0), never a wrong value: a window makes the
+/// past unreachable, it never makes it lie. The capacity is derived, not chosen (#43): a reader's lag
+/// is the records its log appends while the reader's cursor sits, which the census in
+/// <c>tests/performance/FINDINGS.md</c> §10 measures at 1–5 records on every log of the boot and of the
+/// synthetic trace, and at 66 in the worst case a timed subscription can produce. 256 is that worst
+/// case with a 3.9× margin — and <c>bus</c>, which must hold one four-record exchange plus its base,
+/// with 51×.
 /// </para>
 ///
 /// <para>
-/// <b>Shape.</b> A head offset over one array, so discarding from the front costs a pointer move
-/// rather than a shift of everything behind it. The array is copied at all only when it has become far
-/// larger than the live records (a burst has ended) — a long boot appends tens of millions of records,
-/// and retention is what keeps the tree's memory flat.
+/// <b>Shape.</b> One array, one head offset, one count; no growth and no copy, because discarding the
+/// oldest record is moving the head. A long boot appends tens of millions of records and this is what
+/// keeps its memory flat: the array is 8 KiB a log and never reallocates, where an append-only log grew
+/// to 383 792 records on <c>bus</c> alone before the watermark was made per log (#41).
 /// </para>
 /// </summary>
 public sealed class ValueLog
 {
-    const int InitialCapacity = 16;
+    /// <summary>Records a log holds. A power of two, because the ring indexes with a mask.</summary>
+    public const int Capacity = 256;
 
-    Record[] _records = new Record[InitialCapacity];
+    const int Mask = Capacity - 1;
+
+    static ValueLog()
+    {
+        if ((Capacity & Mask) != 0)
+        {
+            throw new InvalidOperationException($"{nameof(ValueLog)}.{nameof(Capacity)} must be a power of two");
+        }
+    }
+
+    readonly Record[] _records = new Record[Capacity];
     int _head;
     int _count;
 
@@ -34,86 +48,67 @@ public sealed class ValueLog
 
     public Channel Channel { get; }
 
-    /// <summary>Records retained — not records ever appended.</summary>
+    /// <summary>Records held — never more than <see cref="Capacity"/>.</summary>
     public int Count => _count;
 
-    public Record this[int index] => _records[_head + index];
+    public Record this[int index] => _records[(_head + index) & Mask];
 
-    /// <summary>Whether the log retains nothing at all.</summary>
+    /// <summary>Whether the ring holds nothing at all.</summary>
     public bool IsEmpty => _count == 0;
 
-    /// <summary>The instant of the oldest retained record, or <c>null</c> if none.</summary>
+    /// <summary>The instant of the oldest record held, or <c>null</c> if none.</summary>
     public long? OldestInstant => _count == 0 ? null : _records[_head].Instant;
 
+    /// <summary>The instant of the newest record held, or <c>null</c> if none.</summary>
+    public long? NewestInstant => _count == 0 ? null : _records[(_head + _count - 1) & Mask].Instant;
+
     /// <summary>
-    /// Records retention has discarded over the run. Reported, never gated
-    /// (design/validation.md §4): it says how much history the machine produced that nothing could
-    /// still be asking for.
+    /// Records the ring has overwritten over the run — history no reader could still be asking for.
+    /// Reported, never gated (design/validation.md §4): it says how much of the machine's past the
+    /// window no longer holds, and it must be information rather than a surprise, which is what the
+    /// assertion in <c>Engine.Debug.cs</c> is for.
     /// </summary>
-    public long Discarded { get; private set; }
+    public long Overwritten { get; private set; }
 
     public void Append(in Record record)
     {
-        if (_head + _count == _records.Length)
+        if (_count == Capacity)
         {
-            Grow();
+            _head = (_head + 1) & Mask;
+            Overwritten++;
+        }
+        else
+        {
+            _count++;
         }
 
-        _records[_head + _count] = record;
-        _count++;
-    }
-
-    /// <summary>
-    /// Discards the records before <paramref name="watermark"/>, keeping the newest one at or before
-    /// it — the base record that still answers every sample from the watermark onwards. Returns how
-    /// many records went.
-    /// </summary>
-    public int TrimTo(long watermark)
-    {
-        if (_count == 0)
-        {
-            return 0;
-        }
-
-        int firstAtOrAfter = Search(watermark, atOrBefore: false);
-
-        // Keep the base (one record before the watermark) and everything after it; if the whole log is
-        // older than the watermark, keep only the newest record — the wire's current value.
-        int keepFrom = firstAtOrAfter < 0 ? _count - 1 : Math.Max(0, firstAtOrAfter - 1);
-
-        if (keepFrom <= 0)
-        {
-            return 0;
-        }
-
-        _head += keepFrom;
-        _count -= keepFrom;
-        Discarded += keepFrom;
-        Compact();
-        return keepFrom;
+        _records[(_head + _count - 1) & Mask] = record;
     }
 
     /// <summary>The last record stamped at or before <paramref name="instant"/>, or -1 if there is none.</summary>
-    public int IndexAtOrBefore(long instant) => Search(instant, atOrBefore: true);
+    public int IndexAtOrBefore(long instant) => SearchBack(instant);
 
     /// <summary>The first record stamped at or after <paramref name="instant"/>, or -1 if there is none.</summary>
-    public int IndexAtOrAfter(long instant) => Search(instant, atOrBefore: false);
+    public int IndexAtOrAfter(long instant) => SearchForward(instant);
 
-    /// <summary>The value of the wire at that instant: the last record at or before it. 0 before the first record.</summary>
+    /// <summary>
+    /// The value of the wire at that instant: the last record at or before it. 0 before the window —
+    /// which is answering "nothing", not lying about a value the ring no longer holds.
+    /// </summary>
     public ushort ValueAt(long instant)
     {
-        int index = IndexAtOrBefore(instant);
-        return index < 0 ? (ushort)0 : _records[_head + index].Value;
+        int index = SearchBack(instant);
+        return index < 0 ? (ushort)0 : _records[(_head + index) & Mask].Value;
     }
 
     /// <summary>The value the next change at or after that instant carries. 0 if the wire never changes again.</summary>
     public ushort NextValue(long instant)
     {
-        int index = IndexAtOrAfter(instant);
-        return index < 0 ? (ushort)0 : _records[_head + index].Value;
+        int index = SearchForward(instant);
+        return index < 0 ? (ushort)0 : _records[(_head + index) & Mask].Value;
     }
 
-    /// <summary>The index of the record carrying exactly that sequence number, or -1 if it is gone.</summary>
+    /// <summary>The index of the record carrying exactly that sequence number, or -1 if the ring overwrote it.</summary>
     public int IndexAt(long seq)
     {
         if (_count == 0)
@@ -121,149 +116,100 @@ public sealed class ValueLog
             return -1;
         }
 
-        int low = 0;
-        int high = _count - 1;
-
-        while (low <= high)
+        if (_records[(_head + _count - 1) & Mask].Seq < seq || _records[_head].Seq > seq)
         {
-            int middle = low + ((high - low) >> 1);
-            long found = _records[_head + middle].Seq;
-            if (found == seq)
-            {
-                return middle;
-            }
-
-            if (found < seq)
-            {
-                low = middle + 1;
-            }
-            else
-            {
-                high = middle - 1;
-            }
+            return -1;
         }
 
-        return -1;
+        int index = _count - 1;
+        while (index > 0 && _records[(_head + index) & Mask].Seq > seq)
+        {
+            index--;
+        }
+
+        return _records[(_head + index) & Mask].Seq == seq ? index : -1;
     }
 
     /// <summary>The first record with a sequence number greater than <paramref name="seq"/>, or -1.</summary>
     public int IndexAfter(long seq)
     {
-        int low = 0;
-        int high = _count - 1;
-        int found = -1;
-
-        while (low <= high)
+        if (_count == 0 || _records[(_head + _count - 1) & Mask].Seq <= seq)
         {
-            int middle = low + ((high - low) >> 1);
-            if (_records[_head + middle].Seq > seq)
-            {
-                found = middle;
-                high = middle - 1;
-            }
-            else
-            {
-                low = middle + 1;
-            }
+            return -1;
         }
 
-        return found;
+        if (_records[_head].Seq > seq)
+        {
+            return 0;
+        }
+
+        int index = _count - 1;
+        while (index > 0 && _records[(_head + index - 1) & Mask].Seq > seq)
+        {
+            index--;
+        }
+
+        return index;
     }
 
     /// <summary>Whether a record was appended after the given sequence number — the subscription test.</summary>
-    public bool HasRecordAfter(long seq) => _count > 0 && _records[_head + _count - 1].Seq > seq;
+    public bool HasRecordAfter(long seq) => _count > 0 && _records[(_head + _count - 1) & Mask].Seq > seq;
 
     /// <summary>Whether a chip asking to be woken at or after that instant would resolve on its own stack.</summary>
-    public bool ChangesAtOrAfter(long instant) => IndexAtOrAfter(instant) >= 0;
+    public bool ChangesAtOrAfter(long instant) => _count > 0 && _records[(_head + _count - 1) & Mask].Instant >= instant;
 
     /// <summary>
-    /// The record a sample names, in <c>log2(Count)</c> probes — or in none at all, which is the case
-    /// that matters: a reader asking "what does the wire hold now" names the newest record almost every
-    /// time, and the newest record answering "the last at or before this instant" *is* the binary
-    /// search's own answer, reached without walking (99.7 ns → 1.9 ns, #38's micro-benchmark). The two
-    /// shortcuts below are the same two comparisons the search would end on; they change no answer.
+    /// The newest record answering "the last at or before this instant" *is* the answer almost every
+    /// time — a reader asking "what does the wire hold now" names the newest record — so the newest is
+    /// tested first and the walk only runs when it is not the answer (#38's 1.9 ns path). The walk
+    /// replaces the append-only log's binary search: the window is at most 256 records, and a wrapped
+    /// index would turn every probe of a search into a masked subscript rather than an addition.
     /// </summary>
-    int Search(long instant, bool atOrBefore)
+    int SearchBack(long instant)
     {
         if (_count == 0)
         {
             return -1;
         }
 
-        if (atOrBefore)
+        if (_records[(_head + _count - 1) & Mask].Instant <= instant)
         {
-            // nothing is later than the newest record: if it qualifies, it is the last one that does
-            if (_records[_head + _count - 1].Instant <= instant)
-            {
-                return _count - 1;
-            }
+            return _count - 1;
         }
-        else if (_records[_head].Instant >= instant)
+
+        // before the oldest record held: the past is unreachable, and it is not misreported
+        if (_records[_head].Instant > instant)
         {
-            // nothing is earlier than the oldest record: if it qualifies, it is the first one that does
+            return -1;
+        }
+
+        int index = _count - 1;
+        while (index > 0 && _records[(_head + index) & Mask].Instant > instant)
+        {
+            index--;
+        }
+
+        return index;
+    }
+
+    int SearchForward(long instant)
+    {
+        if (_count == 0)
+        {
+            return -1;
+        }
+
+        if (_records[_head].Instant >= instant)
+        {
             return 0;
         }
 
-        int low = 0;
-        int high = _count - 1;
-        int found = -1;
-
-        while (low <= high)
+        int index = 1;
+        while (index < _count && _records[(_head + index) & Mask].Instant < instant)
         {
-            int middle = low + ((high - low) >> 1);
-            Record record = _records[_head + middle];
-            bool qualifies = atOrBefore
-                ? record.Instant <= instant
-                : record.Instant >= instant;
-
-            if (qualifies)
-            {
-                found = middle;
-                if (atOrBefore) low = middle + 1;
-                else high = middle - 1;
-            }
-            else if (atOrBefore)
-            {
-                high = middle - 1;
-            }
-            else
-            {
-                low = middle + 1;
-            }
+            index++;
         }
 
-        return found;
-    }
-
-    void Grow()
-    {
-        int size = Math.Max(InitialCapacity, _count * 2);
-        var grown = new Record[size];
-        Array.Copy(_records, _head, grown, 0, _count);
-        _records = grown;
-        _head = 0;
-    }
-
-    /// <summary>
-    /// Moves the live records back to the front when the head has swallowed half the array, and gives
-    /// back a far-too-large array after a burst. Neither moves a record, changes an instant, nor
-    /// renumbers an index — the interval [0, Count) is what every reader already sees.
-    /// </summary>
-    void Compact()
-    {
-        // Copying the live records is O(Count), so it must stay rare: it is worth it only when the array
-        // has become far larger than the live set (a burst has ended). Discarding without copying is
-        // what makes a long run cheap — the head walks forward and Grow() recycles the array, which is
-        // amortised O(1) per record. Compacting on every trim made a boot quadratic (20 frames 21 s,
-        // 40 frames 69 s) because the copy happened once per trim over a growing live set.
-        if (_records.Length <= 4096 || _count * 4 >= _records.Length)
-        {
-            return;
-        }
-
-        var smaller = new Record[Math.Max(InitialCapacity, _count * 2)];
-        Array.Copy(_records, _head, smaller, 0, _count);
-        _records = smaller;
-        _head = 0;
+        return index < _count ? index : -1;
     }
 }

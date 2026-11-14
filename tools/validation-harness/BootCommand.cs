@@ -483,11 +483,10 @@ internal static class BootCommand
             $"queue_count={machine.Engine.QueueCount}",
             $"drain_ms={(machine.Engine.DrainTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency):F0}",
             $"instrument_ms={(machine.Engine.InstrumentTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency):F0}",
-            $"trim_calls={machine.Engine.TrimCalls}",
-            $"trim_ms={(machine.Engine.TrimTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency):F0}",
             $"records_retained={machine.Engine.RetainedRecords.ToString(CultureInfo.InvariantCulture)}",
-            $"records_discarded={machine.Engine.DiscardedRecords.ToString(CultureInfo.InvariantCulture)}",
-            "retention=" + string.Join(";", machine.Engine.Logs.Where(l => l.Discarded > 0).OrderByDescending(l => l.Discarded).Take(8).Select(l => $"{l.Channel.Name}:{l.Discarded}:{l.OldestInstant}")),
+            $"records_overwritten={machine.Engine.OverwrittenRecords.ToString(CultureInfo.InvariantCulture)}",
+            $"window={ValueLog.Capacity} records per log, {machine.Engine.Logs.Count} logs",
+            "overwritten=" + string.Join(";", machine.Engine.Logs.Where(l => l.Overwritten > 0).OrderByDescending(l => l.Overwritten).Take(8).Select(l => $"{l.Channel.Name}:{l.Overwritten}:{l.OldestInstant}")),
             $"_gl_apid={glApid.ToString("x8", CultureInfo.InvariantCulture)}",
             $"queue_pops={machine.Engine.Pops.ToString(CultureInfo.InvariantCulture)}",
             $"fast_path_reads={machine.Engine.FastPathReads.ToString(CultureInfo.InvariantCulture)}",
@@ -593,7 +592,7 @@ internal static class BootCommand
         report.Add($"  _frclock advance        {machine.PeekLong(Frclock) - frclockAtDesktop} over {framesOnDesktop} frames on the desktop (G6 gates it); _nvbls {lastNvbls} is the vbl queue's slot count, never a counter");
         report.Add($"  instructions / frame    {Program.Number(machine.Cpu.Instructions / Math.Max(lastFrame, 1))} ({Program.Number(machine.Cpu.Instructions)} in all, {Program.Number(machine.Cpu.InterruptsTaken)} interrupts, {Program.Number(machine.Cpu.Exceptions)} exceptions)");
         report.Add($"  records                 {Program.Number(machine.SystemControlUnit.GroupDeliveries)} group deliveries, {Program.Number(machine.SystemControlUnit.DeRecords)} DE, {Program.Number(machine.SystemControlUnit.HblRecords)} HBL / {Program.Number(machine.SystemControlUnit.VblRecords)} VBL, {Program.Number(machine.Video.ChunkWrites)} chunk writes");
-        report.Add($"  retention               {Program.Number(machine.Engine.RetainedRecords)} records retained of {Program.Number(machine.Engine.RetainedRecords + machine.Engine.DiscardedRecords)} appended; {Program.Number(machine.Engine.TrimCalls)} trims in {machine.Engine.TrimTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency:F0} ms");
+        report.Add($"  windows                 {Program.Number(machine.Engine.RetainedRecords)} records held of {Program.Number(machine.Engine.RetainedRecords + machine.Engine.OverwrittenRecords)} appended, across {machine.Engine.Logs.Count} logs of {ValueLog.Capacity} — no retention pass, no trim");
 #if DEBUG
         report.Add($"  digest stream           {Program.Number(digestWords)} words, one per batch; run.batches names their instants, run.tail the last 8 batches' records");
         report.Add($"  digest sha256           {digestSha} (run.digest: the record stream, identity included)");

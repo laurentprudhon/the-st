@@ -96,18 +96,18 @@ public sealed partial class Engine
         }
     }
 
-    /// <summary>Records retention has discarded — history no live reader could still be asking for.</summary>
-    public long DiscardedRecords
+    /// <summary>Records the rings have overwritten — history no live reader could still be asking for.</summary>
+    public long OverwrittenRecords
     {
         get
         {
-            long discarded = 0;
+            long overwritten = 0;
             foreach (ValueLog log in _allLogs)
             {
-                discarded += log.Discarded;
+                overwritten += log.Overwritten;
             }
 
-            return discarded;
+            return overwritten;
         }
     }
 
@@ -176,12 +176,6 @@ public sealed partial class Engine
             phaseStart = System.Diagnostics.Stopwatch.GetTimestamp();
             AfterBatch(t);
             InstrumentTicks += System.Diagnostics.Stopwatch.GetTimestamp() - phaseStart;
-
-            if (++_batchesSinceRetention >= RetentionEvery)
-            {
-                _batchesSinceRetention = 0;
-                TrimLogs();
-            }
         }
     }
 
@@ -316,88 +310,10 @@ public sealed partial class Engine
         AfterResume(chip);
     }
 
-    /// <summary>
-    /// How often retention runs, in batches. A trim is a memory act, never a semantic one, so the number
-    /// is free to be large: trimming less often only retains *more*, and a log that retains more never
-    /// answers differently. It was 16, which cost ~2.7 ms a frame in bookkeeping (1 848 trims a frame,
-    /// 3.05 µs each) for a machine whose retained set is a few hundred records; at 256 it is ~7 trims a
-    /// frame (#38).
-    /// </summary>
-    const int RetentionEvery = 128;
-
-    long _batchesSinceRetention;
-
-    /// <summary>
-    /// A wire's log must retain back to the earliest instant a live reader may still sample (ADR 0004's
-    /// 2026-11-07 revision) — <b>and only that wire's readers, because only they can ask it anything.</b>
-    /// A subscriber of this wire with <c>from</c> may fire on the first record at or after it and then
-    /// reads that record, so its <c>from</c> is a floor on what this log still needs; with no subscriber
-    /// waiting on this wire, nothing older than the present can be asked of it by a subscription. The
-    /// sample floor is machine-wide and covers the readers that sample a wire without subscribing.
-    ///
-    /// <para>
-    /// This used to be one minimum over <i>every</i> wire's subscribers, applied to every log — so the
-    /// slowest waiter in the machine sized the memory of all logs. On the boot that was four orders of
-    /// magnitude too conservative: `bus` held 383 792 records because a Timers and events waiter sat 3.84
-    /// frames in the past on `MFPCS`, while the bus's own readers never needed more than 80 (#41).
-    /// </para>
-    /// </summary>
-    long RetentionWatermark(Channel channel)
-    {
-        long watermark = MachineTime;
-
-        SubscriberSet? set = SubscribersFor(channel);
-        if (set is not null)
-        {
-            foreach (Subscriber subscriber in set.Pending)
-            {
-                if (subscriber.From < watermark)
-                {
-                    watermark = subscriber.From;
-                }
-            }
-        }
-
-        return watermark;
-    }
-
-    /// <summary>Ticks spent draining batches, in the debug instruments, and in retention — reported.</summary>
+    /// <summary>Ticks spent draining batches and in the debug instruments — reported.</summary>
     public long DrainTicks { get; private set; }
 
     public long InstrumentTicks { get; private set; }
-
-    /// <summary>Retention's own cost, reported (design/validation.md §4) — a number, never a verdict.</summary>
-    public long TrimCalls { get; private set; }
-
-    public long TrimTicks { get; private set; }
-
-    /// <summary>
-    /// Discards each log's history before <i>its own</i> retention watermark, keeping one base record at
-    /// or before it so that every sample from that watermark onwards still answers exactly what the wire
-    /// carried (ADR 0004 invariant 5). Called from the loop, not from a debug partial: retention is part
-    /// of the machine, not an instrument.
-    /// </summary>
-    void TrimLogs()
-    {
-        long started = System.Diagnostics.Stopwatch.GetTimestamp();
-        TrimCalls++;
-
-        foreach (ValueLog log in _allLogs)
-        {
-            long watermark = RetentionWatermark(log.Channel);
-            if (_sampleFloor < watermark)
-            {
-                watermark = _sampleFloor;
-            }
-
-            log.TrimTo(watermark);
-        }
-
-        // a sample is answered synchronously, on the reader's own stack, so the window it opened has
-        // been closed by the time the batch ends
-        _sampleFloor = long.MaxValue;
-        TrimTicks += System.Diagnostics.Stopwatch.GetTimestamp() - started;
-    }
 
     /// <summary>
     /// <c>Write(t, wire, mask, value)</c>: an append at <paramref name="t"/> and no suspension. A write
@@ -526,32 +442,10 @@ public sealed partial class Engine
     }
 
     /// <summary>
-    /// The value a wire holds at an instant: the last record at or before it. This is also a live
-    /// sampling window for retention (ADR 0004's 2026-11-07 revision): the answer needs the newest
-    /// record at or before <paramref name="instant"/>, which retention would otherwise be free to
-    /// discard as soon as every subscription had moved on.
+    /// The value a wire holds at an instant: the last record at or before it. 0 when the instant is
+    /// older than the ring holds — the past is unreachable, never misreported (ADR 0004).
     /// </summary>
-    internal ushort ValueAt(Channel channel, long instant)
-    {
-        NoteSampled(instant);
-        return Log(channel).ValueAt(instant);
-    }
-
-    /// <summary>The earliest instant a live reader has sampled since the last trim.</summary>
-    long _sampleFloor = long.MaxValue;
-
-    /// <summary>
-    /// A reader is about to ask for an instant that has no subscription behind it — the CPU's
-    /// <c>IPL</c> sample for the end of an instruction, the video chip's four <c>MD</c> words, a C
-    /// register read. Retention must not pass it until the reader has its answer.
-    /// </summary>
-    internal void NoteSampled(long instant)
-    {
-        if (instant < _sampleFloor)
-        {
-            _sampleFloor = instant;
-        }
-    }
+    internal ushort ValueAt(Channel channel, long instant) => Log(channel).ValueAt(instant);
 
     /// <summary>
     /// A chip's internal register anchor (ADR 0008 §6): same append-only log, one driver, no resolver,

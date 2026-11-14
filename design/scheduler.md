@@ -116,47 +116,41 @@ pendingReads(cont)                          // one per suspended coroutine (inva
   (0.13–2.79 ms, all six positive); the `Map` above is the shape, and the array is how the shape is
   spelled. A slot is `null` until its channel is first used, so nothing preallocates a log per wire.
 - **Publishes:**
-  - `retentionWatermark(wire) = min(from)` over `subs[wire]` — the log may never truncate across it
-    (ADR 0004); with no subscriber, the UI's trace window decides.
+  - nothing about retention: since #43 the log is a fixed ring whose capacity is derived, so the
+    engine publishes no watermark (ADR 0004, Revision 2026-11-14).
   - `subscribers(wire)` — compared against `design/crossings.md` in debug builds.
 
-### 3a. How retention is done (#34)
+### 3a. How retention is done (#43)
 
-- **A log is a window over one array**, with a head offset: discarding from the oldest end is a pointer
-  move, and the array compacts when the head has eaten half of it. A long boot appends tens of
-  millions of records; without this the tree's memory is unbounded (`ValueLog._records` was
-  append-only for ever, and a Debug boot was OOM-killed past ~400 frames at 2.6 GB).
-- **The watermark is the minimum over subscribers *and* live sampling windows** (ADR 0004's
-  2026-11-07 revision) — **and it is per log** (#41): each log is trimmed against the minimum `from` of
-  *its own* subscribers, because only they can ask it anything, with the machine-wide sampling floor
-  applied to every log. A subscriber's `from` is a floor, but three readers take no subscription and
-  still ask for an instant in the past: the CPU's `IPL` sample for the end of an instruction, the video
-  chip's four `MD` words behind a group delivery, and any `ReadAt` at or before the chip's own clock.
-  They announce the instant with `Engine.NoteSampled(instant)`; the floor holds until the batch ends,
-  by which time the sample has been answered on the reader's own stack.
-  <br>One minimum over *every* wire was the first implementation, and it let the slowest waiter in the
-  machine size the memory of all logs: on the boot `bus` held 383 792 records while its own readers never
-  needed more than 80, because a Timers and events waiter sat 3.84 frames in the past on `MFPCS`.
-  Measured, and the reason the watermark is per log.
-- **Truncation keeps one base record** — the newest at or before the watermark. That record is what
-  keeps invariant 5 true for every instant from the watermark onwards: the answer to a sample in that
-  range is either in the retained window or *is* the base. A sample older than the window returns
-  "nothing" (0), which is not a wrong value — the past is unreachable, not misreported.
+- **A log is a fixed ring.** `ValueLog.Capacity` = 256 records: one array, one head offset, no growth,
+  no copy. Appending past the window overwrites the oldest record and counts it, which is the whole of
+  the memory story — 8 KiB a log, 22 logs on the boot, `records_retained` 4 882 at the end of a
+  300-frame run against 47 213 110 records appended, and no retention pass anywhere in the loop.
+- **The capacity is derived, not chosen.** A reader's need is the records its log appends while that
+  reader's cursor sits. `tests/performance/FINDINGS.md` §10 measures it at **1–5 records on every log**
+  of the 300-frame boot and of the synthetic trace — the boot's `bus` 5 is one four-record exchange plus
+  the base, `MD` 5 is Video's four words plus the base — and at **66** in the worst case a timed
+  subscription can produce. 256 is that worst case with a 3.9× margin, and `bus` with 51×. A Δ chosen
+  "to be safe" at a frame would need a 20 500-record `answer` ring: the trap #43's own §3.3 names.
+- **A sample older than the window answers "nothing" (0), never a wrong value.** The ring tests
+  `instant < OldestInstant` before it looks at any slot; without that test a wrapped slot would answer a
+  *newer* record's value, which is the failure G7 exists for and which no digest can see.
+- **Two multipliers used to sit on top of that need, and neither was a reader.** The machine-wide
+  `_sampleFloor` was reset per retention pass rather than per batch — 128 batches late, 129 056 ticks of
+  lag, the whole of the old `needFloor − needReader` — and then the cadence itself, which kept 128
+  batches of a log's own appends (`bus` 611 at peak). Both are gone with the log; FINDINGS §10 has the
+  numbers, taken with an instrument that is not in the tree.
 - **Cursors are sequence numbers, never indices.** An index saved across a suspension names a different
-  record once anything was trimmed in between; `SystemControlUnit`'s bus exchange and `TimersAndEvents`'
-  `DE` scan both stored indices and both broke the moment retention ran (a dead bus: three cycles
-  started, no answer, the CPU suspended).
-- **Cadence is an implementation detail**: every 128 batches (#38; 16 before). Trimming less often only
-  *retains more*, so the cadence can never change an answer — it was 1 848 trims and ~2.7 ms a frame of
-  bookkeeping at 16, for a machine that retains a few hundred records. Measured against 256 in three
-  interleaved pairs (256 retains 1 522 records and reallocates more: GC 1.26 vs 0.54 ms a frame), 128 won
-  every pair by 2.7–5.0 ms; then 16 against 128 in four *alternating* adjacent pairs on a quiet host
-  (i7-12700H × 20 cores): 33.42 / 32.47 / 32.27 / 34.81 ms against 31.47 / 31.39 / 30.46 / 31.29 — 128
-  again won every pair, by 1.08–3.52 ms (mean 2.09). Alternating is what makes the pair mean anything:
-  this host drifts ~2 ms over a session, so an A-then-B ordering silently credits B with the drift, and
-  the first six pairs taken that way read 1.15–2.02 where the alternating ones read 1.08–3.52. Both
-  digests were unchanged by the switch on both hosts (boot 10 801 972 words, synthetic 95 999, sha256
-  `ffd761fc…` and `9b92d3ae…` on each). G7 (`check-retention`) proves the rule rather than the cadence.
+  record once the ring has overwritten anything; `SystemControlUnit`'s bus exchange and
+  `TimersAndEvents`' `DE` scan both stored indices and both broke the moment the window moved (a dead
+  bus: three cycles started, no answer, the CPU suspended). A cursor *below* the window now names the
+  oldest held record, which is indistinguishable from a cursor that is genuinely there — that is what
+  the engine's own assertion is for (#43's rule 3).
+- **What proves it.** G7 (`check-window`) tests the ring's algebra and a live sampler against a writer
+  that appends eight times faster than the window holds; `run.stream` proves no record, instant or
+  ordering moved; the cost sits in FINDINGS beside the projection. The cadence this replaced was
+  measured at 128 batches against 16 in #38 (2.09 ms); #45, which would have extended it to 256, is
+  closed by this ticket.
 
 ## 4. Debug assertions (all off in release)
 

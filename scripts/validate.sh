@@ -84,13 +84,14 @@ else
     bad "stores"
 fi
 
-# ---- G7: retention never truncates under a live reader -----------------------------------
-# The one failure a digest structurally cannot see: a log truncated under a live sampler changes an
-# answer while the record stream stays identical, so two runs agree and both are wrong (ADR 0004's
-# 2026-11-07 revision). check-retention tests the log's algebra and runs a sampler 1 000 ticks into
-# the past while a writer keeps appending and retention keeps trimming.
-step "G7 — retention never truncates under a live reader (ADR 0004's revision)"
-if harness Debug check-retention | tee "$stampdir/check-retention.log"; then
+# ---- G7: a ring never answers from outside its window ------------------------------------
+# The one failure a digest structurally cannot see: a record overwritten under a live sampler changes
+# an answer while the record stream stays identical, so two runs agree and both are wrong (ADR 0004).
+# #43 replaced the append-only log's retention cadence with a fixed ring, so check-window tests the
+# ring's algebra over 1 000 appends into 256 slots, and runs a sampler 1 000 ticks into the past while
+# a writer appends eight times as fast as the window can hold.
+step "G7 — a ring answers inside its window, and nothing outside it (ADR 0004, #43)"
+if harness Debug check-window | tee "$stampdir/check-window.log"; then
     ok "G7"
 else
     bad "G7"
