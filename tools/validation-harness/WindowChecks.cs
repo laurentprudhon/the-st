@@ -34,13 +34,13 @@ internal static class WindowChecks
     }
 
     /// <summary>
-    /// The ring on its own: 1 000 records into <see cref="ValueLog.Capacity"/> slots, one per 10 ticks,
+    /// The ring on its own: 1 000 records into <see cref="ValueLog.DefaultCapacity"/> slots, one per 10 ticks,
     /// whose value is its number <b>+1</b> — so a 0 answer can only mean "nothing here", never a value
     /// the wire legitimately carried.
     /// </summary>
     static void WindowAlgebra()
     {
-        Console.WriteLine($"the ring's own algebra — 1 000 records into {ValueLog.Capacity} slots, one per 10 ticks");
+        Console.WriteLine($"the ring's own algebra — 1 000 records into {ValueLog.DefaultCapacity} slots, one per 10 ticks");
 
         var channel = new Channel(ChannelKind.Wire, 0x3F0, "probe");
         var log = new ValueLog(channel);
@@ -49,7 +49,7 @@ internal static class WindowChecks
             log.Append(new Record(index * 10L, index, channel, 1, 0xFFFF, (ushort)(index + 1)));
         }
 
-        int held = ValueLog.Capacity;
+        int held = ValueLog.DefaultCapacity;
         long oldest = 1000 - held;
 
         static ushort Reference(long instant)

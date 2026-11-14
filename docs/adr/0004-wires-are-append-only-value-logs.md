@@ -138,8 +138,8 @@ the scheduler — the scheduler holds the queue and subscriptions and answers no
 **The rule is unchanged; the storage is a fixed ring.** A record may still be discarded only once no
 reader can still ask for its instant — what changed is that the act is no longer a periodic decision
 (the 128-batch retention pass, its watermark walk and its `_sampleFloor`) but a structural one: the log
-is `ValueLog.Capacity` = 256 records, and appending past the window overwrites the oldest record and
-counts it. The three properties the earlier revisions bought are kept, one for one:
+is a fixed ring — `ValueLog.DefaultCapacity` = 256 records, and 4 096 on `DE` — and appending past the
+window overwrites the oldest record and counts it. The three properties the earlier revisions bought are kept, one for one:
 
 - **A sample older than the window answers "nothing" (0), never a wrong value.** The ring tests the
   instant against `OldestInstant` *before* it looks at any slot. Without that test a wrapped slot would
@@ -158,12 +158,18 @@ its chip holds a date (`DateInstant − From`) and declared when it does not —
 `long.MaxValue` and carry no date (`answer`, `group`, `IPL`, `MFPCS`), and each is bounded by a timeout
 the engine arms beside it. The census in `tests/performance/FINDINGS.md` §10 measures the need at 1–5
 records on every log of the boot and of the synthetic trace, and at 66 for the worst timed arm: 256 is
-that worst case with a 3.9× margin.
+that worst case with a 3.9× margin. `DE` is the exception the census itself did not see: Timers and
+events reads it by a cursor advanced only when that chip is awake, it is *not* a subscriber on `DE`
+although `crossings.md` catalogues it as one, and a stopped timer lets the cursor sit for frames while
+the beam writes 400 records a frame — 4 096 is twice its measured need (more than 1 024, no more than
+2 048 on the boot).
 
 **The falsifier changes with it.** The 2026-11-07 text said "if record retention ever needs a hard count
 bound to stay inside memory, the engine is producing far more records than the catalogue predicts: fix
 the model, not the buffer". The hard bound is now the design, so the falsifier is the same claim turned
 around: **a log whose reader needs more than `Capacity` records is a model bug** — a wire appending far
 above its catalogue rate, or a reader that has stopped consuming — and it must be caught by the
-assertion, never by a silent wrong answer. G7 (`check-window`) is that property's automated witness; the
+assertion, never by a silent wrong answer. G7 (`check-window`) is that property's automated
+witness, and assertion 8 (`ValueLog.Debug.cs`) is the one that runs on every log of every run: it
+refuses a sample, a record-by-seq and a *cursor* below the window. It is what found `DE`'s reader. The
 `TrimTo`/`Compact`/`Grow`/`RetentionEvery` machinery and the sampling floor it fed are deleted.

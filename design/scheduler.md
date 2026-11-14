@@ -163,6 +163,7 @@ pendingReads(cont)                          // one per suspended coroutine (inva
 | 5 | every class-1 row's subscriber present while its chip is suspended | a liveness bug with one owner |
 | 6 | writes per resume below a cap | a loop with no suspension in it |
 | 7 | no read or write earlier than the issuing chip's clock | a backdated instant |
+| 8 | no sample, no record-by-seq and no cursor below the ring's `OldestInstant` / oldest `Seq` (`ValueLog.Debug.cs`) | a ring that overwrote what a live reader still meant to ask — the wrong *value* with an unchanged *record stream*, which no digest can see (#43) |
 
 `nextDeadline` is declared on exactly five chips, and it is the min over that chip's own counters:
 

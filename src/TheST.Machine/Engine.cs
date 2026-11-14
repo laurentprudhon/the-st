@@ -128,10 +128,31 @@ public sealed partial class Engine
 
     ValueLog NewLog(Channel channel)
     {
-        var log = new ValueLog(channel);
+        var log = new ValueLog(channel, CapacityFor(channel)) { Verifying = true };
         _allLogs.Add(log);
         return log;
     }
+
+    /// <summary>
+    /// `DE` keeps a window of its own, and the reason is a reader the watermark never saw: Timers and
+    /// events reads `DE` by a *cursor*, advanced only when that chip is awake, and a stopped timer lets
+    /// the cursor sit for frames while the beam keeps writing 400 records a frame. It is not a
+    /// subscriber on `DE`, so no `from` bounded it — under retention the cadence happened to keep the
+    /// records it needed, which is why nothing ever noticed (assertion 8 is what noticed: #43).
+    ///
+    /// 4 096 is twice the largest need measured on the 300-frame boot (more than 1 024, no more than
+    /// 2 048) — a function of how long a stopped timer sleeps, so the assertion, not the number, is the
+    /// guarantee. `<c>crossings.md</c>` catalogues Timers as `DE`'s second subscriber; it polls instead,
+    /// and making it subscribe would return `DE` to the default window.
+    /// </summary>
+    internal const int DeCapacity = 4_096;
+
+    static int CapacityFor(Channel channel) =>
+        channel.Kind == ChannelKind.Wire && channel.Id == Wires.De.Id ? DeCapacity : ValueLog.DefaultCapacity;
+
+    /// <summary>The windows the machine runs on, for <c>run.state</c>.</summary>
+    public static string WindowSummary() =>
+        $"default {ValueLog.DefaultCapacity}, DE {DeCapacity}";
 
     /// <summary>
     /// Grows a channel table so that <paramref name="id"/> is addressable. Runs at most a handful of
