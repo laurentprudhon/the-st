@@ -114,8 +114,9 @@ derived figure must never turn a run red:
 > The same ruling accepts ADR 0005's leaf as the response to that falsifier — off by default, under
 > ADR 0008 §7's seven conditions — and defers building it: #39 and #40 come first, because each changes the
 > number of queue entries and #39 must rule on the sequence counter before any of them can be proven
-> trace-identical. **Status 2026-11-14: 30.2 ms** (34.3 before the engine pass; three of its four wins kept,
-> one reverted), so this row is red by ~3× and the gap is the leaf's to close.
+> trace-identical. **Status 2026-11-14: 24.6 ms** — 34.3 before #38's engine pass (three of its four wins kept, one
+> reverted), 29.0 after it, **24.6 after #40** (the losing arm; six alternating pairs, −4.25 ms mean).
+> This row is still red by ~2.5× and the gap is the leaf's to close.
 
 ## 5. Manual
 

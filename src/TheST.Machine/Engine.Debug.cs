@@ -230,6 +230,7 @@ public sealed partial class Engine
         IReadOnlyDictionary<Chip, int> live = LiveWakes();
 
         int suspended = 0;
+        int dated = 0;
         foreach (Chip chip in _chips)
         {
             if (chip.Armed > 0)
@@ -240,6 +241,19 @@ public sealed partial class Engine
                     throw Fail(2, $"at {instant}: {chip.Name} is suspended on {chip.Armed} wake(s) and owns nothing — {WhereIs(chip)}");
                 }
             }
+
+            if (chip.HasDate)
+            {
+                dated++;
+            }
+        }
+
+        // the engine's own count of held dates against the chips that actually hold one (#40): a date
+        // nobody can see is a chip that never wakes, and the counter is what decision the next instant
+        // is made on
+        if (dated != _datedChips)
+        {
+            throw Fail(2, $"at {instant}: the engine counts {_datedChips} held date(s); {dated} chip(s) hold one");
         }
 
         foreach ((Chip chip, int count) in live)
@@ -284,6 +298,15 @@ public sealed partial class Engine
                 case ApplyWrite { Waiter: { } waiter, WaiterToken: var token } when token == waiter.WakeToken:
                     recounted[waiter] = recounted.GetValueOrDefault(waiter) + 1;
                     break;
+            }
+        }
+
+        // a held date is a live wake that lives in the chip, not in the queue (#40)
+        foreach (Chip chip in _chips)
+        {
+            if (chip.HasDate)
+            {
+                recounted[chip] = recounted.GetValueOrDefault(chip) + 1;
             }
         }
 
@@ -358,7 +381,12 @@ public sealed partial class Engine
             }
         }
 
-        return parts.Count == 0 ? "nothing queued, nothing subscribed" : string.Join("; ", parts);
+        if (chip.HasDate)
+        {
+            parts.Add($"holding a date at {chip.DateInstant}, arrival {chip.DateSeq}");
+        }
+
+        return parts.Count == 0 ? "nothing queued, nothing subscribed, no date held" : string.Join("; ", parts);
     }
 
     static InvalidOperationException Fail(int assertion, string detail) =>

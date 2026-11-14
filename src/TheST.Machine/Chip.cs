@@ -43,6 +43,55 @@ public abstract class Chip
     /// <summary>Bumped whenever a wake fires: every wake armed under an older token is stale.</summary>
     internal long WakeToken { get; private set; }
 
+    // ---- the chip's own date (#40) ------------------------------------------------------------
+    // A date a chip computed for itself used to be a queue entry, and about half of the ones the
+    // System Control Unit arms were then thrown away when a wire fire resumed it first: 8.2 M stale
+    // resumes on a 300-frame boot, ~27 000 enqueues and pops a frame for nothing. The date now lives
+    // here instead, and the loop takes its minimum over the chips' dates each batch — so a losing date
+    // is never enqueued, never popped, and never counted as stale. Its arrival sequence number is still
+    // drawn when it is armed, so its place among same-instant entries is exactly what it was.
+
+    /// <summary>The instant this chip is waiting for, when <see cref="HasDate"/>.</summary>
+    internal long DateInstant { get; private set; }
+
+    /// <summary>The arrival number the date drew when it was armed — its place among same-instant entries.</summary>
+    internal long DateSeq { get; private set; }
+
+    internal Action? DateContinuation { get; private set; }
+
+    /// <summary>True while this chip holds a date of its own. Cleared when any wake resumes it.</summary>
+    internal bool HasDate { get; private set; }
+
+    internal void HoldDate(long instant, long seq, Action continuation)
+    {
+        DateInstant = instant;
+        DateSeq = seq;
+        DateContinuation = continuation;
+        HasDate = true;
+    }
+
+    /// <summary>Takes the held date and clears it — the one caller is the engine, when it fires.</summary>
+    internal Action TakeDate()
+    {
+        Action continuation = DateContinuation!;
+        DateContinuation = null;
+        HasDate = false;
+        return continuation;
+    }
+
+    /// <summary>Drops a held date because another wake resumed the chip first (#40: no stale entry).</summary>
+    internal bool DropDate()
+    {
+        if (!HasDate)
+        {
+            return false;
+        }
+
+        DateContinuation = null;
+        HasDate = false;
+        return true;
+    }
+
     /// <summary>Called by the engine when a wake is armed.</summary>
     internal long Arm()
     {

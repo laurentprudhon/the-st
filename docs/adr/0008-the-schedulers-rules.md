@@ -199,8 +199,9 @@ identical") cannot be witnessed until #39 rules on that counter..
 3. Every coroutine iteration suspends at least once; a chip's clock runs ahead only to its next read or
    write.
 4. A record is never coalesced, and a read never returns a value a later record would change.
-5. An obligation is a pending read; a suspended chip is always the owner of a queued resume, a
-   subscription, or an awaited write.
+5. An obligation is a pending read; a suspended chip is always the owner of a **held date** (#40), a
+   queued resume, a subscription, or an awaited write — the debug assertion rebuilds the count from all
+   four, and the engine's own count of held dates is checked against the chips that hold one.
 6. Every observable state change is a logged record; the digest is a fold over records.
 7. The leaf substitutes pops, never a clock movement, a record, or another chip's subscription.
 

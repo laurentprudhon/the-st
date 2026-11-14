@@ -156,18 +156,21 @@ public sealed partial class Engine
     /// </summary>
     public void Run(long endInstant)
     {
-        while (_queue.TryPeek(out _, out Key head) && head.Instant <= endInstant)
+        while (true)
         {
-            long t = head.Instant;
+            // The next instant is the queue's head *or* the smallest date a chip holds (#40): a fire is
+            // still a queue entry, because a writer chooses its instant, but a chip's own date is not.
+            long t = NextInstant();
+            if (t > endInstant)
+            {
+                break;
+            }
+
             MachineTime = t;
             long phaseStart = System.Diagnostics.Stopwatch.GetTimestamp();
             BeforeBatch(t);
 
-            // One instant, fully drained — including entries born while draining it.
-            while (_queue.TryPeek(out _, out head) && head.Instant == t)
-            {
-                Execute(_queue.Dequeue(), t);
-            }
+            DrainInstant(t);
 
             DrainTicks += System.Diagnostics.Stopwatch.GetTimestamp() - phaseStart;
             phaseStart = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -180,6 +183,137 @@ public sealed partial class Engine
                 TrimLogs();
             }
         }
+    }
+
+    /// <summary>
+    /// The smallest instant the machine has work at: the queue's head, or the earliest date a chip
+    /// holds. The scan only runs when some chip holds a date — most batches queue one and hold none —
+    /// and it is over chips, not over the queue (four today, eight at most), so it is a handful of
+    /// compares a batch rather than a walk of 30 000 entries.
+    /// </summary>
+    long NextInstant()
+    {
+        long next = _queue.TryPeek(out _, out Key head) ? head.Instant : long.MaxValue;
+        if (_datedChips == 0)
+        {
+            return next;
+        }
+
+        foreach (Chip chip in _chips)
+        {
+            if (chip.HasDate && chip.DateInstant < next)
+            {
+                next = chip.DateInstant;
+            }
+        }
+
+        return next;
+    }
+
+    /// <summary>
+    /// One instant, fully drained — the queue's entries at <paramref name="t"/> and the chips' dates at
+    /// <paramref name="t"/>, merged in arrival order so that a held date keeps exactly the position its
+    /// queue entry had (#40). Entries born while draining are drained too.
+    /// </summary>
+    void DrainInstant(long t)
+    {
+        int due = 0;
+        if (_datedChips > 0)
+        {
+            foreach (Chip chip in _chips)
+            {
+                if (chip.HasDate && chip.DateInstant == t)
+                {
+                    if (due == _dueChips.Length)
+                    {
+                        Array.Resize(ref _dueChips, _dueChips.Length * 2);
+                    }
+
+                    // insertion sort by the arrival number: at most a handful of chips, and the dates
+                    // that share an instant are rare enough that this is cheaper than any structure
+                    int at = due++;
+                    while (at > 0 && _dueChips[at - 1].DateSeq > chip.DateSeq)
+                    {
+                        _dueChips[at] = _dueChips[at - 1];
+                        at--;
+                    }
+
+                    _dueChips[at] = chip;
+                }
+            }
+        }
+
+        int next = 0;
+        while (true)
+        {
+            bool queued = _queue.TryPeek(out Entry? entry, out Key key) && key.Instant == t;
+            bool dated = next < due;
+            if (!queued && !dated)
+            {
+                return;
+            }
+
+            if (dated && (!queued || _dueChips[next].DateSeq < key.Seq))
+            {
+                ExecuteDate(_dueChips[next++], t);
+                continue;
+            }
+
+            Execute(_queue.Dequeue(), t);
+        }
+    }
+
+    // The chips with a date at the instant being drained, reused across batches: a boot drains tens of
+    // thousands of batches a frame and a fresh array per batch would be garbage in the hot loop.
+    Chip[] _dueChips = new Chip[8];
+
+    // How many chips hold a date of their own. Kept incrementally: NextInstant's whole cost control is
+    // "scan only when this is non-zero".
+    int _datedChips;
+
+    /// <summary>
+    /// Holds a chip's date instead of enqueuing it (#40). The arrival number is drawn now, at arm time,
+    /// so the date's place among same-instant entries is the one it would have had as a queue entry.
+    /// </summary>
+    void HoldDate(Chip chip, long instant, Action continuation)
+    {
+        if (!chip.HasDate)
+        {
+            _datedChips++;
+        }
+
+        chip.HoldDate(instant, _arrival++, continuation);
+    }
+
+    /// <summary>Drops a chip's held date because another wake resumed it first — the losing arm, never enqueued.</summary>
+    void DropDate(Chip chip)
+    {
+        if (chip.DropDate())
+        {
+            _datedChips--;
+        }
+    }
+
+    /// <summary>
+    /// A chip's held date fires: the same resume a queued one would have been, minus the queue entry.
+    /// A date whose chip was already resumed at this instant is skipped — it was dropped by
+    /// <see cref="DropDate"/> and never existed as far as the machine is concerned.
+    /// </summary>
+    void ExecuteDate(Chip chip, long t)
+    {
+        if (!chip.HasDate)
+        {
+            return;
+        }
+
+        _datedChips--;
+        Action continuation = chip.TakeDate();
+        _freshWakes[chip] = 0;
+        chip.Disarm();
+        chip.Clock = t;
+        BeforeResume(chip);
+        continuation();
+        AfterResume(chip);
     }
 
     /// <summary>
@@ -311,7 +445,10 @@ public sealed partial class Engine
         }
     }
 
-    /// <summary><c>await ReadAt(t, …)</c> — a dated read the chip computed for itself: a queued resume and nothing else.</summary>
+    /// <summary>
+    /// <c>await ReadAt(t, …)</c> — a dated read the chip computed for itself. The date stays in the chip
+    /// (#40); a date already reached is the same-instant resume <see cref="WaitForEither"/> would give.
+    /// </summary>
     internal void SuspendForReadAt(Chip chip, long t, Action continuation)
     {
         OnRead(chip, t);
@@ -319,7 +456,14 @@ public sealed partial class Engine
         long token = chip.Arm();
         _freshWakes[chip] = _freshWakes.GetValueOrDefault(chip) + 1;
         ReadSuspensions++;
-        Enqueue(new Resume(chip, continuation, t, token));
+
+        if (t <= MachineTime)
+        {
+            Enqueue(new Resume(chip, continuation, MachineTime, token));
+            return;
+        }
+
+        HoldDate(chip, t, continuation);
     }
 
     /// <summary>
@@ -366,11 +510,13 @@ public sealed partial class Engine
         if (instant != long.MaxValue)
         {
             // a chip that only wants the wire arms no date at all: a resume at the end of time would
-            // never fire, and would sit in the queue for the rest of the run
-            long dateToken = chip.Arm();
+            // never fire, and would sit in the queue for the rest of the run. A date that is in the
+            // future is held in the chip (#40) — it is this half of the pair that loses most often, and
+            // it is never enqueued and never popped now.
+            chip.Arm();
             _freshWakes[chip] = _freshWakes.GetValueOrDefault(chip) + 1;
             ReadSuspensions++;
-            Enqueue(new Resume(chip, continuation, instant, dateToken));
+            HoldDate(chip, instant, continuation);
         }
 
         long wireToken = chip.Arm();
@@ -431,6 +577,10 @@ public sealed partial class Engine
                     StaleWakes++;
                     return;   // another wake already resumed this chip
                 }
+
+                // a wire fire owns the chip: its held date is dropped here, never enqueued (#40), so
+                // this is the moment the losing arm costs nothing at all
+                DropDate(resume.Chip);
 
                 // A Resume sets the chip's clock to the instant it resumes at, before the chip runs: it
                 // can then neither read nor write an earlier instant (assertion 7).

@@ -55,27 +55,40 @@ Resume(cont, chip, t)
 ApplyWrite(wire, t, driver, mask, value)
 ```
 
+…and one thing that is deliberately **not** an entry: a chip's own date (#40). A fire is a queue entry
+because a writer chooses its instant; a date the chip computed for itself is held in the chip, and the
+loop takes its minimum over the chips' dates each batch — at most a handful of compares a batch, against
+~27 000 enqueues and pops a frame that were then thrown away as stale.
+
 Key: `(t, seq)` — `seq` monotonic, assigned at insertion: the queue's **arrival** counter, read by
 nothing but the same-instant tie-break. Records have their own counter (ADR 0007's 2026-11-14 revision,
 #39), so how many entries a frame queues cannot renumber a record or move the digest.
 
 ```
-while Q not empty:
-    (t, _) = Q.peek()
+while (t = min(Q.peek().t, min over chips of chip.date)) <= endInstant:
     machineTime = t
     assert t >= previousT                    // head monotonic — fails at the instant, not later
     batch = records appended while draining every entry stamped t
-    while Q.peek().t == t:                   // one instant, fully drained, born entries included
-        item = Q.pop()
+    due = the chips whose date is t, in the arrival order their dates drew
+    while Q.peek().t == t or due remains:    // one instant, fully drained, born entries included
+        item = whichever of Q.peek() and due[0] has the smaller arrival number
         match item:
           ApplyWrite: append(wire, t, driver, mask, value)
                       for s in subs[wire] where s.from <= t, in registration order:
                           subs[wire].remove(s)
                           Q.push(Resume(s.cont, s.chip, t))
           Resume:     chip.clock = t
+                      chip.date = none           // a wire fire owns the chip: a losing date is dropped
+                      run chip until it suspends
+          date:       chip.clock = t
                       run chip until it suspends
     digest(fold over batch)                  // debug/test only
 ```
+
+A date draws its arrival number when it is **armed**, not when it fires, so its place among same-instant
+entries is exactly the one a queue entry would have had. A date whose chip a wire resumed first is dropped
+there and then: it is never enqueued, never popped, and never counted as a stale wake. That is #40's whole
+change — 107 215.6 → 63 193.2 pops a frame, and 44 021.8 → 23 679.7 stale.
 
 - **Applying a record fires `subs[wire]` and nothing else.** No waking by count, watermark or
   participation.
@@ -150,8 +163,8 @@ pendingReads(cont)                          // one per suspended coroutine (inva
 | # | Assertion | Catches |
 |---|---|---|
 | 1 | queue head non-decreasing | an ordering bug, at the instant it happens |
-| 2 | `suspendedChips == pendingReads + pendingWriteAndWaits` | a chip suspended with nothing queued — a lost obligation |
-| 3 | `nextDeadline != null ⇒ a Resume for that chip is queued at or before it` | the forgotten self-wake; on System Control Unit, Timers and events, Sound, Disk, Controllers only |
+| 2 | `suspendedChips == heldDates + queuedResumes + subscriptions + awaitedWrites` | a chip suspended with nothing queued — a lost obligation; and the engine's own count of held dates against the chips that hold one (#40) |
+| 3 | `nextDeadline != null ⇒ that chip holds a date at or before it, or a `Resume` for it is queued at or before it` | the forgotten self-wake; on System Control Unit, Timers and events, Sound, Disk, Controllers only |
 | 4 | `subscribers(wire)` ⊆ the catalogue's rows for that wire | a subscription nobody documented |
 | 5 | every class-1 row's subscriber present while its chip is suspended | a liveness bug with one owner |
 | 6 | writes per resume below a cap | a loop with no suspension in it |
@@ -178,10 +191,12 @@ phase), **Blitter** (each access is a read; cooperative mode is a count).
   mixes the same fields **without** the seq (#39). A change that only alters how many queue entries a
   frame has must leave `run.stream` byte-identical; a change that moves an instant, a record or an
   ordering moves both. `run.stream` is what ADR 0008 §7 condition 6 is witnessed against.
-- **The identity digest is re-blessed once**, by #39's split: boot `ffd761fc…` → `eaf7ecf1…`, synthetic
-  `9b92d3ae…` → `58fcdddf…`, with `run.stream` byte-identical across the split (`688ef97b…`) and
-  `pops_per_frame` unchanged at 107 215.6. Both folds are host-independent — they matched byte-for-byte
-  on two hosts.
+- **The identity digest has moved twice**, both times declared: once by #39's split (boot `ffd761fc…` →
+  `eaf7ecf1…`, synthetic `9b92d3ae…` → `58fcdddf…`; `run.stream` byte-identical, `pops_per_frame`
+  unchanged) and once by #40 (boot `eaf7ecf1…` → `93c4dbd4…`, **10 801 972 → 10 801 967 batches**: five
+  instants existed only because a losing date was queued at them, and an empty instant carries no record;
+  `run.stream` byte-identical again, `e52ed136…`). Both folds are host-independent — they matched
+  byte-for-byte on two hosts.
 - **Digest = incremental fold over the records appended in the batch**, wire and internal alike, in
   append order — including the internal register logs, which is why no state walk is needed.
 - **Contract:** same image, twice, byte-identical streams at T=1; later T=1 vs T>1 identical.

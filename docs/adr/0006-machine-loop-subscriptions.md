@@ -109,7 +109,7 @@ while Q not empty:
                   for s in subs[wire] where s.from <= t:      # each fires once
                       subs[wire].remove(s)
                       Q.push((t, seq++), Resume(s.cont, s.chip))
-      Resume:     chip.clock = t
+      Resume:     chip.clock = t                              # drops the chip's held date, if any
                   run chip until it suspends (one `Read`) or finishes an iteration
 ```
 
@@ -143,10 +143,16 @@ a record and pushes the writer's own `Resume` behind its receivers (ADR 0008 §2
 
 1. Every read names the earliest instant it will accept — `ReadAt` exactly, `ReadNext` as `from` —
    and never earlier than the issuing chip's clock.
-2. Every queue entry is a `Resume` or an `ApplyWrite`.
-3. A suspended coroutine owns at least one pending wake — a dated resume or a subscription on one wire —
-   and its wakes are fire-once: the first to fire owns the resume, the rest are stale. *(Revised
-   2026-11-12, above; it read "exactly one pending read, hence at most one subscription".)*
+2. Every queue entry is a `Resume` or an `ApplyWrite`. *(2026-11-14, #40: a chip's own date is no
+   longer a queue entry at all — a fire is, because a writer chooses its instant; a date the chip
+   computed is held in the chip and the loop takes its minimum over the chips' dates each batch.
+   See invariant 3's revision below and `design/scheduler.md` §2.)*
+3. A suspended coroutine owns at least one pending wake — a **held date** or a subscription on one
+   wire — and its wakes are fire-once: the first to fire owns the resume, the rest are stale. *(Revised
+   2026-11-12, above; it read "exactly one pending read, hence at most one subscription". Revised
+   2026-11-14, #40: the dated wake used to be a queued `Resume`, and about half of the ones the System
+   Control Unit armed were then thrown away when a wire fire resumed it first — 8.2 M stale resumes on
+   a 300-frame boot. The date now lives in the chip, so a losing date is never enqueued at all.)*
 4. A record fires every subscription whose `from <= instant` **and whose sequence number is below the
    record's**, each exactly once. *(Revised 2026-11-12: the sequence discriminator is what makes two
    records at one instant — or a chip re-arming at that instant — unambiguous. Revised 2026-11-14, #39:

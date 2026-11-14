@@ -166,6 +166,37 @@ So the records, their instants and their order are untouched; only their names c
 the witness any queue-contents change must satisfy — and it costs four `Mix` calls per record in a Debug
 build that is not the measured one, so the frame budget does not see it.
 
+`run.stream` writes a word per instant **that has records**, not per batch: an empty instant carries no
+information about the machine, and #40's first measurement proved the difference matters — with empties
+folded in, every one of the 9.4 M remaining words moved by a batch-index shift while the records
+themselves were untouched. After that refinement it is `e52ed136…` (10 801 251 words), and it is the file
+#40 leaves byte-identical.
+
+## 8. The losing arm (#40): measured, and 4.25 ms, not 2–3
+
+The proposal's own projection was "~2–3 ms a frame". **Six adjacent, alternating Release pairs on this
+host** say 4.25: the losing date is not merely a pop, it is a `Resume` object allocated per arm that the
+GC also has to collect.
+
+| | before | after | the row |
+|---|---|---|---|
+| frame mean, 6 pairs (A then B, B then A, …) | 29.69 / 28.89 / 29.04 / 28.84 / 28.68 / 28.46 ms | **24.53 / 24.68 / 24.69 / 24.94 / 24.84 / 24.40 ms** | **−4.25 ms mean, −3.84…−5.16, 6/6** |
+| `pops_per_frame` | 107 215.6 | **63 193.2** (−41 %) | −44 022 arms a frame |
+| `stale_wakes_per_frame` | 44 021.8 | **23 679.7** | exactly the dated half is gone |
+| `alloc_mb_per_frame` | 22.78 | **20.77** | −2.0 MB of `Resume` objects |
+| `gc_ms_per_frame` | 0.43 | 0.36 | |
+| `alloc_mb_per_frame`, Release, 800 frames | 22.78 | 20.77 | no collection-shape regression |
+
+Debug, 300-frame boot, the same pair of runs: `queue_pops` 42 040 073 → 25 589 670, `stale_wakes`
+16 449 116 → 8 234 143, `read_suspensions` and `subscriptions` **identical** (16 450 405 / 23 226 950) —
+the machine does the same work, it just stops queueing 8.2 M dates it will throw away.
+
+`run.digest` moved again, legitimately and for the last time here: **10 801 972 → 10 801 967 words**
+(`eaf7ecf1…` → `93c4dbd4…`). Five instants existed only because a losing date was queued at them; with
+the date held in the chip they are never drained, and an empty instant carries no record. `run.stream` —
+the identity-free fold — is **byte-identical at `e52ed136…`, 10 801 251 words**, which is the witness that
+no instant, record or ordering moved.
+
 And the wall those do not touch: **17.2 GB is allocated inside continuations, 380 B per resume** —
 async state-machine boxes plus a `Resume` object for every wake. At the engine's measured 88 ns
 suspend/resume floor, 45.2 M continuations is 4.0 s of the run before any work happens, and 77.6 M pops

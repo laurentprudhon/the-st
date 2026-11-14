@@ -87,11 +87,13 @@ the sources dissolved all three:
 > identical") unwitnessable for any change that removes entries — #40 and the leaf both do.
 >
 > Nothing observable moved when they were split, and that is measured rather than argued: the boot's
-> 10 801 972-word record stream folded *without* identity (`run.stream`) is byte-identical across the
-> split, `sha256 688ef97b…`, while the identity digest moved once — `ffd761fc…` → `eaf7ecf1…` — and is
-> re-blessed. `pops_per_frame` stayed at 107 215.6 and the gate's assertions stayed silent. From this
-> commit on, a change in how many queue entries a frame has must leave `run.stream` byte-identical and
-> the identity digest untouched; a change that moves an instant, a record or an ordering moves both.
+> record stream folded *without* identity (`run.stream`) is byte-identical across the split — `e52ed136…`,
+> 10 801 251 words, one per instant that has records — while the identity digest moved once,
+> `ffd761fc…` → `eaf7ecf1…`, and is re-blessed. `pops_per_frame` stayed at 107 215.6 and the gate's
+> assertions stayed silent. From this commit on, a change in how many queue entries a frame has must leave
+> `run.stream` byte-identical; the identity digest — one word per batch, empty or not — is the one allowed
+> to move when an instant that carried no record stops being drained. A change that moves a record, an
+> instant or an ordering moves both, and `harness diff` says which.
 3. A wire's value at an instant is a function of the records at that instant, never of their order,
    except where the resolver is single-driver (last record wins) or a conflict is reported.
 4. The queue head is non-decreasing; ties are resolved inside the firing of the instant.
