@@ -366,3 +366,55 @@ bites the logs whose reader has no date, never `bus`.
 (it is stream-identical and four fifths of today's retained set; the ring deletes the floor instead), and
 how often a 2 048-tick timeout actually fires on the `IPL` arm — 2 015 ticks is the measured ceiling, so
 it fires rarely and must be counted (`timed_wakes`) rather than assumed zero.
+
+## 11. The ring against the cadence (#43 step 5): 3.5 ms a frame, and a timeout that is not free
+
+**The pair.** Six adjacent, alternating Release pairs at 800 frames on the laptop host (i7-12700H × 20),
+`validation-harness boot`, load 0.60–1.18, baseline `5506a59` (the append-only log with retention every
+128 batches) against `d70169b` (the ring, assertion 8, no cadence):
+
+| pair | retention | ring | delta |
+|---|---|---|---|
+| 1 (A→B) | 25.17 ms | 21.17 ms | **4.00** |
+| 2 (B→A) | 24.40 | 21.21 | **3.19** |
+| 3 (A→B) | 24.59 | 21.25 | **3.34** |
+| 4 (B→A) | 24.48 | 21.06 | **3.42** |
+| 5 (A→B) | 25.38 | 21.13 | **4.25** |
+| 6 (B→A) | 24.72 | 21.55 | **3.17** |
+
+**All six positive, mean 3.56 ms a frame** — and `alloc_mb_per_frame` **20.77 → 11.12** on every one of
+them, `gc_ms_per_frame` 0.36 → 0.20. The projection was the cadence's own 2.09 ms (#38's 16-v-128 pair);
+the measurement is 1.7× that, because the ring also deletes `Grow`/`Compact` — the append-only log
+reallocated whenever the head swallowed the array, and that landed in the allocation column, not in
+`trim_ms`. `trim_ms` itself was 2.36 ms a frame on the Debug boot (708 ms over 300 frames) and is now
+absent from the code.
+
+**The measurement is not the cadence's, and the two are separable:** the one-line `_sampleFloor` reset
+(§10) retained 770 → 223 records but changed no frame time measurably, while the ring changes both. What
+the ring buys is the pass itself — 84 390 walks over every log per 300-frame boot — plus the array churn.
+
+**Rule 1 of the ticket is answered *no*: a timeout wake is not clock-neutral here.** Armed engine-wide on
+the four undated arms at `MaxSilence = 2 048`, a 300-frame boot takes **36 209 timed wakes** (120.7 a
+frame) and **moves both folds**: `run.stream` `e52ed136…` → `276eb45d…`, `run.digest` `93c4dbd4…` →
+`c601d745…`, with `subscriptions` and `stale_wakes` each +36 209 and `queue_pops` unchanged (a held date
+is never a pop). The count is not a coincidence: 113 blank lines of 2 048 ticks a frame is 231 424 ticks
+of silence on `group` — `231 424 / 2 048 = 113` wakes a frame, exactly the observation. **Any Δ short
+enough to keep a 256-record window fires during a wire's legitimate silence** (0.36 frame on `group`,
+3.84 on `MFPCS`), and any Δ long enough not to fire needs 3 240 `group` records and 12 300 `MFPCS`
+records — a 16 384-record ring, 640 KB a log. The narrow variant (bounding only `group` and `MFPCS`,
+leaving the two "what does it hold now" arms alone) fires the *same* 36 209 times and moves the same
+stream, so the CPU's two arms were never the problem.
+
+**What bounds the window instead**: the ring always holds the newest record, so an arm that only asks
+"what does it hold now" cannot be starved; the arms that consume a *backlog* are the ones that need a
+window, they carry an exact date (`DateInstant − From`), and assertion 8 is the witness that no reader
+was ever answered below it. G7 (`check-window`) plus assertion 8 replace the retention row one for one.
+
+**Found, not fixed: `DE`'s passive reader.** Assertion 8 fired on its first 300-frame boot —
+`DE: a cursor at seq 380464 is below the window (oldest held 396478)` — because Timers and events scans
+`DE` from a cursor advanced only when *it* is awake, and it is **not** a subscriber on `DE` although
+`crossings.md` catalogues it as one (`TBI`, class 1, 200 counts a frame). No watermark ever bounded it;
+under retention the 128-batch cadence happened to keep what it needed, which is why nothing noticed.
+`DE` therefore runs a 4 096-record window (twice its measured need: more than 1 024, no more than 2 048)
+and one silent loss on the boot is now impossible rather than unlikely. Making Timers subscribe — the
+catalogue's own row — would return `DE` to 256 and is a machine change, so it is filed, not absorbed.
