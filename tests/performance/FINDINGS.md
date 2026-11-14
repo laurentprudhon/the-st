@@ -134,7 +134,7 @@ engine, both ways it can be written:
 
 | spelling | allocation | pairs | result |
 |---|---|---|---|
-| single slot, **reclaimed** when a wire drops back to one waiter | 22.78 → **26.77 MB** a frame | 8, all negative | **3.9 ms slower** |
+| single slot, **reclaimed** when a wire drops back to one waiter | 22.78 → **26.77 MB** a frame | 8, all negative | **3.65 ms slower** |
 | single slot, list kept once created (no reclaim) | 22.92 MB a frame | 4, all negative | **0.99 ms slower** |
 
 The first spelling allocates a `List` per burst on a wire that oscillates between one and two waiters —
