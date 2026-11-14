@@ -341,7 +341,11 @@ internal static class BootCommand
         // wall time is a measurement of the instruments, not of the machine (validation.md §2's table).
         double meanFrameMs = framesTimed == 0 ? 0 : frameMsTotal / framesTimed;
         double meanDesktopMs = framesTimedOnDesktop == 0 ? 0 : frameMsOnDesktop / framesTimedOnDesktop;
-        const double BudgetMs = 5.0;
+        // The budget is 50 Hz with 2x headroom (10 ms of the 20 ms frame), not the 5 ms #8 first
+        // proposed: crossings alone cost 9.4 ms a frame at the measured 107 215.6 pops and the engine's
+        // 88 ns suspend/resume floor, so a 5 ms gate would gate ADR 0006's design rather than this
+        // engine (#38's ruling, 2026-11-14; design/validation.md G8).
+        const double BudgetMs = 10.0;
         const double FrameMs = 20.0;
 #if DEBUG
         const bool budgetMeasured = false;
@@ -560,11 +564,11 @@ internal static class BootCommand
         report.Add("G8 — the frame budget (design/validation.md §3):");
 
 #if DEBUG
-        report.Add($"  mean frame              {meanFrameMs,8:F2} ms of {FrameMs:F2} ms   budget {BudgetMs:F2} ms (25 %)   not measured");
+        report.Add($"  mean frame              {meanFrameMs,8:F2} ms of {FrameMs:F2} ms   budget {BudgetMs:F2} ms (50 %)   not measured");
         report.Add("  a Debug frame carries the per-instant digest and the seven assertions: its wall time is a");
         report.Add("  measurement of the instruments, not of the machine (validation.md §2's two-table row).");
 #else
-        report.Add($"  mean frame              {meanFrameMs,8:F2} ms of {FrameMs:F2} ms   budget {BudgetMs:F2} ms (25 %)   {(g8Green ? "green" : "RED")}");
+        report.Add($"  mean frame              {meanFrameMs,8:F2} ms of {FrameMs:F2} ms   budget {BudgetMs:F2} ms (50 %)   {(g8Green ? "green" : "RED")}");
 #endif
 
         report.Add($"  n                       {Program.Number(framesTimed)} frames timed (max {frameMsMax:F2} ms)");

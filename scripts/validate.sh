@@ -245,10 +245,10 @@ fi
 # ---- G8: the frame budget -----------------------------------------------------------------
 # Release, because a Debug frame carries the per-instant digest and the seven assertions: its wall
 # time is a measurement of the instruments (validation.md §2). The row is the mean wall time of one
-# frame against the 5 ms of the 20 ms budget, and it is reported with n, the host, the core count and
+# frame against the 10 ms of the 20 ms budget (50 Hz with 2x headroom, #38's ruling), and it is reported with n, the host, the core count and
 # the crossing count the run actually had — the same mean on another host means nothing (§4), which
 # is why the numbers are printed beside the verdict and kept in run.state.
-step "G8 — the frame budget (Release: mean frame <= 5 ms of the 20 ms frame)"
+step "G8 — the frame budget (Release: mean frame <= 10 ms of the 20 ms frame)"
 harness Release boot --frames 800 --out "$stampdir/g8" >"$stampdir/g8.log" 2>&1
 g8state="$stampdir/g8/run.state"
 if [ ! -f "$g8state" ]; then
@@ -262,9 +262,9 @@ else
     percycle=$(grep -E '^pops_per_bus_cycle=' "$g8state" | cut -d= -f2)
     g8=$(grep -E '^g8=' "$g8state" | cut -d= -f2)
     if [ "$g8" = "green" ]; then
-        ok "G8: ${mean} ms a frame of 20.00 (budget 5.00) — n ${n}, ${cpu} × ${cores}, ${pops} pops a frame (${percycle} a bus cycle)"
+        ok "G8: ${mean} ms a frame of 20.00 (budget 10.00) — n ${n}, ${cpu} × ${cores}, ${pops} pops a frame (${percycle} a bus cycle)"
     else
-        bad "G8: ${mean} ms a frame of 20.00 (budget 5.00) — n ${n}, ${cpu} × ${cores}, ${pops} pops a frame (${percycle} a bus cycle); see $stampdir/g8/run.report"
+        bad "G8: ${mean} ms a frame of 20.00 (budget 10.00) — n ${n}, ${cpu} × ${cores}, ${pops} pops a frame (${percycle} a bus cycle); see $stampdir/g8/run.report"
     fi
 fi
 

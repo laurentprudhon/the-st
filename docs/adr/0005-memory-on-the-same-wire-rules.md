@@ -192,3 +192,24 @@ the **System Control Unit** ([ADR 0014](0014-the-stores-are-data-structures.md),
 - **The rejected option "per-chip private memory pointers (a shared RAM array every chip indexes)"
   is still rejected.** `MachineBytes` is the host's view only, in machine byte order, and no virtual
   chip may hold it (ADR 0014 §4).
+
+## Revision — 2026-11-14 (ticket #38): the falsifier fires, and the leaf is accepted but deferred
+
+The Falsifier above asks whether the walking skeleton can hold **50 Hz with 2× headroom on the reference
+host** — 10 ms a frame. Measured on 2026-11-14, the uniform model holds **30.2 ms** (34.3 before #38's
+engine pass: three cheap wins landed for 4.1 ms, a fourth was implemented and reverted). The condition is
+therefore **met**, and this ADR's stated response to it — implement the leaf — is what #38 ruled:
+
+- **The leaf is accepted as the response**, inside the System Control Unit, off by default, under
+  [ADR 0008](0008-the-schedulers-rules.md) §7's seven conditions and its trace-identity acceptance test.
+  The owner's constraint is unchanged and still binding: *"i hope we will not need it, it should only be a
+  very last resort"* — accepted is not the same as begun.
+- **It is deferred, not dropped.** Two tickets go first (#39, #40), because both — and the leaf itself —
+  change how many queue entries a frame has, and `Record.Seq` is also the queue's key counter. Until #39
+  rules on that counter, ADR 0008 §7's condition 6 ("leaves the digest stream identical") cannot be
+  witnessed for any of them.
+- **The budget is restated at 10 ms, not 5.** The 5 ms of `design/validation.md` G8 was #8's proposal when
+  the crossing count was an estimate; the measured boot sets 107 215.6 pops a frame and the engine's
+  suspend/resume floor is 88 ns, so crossings alone cost **9.4 ms a frame** before any instruction runs.
+  A gate below that line gates ADR 0006's design, not this engine. The reference host is now named: the
+  laptop (i7-12700H × 20); Xeon runs are corroboration and never the record.

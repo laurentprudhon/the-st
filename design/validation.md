@@ -75,7 +75,7 @@ second way to fail and no coverage. The only pixel-level evidence is the owner's
 | **G5** | Per-chip rates match the catalogue, per frame | The harness differences the chips' counters over the four frames after the desktop is up and divides by four (`boot`'s own rate window; `run.report` carries the row) | Video group deliveries = **4 000**/frame; `DE` records = **400**/frame (200 asserting the window open plus 200 releasing, two subscribers); Timer B counts = **200**/frame; video chunk writes = **4 000**/frame; HBL = **625 per two frames** (313 lines, the wrap line straddling the frame boundary); total class-1 ≤ the catalogue's ceiling for the workload | A subscription that never fires (a liveness bug the digest cannot see — two runs can both be silent); a beam or a timer at the wrong rate; a delivery amalgamated into a tick table | automated |
 | **G6** | The machine's own clocks, read from the OS | The harness reads EmuTOS's system variables over the settle window after the desktop is seen, addresses from `roms/emutos-1.4/etos256<lang>.sym` | `_frclock` ($466) advanced by `N` ± 1 over `N` frames on the desktop (the 200 Hz counter `_vbclock` beside it); `_gl_apid` (0x0000e32a, BSS) non-zero, so the AES handed an application its id; the PC inside the desktop's text (`_deskstart` 0x00e2b394 → the desk object files) on at least one sampled frame — the AES event loop waits inside the BIOS's `evnt_multi`, so the PC is *not* routinely there. `_nvbls` ($454) is the vbl queue's **slot count** (`ARRAY_SIZE(vbl_list)` = 8), reported and never a frame counter | A VBL that is dropped or doubled — which both runs drop *identically*, so the digest passes; a VBL interrupt that never reaches the CPU; a "desktop" that is a static screen rather than a running AES event loop | automated |
 | **G7** | Retention never truncates under a live reader | Targeted test: a sampler reads the `IPL` wire 100 ticks back while a writer keeps appending; debug assertion in the log that refuses any discard below `min(subscription.from, live sampling window)` | The sampler's answer equals the value of the last record at or before its instant; no assertion fires | A log truncated under a live sampler — a wrong *value* with an unchanged *record stream*, which is the one failure a digest test structurally cannot catch (ADR 0004, Revision 2026-11-07) | automated |
-| **G8** | The frame fits its budget | Release build, per-frame wall time over the run, at #18's measured crossing density | Mean ≤ **5 ms of 20 ms** (25 %), reported with `n`, the CPU and the crossing count used | A loop quadratic in crossings; a per-frame allocation storm; the case where the memory leaf starts to be earned | automated (not a determinism test) |
+| **G8** | The frame fits its budget | Release build, per-frame wall time over the run, at #18's measured crossing density, on the **reference host** — the laptop (12th Gen Intel i7-12700H × 20); runs on the older Xeon are corroboration and never the record | Mean ≤ **10 ms of 20 ms** (50 % — 50 Hz with 2× headroom, the number ADR 0005's falsifier and ADR 0014's falsifier 3 already use), reported with `n`, the CPU, the core count and the crossing count used | A loop quadratic in crossings; a per-frame allocation storm; a budget set below the crossing bill itself | automated (not a determinism test) |
 
 G5's figures come from the catalogue's own arithmetic — 80 words per active line × 200 lines ÷ 4 words
 per group = 4 000; `DE` is one record per active line with two subscribers; Timer B counts `DE`. The
@@ -98,6 +98,21 @@ derived figure must never turn a run red:
 - **`_frclock`'s advance** (the OS's 200 Hz counter) beside `_nvbls`, as corroboration of G6.
 - **Digest stream length** and the first appearing-difference instant when G1 or G2 fails, with the
   full record stream for the last N batches (the one-line diff ADR 0008 promises).
+
+> **G8's budget: why 10 ms and not 5** (#38's ruling, 2026-11-14). #8 proposed 5 ms (25 % of the frame)
+> when the crossing count was still an estimate. The measured boot sets **107 215.6 pops a frame**, and the
+> engine's own suspend/resume floor is **88 ns**, so the crossings alone cost **9.4 ms a frame before a
+> single instruction executes**. A 5 ms gate is therefore not a target but an arithmetic impossibility for
+> the uniform model — it would gate ADR 0006's design, not this engine. The row is now **10 ms**, which is
+> the number ADR 0005's falsifier and ADR 0014's falsifier 3 already use ("50 Hz with 2× headroom"), and the
+> **reference host is named** — the laptop (12th Gen Intel i7-12700H × 20); runs on the older Xeon are
+> corroboration and never the record.
+>
+> The same ruling accepts ADR 0005's leaf as the response to that falsifier — off by default, under
+> ADR 0008 §7's seven conditions — and defers building it: #39 and #40 come first, because each changes the
+> number of queue entries and #39 must rule on the sequence counter before any of them can be proven
+> trace-identical. **Status 2026-11-14: 30.2 ms** (34.3 before the engine pass; three of its four wins kept,
+> one reverted), so this row is red by ~3× and the gap is the leaf's to close.
 
 ## 5. Manual
 
@@ -153,7 +168,7 @@ Stated so no later session mistakes the green run for more than it is:
 | G4 | ADR 0001 (640 000 ticks, 32 MHz ÷ 2ⁿ, 1 000/500/250/125); #3's first comment |
 | G5 · G7 | `design/crossings.md` §2–§10 (rates, two `DE` subscribers, 4 000 groups); ADR 0004 Revision 2026-11-07 |
 | G6 | ADR 0010 (boots to GEM), `roms/emutos-1.4/*.sym` / `*.src` for the addresses |
-| G8 | #8 (the frame budget is not the risk; 25 % is the number that reopens the pool) |
+| G8 | #38's ruling, 2026-11-14: the budget is 10 ms (50 Hz with 2× headroom), not the 5 ms #8 proposed — see the note below §4; the leaf in ADR 0005 is the accepted response and is deferred |
 | D1 | ADR 0008 §6 second clause; #8's topology ruling |
 | D2 | #3's first comment (the N-frame counter test); ADR 0001 |
 | D3 | overview §10.4 (validation ladder); ADR 0010 (acceptance ≠ compatibility) |

@@ -216,7 +216,10 @@ name false.
    chip found a private handle and the store became a chip by the back door.
 3. **Cost.** If the walking skeleton cannot hold **50 Hz with 2× headroom** on the reference host with
    the CPU bus traffic behind these calls, the response is ADR 0005's leaf (which inlines the slot
-   wait) — never a different store boundary.
+   wait) — never a different store boundary. **Measured 2026-11-14: 30.2 ms a frame against that 10 ms,
+   so the condition is met; #38 ruled the leaf accepted and deferred** (ADR 0005, Revision 2026-11-14).
+   The reference host is the laptop (i7-12700H × 20). This falsifier is untouched by the ruling — only
+   its condition is now a fact rather than a risk.
 4. **Nothing.** The 512-row refresh figure, the bank count and the part geometry are inventory facts:
    correcting one changes a constant and §2's table, not this decision. A second machine or a memory
    upgrade would re-open the "one population" constant only, and would be a new effort by the map's

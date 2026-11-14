@@ -183,7 +183,13 @@ ordering or a release instant". Stated as scheduler conditions, such a leaf:
 
 The owner's position on it, recorded verbatim because it is a constraint on every future session:
 *"i hope we will not need it, it should only be a very last resort, because it would really cripple the
-cpu and memory coroutines logic and readability"*.
+cpu and memory coroutines logic and readability"*
+
+**Status, 2026-11-14 (#38).** ADR 0005's falsifier has fired on measurement, so the leaf is **accepted and
+deferred**: the conditions above are its acceptance test, not an invitation to start. Two tickets precede
+it — #39 (the sequence counter is both the queue key and the record's identity) and #40 (the losing arm) —
+because all three change how many queue entries a frame has, and condition 6 ("leaves the digest stream
+identical") cannot be witnessed until #39 rules on that counter..
 
 ## Invariants
 
