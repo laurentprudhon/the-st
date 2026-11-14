@@ -286,3 +286,83 @@ No other wire has this shape: `answer` (CPU), `group` (Video), `MFPCS` (Timers a
 every record they are woken by. `bus` is the only wire whose subscriber is woken by a record it does not
 read, and it is also the widest: 5 records a cycle, 4.44 pops, 23 679.7 stale wakes a frame at
 `42d8358`.
+
+## 10. The per-log depth census (#43 rule 5): readers need five records, and nothing sizes the logs but the cadence
+
+#43 asks how deep a ring would have to be, per log, on a workload that is not the boot — and warns that
+§4's append rates predate #39/#40. Taken 2026-11-14 on the laptop host (i7-12700H × 20), against
+`5506a59`, from a temporary `#if DEBUG` partial (`Engine.Debug.cs`, a `BeforeTrim` hook plus a
+channel-aware sample hook) that is **not in the tree**: it samples at each retention pass, so it costs
+~17 µs a trim and its `trim_ms` (2 171 against the clean 708) and `frame_mean_ms` (113.90) are
+instrument figures, not measurements. Both folds reproduced exactly with the instrument in place —
+`run.digest` `93c4dbd4…` / 10 801 967 words, `run.stream` `e52ed136…` / 10 801 251 — so it is inert.
+
+Columns, per log, over the whole run: `peak` = the largest `Count` the log ever held at a retention
+pass; `needR` = records from the oldest **subscriber's** `from` to the newest at that pass (what a
+reader still needs); `needF` = the same, with today's machine-wide `_sampleFloor` folded in; `lag` =
+`MachineTime − from` in ticks; `noDate` = the same lag for subscribers whose chip holds **no date**.
+
+**300-frame Debug boot** (10 801 967 batches, 47 213 110 records appended):
+
+| log | peak | needR | needF | lag (ticks) | no-date lag | records/tick |
+|---|---|---|---|---|---|---|
+| `bus` | 1 186 | **5** | 605 | 630 192 | 0 | 0.159 |
+| `MD` | 893 | **5** | 452 | 0 | 0 | 0.087 |
+| `IPL` | 225 | **1** | 128 | 2 015 | 2 015 | 0.003 |
+| `HSYNC` | 225 | **2** | 128 | 0 | 0 | 0.002 |
+| `answer` | 238 | **1** | 121 | 34 | 34 | 0.032 |
+| `timer D` | 235 | **1** | 117 | 0 | 0 | 0.010 |
+| `group` | 224 | **1** | 113 | 232 244 | 232 244 | 0.014 |
+| `line` | 113 | 1 | 64 | 0 | 0 | 0.001 |
+| `MFPCS` | 20 | 1 | 13 | 2 460 240 | 2 460 240 | 0.005 |
+| `DE` | 24 | 1 | 12 | 0 | 0 | 0.001 |
+| every other log | ≤ 30 | 0–2 | ≤ 16 | — | — | ≤ 0.005 |
+
+**Synthetic trace, 100 frames:** `synth` 429 / **3** / 215, lag 249 (no date); `register` 172 / **1** / 86.
+
+**The reader need is 1–5 records on every log, on both workloads.** `bus` 5 is the widest and it is
+structural, not statistical: one exchange is four records and the System Control Unit finds it again by
+`IndexAt(_assertionSeq)`, so one exchange plus the base record is the floor a ring can have on `bus`.
+`MD` 5 is Video's four words plus the base. Everything else is 1–2.
+
+**What actually sizes the logs is not a reader and not the wire rate.** Two multipliers sit on top of
+that need, and both were measured separately:
+
+1. **`_sampleFloor` is reset per retention pass, not per batch.** `TrimLogs` ends with
+   `_sampleFloor = long.MaxValue` under the comment "a sample is answered synchronously … so the window
+   it opened has been closed by the time the batch ends" — but the reset runs once per **128 batches**,
+   so every sample in the window holds a machine-wide floor that applies to *every* log, including the
+   ninety per cent nothing sampled. It is the whole of `needF − needR` above (`bus` 605, `MD` 452,
+   `IPL` 128) and it reached 129 056 ticks of lag.
+2. **The cadence itself.** With the floor reset moved to the end of each batch (one line, experiment
+   only, digests still `93c4dbd4…` / `e52ed136…`), `records_retained` falls **770 → 223** and
+   `needF == needR` everywhere — but the peaks only fall to `bus` **611**, `MD` 457, `IPL` 130,
+   `answer` 123, `group` 115, because between two retention passes a log keeps everything it appends,
+   and 128 batches of `bus` is ~600 records. #45's premise was right; the floor was sitting on top of it.
+
+**Four subscriptions have no held date, not two.** §3.1 of #43's handoff names `answer`
+(`M68000.cs:264`) and `group` (`Video.cs:75`); the census adds `IPL` when the level is not takeable
+(`M68000.cs:458`) and `MFPCS` when neither counter is running (`TimersAndEvents.cs:99`) — both pass
+`long.MaxValue` to `WaitFor`, which arms a subscription and no date. Measured lags: `answer` 34 ticks,
+`IPL` 2 015, `group` 232 244 (0.36 frame), `MFPCS` 2 460 240 (3.84 frames — §4's own 3.84-frame waiter,
+still there under #41's per-log watermark, and it costs 20 records because `MFPCS` is silent while the
+CPU idles). Those four are the only arms a timeout has to bound; every other arm already carries an
+exact date, and its lag is `DateInstant − from`.
+
+**The capacity arithmetic this gives** — `capacity ≥ Δ × (that log's peak records/tick)` for the
+no-date arms, and the exact date-bound need for the rest:
+
+| Δ (ticks) | `answer` | `group` | `MFPCS` | `IPL` | worst | ring 256 |
+|---|---|---|---|---|---|---|
+| 2 048 (one line) | 66 | 29 | 10 | 6 | **66** | 3.9× margin |
+| 8 192 | 262 | 115 | 41 | 25 | 262 | 1.0× — no |
+
+So the ring is **256 records on every log** if the timeout on the four no-date arms is one line (2 048
+ticks), and `bus` is then 51× its measured need. A Δ chosen "to be safe" at a frame would need a
+20 500-record `answer` ring and a 9 000-record `group` ring — the trap #43 §3.3 describes, and it only
+bites the logs whose reader has no date, never `bus`.
+
+**Two things this does not settle.** Whether the per-batch `_sampleFloor` reset should land on its own
+(it is stream-identical and four fifths of today's retained set; the ring deletes the floor instead), and
+how often a 2 048-tick timeout actually fires on the `IPL` arm — 2 015 ticks is the measured ceiling, so
+it fires rarely and must be counted (`timed_wakes`) rather than assumed zero.
