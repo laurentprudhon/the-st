@@ -55,6 +55,33 @@ of triggers.
 > until they pop. The engine counts them (`stale_wakes`) and reports the number; nothing decides anything
 > by it.
 
+> ### Revision — 2026-11-14 (ticket #44, measured and not adopted)
+>
+> Invariant 4 stays as written: **a record fires every subscription whose `from <= instant` and whose
+> sequence number is below the record's.** A subscription does *not* say which lanes it reads.
+>
+> The alternative was built and measured (`tests/performance/FINDINGS.md` §9): a subscription could name
+> the lane mask a record must carry exactly (`WaitFor(t, wire, afterSeq, lanes)`, `0` = any), so that
+> the System Control Unit — which starts an exchange only on the bus's address-high word — would stop
+> being woken by the CPU's release, a wake that drains one record and does nothing. Two findings rejected
+> it:
+>
+> 1. **The release wake is not a no-op.** It resumes the chip a few arrivals after the top of its loop,
+>    which is where the chip arms its next structural date, so it **re-arms** that date (the first arm is
+>    dropped by the resume, #40). Order is `(instant, arrival)` (ADR 0007), so that second arm is what
+>    orders a CPU bus assertion against a System Control Unit video group that land on the same instant.
+>    Removing the wake keeps every counter of the machine identical and still moves `run.stream` at 711
+>    of a 300-frame boot's 10 801 251 words: an ordering inside instants, not a record.
+> 2. **It loses.** Six adjacent alternating Release pairs: 0.63 ms a frame *slower*, 5 of 6, on 6 113
+>    fewer pops a frame — the fire loop pays a branch per record per wire, which is more than 6 113
+>    no-op resumes are worth. The answer to this ADR's open question ("does a lane-aware subscription
+>    cost anything?") is therefore: yes, on the fire path, and not at registration.
+>
+> What the ticket did find is the *double arm*: a chip that re-arms its own held date within one instant
+> costs one `Resume`, two arms and one subscription a cycle, and its arrival number is the whole content
+> of the same-instant tie-break. That is a scheduler shape (#48's census), not a subscription one, and it
+> is not changed here.
+
 ## Context
 
 - ADR 0003 fixed the ordering, the queue and the ownership of a chip's clock, and left two things

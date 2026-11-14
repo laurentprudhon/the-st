@@ -203,3 +203,86 @@ suspend/resume floor, 45.2 M continuations is 4.0 s of the run before any work h
 is 6.8 s. That is why neither a dictionary rewrite nor an array of logs reaches 5 ms, and why the
 remaining choice is [#38](https://github.com/laurentprudhon/the-st/issues/38)'s: the leaf, a restated
 budget, or fewer crossings.
+
+## 9. The lane-aware subscription (#44): a measured no, and a wake that is not a no-op
+
+FINDINGS §4 said `bus` is five records a bus cycle and two wakes — the assertion group and the release
+— and that the release wake finds nothing to do. #44's premise was that a subscriber woken for a record
+it never reads is free money in the catalogue, and its whole acceptance test was that such a wake
+"must not be able to move a record": `run.stream` byte-identical.
+
+**The premise does not hold, in either half.** A subscription may name the lane mask a record must
+carry (`WaitFor(t, wire, afterSeq, lanes)`, matched exactly, `0` = any), the System Control Unit and
+the corpus's single-step bus name `0xFF00` (the address-high word — the only record that begins an
+exchange), and all of that was built and measured on 2026-11-14, on this host, against today's
+baseline (`42d8358`). It is **not landed**, for two reasons that the ticket now records instead of the
+win.
+
+**1. It loses.** Six adjacent, alternating Release pairs, 800 frames, `validation-harness boot`:
+
+| | baseline `42d8358` | lane-aware | the row |
+|---|---|---|---|
+| frame mean, 6 pairs (A→B, B→A, …) | 26.14 / 25.02 / 24.78 / 25.54 / 25.30 / 25.76 ms | **25.97 / 26.04 / 26.05 / 25.83 / 26.05 / 26.33** | **+0.63 ms mean, 5 of 6 pairs against it** |
+| `pops_per_frame` | 63 193.2 | **57 080.3** (−9.7 %) | −6 113 pops, 4.44 → **4.01** a bus cycle |
+| `subscriptions_per_frame` | 62 424.2 | **56 315.6** | −6 109 |
+| `suspensions_per_frame` (dates) | 44 022.4 | **37 913.9** | −6 109 |
+| `stale_wakes_per_frame` | 23 679.7 | 23 679.7 | unchanged: the leftover arm still fires, one instant later |
+| `alloc_mb_per_frame` | 20.77 | **20.59** | −0.18 MB |
+| `gc_ms_per_frame` | 0.36 | 0.38 | |
+
+**The projection was ~1 ms regained** (6 113 pops at the 96 ns a pop #40's own pair implies); the
+measurement is −0.63, and the two candidate causes are both in the hot path, which is the answer to
+the ADR 0006 §6 question ("does a lane-aware subscription cost anything?"): yes, and not at
+registration. A `Subscriber` grows a field and every fire on **every** wire pays
+
+```
+subscriber.Lanes != 0 && subscriber.Lanes != mask
+```
+
+in the 176 ns fire loop, and the waiter's own "is the wire already answered" test stops being one
+comparison on the newest record and becomes a backward scan over the records past its sequence. On
+`bus` alone that is ~93 000 records a frame paying the branch, to save 6 113 no-op resumes. A cheaper
+spelling (a per-wire "has a lane filter" flag, or a second subscriber list per lane) was **not** built:
+what it could recover is bounded by the same 0.63 ms, and reason 2 rules any spelling out.
+
+**2. The release wake is not a no-op — it re-arms the date.** Removing it keeps every counter the
+machine has identical (`bus_cycles` 5 564 479, `bus_answers`, `groups`, `de_records`, `hbl`, `vbl`,
+`chunks`, `instructions`, `pc`, every assertion silent) and still moves **`run.stream`**:
+
+| | baseline | lane-aware |
+|---|---|---|
+| `run.stream`, 300-frame Debug boot | `e52ed136…`, 10 801 251 words | **`18c387ea…`, 10 801 251 words** |
+| `run.digest` | `93c4dbd4…`, 10 801 967 words | **`8b213e20…`, 10 801 967 words** |
+| words that differ | — | **711 of 10 801 251** |
+
+Same word counts, same records per instant, same values — the *order inside* 711 instants moved. The
+cause, read from a temporary record/resume dump (not in the tree) at the first differing batch
+(7 810, instant 143 480): the System Control Unit arms its next structural date at the top of its loop,
+and the release wake resumes it a few arrivals later, so it **arms that date a second time** (the first
+arm is dropped by the resume, #40). Per ADR 0007 a same-instant tie is arrival order, so that second
+arm decides whether the CPU's bus assertion or the System Control Unit's video group is appended first
+when both land on one instant — CPU first in the machine we have, System Control Unit first without the
+wake. Both orders are legal under ADR 0007; neither is more physical; the blessed stream is the one
+history the machine already has.
+
+**The ruling.** The wake cannot be removed without moving an ordering, and removing it does not pay
+anyway: [#44](https://github.com/laurentprudhon/the-st/issues/44) is **answered, not fixed** — the wire
+catalogue's bus row stays as it is, `run.stream` stays `e52ed136…`, and the fifth record's wake is
+**not** a candidate for #46–#48. What is left as a real observation is the double arm itself: a chip
+that re-arms the same held date inside one instant costs one `Resume`, two arms and one subscription a
+cycle, and its arrival number is what the ordering hangs on. That is a scheduler shape, not a
+subscription one, and it is filed on
+[#48](https://github.com/laurentprudhon/the-st/issues/48) with the census below.
+
+**The census of `bus` subscribers (`Wires.Bus`, both, and no other wire in the machine).**
+
+| subscriber | what it reads | the wake it does not need |
+|---|---|---|
+| `SystemControlUnit` | the four assertion lanes; starts an exchange on `0xFF00` | the release (`0x8000`), and one leftover arm from the previous instant per cycle |
+| `Corpus.SingleStepBus` | the same four lanes (a test fixture, not in the boot) | the same release |
+
+No other wire has this shape: `answer` (CPU), `group` (Video), `MFPCS` (Timers and events) and `IPL`
+(CPU) each carry one record per event with one mask (`0xFFFF`, `0x0007`, …), so their subscribers read
+every record they are woken by. `bus` is the only wire whose subscriber is woken by a record it does not
+read, and it is also the widest: 5 records a cycle, 4.44 pops, 23 679.7 stale wakes a frame at
+`42d8358`.

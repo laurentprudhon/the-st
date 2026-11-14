@@ -227,6 +227,16 @@ Class-1 wakes per frame, by workload:
 Class-2 queue entries are separate and much larger: **≤ 40 000 bus cycles/frame**, ~4 entries each —
 the 40 % bill ADR 0005 records for #10, and the reason the memory leaf exists as a planned option.
 
+**Note — 2026-11-14** (ticket #44, measured on the boot at `42d8358`). The bus costs **4.44 pops a bus
+cycle**, not 4: the CPU's assertion group wakes the System Control Unit once, the release wakes it once
+more to read a record it never uses, and the leftover arm of the previous instant fires stale. The
+*release wake* was priced as removable by naming the lane a subscription accepts, and it is not: it also
+re-arms the chip's held date, so its arrival number orders that chip's next structural event against
+another chip's — removing it moves `run.stream` at 711 instants of a 300-frame boot while every counter
+of the machine stays identical, and it is 0.63 ms a frame *slower* over six alternating pairs. The rows
+above are unchanged; `tests/performance/FINDINGS.md` §9 is the measurement (ADR 0006's revision of the
+same date records the ruling).
+
 The old 10²–10³ band is gone, and the reason is a decision, not an error: the video group delivery is a
 crossing at 4 000/frame by the owner's ruling of 2026-11-05 (one wire event per four words, an approximation
 of the Shifter's input buffer). Everything else in the table stays two to three orders below the bus
