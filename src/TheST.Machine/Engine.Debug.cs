@@ -130,7 +130,16 @@ public sealed partial class Engine
     partial void AfterBatch(long instant)
     {
         _digestWords.Add(_digest);
-        _streamWords.Add(_stream);
+
+        // An instant that appended no record carries no information about the machine, and a change
+        // that stops an empty instant from being drained at all (#40: a chip's losing date is never
+        // enqueued) must not be mistaken for a change that moved a record. So the identity-free fold
+        // writes a word per instant *that has records*: a queue-contents change leaves this file
+        // byte-identical, while run.digest — one word per batch, empty or not — is the one that moves.
+        if (_batchRecords.Count > 0)
+        {
+            _streamWords.Add(_stream);
+        }
         AssertSuspendedChipsAreOwningSomething(instant);   // 2
     }
 
