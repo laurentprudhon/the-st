@@ -12,8 +12,8 @@ design note, not a database migration: no table exists yet.
 | tier | where | holds | public? |
 |---|---|---|---|
 | **the emulator** | `laurentprudhon/the-st` — this repository | the emulator, its design, the maps, the research | yes |
-| **the catalogue** | `laurentprudhon/the-st-software` | structured data — every level below, scores, our summaries, **manual OCR text**, and the **media manifest** | yes, from the start |
-| **the media** | object storage behind a custom domain (R2, §0.1) | page crops, box fronts/backs, manual page images, leaflets, disk labels, screenshots, **the HTML of full articles** | yes |
+| **the catalogue** | `laurentprudhon/the-st-software` | structured data — every level below, scores, our summaries, **manual OCR text**, and the **media manifest** | **private for now**, public later |
+| **the media** | **a local static site** now, object storage (R2) later — **same keys** | page crops, box fronts/backs, manual page images, leaflets, disk labels, screenshots, **the HTML of full articles** | served on the LAN; public later |
 | **the cache** | a local directory | **disk images and full magazine pages**, nothing else | never |
 
 **Ruled** (owner, 2026-11-15): *"everything about the catalog is stored in a catalog/store repo named
@@ -24,6 +24,11 @@ efficiently (to the emulator catalog UI for example)"*.
 
 **The only link between the two repositories is one string**: `first_played_by = {emulator version, date}` on a
 rendition that reached `runs = plays`. No shared schema, no shared code, no build dependency.
+
+**Ruled (owner, 2026-11-15, final for this phase)**: *"for now the software repo stays private, and the images stay
+in a locally hosted website which structure mirrors `media/<sha256[0:2]>/<sha256>.jpg`"*. So the media tier is a
+local static site whose paths are already the production paths — the tree uploads to R2 unchanged when the
+catalogue opens, and nothing in the catalogue ever records a host.
 
 **The only link between the repository and the media host is the manifest**: every object's `key` + `sha256` +
 `size` + `origin_url` + `credit`, committed as data. The bucket holds bytes; the repository says which bytes should
