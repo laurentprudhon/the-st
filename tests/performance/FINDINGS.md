@@ -878,3 +878,206 @@ mutable entry and a free list for a number nobody can see; the tree stays `af1c2
   allocation line is now 17 %, its share of the frame is unmeasurable, and `pops_per_frame` is the cost
   control that already exists.
 
+## 18. The census of wakes (#48): what each chip is woken for, and what a wake is worth
+
+#48 asked three things: a **three-bucket census per chip** (resumed with a record to consume / on a date it
+computed / with nothing to do), the **SCU's machinery-versus-work split** by #47's method, and **a ruling
+per chip**. All of it was measured on a scratch copy of `b289504` (`/opt/data/cache/scratch/st-census`) with
+counters that never entered the tree: an origin tag on `Resume`, one work counter per chip, and a bracket
+around the resume split by what the wake found.
+
+**The census build is inert, and that is asserted rather than hoped.** With every counter in place and the
+bracket off, the 300-frame Debug boot reproduces **`run.digest` `6e657033…` / 10 801 967 words** and
+**`run.stream` `e0ca9570…` / 10 801 251 words** byte-for-byte, and every counter of the machine reads exactly
+what the landed tree reads (`pops_per_frame` 63 592.7, `subscriptions_per_frame` 69 242.1,
+`suspensions_per_frame` 44 417.5, `stale_wakes_per_frame` 6.0, `bus_cycles` 10 300 388, `groups` 2 892 000,
+`chunks` 2 892 000). The *timing* build is not inert: its frame mean is 17.5 ms with the counters alone and
+19.2–20.5 ms with the bracket on, against 16.2–16.7 ms for the tree — so the **shares** are the finding and
+none of those frame means is quoted as a measurement.
+
+### 18.1 Three families of wake, and why `pops_per_frame` is not the count of them
+
+| family | per frame | allocates | counted by |
+|---|---|---|---|
+| a wire record fires a subscription — a queued `Resume` | **39 143.2** | a 48-B `Resume` | `queue_pops` |
+| a held date fires — the chip's own date, `ExecuteDate` (#40) | **23 680.4** | nothing | nothing |
+| a future-dated write — a queued `ApplyWrite` | **24 449.5** | a 48-B entry | `queue_pops` |
+| **every resume of a chip** | **62 823.6** | | neither: the census |
+
+`pops_per_frame` (63 592.7) is the **queue's** count: 39 143.2 `Resume` entries plus 24 449.5 `ApplyWrite`
+entries. The 23 680.4 held-date wakes are not entries at all (#40 took them out of the queue) and appear in no
+pop counter — which is the one thing #46's arithmetic could not see from outside. Its 1.80 MB a frame is
+39 143 objects of 48 B, **not** 62 824: the pool reached the wire half of the machine's resumes and, as §17
+said, nothing else. Its other half of the split — "~24 300 `ApplyWrite`" — is confirmed here to within 1 %.
+
+### 18.2 The three buckets, per chip
+
+Release, 800 frames asked / 724 run, `b289504` + census. Every figure is a count of `Execute`/`ExecuteDate`
+invocations, divided by the 724 frames the run timed; the Debug 300-frame cross-check is in §18.6.
+
+| chip | resumes a frame | by a wire | by a date | consumed a record | **found no work** | the work, per frame |
+|---|---|---|---|---|---|---|
+| CPU | **14 408.8** | 14 407.1 | 1.6 | — | **181.8** (1.3 %) | 14 227.1 bus cycles |
+| SystemControlUnit | **38 001.7** | 20 335.5 | 17 666.9 | 20 340.0 | **6 112.9** (16.1 %) | 14 227.0 bus answers, 14 222.7 exchanges begun, 4 814.8 beam events |
+| Video | **3 994.5** | 3 994.5 | 0 | 3 994.5 | **0** | 3 994.5 painted chunks |
+| TimersAndEvents | **6 418.6** | 406.0 | 6 012.6 | 406.0 | **206.2** (3.2 %) | 6 012.6 timer expiries (6 008.7 of them Timer D), 199.7 `DE` counts |
+| **the machine** | **62 823.6** | 39 143.2 | 23 680.4 | | **6 500.9** (10.3 %) | |
+
+The third bucket is **10.3 % of every resume in the machine, and 94 % of it is one chip's one wake**: the
+System Control Unit's 6 112.9. The CPU's 181.8 are wakes that complete no bus cycle (a stale `answer` arm, a
+stop-wait's own line); Video's is empty; Timers' 206.2 are `MFPCS` register selects that find nothing to do
+and re-arm — 3.2 % of that chip, 0.02 ms a frame, not worth a ticket.
+
+### 18.3 What a wake costs, and how much of it is machinery
+
+Three alternating runs of each direction, Release 800 frames, a `Stopwatch` pair per resume around the
+dispatch and per resume around the continuation, all four chips in one process. A timestamp pair costs
+**15.5–17.6 ns** measured in the same binary (median 15.7), and every figure below has one pair subtracted.
+"Machinery" is the engine's own resume path — `Disarm`, the clock write, the two `#if DEBUG` hooks and the
+continuation's invocation; "body" is the continuation itself: the state machine's `MoveNext` *plus* the
+chip's own code, which this bracket cannot split.
+
+| chip | resumes a frame | ns a wake | **ms a frame** | share of 16.5 ms | of which machinery |
+|---|---|---|---|---|---|
+| CPU | 14 408.8 | **620.3** | **8.94** | 54.2 % | 15.5 (2.5 %) |
+| SystemControlUnit | 38 001.7 | **92.3** | **3.51** | 21.3 % | 8.2 (8.9 %) |
+| Video | 3 994.5 | **133.3** | **0.53** | 3.2 % | 17.4 (13.0 %) |
+| TimersAndEvents | 6 418.6 | **89.3** | **0.57** | 3.4 % | 15.7 (17.6 %) |
+| **four chips** | 62 823.6 | | **13.55** | **82.1 %** | **~1.0** |
+
+**The engine's resume path is 8–18 ns a wake — 1.0 ms a frame for the whole machine.** It is not where the
+time is. What is left (92–620 ns) is the continuation: the coroutine stepping from its await to its next
+await, which is the state machine's dispatch *and* the chip's own work in one number.
+
+That number is the honest limit of this method, and it is worth saying why the SCU could not be priced the
+way #47 priced the CPU. #47's variant B makes every awaiter complete inline; the CPU survives it because its
+device answers on the stack and the chip advances its own `pc`. The System Control Unit **cannot**: its loop
+progresses only when its clock moves, and its clock moves only when it is resumed — an inline awaiter spins
+at the same instant forever, and a generated "no `async`" variant is the same infinite loop. Making the SCU
+synchronous means rewriting `Run` as a stepper that returns its next instant, i.e. it *is* the design change
+being priced (ADR 0008 §7's last resort), so it cannot also be its own measurement. What is left is two
+bounds, and they agree: the CPU's state machine measured 42.7 ns of a 420 ns chain by #47's A − B (10 %), and
+the SCU's cheapest real wake — the release wake that finds nothing — costs **60.3 ns** end to end. A
+coroutine-free SCU may therefore save a fraction of 92 ns, not a multiple of it.
+
+### 18.4 The System Control Unit: 2.67 wakes a bus cycle, and one of the three is #44's
+
+14 227 bus cycles a frame, 38 001.7 resumes, and the wake's price depends on what it found:
+
+| what the wake found | per frame | per bus cycle | ns a wake |
+|---|---|---|---|
+| nothing: a released `Z` at an instant that carries nothing else | **6 112.9** | 0.430 | **60.3** |
+| an exchange to begin (the assertion lane, `0xFF00`) | **14 222.7** | 1.000 | **69.3** |
+| the answer: its own held date fallen due | **14 227.0** | 1.000 | **113.3** |
+| a beam event (line end, group, `DE` edge) | **3 434.7** | 0.241 | **131.3** |
+| an answer **and** a beam event | **1 380.1** | 0.097 | **190.3** |
+
+(Beam events are 4 819.2 a frame: 3 434.7 wakes that handled one and 1 380.1 that did so with an answer.)
+
+Two facts fall out of the census that the profile never showed:
+
+- **The answer is the chip's own date, not the release wire.** `ExecuteDate` fires the bus cycle **10 300 387
+  times — exactly `bus_cycles`** — and the `Z` release of that cycle is appended by the CPU *behind* it, in
+  the same instant, on the CPU's own stack. Of the 10 300 387 wakes the release record causes, 5 874 660 also
+  begin the next exchange (the next assertion shares the instant, so the chip is woken by the release and
+  never by the assertion it wanted) and **4 425 727 find nothing at all**. Those are #44's 6 113 a frame, and
+  the census counts them independently of that ticket: 4 425 727 / 724 = 6 112.9.
+- **#44's pair is this bucket priced.** Removing those 6 113 pops cost **+0.63 ms** (5 of 6 pairs against)
+  and moved `run.stream` by 711 same-instant orderings. This page says the same thing from the other end: the
+  prize was 6 112.9 × 60.3 ns = **0.37 ms a frame**, and the lane filter that removes them costs more than
+  that on every record of the widest wire in the machine.
+
+So the SCU's 21.3 % is 1 exchange begun + 1 answer + 0.24 beam + 0.43 wasted wake per bus cycle, and only the
+last is removable — at a measured loss. **Ruling: leave the wake.**
+
+### 18.5 Video: one resume, one group, one chunk — the ticket's premise was a line
+
+2 892 000 resumes over 724 frames = **3 994.5 a frame**, and `groups` = 2 892 000, `chunks` = 2 892 000,
+`groups` arriving outside the display window = **0**. Video is **1 : 1 : 1**: one `group` record, one resume,
+one painted chunk of 16 pixels (32 columns). The ticket's "2 892 000 resumes against 144 620 records — twenty
+resumes a record" compared resumes with *lines*: `de_records` 289 200 and the 144 620 were the per-line
+anchors (`Video.LineAnchors`), i.e. 20 groups a line, not 20 wakes a record. There is no per-line or per-`DE`
+wake here at all, and no event the chip could compute instead of being woken for: the group *is* its work.
+
+**Ruling: leave it, and correct the premise** — 0.53 ms a frame (3.2 %) for 2.9 M chunks.
+
+### 18.6 Timers: Timer D expires 6 013 times a frame for a log nobody reads
+
+| | per frame | what it is |
+|---|---|---|
+| `MFPCS` selects that only re-arm | 206.2 | the honest "nothing to do" of this chip: 3.2 % of it, 0.02 ms |
+| `DE` counts (Timer B's input) | 199.7 | one per active line, exactly the 200 the video spec asks |
+| **timer expiries** | **6 012.6** | of which **6 008.7 are Timer D** and 3.95 Timer C |
+
+The emulated OS programmes **TCDCR `0x51`, TDDR `2`** — Timer D on divider ÷4 with a data register of 2, i.e.
+**8 MFP clocks = 104 ticks**, and the census reads `_dExpiry − Clock = 104` at the end of the run. So the
+machine expires Timer D **6 008.7 times a frame**, and every expiry
+
+- wakes the chip (**87.3 ns**, the cheapest wake it has),
+- appends an anchor to the `timer D` log — **4 353 103 records in 724 frames**, 5.9 % of every record the
+  machine appends,
+- recomputes the same deadline.
+
+Nothing observes any of it. `timer D` has **no subscriber** and no reader in the machine (§10's census has it
+at `needR` 1, the machine-wide floor, like every unwatched log), and `_dCounter` is never decremented — a read
+of TDDR returns the value `RestartCounters` wrote, so the 4.35 M anchors carry one repeated number. The USART
+this timer clocks is a stub (ADR 0013), which the chip's own comment says: *"Timer D is arithmetic only while
+the USART is a stub: it counts, nothing observes it."* It counts 6 009 times a frame to nobody.
+
+**Prize: 6 008.7 × 87.3 ns = 0.52 ms a frame, 3.2 % of it** — the anchor append is already inside that 87.3 ns,
+so there is no second number to add. It is 91 % of this chip's own 0.57 ms and 3.8 % of the four chips' 13.55.
+
+**It cannot land as a perf change**: 4.35 M records disappear from the stream, so both folds move and that is
+the owner's re-bless (working agreement; #48's own out-of-scope clause says so). It is filed as
+[#63](https://github.com/laurentprudhon/the-st/issues/63) in #44's shape, with the number above as its
+projection and the re-bless as its first step.
+
+Two things this page found on the way and does **not** file as perf tickets:
+
+- **Timer B's interval mode has no expiry check.** `_bExpiry` is computed in `RestartCounters` and read
+  nowhere: a Timer B programmed as an interval timer never fires. The boot uses event-count mode (TBCR bit 3)
+  and the emulated OS never notices, so this is a machine gap for a timer-behaviour ticket, not a perf one.
+- **The `MFPCS` wake is a re-arm, not a no-op.** The register write itself happens on the System Control Unit's
+  stack (`Timers.Register`), and the record only exists so a suspended chip learns its deadline moved. It is
+  206 a frame — nothing worth restructuring.
+
+### 18.7 The rulings
+
+| chip | ruling | the number it rests on |
+|---|---|---|
+| **SystemControlUnit** | **leave the wake** — 2.67 wakes a bus cycle is the exchange's own structure, and the only removable third (6 112.9 a frame) is #44's, measured at +0.63 ms to remove and ordering-moving | 92.3 ns a wake, 3.51 ms a frame (21.3 %) |
+| **Video** | **leave it** — one resume per group, one chunk painted, zero wasted; the ticket's 20:1 was a per-line figure | 133.3 ns a wake, 0.53 ms (3.2 %) |
+| **TimersAndEvents** | **cut the wake: Timer D** — a timer nothing observes, at 6 008.7 expiries a frame; filed as #63, re-bless first | 87.3 ns a wake, **0.52 ms (3.2 %)** |
+| **CPU** | **nothing to cut** — 181.8 of its 14 408.8 wakes (1.3 %) find nothing, and its 54 % share is one instruction stream's cost, which §15's bench already priced | 620.3 ns a wake, 8.94 ms (54.2 %) |
+
+**What #49 inherits.** The frame, by chip, measured: **CPU 8.94 ms (54.2 %)**, System Control Unit 3.51
+(21.3 %), Video 0.53 (3.2 %), Timers 0.57 (3.4 %), and ~2.9 ms (17.9 %) of residual — 24 450 `ApplyWrite`
+entries, the batch loop (36 007 instants a frame in the 300-frame boot's own count), GC's 0.17 and the debug
+hooks. Chips on separate threads could at
+the very best address the 27.9 % in the three device chips; the CPU's 54.2 % is a single instruction stream
+under a deterministic `(instant, arrival)` contract and no thread count divides it. And the machinery this
+page prices — the engine's resume path — is 1.0 ms of the 16.5. Whatever #42's leaf or #49's threads buy, they
+buy it out of the 92–620 ns a wake that belongs to the coroutines, not out of the queue.
+
+### 18.8 What this page does not say, and how it was proved
+
+- **The census is counts, not time.** The counts are identical in Release and Debug (§18.6) and identical
+  across runs; the ns figures are Release only, three runs each way, and carry a ±5 ns host drift that moves
+  the CPU's row by 8 % between the first and last run of a session (615 → 670 before calibration). Every
+  per-chip ms figure is that chip's mean wake times its count, not a difference of frames.
+- **Two of the three buckets are counted by witnesses, not by intent.** "Consumed a record" is a chip's own
+  cursor (the bus log's `Seq` seen, the group's `Seq`, the MFP select's `Seq`), and "found no work" is its own
+  work counter — a bus cycle performed, an exchange begun, a beam event handled, a chunk painted, a timer
+  expired, a `DE` counted. A wake that consumed a record and still found no work counts as **nothing**: that
+  is exactly the `Z` release, and it is why the third bucket is not empty.
+- **Nothing landed, so there is no pair to report.** The tree is `b289504` untouched (`git status --short`
+  empty), and the proof is the tree's own: the reference pair `6e657033…` / 10 801 967 and `e0ca9570…` /
+  10 801 251 reproduces *from the census build* with every counter in it, the gate's `G1` row reads **10 801 967
+  digest words, identical**, the synthetic is `g1-a` 95 999 words `58fcdddf…`, and `scripts/validate.sh` at
+  `runs/20261115T111934Z` reads **31 ok / 1 FAIL** with G8 red at its own figure — **16.89 ms** a frame of
+  10.00, n 724, 63 592.7 pops a frame, `alloc_mb_per_frame` 10.42, `gc_ms_per_frame` 0.17, i.e. the same
+  allocation line §17 left.
+- **One gate run was thrown away, and why is worth a line for the next session.** A first re-run this session
+  (`runs/20261115T111446Z`) read **18.54 ms** while two local `llama-server` processes were loading — load 1.5,
+  which is this skill's own discard threshold — and the second, on the same tree, read 16.89. G8 on this host
+  can read 16.6–18.5 without the machine changing; never read a single gate figure as a trend.
