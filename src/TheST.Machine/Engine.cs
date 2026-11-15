@@ -128,31 +128,13 @@ public sealed partial class Engine
 
     ValueLog NewLog(Channel channel)
     {
-        var log = new ValueLog(channel, CapacityFor(channel)) { Verifying = true };
+        var log = new ValueLog(channel) { Verifying = true };
         _allLogs.Add(log);
         return log;
     }
 
-    /// <summary>
-    /// `DE` keeps a window of its own, and the reason is a reader the watermark never saw: Timers and
-    /// events reads `DE` by a *cursor*, advanced only when that chip is awake, and a stopped timer lets
-    /// the cursor sit for frames while the beam keeps writing 400 records a frame. It is not a
-    /// subscriber on `DE`, so no `from` bounded it — under retention the cadence happened to keep the
-    /// records it needed, which is why nothing ever noticed (assertion 8 is what noticed: #43).
-    ///
-    /// 4 096 is twice the largest need measured on the 300-frame boot (more than 1 024, no more than
-    /// 2 048) — a function of how long a stopped timer sleeps, so the assertion, not the number, is the
-    /// guarantee. `<c>crossings.md</c>` catalogues Timers as `DE`'s second subscriber; it polls instead,
-    /// and making it subscribe would return `DE` to the default window.
-    /// </summary>
-    internal const int DeCapacity = 4_096;
-
-    static int CapacityFor(Channel channel) =>
-        channel.Kind == ChannelKind.Wire && channel.Id == Wires.De.Id ? DeCapacity : ValueLog.DefaultCapacity;
-
     /// <summary>The windows the machine runs on, for <c>run.state</c>.</summary>
-    public static string WindowSummary() =>
-        $"default {ValueLog.DefaultCapacity}, DE {DeCapacity}";
+    public static string WindowSummary() => $"default {ValueLog.DefaultCapacity}";
 
     /// <summary>
     /// Grows a channel table so that <paramref name="id"/> is addressable. Runs at most a handful of
@@ -434,6 +416,21 @@ public sealed partial class Engine
     /// dropped as stale. This is the shape that lets a chip with a counter also answer a wire.
     /// </summary>
     internal void WaitForEither(Chip chip, long instant, Channel channel, long afterSeq, Action continuation)
+        => WaitForEither(chip, instant, channel, afterSeq, default, long.MinValue, continuation);
+
+    /// <summary>
+    /// The same awaiter with a **second** event input (a <see cref="Channel"/> id of 0 is the absent
+    /// one): three wakes, one continuation (#50 — Timers and events meets the machine on <c>MFPCS</c>
+    /// and on <c>DE</c>, and a polled cursor on either one is a silent loss waiting for a quiet chip).
+    /// </summary>
+    internal void WaitForEither(
+        Chip chip,
+        long instant,
+        Channel channel,
+        long afterSeq,
+        Channel second,
+        long secondSeq,
+        Action continuation)
     {
         if (instant <= MachineTime)
         {
@@ -456,17 +453,32 @@ public sealed partial class Engine
             HoldDate(chip, instant, continuation);
         }
 
+        AddSubscriber(chip, channel, afterSeq, continuation);
+
+        if (second.Id != 0)
+        {
+            AddSubscriber(chip, second, secondSeq, continuation);
+        }
+    }
+
+    /// <summary>
+    /// One more armed wake on a wire, under a continuation that is already armed: the first to fire owns
+    /// the chip and every other arm of the same token goes stale (<see cref="Chip.Armed"/> counts them
+    /// all, which is assertion 2's cheap side).
+    /// </summary>
+    void AddSubscriber(Chip chip, Channel channel, long afterSeq, Action continuation)
+    {
         long token = chip.Arm();
         _freshWakes[chip] = _freshWakes.GetValueOrDefault(chip) + 1;
         Subscriptions++;
 
         List<Subscriber> subscribers = SubscribersOf(channel).Pending;
 
-        // A chip holds one pending subscription per (wire, cursor): re-arming the same afterSeq — what
-        // a chip woken by something else does on every resume — replaces the entry instead of adding a
-        // second one. Left to append, a chip woken n times between two records of a wire leaves n dead
-        // entries behind, and the next record tears them out one RemoveAt and one stale wake at a time
-        // (#50: 16 dead entries a DE record, 581 a frame on MFPCS alone, 23 680 stale wakes a frame).
+        // A chip holds at most one pending subscription per (wire, cursor): re-arming the same
+        // afterSeq — what a chip woken by something else does on every resume — replaces the entry
+        // instead of appending a second one. Left to append, a chip woken n times between two records
+        // of a wire leaves n dead entries behind, and the next record tears them out one RemoveAt and
+        // one stale wake at a time (#50: 16 dead `DE` entries a record, 6 400 a frame, on 400 records).
         for (int index = 0; index < subscribers.Count; index++)
         {
             if (subscribers[index].AfterSeq == afterSeq && ReferenceEquals(subscribers[index].Chip, chip))

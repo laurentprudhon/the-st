@@ -5,9 +5,9 @@ namespace TheST.Machine.Chips;
 /// 2.4576 MHz crystal, the event selector over sixteen sources, and one <c>IRQ</c> line into the System
 /// Control Unit.
 ///
-/// Its wakes are the counters' expiries (dates it computes itself) and the register selects it answers
-/// (a subscription on <c>MFPCS</c>); the events its sources carry arrive as records and are counted as
-/// they land.
+/// Its wakes are the counters' expiries (dates it computes itself), the register selects it answers (a
+/// subscription on <c>MFPCS</c>) and its event inputs that have a driver — <c>DE</c>, which Timer B
+/// counts. An input is an arm, never a cursor it advances itself (#50).
 /// </summary>
 public sealed class TimersAndEvents : Chip
 {
@@ -96,20 +96,36 @@ public sealed class TimersAndEvents : Chip
 
             CountEventRecords();
 
-            await WaitFor(Math.Min(_cExpiry, _dExpiry), Wires.MfpSelect, _selectSeq);
+            await WaitFor(Math.Min(_cExpiry, _dExpiry), Wires.MfpSelect, _selectSeq, Wires.De, _deSeq);
         }
     }
 
-    // Both cursors are sequence numbers, never indices: retention discards records from the oldest
-    // end, so an index saved across a suspension names a different record — or no record at all —
-    // once anything was trimmed in between (it threw IndexOutOfRange on the DE log).
+    // Both cursors are sequence numbers, never indices: a ring discards records from the oldest end,
+    // so an index saved across a suspension names a different record — or no record at all — once the
+    // head has moved (it threw IndexOutOfRange on the DE log).
     long _deSeq = long.MinValue;
     long _sintSeq = long.MinValue;
 
     /// <summary>
-    /// Events that arrive as records are counted from the logs at each of this chip's own wakes: a
-    /// counter's expiry is a date the chip computed, so the chip is awake often enough to count them
-    /// without a second subscription (ADR 0008 §5 — a wake only where the chip meets another chip).
+    /// Counts the event records the chip woke for: <c>DE</c> (Timer B's input, <c>TBI</c>) and
+    /// <c>SINT</c> (source 15).
+    ///
+    /// <para>
+    /// <c>DE</c> is an **arm** of this chip's wake (<see cref="Run"/>), because the catalogue says so
+    /// (<c>crossings.md</c> §2, second subscriber, class 1) and because the alternative lost counts
+    /// silently: read as a cursor advanced only when the chip is awake, a stopped timer let it sit for
+    /// frames while the beam kept writing 400 <c>DE</c> records, and the scan then restarted at the
+    /// window's oldest record instead of answering "nothing" (#43's assertion 8 found it, #50 removed
+    /// the need for the deeper window it had been given). The cursor stays, because it is what makes
+    /// the count once per assert edge: a wake can find the record that fired it already counted.
+    /// </para>
+    ///
+    /// <para>
+    /// <c>SINT</c> is still read this way, and legitimately: Sound is a stub, so the wire has no
+    /// driver and no records, and arming it would register a subscription on every resume to wake
+    /// nothing. It becomes an arm — the same three-line change — the day Sound drives frame ends, and
+    /// until then assertion 8 is what says if a cursor fell behind.
+    /// </para>
     /// </summary>
     void CountEventRecords()
     {

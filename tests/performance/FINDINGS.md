@@ -452,3 +452,59 @@ byte-identical**: `run.digest` `93c4dbd4…` / 10 801 967 words, `run.stream` `e
 on the 300-frame Debug boot, with `queue_pops` (25 589 670) and `subscriptions` (23 226 950) unchanged
 too — a change that removes no record and no arrival number, exactly the shape #39's split was made to
 express.
+
+## 13. Timers subscribes to `DE` (#50): 0.56 ms for the arm, 2.15 ms for the ticket
+
+#50 asked one question — what does it cost to make Timers and events **subscribe** to `DE` instead of
+polling it, as `crossings.md` §2 has always said it does — and the pairs answered a second one first:
+**the price was never the 400 `DE` records a frame on the fire path; it was the subscriptions the poll
+had been hiding** (§12). With §12's fix in place the subscription is cheap, and the ticket nets out a
+win:
+
+| variant | what it is | mean frame |
+|---|---|---|
+| **B** | `3eb1231` + §12's fix — Timers polls `DE`, `DE` holds 4 096 records | 18.6–19.2 ms |
+| **C** | B + Timers arms `DE` + `Engine.DeCapacity` deleted (`DE` at 256) | 19.0–19.7 |
+
+| pair | mean delta | all pairs | alloc_mb_per_frame |
+|---|---|---|---|
+| B → C: the `DE` arm + the window | **0.56 ms** (against) | 0.20 0.57 0.58 0.89 (load 0.67–0.94) | 11.12 → 11.47 |
+| A → C: the ticket as it lands | **2.16 ms faster** | 2.31 1.79 2.32 2.13 2.29 2.11 | 11.12 → 11.47 |
+
+The `B → C` figure was taken twice: **0.56 ms** over four quiet pairs (load 0.67–0.94) and 0.83 ms over
+six at load 0.85–1.94 — above the 1.5 floor, so quoted only as agreement. **The subscription is honestly
+sub-millisecond and against in ten of ten pairs.** It is what a resume costs: 400 `DE` records a frame
+become 400 resumes, and §3 puts a chip resume's own work at 1.0–2.6 µs — 0.4–1.0 ms. #44's projection
+for a wake that starts no work (96 ns a pop, so ~0.04 ms for 400) is off by more than an order of
+magnitude; that arithmetic has now failed to transfer twice (#40 was the first).
+
+**The stream moves, and only in the chip's own anchors**: `run.stream` `e52ed136…` → `e0ca9570…`,
+`run.digest` `93c4dbd4…` → `6e657033…`, same word counts, **628 words of 10 801 251 differ** (0.006 %;
+#44 moved 711). All 628 are records of Timers and events' own internal logs:
+
+- **601** (`timer D`, value `0x0002`) carry the *same instant* but a different `seq` (+0..+5) — the
+  record lands in a different batch of the same instant, which is what a fresher chip clock does to an
+  anchor;
+- **27** (19 `register`, 8 `acknowledge`) move *forward* by 16…109 680 ticks, all in the same
+  direction, because an internal anchor is stamped with the chip's clock (ADR 0008 §6) and that clock
+  is now fresh instead of stale by up to 3.84 frames (§10's `MFPCS` lag). The anchor starts telling the
+  truth about when the chip was last awake.
+
+Every counter of the machine is identical: `instructions` 4 484 320, `bus_cycles` 10 300 388, groups
+1 198 480, `DE` records 119 848 (400/frame), **Timer B counts 59 924 — 200/frame, G5's row, and the
+release edge it does not count now wakes the chip 200 times a frame and is still not counted**, `irq`
+1 167, `timer_c` 1 167, `frames_to_desktop` unchanged. Assertion 8 silent at `DE` = 256 on the
+300-frame boot and on the gate's 800-frame boot — the assertion that failed at 256 before
+(`DE: a cursor at seq 380464 is below the window (oldest held 396478)`). `window=default 256` now
+describes every one of the 22 logs and `records_retained` fell 8 722 → 4 882: **no log has a window of
+its own any more.**
+
+The gate: **31 ok, 1 FAIL (G8 21.20 ms)**, G5 and G6 green, G3 silent from reset to the desktop.
+
+**The rule this establishes, for every chip still a stub.** A wire a chip reads for *events* must be an
+arm of its wake; a log may be *sampled* only for "what does it hold now" (a level read), never for a
+backlog. This chip has four more event inputs: `SINT` (still a cursor, silent only because Sound is a
+stub), `FDINT`/`DINT` (Disk), `BINT` (Blitter), and `GPI4` (Controllers — a `GPIP` level a read
+answers, not a cursor at all). `WaitFor` takes one date and **two** wires, so `SINT` joins as the same
+six lines when Sound drives a frame end. Until then assertion 8 is what says a cursor fell behind,
+which is why it was worth keeping.

@@ -58,6 +58,16 @@ sixteen of its sources, over the one `IRQ` line (`U203.32`).
 | keyboard ACIA event | `N6850` → `GPI4` | per key or mouse event | sets source 6's pending bit |
 | register writes and reads | `MFPCS` | per access | writes are one subscription each; reads answer the cycle |
 
+**An input with a driver is an arm of this chip's wake, never a cursor it advances itself.** `DE` is
+armed (`Run`: `WaitFor(min(cExpiry, dExpiry), MFPCS, select, DE, deSeq)`), because a cursor only moves
+when the chip is awake: a quiet chip then falls arbitrarily far behind a log that keeps being written,
+and the scan restarts at the window's oldest record instead of answering "nothing" — a silent loss no
+digest can see. #43's assertion 8 found it on `DE` (`a cursor at seq 380464 is below the window`) and
+#50 removed the need for the 4 096-record window it had been given. `SINT`, `FDINT`/`DINT` and `BINT`
+are still read by cursor because Sound, Disk and the Blitter are stubs and those wires carry no
+records; each becomes the same arm as its driver lands. `GPI4` is not a cursor at all — it is a `GPIP`
+level that a register read answers.
+
 **Timers and events declares one `nextDeadline`** (ADR 0008 §5): the minimum over the counters that can assert a
 pending bit — **A, B and C**. Timer D is arithmetic (Q1): its only purpose is the USART baud clock, the
 USART is a stub, so its expiry nothing can observe. The assertion is unchanged: *if `nextDeadline` is

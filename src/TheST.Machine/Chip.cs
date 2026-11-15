@@ -149,10 +149,29 @@ public abstract class Chip
     /// shape a chip with a counter and an input needs, and the reason the engine arms several wakes.
     /// </summary>
     protected WaitForAwaiter WaitFor(long instant, Channel channel, long afterSeq = long.MinValue)
-        => new(this, channel, instant, afterSeq);
+        => new(this, channel, instant, afterSeq, default, long.MinValue);
+
+    /// <summary>
+    /// <c>await WaitFor(t, wire, afterSeq, second, secondSeq)</c> — the same, plus a **second** event
+    /// input: whichever of the three fires first resumes the chip (#50).
+    ///
+    /// <para>
+    /// This is the shape every chip with more than one event input needs, and the reason a chip may not
+    /// read an input with a cursor it advances itself: a cursor only moves when its owner is awake, so a
+    /// quiet chip falls arbitrarily far behind a log that keeps being written, and answers "nothing"
+    /// where the wire carried something. A subscription is woken by the record, so its lag is the
+    /// instant it is resuming in — which is why <c>ValueLog.DefaultCapacity</c> is enough for every log.
+    /// </para>
+    /// </summary>
+    protected WaitForAwaiter WaitFor(long instant, Channel channel, long afterSeq, Channel second, long secondSeq)
+        => new(this, channel, instant, afterSeq, second, secondSeq);
 }
 
-/// <summary>The awaiter of "whichever comes first": a wire record or a date the chip computed.</summary>
+/// <summary>
+/// The awaiter of "whichever comes first": a wire record, a second wire's record, or a date the chip
+/// computed. A <see cref="Channel"/> whose id is 0 is the absent second input — id 0 belongs to the
+/// synthetic fixture's wire, so no real wire can ever answer to it.
+/// </summary>
 public readonly struct WaitForAwaiter : System.Runtime.CompilerServices.ICriticalNotifyCompletion
 {
     readonly Chip _chip;
@@ -161,23 +180,32 @@ public readonly struct WaitForAwaiter : System.Runtime.CompilerServices.ICritica
 
     readonly long _afterSeq;
 
-    internal WaitForAwaiter(Chip chip, Channel channel, long instant, long afterSeq)
+    readonly Channel _second;
+    readonly long _secondSeq;
+
+    internal WaitForAwaiter(Chip chip, Channel channel, long instant, long afterSeq, Channel second, long secondSeq)
     {
         _chip = chip;
         _channel = channel;
         _instant = instant;
         _afterSeq = afterSeq;
+        _second = second;
+        _secondSeq = secondSeq;
     }
 
     public WaitForAwaiter GetAwaiter() => this;
 
-    public bool IsCompleted => _instant <= _chip.Clock || _chip.Engine.Log(_channel).HasRecordAfter(_afterSeq);
+    public bool IsCompleted =>
+        _instant <= _chip.Clock
+        || _chip.Engine.Log(_channel).HasRecordAfter(_afterSeq)
+        || (_second.Id != 0 && _chip.Engine.Log(_second).HasRecordAfter(_secondSeq));
 
     public void GetResult()
     {
     }
 
-    public void OnCompleted(Action continuation) => _chip.Engine.WaitForEither(_chip, _instant, _channel, _afterSeq, continuation);
+    public void OnCompleted(Action continuation) =>
+        _chip.Engine.WaitForEither(_chip, _instant, _channel, _afterSeq, _second, _secondSeq, continuation);
 
     public void UnsafeOnCompleted(Action continuation) => OnCompleted(continuation);
 }
