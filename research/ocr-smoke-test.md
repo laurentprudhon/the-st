@@ -9,6 +9,8 @@ before any pipeline code exists, and measure what one magazine page actually cos
 |---|---|---|
 | GPU | **NVIDIA GeForce RTX 3070 Ti Laptop, 8191 MiB (7097 free)** | `nvidia-smi`, `llama-server --list-devices` → `CUDA0` |
 | CUDA driver libs | `/usr/lib/wsl/lib/libcuda.so.1` present | `ldconfig -p` |
+| driver / CUDA | **NVIDIA 620.70.03, KMD 621.14, CUDA UMD 13.5** | `nvidia-smi` header |
+| build choice | the **cuda-12.8** llama.cpp build runs fine on a 13.5 UMD driver (backward compatible) | it loaded and ran all three models |
 | llama.cpp | **v1.0.0-dev, build 12409** (nightly `b12409`, ubuntu-cuda-12.8-x64) | `llama-server --version` |
 | models | OvisOCR3 Q4_K_M 505 MB + mmproj Q8 116 MB · d1-2B Q4_K_M 1.1 GB + mmproj Q8 203 MB · LFM3-VL-2B Q4_K_M 1.1 GB + mmproj Q8 203 MB · LightOnOCR-3-0.8B Q4_K_M 505 MB + mmproj Q8 116 MB | `du -h` |
 | test page | `atari-st-format-issue-049` page 60 (printed p31, "ST ANSWERS HELP!") | IA per-page URL, 1200×1560 |
