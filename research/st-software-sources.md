@@ -2,6 +2,41 @@
 
 STATUS: complete (v1.1) — written 2026-11-15 after ~45 min of probing. Sections marked `PARTIAL` were cut short by the time budget; see *Gaps and next probes*.
 
+> ### Correction — 2026-11-15, the twenty-title download sweep (ticket #57)
+>
+> A second pass asked what each source *delivers* rather than what it *answers*, over twenty titles from
+> six countries, searched under every name they shipped under. Findings are canonical in
+> [`research/st-download-sources.md`](./st-download-sources.md); the corrections to **this** note are:
+>
+> 1. **§1 Atari Mania is no longer "zips of `.stx`, ~835 KB".** Its dumps are multi-format bundles —
+>    observed 533 KB (Populous) to **142,194,769 B** (F-19: HFE + Pasti + RAW + SCP in one zip) — and its
+>    game pages moved to `/games/atari-st-games-<slug>-<id>` (0 old-scheme URLs remain in 44,832 sitemap
+>    `<loc>`s, counted 2026-11-15). Pages now carry `Dump format` and `Number of Disks` fields, and the
+>    dump filename is **arbitrary** (`navy_moves.zip`, `f-19_stealth_fighter_microprose_software_uk_1990.zip`),
+>    so the slug-guess route described here silently 404s (the soft-404 is a 1,259-byte HTML body, HTTP 404).
+> 2. **§2 Atari Legend does serve binaries** — menu-disk zips at `/storage/zips/menus/<id>.zip` (verified
+>    200, 786,548 B) plus a browser emulator; it still serves no retail original.
+> 3. **The IA layer is four collections, not two.** Beside `ataridiskimages` and `tosec-main`:
+>    `softwarelibrary_atari_st_games` (884 playable `.st` items, SHA1 per file),
+>    `atari-st-roms_202405` (420 `.ipf`), `launchbox-atari-st` (2,716 TOSEC-named zips),
+>    `AtariSTRomsetByGhostware2018` (220 `.stx` + 219 `.st`).
+> 4. **PlanetEmu (only a link in this note's community list) is a first-class host**: one URL category per
+>    container format, 14,001 game entries (11,872 `.st`, 1,444 `.stx`, 413 `.ipf`, 178 `.scp`, 4 `.hfe`),
+>    and the only ST host publishing **CRC32 per file**. There is **no `.msa` games category** anywhere.
+> 5. **New hosts this note does not list**: `ataristpublicfloppydb.sidecartridge.com` (3,409 rows, CSV per
+>    letter), `exxosforum.co.uk` ST Format/Pompey indices (verified), `atari.8bitchip.info`,
+>    `computeremuzone.com/atari/`, `gamesdatabase.org` (manual PDFs), `16bit.pl`, `oldgamesdownload.com`,
+>    `emuparadise.me`, `downloads.atari-home.de`, `st-news.com`, `page6.org`, `atarijookie`'s menu-image
+>    downloader. `myabandonware.com` was probed and **excluded** (no ST binaries; `robots.txt` disallows
+>    `/download/`).
+> 6. **Five of twenty sample titles have no ST release** (Die Siedler, Ambermoon, Battle Isle, Game Over
+>    1987, Dylan Dog), and `archive.org/details/battle-isle` / `Dylan_Dog_1992_Simulmondo` are Amiga and C64
+>    items respectively — title matching on IA must read the `collection` field, never the title string.
+>
+> Everything below stands as written except where the six points above contradict it; the figures in this
+> note keep their original labels and were not rewritten.
+
+
 A survey of what exists on the web for Atari ST/STE software: disk images (`.st`, `.msa`, `.stx`, `.ipf`, `.scp`, `.hfe`, `.stt`, `.dim`, `.raw`), manuals, box and disk-label artwork, and the metadata attached to them. This is an inventory of **sources**, not a catalogue of titles.
 
 Evidence labels used throughout:
