@@ -1,142 +1,202 @@
-# The corpus schema — what an entry, an article and a review are
+# The software catalogue — title, release, disk, rendition, file
 
-STATUS: **proposal (v0)** — 2026-11-15. Written to make the ruled parts concrete before the extraction tool is
-built. Each section says whether it is **ruled** (owner, quoted in `/opt/data/handoffs/the-st-52-schema-rulings.md`)
-or **proposed** (mine, and open to being overturned).
+STATUS: **design (v1)** — 2026-11-15, ticket #52. Every rule below is the owner's, quoted in
+`/opt/data/handoffs/the-st-52-schema-rulings.md`; the deductions are marked as deductions. The magazine half of
+the corpus lives in `design/corpus-magazines.md`.
 
-This is the document the harvester (#53), the artefact store (#60) and the review extractor all read. It is a
+This is the document the harvester (#53), the artefact store (#60) and the test pipeline (#61) read. It is a
 design note, not a database migration: no table exists yet.
 
-## 0. The two layers, and why they are separate
+## 0. The two layers
 
-| layer | lives in | holds | ruled? |
+| layer | lives in | holds |
+|---|---|---|
+| **catalogue** | this repo (`the-st`) | facts, hashes, provenance, our summaries — **no binaries** |
+| **artefact store** | a separate private repo, public later (#60) | formatted text, page crops, box/disk/manual/leaflet scans and their OCR |
+
+The catalogue never holds a scan; the store never holds a fact the catalogue does not also point at.
+
+## 1. The five levels
+
+**Ruled** (owner: "*five levels*"). Each level exists because an observed artefact forces it, not for tidiness.
+
+| level | is | key | forced by (counted) |
 |---|---|---|---|
-| **catalogue** | this repo (`the-st`) | facts, hashes, provenance, our summaries | ruled (metadata-first, no binaries) |
-| **artefact store** | a separate private repo, public later | formatted article text, page crops, box/disk/manual/leaflet scans + their OCR | ruled (#60) |
+| `title` | the work: "Populous" | slug | a compilation disk carries several titles, so the work must exist apart from any disk |
+| `release` | a publication: publisher, year, **language**, region, kind, **name of its own**, `disk_count` | slug | Captain Blood's French retail dump is 33.7 MB against 543 KB for the cracked `.st`; *L'Arche du Capitaine Blood* is a different publication name |
+| `disk` | one physical floppy | (release, ordinal) | `Outlands_(A).stx` + `Outlands_(B).stx`; Turrican's zip carries three |
+| `rendition` | one byte-exact encoding of one disk in one container, with its modifications | (disk, container, sha256) | F-19's single zip carries **four renditions of three disks** |
+| `file` | one fetchable URL | (host, path) | Turrican's Atarimania zip holds **171 entries**, of which 166 are per-track `.hxcstream` sidecars |
 
-The catalogue never holds a scan; the store never holds a fact the catalogue does not also hold a pointer to.
-That asymmetry is what makes the store replaceable and the catalogue durable.
-
-## 1. The file model (ruled in shape, names proposed)
-
-Five levels. **Provenance lives on the file; identity lives on the hashed image.**
+and one join, **`rendition_titles (rendition_id, title_id, role, part, slot)`** — the content relation, many-to-many.
+There is deliberately **no `title_id` on `release`**: the only path from a release to a title goes through the
+rendition, so a single-game release and a menu disk take the same route.
 
 ```
-title ──< release ──< disk ──< rendition >── file (many-to-many: a mirror is a second file)
-                    │
-                    └──< review >── article ──(page span)──> artefact (store ref)
+release ──< disk ──< rendition >── file        (file↔rendition M:N: a mirror, a sidecar, a bundle part)
+                        │
+                        └──< rendition_titles >── title    (M:N: compilations, coverdisks, multi-disk games)
 ```
 
-- **title** — the work ("Outlands"). Key: slug. A title may have **zero releases on the ST**: five of the
-  twenty sampled titles were in that state (Die Siedler, Ambermoon, Battle Isle, Game Over 1987, Dylan Dog),
-  so "exists as a name, never shipped here" is a first-class state, not an absence.
-- **release** — an edition: (title, publisher, year, region, kind ∈ original / budget / cracked / compilation
-  member / localised). Key: the TOSEC-style tuple → slug. **Disk count is a release property**, because the
-  same game is 2 disks in 1988 and 1 disk in the 1992 Hit Squad re-release (Navy Moves), and 2-disk retail vs
-  1-disk French repack (Maniac Mansion).
-- **disk** — one physical floppy. Key: (release, ordinal). A disk that appears in several releases is one disk
-  if its bytes match, joined by hash.
-- **rendition** — one byte-exact encoding of one disk in one container (`.stx`, `.scp`, `.ipf`, `.hfe`, `.st`,
-  `.msa`). Key: (disk, container) + `image_hash` once fetched. **Protection state is a rendition property**:
-  a Pasti `.stx` preserves it, a `[cr …]` `.st` removes it, and a title with no preserving rendition anywhere
-  (Giana Sisters) is `unknown`, never `removed`.
-- **file** — a fetchable URL: source, fetch date, HTTP status, size, the source's advertised strings, and
-  whatever hash the host publishes. A **mirror** is a second file for the same rendition; a **bundle** is one
-  file carrying several (Atarimania's 142 MB zips: 4 renditions + 166 `.hxcstream` sidecars).
+## 2. Identity — three different rules, and they must not be confused
 
-**Proposed keys, not ruled**: `title:<slug>`, `release:<title-slug>/<publisher-slug>-<year>-<region>-<kind>`,
-`disk:<release-key>#<ordinal>`, `rendition:<disk-key>@<container>`, `file:<source>/<path-hash>`. The rule they
-obey: **a key is derived from what the source publishes, never from a fetched byte**, so an entry exists before
-any file is ever downloaded.
+**A title exists only if a file exists.** Ruled: *"there should not be titles without files in the catalog"*. The
+catalogue is a **presence** catalogue, not a bibliography: absence is a non-row, never a state. The five sampled
+titles with no ST release (Die Siedler, Ambermoon, Battle Isle, Game Over 1987, Dylan Dog) are simply not in it,
+and "15.2 % of entries are unopenable" is a fact *about the sources*, not a gap in the catalogue.
 
-## 2. Article (proposed)
+**A release is identified by its own name**, never derived from its content — because a compilation cannot be
+named after one of its games, and a translated edition has a different name for the same work.
 
-| field | type | note |
+**A rendition is identified by the SHA-256 of its container bytes.** Ruled. Three consequences:
+
+- two hosts serving the byte-identical `.st` are **one rendition with two `file` rows** — the dedupe that matters;
+- a `.st` and a `.stx` of one disk are **always two renditions**, and that is honest: they are different dumps;
+- therefore **a `disk` is not identified by any hash.** It is a *claim* — "this rendition is of that disk" —
+  carrying its own evidence tier: `stated` when the source labels it (PlanetEmu's `Vroom (1991)(Lankhor)`,
+  an Atarimania page), `inferred` when a later comparison argues for it. An unmatched rendition is allowed and is
+  its own disk until something says otherwise.
+
+The corollary that saves a future mistake: **renditions of one disk are expected to differ in bytes** — that is
+what a crack *is*. So sector-level equality cannot decide the disk match either. The disk comes from the
+source's labelling or from context, never from comparing data.
+
+## 3. Releases carry the language
+
+Ruled: *"release must carry the language for example"*. Language is a property of the **publication**, never of
+the title — so there are never two `title` rows for one work, and "every language version of Populous" is a
+join. The translated name lives on `release.name`, with the work's canonical name on `title.name` and the
+alternates in `title.name_alt[]` for search.
+
+Refinement for the schema, not yet needed: a release shipping two languages on one disk (some games ask at boot)
+needs `languages[]` rather than `language`.
+
+**`release.disk_count` is `stated`, and it is what makes completeness expressible.** The number of `disk` rows is
+*counted*; when counted < stated the release is incomplete, and that is a query rather than a flag. Deriving the
+count from the files cannot distinguish "a 2-disk release, both held" from "a 3-disk release, one missing". When
+nobody states the count it is NULL and completeness is honestly unknowable.
+
+```sql
+SELECT name, disk_count, COUNT(disk_id) FROM release
+GROUP BY release_id HAVING COUNT(disk_id) < disk_count;   -- "we hold 2 of this release's 3 disks"
+```
+
+## 4. Content — compilations, coverdisks, multi-disk games
+
+Ruled: *"we also need to model pompey pirates compilations. a rendition can carry several titles"*. The content
+relation is M:N with a `role`:
+
+| `role` | means | `part` / `slot` |
 |---|---|---|
-| `article_id` | key | `article:<magazine-slug>/<issue>/<first-page>-<last-page>` |
-| `magazine` | ref | + `issue` (as printed), `issue_date` |
-| `page_span` | (first, last) | **printed folios**, not PDF page indices — the leaf→folio map is imperfect (only 25/55 IA items had one) |
-| `kind` | enum | `review` · `preview` · `hints` · `cheats` · `feature` · `news` · `advert` · `letter` |
-| `title_as_printed` | string | as it appears on the page |
-| `summary_en` | text | **ours**, 1–3 sentences |
-| `artefact_refs` | list | store ids: page crops, formatted text |
-| `provenance` | list | scan source, DPI, provenance class (`own-scan` / `archived-scan-degraded` / `third-party-ocr-fallback`), OCR engine+version+date, confidence |
+| `only` | the whole game is this rendition (a normal single-disk release) | — |
+| `part` | the game spans several renditions: `part` = 1..N | the ordinal |
+| `menu` | the game is one entry of a compilation or coverdisk | `slot` as the menu shows it |
 
-## 3. Review (ruled as a separate entity)
+A compilation is **a release whose `kind` is `compilation` and whose renditions carry several titles**. There is
+no compilation table, no `compilation_of` column and no `also_on` field — a game on Pompey Pirates 42 is a second
+content row pointing at the *same* `title`, and the menu-disk copy needs no release of its own: the compilation's
+release is its publication event. A magazine coverdisk is the same shape again, which matters because the
+menu-disk CDs are already a real slice of what the hosts serve.
 
-A review **is not** a field on a title or a release; it is its own record, because reviews are the filter axis:
+A multi-disk *compilation* (different games on each disk) is `role=menu` with slots per disk; a game spanning two
+menu disks is `role=part` on both. Neither is a new structure.
 
-| field | type | note |
+### 4.1 Two `sides` columns, and why
+
+`disk.sides` is the **physical** disk (1 or 2). `rendition.sides` is what the **image** covers (`both` / `0` /
+`1`). So a 360 KB file is a side-0 image of a 2-sided disk — a partial rendition, not a different disk, and "we
+have side A only" stays expressible.
+
+## 5. Modifications
+
+Ruled: *"cheats/trainers/copy protection removal"*, with "cheat" fixed as a **built-in cheat menu** (the
+published poke is out of scope; if it ever enters, pokes attach to the title, per the rule *in the bytes →
+rendition; about the game → title*).
+
+Placement, and the reason it is not on the release:
+
+- `rendition.modifications[]` — changes to the **whole image**: a menu/loader patch, disk-level protection removal;
+- `rendition_titles.modifications[]` — changes to **one game on that disk**: its trainer, cheat menu, its
+  protection removal.
+
+**The rule: a modification is recorded where the bytes it changed live — whole disk → rendition, one game → the
+content entry.** Two ordinary corpus shapes defeat the release level: one release held twice, pristine (an
+original Pasti dump) and trained (a cracked `.st`), needs the pristine copy to say "none"; and one menu disk
+routinely repackages games cracked by *different* groups, so one author per disk — or per release — is wrong.
+
+`modifications[] = {kind: trainer | cheat-menu | protection-removed | patch, detail, author}` — `author` being
+the cracking group, which is why **a crack never needs to become a release of its own**.
+
+## 6. Files, claims and verdicts
+
+A `file` is one fetchable URL: `host`, `path`, `url`, `http_status`, `size`, `sha256`, `fetched_at`, the
+`advertised` strings the source publishes, and a provenance tier.
+
+**Both verdicts are properties of the file** (ruled), because what they test is a *claim* — and the claim is
+per-listing, not per-bytes: two files of one rendition can be advertised as different titles on different hosts.
+
+| field | scope | values |
 |---|---|---|
-| `review_id` | key | `review:<article_id>` — a review always has an article (the page it lives on) |
-| `release_reviewed` | ref, nullable | the release the magazine actually reviewed (ST or Amiga — Tilt scored **each machine separately in one entry**) |
-| `version_reviewed` | string, nullable | as printed ("v1.04", "european version") |
-| `scores` | list of `aspect_score` | **never a single number** |
-| `verdict_quote` | ≤ 200 chars | the magazine's own words, short; longer prose stays in the store |
-| `summary_en` | text | ours |
-| `reviewer` | string, nullable | |
-| `is_scored` | bool | ST Magazine printed **no scores at all** — presence must be explicit |
+| `runs` | the **file** | `plays` · `boots` · `disk-image-corrupted` · `disk-protection-emulation-failure` · `machine-emulation-failure` · `unknown` — total, exactly one per file |
+| `is-what-it-claims` | the **file** | `agrees` / `disagrees` / `undetermined` on title, version, disk count and language, **with the compared strings recorded** |
+| `run-status` | the **run**, never the file | `ok` · `harness-failure` (cache, path, decoder, screenshot) |
 
-### 3.1 `aspect_score`
+`runs` is an enum rather than a boolean because it names **whose** fault: `disk-image-corrupted` is a fact about
+the dump (a catalogue note), `disk-protection-emulation-failure` is a gap in our emulator, and
+`machine-emulation-failure` is a bug in the machine model — only the last two are emulator work items.
 
+**`is-what-it-claims` is filled in two passes** (ruled):
+
+1. **Inspection of the container content** — cheap, deterministic, runs on every file: the boot sector's
+   geometry, the FAT's directory entries, the volume label, the strings the label implies. This is what fills
+   the column for the whole corpus.
+2. **Escalation for some titles** — run it in the emulator and have a VLM read the title screen. Expensive; used
+   to adjudicate what pass 1 flagged, and for trained copies whose filenames are unchanged.
+
+A value is written only with its evidence; `undetermined` beats a guess. `run-status = harness-failure` never
+touches the file's verdict, so our own tooling bugs cannot inflate "how much of the corpus fails", and a wrong
+title cannot masquerade as an emulator defect.
+
+## 7. Evidence tiers
+
+Every figure and every claim carries one: **`counted`** (fetched and parsed, method stated), **`stated`** (a source
+says so, quoted), **`derived`** (inference from counted shapes), **`unverified`** (believed, not observed). This
+applies to structure too: `release.disk_count` is stated while the disk rows are counted, and `disk` identity is
+a stated or inferred claim while the rendition hash is counted.
+
+## 8. The queries this model must answer
+
+```sql
+-- every language version of a work
+title → rendition_titles → rendition → disk → release, select release.language
+
+-- how many renditions v1's emulator can actually read (the disk-path floor, #29)
+SELECT container, COUNT(*) FROM rendition
+WHERE container IN ('st','msa','dim','stx')  -- vs 'ipf','scp','hfe' held but deferred
+GROUP BY container;
+
+-- which versions of a game are trained, and by whom
+rendition_titles WHERE title_id = ? → modifications[].author
+
+-- what is missing from a release
+release.disk_count vs COUNT(disk)
+
+-- the corpus's health, by fault domain
+SELECT runs, COUNT(*) FROM file GROUP BY runs;      -- excludes harness failures by construction
 ```
-{ aspect: enum,  value: number,  scale_min: number, scale_max: number, direction: "higher-better"|"lower-better",
-  raw: string }
-```
 
-Why all four fields and not one `score` column, from the counted corpus:
+## 9. What this forbids
 
-| magazine | raw | trap if flattened |
-|---|---|---|
-| ST Format, Joystick, ST Action | `87%` | none |
-| **ACE** | `625/1000` | a `%` reader records 625 % |
-| **Tilt** (from #113) | `%`; before #39 `1–6`; #39–#112 `x/20` | **the scale changes inside one magazine's run** — the issue date must decide it |
-| **Génération 4** | `%` → `/6` → `/20` | same |
-| ST-Magazin | `Note: 4 von 6` | `/6` |
-| ST-Computer, TOS | `Gesamtwertung 8` (0–10) | sub-scores exist in print only as graphics |
-| **68000er** | `GN 1.83` | **lower is better** — inverting this silently is the worst bug available |
+`title.language` · per-language title rows · `title_id` on `release` · a `compilation_of` column · an `also_on`
+field · a "disk 2 of 3" string inside a filename · a `protection_state` column on a title or release · a
+`works: bool` column · deriving `disk` identity from a hash · deriving `release.disk_count` from the files.
 
-Aspect vocabulary, seeded from what the magazines actually print: `graphics`, `sound`, `animation`,
-`interest`, `overall`, `gameplay`, `price`, `fun`. Open set, one row per aspect per review.
+## 10. Open
 
-`raw` is kept so a disagreement between our parse and the printed page is always visible.
-
-## 4. What the emulator and the store read
-
-- The emulator references a **review** by `review_id` and an **artefact** by store id; it never reads the store
-  directly for catalogue facts, and when the store is private it degrades to "no image available".
-- The store id must be **stable before publication**, so it is content-derived, not path-derived (see #60).
-
-## 6. Engines (2026-11-15) — one runtime, three models, all GGUF
-
-Owner's constraint: **llama.cpp v1** as the only inference runtime. My earlier claim that `d1-2B` had no GGUF
-was wrong (I searched three of five models): `LiquidAI/d1-2B-GGUF` is an official Liquid AI repo and llama.cpp
-**b11960 / v0.8.0+** supports it. The two-runtime option is withdrawn — one runtime is enough.
-
-| role | model | GGUF | llama.cpp status | licence |
-|---|---|---|---|---|
-| page → blocks + typed extraction | **OvisOCR3** (0.8B) | community (`mradermacher`, `prithivMLmods`, `Soulfate24`) | community-grade vision path — **to be proven on the golden set** | Apache-2.0 |
-| gates: is-this-a-review, has-score-box, which-aspect | **d1-2B** | **official** `LiquidAI/d1-2B-GGUF` | `noul` / `choice` / `score` supported since b11960 | LFM Open License |
-| English summary paragraph | **LFM3-VL-2B** | **official** `LiquidAI/LFM3-VL-2B-GGUF` | supported | LFM Open License |
-| cross-check transcription (optional) | LightOnOCR-3-0.8B | community (`prithivMLmods`) | unverified | Apache-2.0 |
-
-**The one runtime constraint that shapes the design**: llama.cpp supports d1's `noul`, `choice` and `score`
-questions, but **not** its typed extraction (`text`/`number`/`date`), multiple-choice or boxes. That is fine by
-construction — typed extraction is OvisOCR3's job (KIE with our JSON template), and d1 only ever answers gates.
-If a later step needs d1 extraction, that single step goes to transformers, and the rest stays on llama.cpp.
-
-**Scheduling consequence for the 8 GB box**: the stages are sequential, not concurrent — all pages through the
-OCR server, then all blocks through the gate server, then all reviews through the summary server — so one model
-is resident at a time. On a 32 GB card the same pipeline runs with all three loaded.
-
-**Surya 2.5 is out**, and the reason is licence not quality: its weights are OpenRAIL-M, and this project is
-OSS with a public artefact site later.
-
-## 5. Open, and deliberately not decided here
-
-1. **Q1 of #52** — the file model's identity rule above is still the *pending* question (five levels vs the
-   alternatives); this document assumes the five-level shape.
-2. Whether `review` links to a **release** or to a **title** when the magazine reviewed a version we cannot
-   identify (common: a 1988 review of a game whose dumped release is 1990).
-3. How a review of a **compilation** is recorded (one review covering five games, each scored separately).
-4. The store's id scheme (#60) and the artefact/rendition boundary.
+1. **`release.kind`'s closed set** — `retail` · `budget` · `compilation` · `coverdisk` · `homebrew`? A crack is
+   *not* a kind (it is a rendition with modifications, §5), which keeps the set small.
+2. **Whether a title's canonical name is English** — the search index needs one name per work, and
+   *L'Arche du Capitaine Blood* vs *Captain Blood* is the test case.
+3. **What pass 1 of §6 can actually decide** — to be established against a sample of real containers, not
+   assumed; a label blank on a cracked copy is the expected failure.
+4. **The artefact/rendition boundary and the store's id scheme** (#60).
