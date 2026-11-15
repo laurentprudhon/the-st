@@ -7,48 +7,52 @@ the corpus lives in `design/corpus-magazines.md`.
 This is the document the harvester (#53), the artefact store (#60) and the test pipeline (#61) read. It is a
 design note, not a database migration: no table exists yet.
 
-## 0. Two repositories and one cache
+## 0. Two repositories, one media host, one cache
 
-| tier | location | holds | published? |
+| tier | where | holds | public? |
 |---|---|---|---|
-| **the emulator** | `laurentprudhon/the-st` — this repository | the emulator, its design, the wayfinder maps, the research | public |
-| **the catalogue** | `laurentprudhon/the-st-software` | **everything about the software**: the facts, the OCR text, the crops, the covers, the leaflets, the manual text | private now, public later |
-| **the cache** | a local directory beside the checkout | **the disk images and the full magazine pages** — nothing else | never |
+| **the emulator** | `laurentprudhon/the-st` — this repository | the emulator, its design, the maps, the research | yes |
+| **the catalogue** | `laurentprudhon/the-st-software` | structured data — every level below, scores, our summaries, **manual OCR text**, and the **media manifest** | yes, from the start |
+| **the media** | object storage behind a custom domain (R2, §0.1) | page crops, box fronts/backs, manual page images, leaflets, disk labels, screenshots, **the HTML of full articles** | yes |
+| **the cache** | a local directory | **disk images and full magazine pages**, nothing else | never |
 
-**Ruled** (owner, 2026-11-15): *"everything about the catalog is stored in a catalog/store repo named the-st-software
-... the only link with the-st repo (besides the name) is the version of the emulator which first ran the rendition
-of a game with success. only the disk images and the full magazine pages live in the local download cache."*
+**Ruled** (owner, 2026-11-15): *"everything about the catalog is stored in a catalog/store repo named
+the-st-software … the only link with the-st repo (besides the name) is the version of the emulator which first ran
+the rendition of a game with success. only the disk images and the full magazine pages live in the local download
+cache"*, and later *"images should not be stored in the-st-software repo, but on a website which serves them
+efficiently (to the emulator catalog UI for example)"*.
 
-**The only link between the two repositories is one string.** For a rendition that ran, the catalogue records
-`first_played_by = {emulator version, date}`. Nothing else crosses — no shared schema, no shared code, no build
-dependency — so the emulator stays releasable without the catalogue and the catalogue stays readable without the
-emulator.
+**The only link between the two repositories is one string**: `first_played_by = {emulator version, date}` on a
+rendition that reached `runs = plays`. No shared schema, no shared code, no build dependency.
 
-**Why the boundary is exactly there**, from the owner's reasoning: the disk images *are* the games and are never
-redistributed; a whole magazine issue is a reproduction nobody would defend. What makes the catalogue worth having
-is the **crop** of an article's illustrations (mostly screenshots) and the **OCR text**, and the owner's position
-is that those are acceptable.
+**The only link between the repository and the media host is the manifest**: every object's `key` + `sha256` +
+`size` + `origin_url` + `credit`, committed as data. The bucket holds bytes; the repository says which bytes should
+exist. That is what makes the bucket replaceable, reconcilable and auditable.
 
 | what | where |
 |---|---|
-| `title` / `release` / `disk` / `rendition` / `file` / `artefact` rows, scores, verdicts | **catalogue** |
-| SHA-256, sizes, HTTP status, advertised strings, origin URLs | **catalogue** |
-| our English summaries, the ≤200-char quotes | **catalogue** |
-| OCR **text** — articles and manuals, every language | **catalogue** |
+| `title` / `release` / `disk` / `rendition` / `file` / `artefact` / `article` / `review` rows | **catalogue** |
+| scores, `aspect_score` values, `raw` strings, verdicts, `first_played_by` | **catalogue** |
+| our English summaries; the ≤200-char verdict quotes | **catalogue** |
+| **manual OCR text** — instructions, controls, copy-protection answers | **catalogue** |
 | OCR metadata: engine, model, version, date, pages, confidence | **catalogue** |
-| page crops, box fronts/backs, manual page images, leaflets, disk labels | **catalogue** |
-| screenshots, emulator-captured or archived | **catalogue** |
-| the schema, the pipeline code that fills it, the design notes | **catalogue** |
+| the media manifest, and the crop/plate geometry | **catalogue** |
+| page crops, box fronts/backs, manual **page images**, leaflets, disk labels, screenshots | **media** |
+| **the full OCR of an article, as HTML** | **media** |
 | `.st` / `.stx` / `.ipf` / `.scp` / `.msa`, the zips holding them | **cache** |
-| full magazine page scans, and any issue-level PDF or JP2 | **cache** |
-| GGUF weights, intermediate OCR JSON, run artefacts | **cache** |
+| full magazine page scans, issue-level PDFs and JP2s | **cache** |
 
-The cache is not knowledge: every entry in it is re-fetchable from a recorded `url`, which is why each `file` row
-carries `url` + `sha256` + `size`. Losing the cache costs bandwidth, never truth. **A crop is the exception that
-proves the rule** — once the full page is gone, the crop is its only surviving derivative, which is why crops are
-promoted into the catalogue rather than left in the cache.
+**Ruled (owner, same message)**: *"we should keep only structured review data and summaries in the git repo, manual
+OCR with the instructions and controls, and keep the HTML version of the full articles OCR on the website, with a
+link to request removal."* So the repository is **text and structured data only** — which also means the whole
+question of git LFS disappears: there is no binary in it to store.
 
-### 0.05 Scope: only what is about the Atari ST
+**Withdrawal becomes cheap, which it was not before.** Because no image and no article HTML is in git history, a
+takedown request is one API delete plus one commit removing a manifest row — no history rewrite, no support ticket.
+Each article page carries a *request removal* link that opens a prefilled issue on `the-st-software`, so the request
+is public, auditable and needs no new infrastructure.
+
+### 0.1 Scope: only what is about the Atari ST
 
 **Ruled** (owner, 2026-11-15): *"we will only keep the magazine articles related to the atari st or its games and
 software, not all articles from all magazines."* The corpus is not an archive of the magazines; it is an archive of
@@ -66,53 +70,36 @@ many-to-many *and* optional — the link exists when the article is about a part
 This also moves the size estimates: the ~25 000-article crop figure below was derived before this rule and should
 be read as an upper bound.
 
-### 0.1 Does this need git LFS?
+### 0.2 The media host — checked, with numbers
 
-Yes, for the images — and the numbers say it needs a paid LFS pack, not the free 1 GB. Order of magnitude at the
-corpus we can already count:
+**Requirement**: cheap, backed up, and served fast enough for the emulator's catalogue UI.
 
-| class | estimate | how derived |
-|---|---|---|
-| article crops | **7–8 GB** | ~25 000 articles × ~2 crops × ~150 KB |
-| box fronts/backs | **4–5 GB** | ~10 000 releases × 2 × ~250 KB |
-| manual page images | **8–10 GB** | ~5 000 releases × ~16 pages × ~120 KB |
-| leaflets, disk labels | **~1 GB** | ~10 000 × ~100 KB |
-| screenshots | **~4 GB** | ~10 per title × ~40 KB |
-| OCR text | **~1.5 GB** | text, so ordinary git — it does not need LFS |
+| host | storage | egress | at 30 GB | notes |
+|---|---|---|---|---|
+| **Cloudflare R2** | **$0.015/GB-mo**; free 10 GB, 1 M Class A + **10 M Class B ops/mo** | **free, always** | **~$0.30/mo** | S3-compatible, Cloudflare CDN and SSL on a custom domain, no egress bill ever |
+| Backblaze B2 | $0.0069/GB-mo (≈$6.95/TB); first 10 GB free | free up to **3× stored** | ~$0.21/mo | cheapest storage; pairs with Cloudflare through the Bandwidth Alliance |
+| Bunny Storage + CDN | $0.01/GB-mo, $1 minimum | CDN from ~$0.01/GB | ~$0.30/mo + traffic | very cheap CDN, good EU coverage |
+| Hetzner Object Storage | €6.49/mo **flat** incl. 1 TB storage + 1 TB egress | included | €6.49/mo | uneconomic at 30 GB, unbeatable near 1 TB, German jurisdiction |
+| Wasabi | $7.99/TB | none | $7.99/mo | **1 TB minimum** — out at this size |
 
-Total order **25–30 GB**. Three consequences:
+**Recommendation: R2 as primary, B2 as a cold mirror** — together **under $1/month** at 30 GB, and the thing that
+matters is the shape of the cost curve: zero egress means a public site can be read by anyone without a bill that
+scales with interest, which is exactly the failure mode of S3-class hosting.
 
-1. **Put the images in LFS and the text in plain git.** Text diffs, greps and merges; images must not.
-2. **Cap quality before the first commit, not after.** LFS objects are immutable — re-encoding an image leaves the
-   old object in storage for ever, so a "recompress later" decision is a permanent size increase. Fix the crop
-   width and JPEG quality once, as a schema constant.
-3. **Tell clones not to smudge.** `GIT_LFS_SKIP_SMUDGE=1` on clone, so a reader who wants the schema does not
-   pull 30 GB, and the public site later serves images from an object-store mirror rather than making browsers
-   clone.
+**Serving design**, three decisions that make it cheap and cacheable for ever:
 
-Alternatives, and why not: plain git makes every clone pay the full history for ever; `git-annex` handles this size
-better but is not GitHub-native and is hard to explain to a reader; object storage plus a manifest contradicts the
-"full information in one place" goal this split exists to serve.
+1. **Content-addressed keys** — `media/<sha256[0:2]>/<sha256>.jpg`. An object never changes, so it can carry
+   `Cache-Control: public, max-age=31536000, immutable`, needs no invalidation, and identical crops across titles
+   dedupe by construction.
+2. **A custom domain in front** (`media.<project>.org` → R2 + Cloudflare CDN), so the scheme can change host
+   without anything in the catalogue changing — the manifest keys are host-independent.
+3. **Images at a fixed, capped quality** — the reason LFS's immutability warning applied disappears, but the same
+   discipline does not: a re-encode under a content-addressed key is a *new* object, so quality must be chosen once
+   or the bucket doubles.
 
-**Host — checked, because the assumption was wrong.** GitHub's LFS metering does **not** depend on visibility: the
-same three rules apply and the usage counts against the *repository owner* whichever it is (storage on every push,
-bandwidth on every download), with a free quota of **1 GB storage and 1 GB/month bandwidth** and metered billing
-beyond it at **$5 per 50 GB** of each. So making the repository public does not raise the limit. The asymmetry the
-owner expected does exist, just elsewhere: **Hugging Face** gives free public repositories best-effort storage
-(recommended repo size **300 GB**, 200 GB per file) against **100 GB** for private, which is exactly the
-public-is-cheaper shape.
-
-Three options, and the trade: **(a) GitHub with paid LFS** — ~$3–5/month at this size, one place, the ecosystem the
-project already lives in; **(b) data and text on GitHub, images on a HF dataset** — free, but two homes and a join;
-**(c) everything on HF** — free at this size and one place, but an unusual home for a software catalogue, subject
-to their "genuinely useful to the community" norm. The project's own preference for simplicity points at (a) while
-the corpus stays under ~50 GB, with (c) as the fallback if manual scans push it past that.
-
-**And one tension to keep in view**: removal and LFS pull in opposite directions. LFS objects are immutable in
-history, so an item that must be withdrawn is removed from `HEAD` cheaply and from history only by a rewrite (plus
-a support request to purge the objects). If withdrawal has to stay cheap, contested material should not enter the
-store in the first place — which is the argument for crops over full pages, and for a takedown-shaped scope rule
-rather than a promise to delete later.
+**Backups**: R2 versioning on the bucket, plus an `rclone sync` to B2 on a schedule, plus the manifest in git. Three
+independent things would have to fail at once for a crop to be lost — which matters because a crop is the only
+surviving derivative once the full page leaves the cache (§0).
 
 ## 1. The five levels
 
@@ -244,8 +231,8 @@ facts and its store pointer live here — the same asymmetry as the magazine hal
 | `origin_url` | **the URL the image came from** — to credit its author, and to re-fetch it |
 | `credit` | the author or site as it should be displayed |
 | `dpi` | measured, nullable — **degradation is derived from it against the floor, never stored as a class** |
-| `store_ref` | the store id (content-derived, stable before publication) |
-| `ocr` | `{engine, model_version, date, pages, confidence}` + a store ref for the text |
+| `media_key` | `media/<sha256[0:2]>/<sha256>.jpg` — content-addressed, immutable, host-independent |
+| `ocr` | `{engine, model_version, date, pages, confidence}`; the **manual text itself is a catalogue field**, the *page images* are media |
 
 **The attachment rule, one sentence:** *an artefact attaches to the most specific level whose artefact it is.* A
 box front, a manual and a protection leaflet belong to the **release** — they are edition- and language-specific.
