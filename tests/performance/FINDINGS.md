@@ -1914,3 +1914,78 @@ the scheduler, so a chip that owns its own time is where the model ends.
 **What stands**: §24's three legal shapes, and the counter. **What does not**: any claim that a synchronous exchange
 is a local change. A session that wants the 1.64 ms should file a paper ticket ("the machine has a global now the
 chips may advance"), not a perf ticket — and should expect to re-derive the digest contract with it.
+
+
+### 24b. The prototype the owner asked for: a single machine sync — **1.41 ms a frame (9.5 → 8.0)**, and allocation halved
+
+Asked for on 2026-11-15, after §24a: *"just try to build a temporary prototype here (which will be discarded) of the
+changes required to the scheduler to transform the cpu memory / write cycles in a synchronous call + a single machine
+sync (taking into account that a memory write is not always RAM, but also memory mapped devices). i really would like
+to know how much time it saves per frame, during boot and during a CPU-bound workload."* Built in
+`/opt/data/cache/scratch/st-leaf/` under `ST_SYNC=1`; **nothing of it landed**. It is a throwaway: the machine it runs
+is not byte-identical (below), so the numbers price the **shape**, not a change.
+
+**The change, in full — four pieces, none of them in a chip's decode:**
+
+1. **`Engine.RunTo(instant)`** — the machine catches up to an instant on demand (`Run`, made re-entrant: a per-depth
+   due list, and `Horizon` saved and restored per call). The CPU calls it; the drain is no longer only the harness's.
+2. **`M68000.Cycle`, one branch**: instead of `await WaitFor(Answer)` the core does `RunTo(asserted)`, appends its
+   four records, `RunTo(slot)`, reads the answer **where it landed** in the log, appends the `Z` release at the slot
+   and sets its clock there. RAM, ROM, **a device register or the acknowledge** — the decode is unchanged, because the
+   System Control Unit's own `PerformBusCycle` still runs inside `RunTo(slot)`. Nothing is special-cased.
+3. **The core's own sampling**: the pin is read at its instruction boundaries (`RunTo(Clock)` before
+   `CheckInterruptAsync`), and the `STOP` loop polls the machine's next contact instead of subscribing — the two wakes
+   the core used to need are gone.
+4. **One suspension a frame** (`ResumeFrame`): the core runs the frame and yields, so the harness can time it — and
+   that is the only `await` it has left.
+
+**The numbers. Release, `boot --frames 800` (`frame_n` 723), alternating pairs, the same binary with `ST_SYNC` off
+and on:**
+
+| | ref | sync | Δ |
+|---|---|---|---|
+| pair 1, all 723 | 9.53 | **8.19** | **+1.34** |
+| pair 2, all 723 | 9.54 | **7.99** | **+1.55** |
+| pair 3, all 723 | 9.32 | **7.98** | **+1.34** |
+| **means** | 9.46 | **8.05** | **+1.41** |
+| boot window (573 frames) | 9.76 | 8.37 | **+1.39** |
+| desktop window (150 frames) | 8.34 | 6.85 | **+1.49** |
+| early boot, `--frames 60` (reset + the ROM's RAM pattern test) | 22.01 | 20.17 | **+1.85** |
+| `--frames 200`, boot-heavy | 13.67 | 12.18 | **+1.49** |
+
+- `alloc_mb_per_frame` **7.94 → 3.58** (**−55 %**, −4.36 MB): the core's suspension *is* its allocation (56 % of the
+  line, §22), and 99 % of it is gone.
+- `pops_per_frame` **63 592.7 → 57 279.0** (−6 313.7): the four `ApplyWrite`s an ahead-clocked assertion used to queue,
+  and the core's own `Resume`.
+- Per bus cycle: 1.41 ms / 14 227.1 = **99 ns**, against §47's bench **115.4 ns** for the same removal — the ceiling and
+  the measurement agree for the first time.
+- **The gain tracks the bus cycles, not the workload**: 1.39 ms in the boot window, 1.49 in the desktop's, 1.85 in the
+  heaviest early frames. A CPU-bound program (more fetches and data cycles a frame) gains proportionally more; the
+  desktop is the *least* favourable case and still gains 18 %.
+
+**Why it is not the 0.16 ms of §24.** §24's leaf removed the System Control Unit's slot wake and left the core
+suspended; this removes **the core's suspension, its `Resume`, and the four queued assertion records** — the whole of
+what §47's `A − B` priced. That is what ADR 0008 §7's condition 5 forbids, and it is worth 1.4 ms: the condition is
+worth a seventh of the frame, not a rounding error.
+
+**What is not neutral, and what a landed version has to fix** (all of it measured, none of it guessed):
+
+- **−29 instructions and −65 bus cycles over 724 frames** (4 484 320 → 4 484 291, 10 300 388 → 10 300 323); `groups`,
+  `timer_b_counts`, `timer_c` identical. The cause is piece 3: the pin is sampled at the core's own boundaries
+  (a real 68000 does exactly that), where the reference wakes it at the record's instant — so an interrupt is taken a
+  few clocks differently, once in ~150 000 instructions. **A behaviour change, so it is the owner's re-bless**, not a
+  session's.
+- **The folds move**: `Run` is re-entered per contact, so `run.digest` and `run.stream` fold more batches than the
+  machine has instants. A landed version needs the fold keyed on a record's instant instead of on the batch that
+  appended it (the definition question §24 already raised, one level down), or a batch stack in the instrument.
+- **`MachineTime` is per drain frame**: a nested `Run` moves it past the outer batch. The prototype survives it because
+  nothing else is in flight when the core drives (its four records are the only entries), but a landed version must
+  make the drain's instant a stack, not a field.
+- `RunTo` re-entry counts: **36 000–45 000 `Run` calls a frame** against the reference's one. Each is a `NextInstant()`
+  and usually an immediate return — cheap, and the numbers above include that rent.
+
+**The ruling this supports** (the owner's): with §7's condition 5 relaxed and the drain made a stack, the machine
+gains **1.4 ms a frame (15 %) and loses 55 % of its allocation** — but it stops being a scheduler of independent
+timelines and becomes a machine with one clock that the CPU owns. That is a paper decision (ADR 0003/0006/0007), not a
+perf ticket, and it is now priced: 1.4 ms against the coroutine model. §24's three legal shapes are unchanged; the
+0.16 ms leaf is the best available *without* the paper.
