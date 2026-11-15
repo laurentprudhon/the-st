@@ -1626,7 +1626,7 @@ untouched, so the folds are byte-identical **by construction**, and measured: th
 still reads `2bfb229b…` / 9 136 634 and `238faddf…` / 9 135 915, with `drain_ms` and `instrument_ms` still in its
 `run.state`. **No re-bless is implied and none was asked for.**
 
-### 22.5 The three-part proof
+### 22.5 The proof — the three parts, and the bench as a fourth witness
 
 1. **Both folds**: unchanged — `run.digest` `2bfb229b1211215413613c954262673929dba864a363651e0350ff048d380c61` /
    9 136 634, `run.stream` `238faddf3c4cd19e262284d5b80fc8dfb89ed477203c382cc1dc3f3a6faedf1c` / 9 135 915. The
