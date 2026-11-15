@@ -1265,3 +1265,152 @@ what the machine measured.
 **Two things are left for the next session, and neither is a lever.** The 7.93 MB that remains under a
 lowering with no boxes (19.4), and the per-chip split of the 3.72 ms, which #48's bracket would give for the
 price of one scratch build.
+
+## 20. The ladder re-priced (#65's study): the CPU took 279 ns a wake, the device chips paid 0.55 ms, and the 7.93 MB is two things
+
+The rung after L1 is not a lever: it is the study that turns two arithmetic estimates into measurements, because
+every remaining rung (#42's leaf, L3, #49) was argued against a number that L1 had already deleted. Both questions
+are answered here, from scratch copies that never entered the tree — and the second one now closes against the
+gate's own allocation line to within 0.01 MB, which is the first time this page can say what the whole line *is*.
+
+**No pairs, because nothing in the tree changed.** `main` stays at **`14b87f2`**, `git status --short` empty. The
+proof is the tree's own: the 300-frame Debug boot of the census build reproduces `run.digest`
+**`6e657033…` / 10 801 967** and `run.stream` **`e0ca9570…` / 10 801 251** byte-for-byte and **every machine
+counter** of the landed tree's own 300-frame Debug boot (`pops_per_frame` 85 698.4, `subscriptions_per_frame`
+84 054.9, `suspensions_per_frame` 55 223.8, `bus_cycles` 5 564 479, `frames_run` 300, `groups` = `chunks` =
+1 198 480 — the two `run.state` files agree line for line except wall time and the counters' own Debug
+allocation); the gate reads **31 ok / 1 FAIL** with G8 red at **12.42 ms**.
+
+### 20.1 How it was measured, and the second lowering that makes it drift-free
+
+#48's instrument, ported onto the landed tree in `/opt/data/cache/scratch/st-census-ra` (the port is three
+`Origin*` tags plus one `if (TimingMode == …)` per mode — no machine line changed; the tree's `csproj` files came
+along, so the copy builds under the same `runtime-async=on` and the witness is `AsyncHelpers` on
+**`TheST.Machine.dll`**, §19.1's trap). Three modes, all from one binary: **0** counters only, **1** a `Stopwatch`
+pair around the resume's dispatch, **2** around the continuation, **3** the allocation census of §20.4.
+
+**The study's own addition is the second column: a copy with the flag deliberately off.** §18's per-chip figures
+were taken under the compiler state machines, and a single-column re-take under runtime async could not tell a
+real 8 ns move from this host's own drift — the same six runs in two thermal episodes read 13.2 and 18.4 ms a frame
+for identical code. So the same instrument was built twice (`st-census-csm` with
+`<Features>runtime-async=on</Features>` removed — 101 `<…>d__N` names against the RA build's 2, `AsyncHelpers` 0
+against 1) and the two binaries were **interleaved run by run**, which is the only comparison in this page that a
+hot host cannot fake.
+
+Two things follow, and both are checked rather than hoped:
+
+- **The instrument is inert and reproduces the previous session.** The CSM column reads **616.1 / 93.1 / 134.1 /
+  91.1 ns** a wake against §18's **620.3 / 92.3 / 133.3 / 89.3** — the same instrument, a different session,
+  within 1–3 %. That is what makes the RA column quotable next to it.
+- **The counts are the tree's, and the bucket totals still add up.** 62 823.6 chip resumes a frame
+  (`pops_per_frame` 63 592.7 − 24 449.5 `ApplyWrite` + 23 680.4 held-date wakes), and the three-bucket census
+  reads the same 10.3 % "found no work" §18.2 published: CPU 181.8, SCU 6 112.9, Video 0, Timers 206.2, 6 500.9 a
+  frame. Runtime async changed no count in the machine, which is §19.3's claim restated by a different instrument.
+
+The probe cost was re-measured in each binary and each run (**15.6–18.1 ns** a pair, median 15.9 for the dispatch
+and 15.6 for the body bracket) and is subtracted from every figure below.
+
+### 20.2 The four chips, under both lowerings — the machine's split of L1
+
+Release, 800 frames asked / 724 run, three runs each way per column, alternating binary and bracketing the frame
+mean either side of the pair. `ns a wake` is the **dispatch** bracket with the probe's own pair subtracted;
+`machinery` is dispatch minus body, i.e. `Disarm`, the clock write, the two `#if DEBUG` hooks and the
+continuation's invocation, and none of it is where the time is.
+
+| chip | resumes a frame | ns a wake, CSM | **ns a wake, runtime async** | Δ | ms, CSM | **ms, runtime async** | share of 12.29 ms |
+|---|---|---|---|---|---|---|---|
+| CPU | 14 408.8 | 616.1 | **337.1** | **−279.0** | 8.88 | **4.86** | 39.5 % |
+| SystemControlUnit | 38 001.7 | 93.1 | **101.1** | **+8.0** | 3.54 | **3.84** | 31.3 % |
+| Video | 3 994.5 | 134.1 | **164.1** | **+30.0** | 0.54 | **0.66** | 5.3 % |
+| TimersAndEvents | 6 418.6 | 91.1 | **111.1** | **+20.0** | 0.58 | **0.71** | 5.8 % |
+| **four chips** | 62 823.6 | | | | **13.54** (84.5 % of 16.01) | **10.07** (81.9 % of 12.29) | 81.9 % |
+| residual (`ApplyWrite` dispatch, batch loop, GC, hooks) | | | | | 2.47 (15.5 %) | 2.22 (18.1 %) | 18.1 % |
+| machinery, per chip | | 25.2 / 9.7 / 23.2 / 20.5 | 26.8 / 13.4 / 25.2 / 15.5 | | | | |
+
+**Every one of those four moves is unanimous**, which is what a ±3–5 ns spread allows one to say: CPU 335/332/347
+against 616/616/630; SCU 99/98/104 against 93/94/92; Video 165/160/165 against 130/134/134; Timers 109/110/122
+against 91/92/89. The continuation bracket says the same thing from the other side (CPU 310.3 against 590.9,
+SCU 87.7/83.4, Video 138.9/110.9, Timers 95.6/70.6), and **the machinery column is flat across the lowering —
+the whole of the device chips' loss is inside the continuation**, not in the engine's resume path.
+
+### 20.3 What that does to L1's 3.72 ms, and where §19.4 was wrong
+
+The census and the pair agree, and they agree on a correction:
+
+| | the census | the pair |
+|---|---|---|
+| CPU | **−4.02 ms** (−279.0 ns × 14 408.8) | |
+| the three device chips | **+0.55 ms** (+8.0, +30.0, +20.0 ns) | |
+| **net, four chips** | **−3.47 ms** | **−3.72 ms** (L1's six pairs) · **−3.77 ms** (bracket on, 16.01 → 19.78) · **−3.85 ms** (allocation mode, 13.66 → 17.52) |
+
+**§19.4's attribution was wrong in both halves, and this is the page that says so.** It read 88 % CPU / 9 ns a
+wake for the devices off `cpu-dissection`'s A row (230.3 ns a cycle × 14 227 cycles = 3.28 ms), which is a
+**one-chip** world with no record appends and no subscription fires — §15 priced the coroutine, not the machine's
+wake. Measured in the machine, the CPU's saving is **279 ns a wake, 4.02 ms — 108 % of the pair's net and 116 % of the
+census's**, and the
+three device chips did not share the win: they **paid 0.55 ms** for it, +8 to +30 ns a wake, unanimous in both
+brackets. The bench's direction was right and its magnitude was 20 % low; the "0.44 ms spread over the device
+chips" was not a gain at all.
+
+**Why the device chips lose, stated as a hypothesis and nothing more**: their wakes complete their await on the
+stack (the record is already there when the chip is resumed), they allocate nothing (§20.4), and runtime async's
+inline path evidently costs a few ns more than a compiler state machine's `MoveNext` on a continuation this short.
+The bench cannot see it — its B row is the CPU's own inline shape. It is 0.55 ms and it is a *rent* the ladder
+should carry in the open, not a lever.
+
+### 20.4 The 7.93 MB, attributed: 44 % the queue, 56 % the CPU's own suspensions, and no harness
+
+§19.4 left this open with a warning — the number is process-wide, so price the harness first. Done, and the
+harness is **zero**:
+
+| | MB a frame | what it is |
+|---|---|---|
+| `alloc_mb_per_frame`, the gate's figure | **7.93** | 10.42 before L1 |
+| of which this harness's own per-frame work | **0.000** | `GC.GetAllocatedBytesForCurrentThread()` around and outside `Engine.Run`, 724 frames, identical to the process total |
+| queue entries, `Resume` | **1.79** | 39 147.6 a frame × **48 B** (measured in the binary, not quoted) |
+| queue entries, `ApplyWrite` | **1.68** | 24 445.0 a frame × **72 B** |
+| **the CPU's continuation, everything else** | **4.45** | 14 408.8 resumes × **324.2 B** |
+| SystemControlUnit / Video / Timers, directly | 0.001 each | their wakes suspend nothing and allocate nothing |
+
+**It closes, and the closure is the point**: 4.45 + 3.47 = **7.92** against the gate's 7.93, and the same
+arithmetic on the CSM build gives 6.95 + 3.47 = **10.42**, which is exactly what `runs/20261115T111934Z` read
+before L1. The census build's own total is 0.30 MB higher than the gate's in both columns because the census's
+`Resume` carries an `Origin` tag (56 B against the tree's 48 B × 39 147.6) — so the instrument is priced, not
+assumed.
+
+**So L1 removed 181 B a CPU suspension, and that is the only allocation it touched**: 505.5 → 324.2 B a resume,
+−2.491 MB a frame against the pair's −2.49. §19.4's "exactly 56 B a suspension — one object a suspension, the
+continuation `Action`" divided 2.49 MB by `suspensions_per_frame` (44 417.5), which counts **dated reads and
+subscriptions across every chip** — 30 000 of those are the device chips' wakes, which allocate nothing. Per CPU
+suspension the compiler was allocating **181 B** (its box *and* its `Action`), not 56. The bench's own A row moved
+496.0 → 299.8 B a resume, the same shape and a different world.
+
+### 20.5 The rulings, one line per ticket whose premise moved
+
+- **#65 L2 — pooled boxes: subsumed, not defeated.** There is no compiler box to pool under this lowering. Nothing
+  to build, and this page is the ledger entry that says so.
+- **#65 L3 — folded dispatch: dead on arithmetic, and further away than §19.5 said.** A fold can reach the frames
+  only (`B − C` 13.6 ns a cycle ≈ 0.19 ms) while the whole cycle is 169.9 ns; and the mechanism a fold would
+  install — answer inline instead of suspending — is the very path runtime async already made marginally **worse**
+  for the short wakes (§20.2's +8 to +30 ns). A lever whose prize is 0.19 ms and whose own mechanism is a measured
+  loss stays an ADR 0009 design question with no perf case.
+- **#42 — the leaf's ceiling is now 1.64 ms, and it should be quoted as `A − B`, not `A − C`.** The leaf inlines
+  *the suspension* (§7's one closed exchange), so its bound is the bench's **`A − B` 115.4 ns a cycle = 1.64 ms**
+  of a 12.29 ms frame (13 %), not the whole coroutine's 1.83. Its seven conditions and the readability cost are
+  unchanged; the prize is a sixth of the frame, not a third. Its case has to be re-made on that.
+- **#49 — the chips' split is now a measurement, and the parallelisable share went UP to 42.4 %.** CPU **4.86 ms
+  (39.5 %)**, SystemControlUnit 3.84 (31.3 %), Video 0.66 (5.3 %), Timers 0.71 (5.8 %) — **5.21 ms (42.4 %) in the
+  three device chips**, residual 2.22 (18.1 %). §18's 27.9 % and §19.6's estimate of 32.8 % are both superseded:
+  L1 made the device chips *more* of the frame by making the CPU cheaper. The ordering contract is still the
+  binding constraint and no thread count divides it.
+- **#63 — Timer D is now 0.67 ms, not 0.52.** A Timers wake costs 111.1 ns under the landed lowering (91.1
+  before), so 6 008.7 expiries × 111.1 ns = **0.67 ms a frame, 5.4 %**, 94 % of that chip's 0.71. The one lever
+  on the ladder with no design cost got *bigger* while everything else got smaller, and it still waits on the
+  owner's re-bless — a moved `run.stream` is the owner's decision and not this page's.
+
+**What this page does not say**: the ms columns are counts × a bracketed ns, and the runs they were taken in read
+15.3–16.3 ms (RA) and 19.0–19.9 ms (CSM) because every wake carries two stopwatch pairs and the counters —
+**the rent is ~3 ms and none of those frame means is quotable**. The pair is the number for the frame; the census
+is the number for the *shape*, and the CSM column is what proves the shape's instrument against §18. The
+reproduction is `/opt/data/cache/scratch/ra20/ab.sh` over `st-census-ra` and `st-census-csm`, with the mode in
+`ST_CENSUS_TIMING` (`outer`, `body`, `alloc`).
