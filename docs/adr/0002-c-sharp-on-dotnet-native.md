@@ -225,3 +225,25 @@ here; the status stays `accepted`.
 Frame cost at the ADR's own 10²–10³ crossings per frame after the DMA correction: **0.1–1.1 ms of a
 20 ms frame**, with no gen2 collection and ≤0.019 ms of GC pause per frame at the highest density
 swept (10⁴).
+
+## Revision — 2026-11-15, ticket #65 (L1): the runtime-async sentence, tested on the machine
+
+The falsifier above (*"if runtime-async proves unavailable or unhelpful, we stay on .NET 10 and change
+nothing else"*) has now been run against the emulator rather than against a microbenchmark, and it
+reads **false in both halves**:
+
+- **Available.** The machine binds it with nothing opted out: `-p:Features=runtime-async=on` on
+  `11.0.100` (a Roslyn feature flag, verified by `AsyncHelpers` in `TheST.Machine.dll`), 45
+  compiler-generated async state machines down to 1 — and the one left is an iterator, not a frame. No
+  method needed `[RuntimeAsyncMethodGeneration(false)]`, and `TreatWarningsAsErrors` stayed green.
+- **Not merely helpful: it is 23 % of the frame.** Six adjacent alternating Release pairs, 800 frames,
+  on `cdcd9e8` + the two property lines: **16.01 → 12.29 ms a frame (−3.72 ms, 6/6 pairs)**,
+  `alloc_mb_per_frame` **10.42 → 7.93**, `gc_ms_per_frame` 0.17 → 0.12, with every machine counter and
+  both folds (`6e657033…` / 10 801 967, `e0ca9570…` / 10 801 251) byte-identical. Per bus cycle, on the
+  CPU's own trace: **400.2 → 169.9 ns**. The gate reads **31 ok / 1 FAIL**, G8 at **12.42 ms**.
+
+So the sentence's premise is measured out, and the fallback it authorises is not the one this project
+would take. **This revision records the measurement; striking the sentence is the owner's decision**, as
+it is a language/ADR question and not a performance one. What the measurement does settle is that .NET
+11's runtime is not a bet any more — it is the largest single perf result the project has landed, and it
+cost the source nothing (FINDINGS §19).

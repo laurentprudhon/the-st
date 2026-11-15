@@ -1099,3 +1099,169 @@ buy it out of the 92–620 ns a wake that belongs to the coroutines, not out of 
   (`runs/20261115T111446Z`) read **18.54 ms** while two local `llama-server` processes were loading — load 1.5,
   which is this skill's own discard threshold — and the second, on the same tree, read 16.89. G8 on this host
   can read 16.6–18.5 without the machine changing; never read a single gate figure as a trend.
+
+## 19. Runtime async (#65 L1): 3.72 ms a frame, 23 % of it — the .NET 11 bet, measured
+
+#65's first rung compiles the machine's `async` onto the runtime's frames instead of compiler-generated state
+machines: no box, no continuation `Action`, no `MoveNext`. **The source does not change** — same `await`, same
+loops, same readability ADR 0008 §7 protects — and the measurement is **3.72 ms off a 16.01 ms frame, 6 of 6
+pairs, with every machine counter and both folds identical.** It is the largest single step the ladder has
+taken, and it is the return on the .NET 11 decision rather than a new one: ADR 0002 chose this runtime *for*
+runtime-async and the project had never run the machine under it.
+
+### 19.1 What landed: two property lines, and the trap that hid the first attempt
+
+```xml
+<Features>runtime-async=on</Features>
+```
+
+in `src/TheST.Machine/TheST.Machine.csproj` and in `tools/cpu-dissection/CpuDissection.csproj` (which links
+the CPU's sources and would otherwise price a different compilation than the machine ships). It is a Roslyn
+**feature** flag, not an SDK property: `Features` reaches `csc` as `/features:`.
+
+**The witness is the emitted IL, and it has to be read on the machine's assembly.** `strings TheST.Machine.dll
+| grep AsyncHelpers` hits, and the compiler's async state machines go **45 → 1**; the one left is
+`<SubscriberSets>d__87`, an *iterator*, present in both trees. Nothing needed
+`[RuntimeAsyncMethodGeneration(false)]`: no `ERR_UnsupportedFeatureInRuntimeAsync`, zero warnings with
+`TreatWarningsAsErrors` on.
+
+**The trap this page paid for, and it is a correction to the recipe, not a repeat of it.** The documented
+shape — `dotnet build -c Release -p:Features=runtime-async=on -o <clean dir>` — is **not enough**: cleaning the
+*output* directory does not clean the *intermediate* `obj`, and `CoreCompile`'s up-to-date check does not hash
+`Features`, so the build reports success in 0.34 s and **copies the previous IL**. The first attempt here
+produced a `TheST.Machine.dll` byte-identical to the baseline (`md5 5b5185bc…`) while `validation-harness.dll`
+*did* differ — the harness project had been rebuilt, the machine had not. Two rules follow:
+
+- put the flag **in the project file** (then it is part of every build's inputs, including the gate's own
+  `dotnet build TheST.sln`), and `rm -rf obj bin` once after doing so;
+- read the witness on `TheST.Machine.dll`. A harness-only check says "the flag took" when it did not.
+
+### 19.2 The three-part proof
+
+1. **Both folds byte-identical.** 300-frame Debug boot on the landed tree: `run.digest`
+   **`6e657033…` / 10 801 967** words, `run.stream` **`e0ca9570…` / 10 801 251** words. The gate's own rows:
+   `G1: 10801967 digest words, identical`, `G2 … identical to G1's stream`, the synthetic `g1-a` green.
+2. **`tools/cpu-dissection` `check`: `same_work yes`.** All four variants replay the boot's **5 564 478**
+   cycles to the same end state — `pc e02fe2`, `sr 2320`, `d0 000005e2`, `a7 00000e96` — with `gen.py`
+   regenerated and the bench built under the same flag. (Regenerating `Gen/` produced no diff: the generator
+   is still deterministic against the landed sources.)
+3. **The pair** below, and `scripts/validate.sh` at `runs/20261115T121801Z`: **31 ok / 1 FAIL**, G8 red at its
+   own figure — **12.42 ms** of 10.00, n 724, 63 592.7 pops a frame, `alloc_mb_per_frame` 7.93,
+   `gc_ms_per_frame` 0.12.
+
+### 19.3 The pair — six adjacent, alternating, Release, 800 frames, load 0.88–1.00
+
+A = `cdcd9e8` built in this session (`rm -rf obj bin` first, §16's trap), B = the same tree with the two
+property lines.
+
+| pair | A, ms | B, ms | A − B |
+|---|---|---|---|
+| 1 AB | 15.80 | 12.30 | +3.50 |
+| 2 BA | 15.98 | 12.19 | +3.79 |
+| 3 AB | 16.25 | 12.21 | +4.04 |
+| 4 BA | 16.06 | 12.21 | +3.85 |
+| 5 AB | 16.01 | 12.50 | +3.51 |
+| 6 BA | 15.95 | 12.31 | +3.64 |
+| **mean** | **16.01** | **12.29** | **+3.72, 6/6 positive** |
+
+**Every counter of the machine is identical**, which is what makes this a lowering and not a machine:
+`pops_per_frame` 63 592.7, `subscriptions_per_frame` 69 242.1, `suspensions_per_frame` 44 417.5,
+`stale_wakes_per_frame` 6.0, `bus_cycles` 10 300 388, n 724. What moved is time and bytes:
+
+| | A | B |
+|---|---|---|
+| mean frame | 16.01 ms | **12.29** (−23.2 %) |
+| mean on the desktop (150 frames) | 14.60 | **10.93** |
+| frame max (pairs 1/2) | 154.03 / 158.04 | **115.81 / 114.61** |
+| `alloc_mb_per_frame` | 10.42 | **7.93** (−2.49 MB, −23.9 %) |
+| `gc_ms_per_frame` | 0.17 | **0.12** |
+
+### 19.4 The prize, in the counter it lands in — and the ceiling it was written against
+
+The frame, declared before the build. The handoff's ceiling was *at most 8.94 ms* (the CPU's share of §18's
+continuation bill) and 13.55 ms across the four chips; #65 itself said **"0 to ~6 ms"**. Measured: **3.72 ms**,
+inside both and 62 % of the ticket's upper bound.
+
+- **59.2 ns off the average wake** (§18's 13.55 ms / 62 823.6 wakes = 215.7 ns a wake), i.e. **27.5 % of the
+  continuation bill** §18 attributed.
+- **Most of it is the CPU, and the bench says so independently.** `cpu-dissection`'s A row fell **400.2 →
+  169.9 ns a bus cycle (−230.3, −57.5 %)**; 230.3 × 14 227 bus cycles = **3.28 ms**, which is 88 % of the
+  machine's 3.72. The remaining 0.44 ms spread over the three device chips' 48 415 wakes is 9 ns a wake —
+  the order those wakes would move by, and no more.
+- **Against #8's prior, not against the ceiling.** #8 put ~165 of a suspension's 213 ns in "execution-context
+  capture, state machine box, delegate"; a CPU wake here is **620.3 ns → ~392 ns**, a fall of ~228 ns. The
+  prior was in the right place and under-stated the machine's case, because the machine's wake carries
+  traffic the one-chip bench never modelled.
+- **Allocation: 2.49 MB a frame, exactly 56 B a suspension.** That is one object a suspension — the
+  continuation `Action` of §15 — and it confirms the shape: what runtime-async removes from the heap is *one
+  object a suspension*, not the 4–6 boxes. The bench's own A row agrees in its own world: **496.0 → 299.8 B
+  a resume (−196 B, −39.5 %)**.
+- **§17's attribution of the allocation line is now falsified.** §17 said the 8.62 MB left after the `Resume`
+  pool "is the coroutine itself — state-machine boxes and continuation delegates". Only **2.49 MB** of it was:
+  **7.93 MB remains under a lowering that emits neither a box nor a continuation `Action`** (178 B a
+  suspension, the harness's own bookkeeping included). What that line *is* has not been measured, so it is
+  written here as an open question rather than a ticket — and the first thing to do with it is price the
+  harness's own share before believing any of it is the machine's.
+
+### 19.5 The bench under the new lowering — a new row, labelled, never an edit
+
+Both rows are the same tree, same host, same session, `bench 6` (six alternating passes over the boot's
+5 564 478-cycle trace); the only difference is the lowering. The left column is a **re-take in this session**
+on the post-#62 tree — not §15's table, whose 501 / 81 / 40.8 ns were measured before the bus wrappers were
+folded and must not be compared with either column here.
+
+| variant (one chip, the boot's trace) | compiler state machines | **runtime async** |
+|---|---|---|
+| **A** — the CPU as it ships | 400.2 ns/cycle, 496.0 B/resume | **169.9 ns/cycle, 299.8 B/resume** |
+| **B** — every answer on the stack | 75.5 | **53.5** |
+| **C** — no `async` at all | 39.4 | **40.1** |
+| **D** — the folded control | 377.5 | **169.3** |
+| **A − B** (the suspension) | 324.7 | **115.4** |
+| **B − C** (the frames, nothing suspends) | 36.1 | **13.6** |
+| **A − C** (all of the coroutine) | 360.8 | **128.9** |
+
+Two things in that table matter beyond this page:
+
+- **`B − C` also fell, 36.1 → 13.6 ns a cycle, and `B` allocates nothing either way.** The runtime lowering is
+  cheaper even where nothing suspends — ADR 0002's own "a completed await folds away" — which the machine
+  never sees, because its fast-path share is **0.00 %**. That is the part of the lever this machine cannot
+  use, and it is the whole of what the bench's B row buys.
+- **`A − C` is the ceiling for any CPU coroutine elimination, and it is now 128.9 ns a cycle ≈ 1.83 ms a
+  frame** — not the 6.55 ms #42 was filed on.
+
+### 19.6 What this does to the ladder (#65 L2/L3/L4, #42, #49)
+
+- **L2 is subsumed, as the ticket said it would be.** `PoolingAsyncValueTaskMethodBuilder` recycles the
+  compiler's state-machine boxes; there are none. Close it as subsumed by L1, not as a no.
+- **L3's projection is spent on arithmetic, and this is the sharpest consequence.** It projected **~375 ns a
+  bus cycle / ~5.3 ms** for folding the instruction layer, from §15's D-variant shape applied one level
+  deeper. The whole cycle now costs **169.9 ns** and the part a fold can reach — the frames themselves,
+  `B − C` — is **13.6 ns a cycle, 0.19 ms a frame**. A lever whose projection is larger than the total that
+  remains is not "re-derive it later": it cannot be worth what it says. It stays a design question for ADR
+  0009 and it is no longer a 5 ms one.
+- **#42's leaf has shrunk by two thirds.** Its 6.55 ms was "a coroutine-free CPU" against a then-18.07 ms
+  frame; `A − C` says the whole coroutine is **1.83 ms** of a 12.29 ms frame now. The leaf also inherits a
+  second reason to re-take its own number: its per-cycle projections were taken under the old lowering.
+- **#49's threads lose absolute headroom and keep their share.** At §18's per-chip split and this page's 88 %
+  CPU attribution: CPU **8.94 → 5.66 ms**, the three device chips **4.61 → 4.17 ms**, residual 2.9, frame
+  16.45 → 12.73. The parallelisable share *rises* (27.9 % → 32.8 %) while the absolute prize falls by 0.44 ms.
+  The split is an estimate from the bench's A row, not a per-chip measurement: re-running #48's bracket under
+  the landed tree is what would make it one.
+- **#63 (Timer D) is untouched** — a timer's expiry is not a coroutine frame, and its 0.52 ms projection stands.
+
+### 19.7 The ruling
+
+**L1 lands.** Two property lines, one commit: 3.72 ms a frame (6/6 pairs, load under 1.0), 2.49 MB of
+allocation, both folds and every machine counter byte-identical, `check` `same_work yes`, the gate at
+**31 ok / 1 FAIL** with G8 at **12.42 ms** — the first time this gate has read under 13 ms.
+
+**ADR 0002's fallback sentence is now a tested claim, and it reads false.** *"If runtime-async proves
+unavailable or unhelpful, we stay on .NET 10"* — unavailable: no, the toolchain carries it and the machine
+binds it with no method opted out; unhelpful: no, it is **23 % of the frame and 57 % of a bus cycle's cost**.
+The ADR's evidence section now carries the number (§"Revision — 2026-11-15, ticket #65"). Whether the
+fallback sentence is struck is the owner's call — it is a language/ADR decision and this page only reports
+what the machine measured.
+
+**Two things are left for the next session, and neither is a lever.** The 7.93 MB that remains under a
+lowering with no boxes (19.4), and the per-chip split of the 3.72 ms, which #48's bracket would give for the
+price of one scratch build.

@@ -15,6 +15,15 @@
     <LangVersion>latest</LangVersion>
     <InvariantGlobalization>true</InvariantGlobalization>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!--
+      Runtime async (#65 L1, FINDINGS §19): `async`/`await` lowered into the runtime's frames instead of a
+      compiler-generated state machine — no box, no continuation `Action`, no `MoveNext`. The source does
+      not change; ADR 0002 chose .NET 11 for exactly this and this is the measurement that settles it.
+      It is a Roslyn *feature* flag, not an SDK property: `Features` reaches csc as `/features:`. Every
+      project that compiles these sources needs the same line — `tools/cpu-dissection` links them, and a
+      project without it silently prices a different compilation than the machine ships.
+    -->
+    <Features>runtime-async=on</Features>
   </PropertyGroup>
 
 </Project>

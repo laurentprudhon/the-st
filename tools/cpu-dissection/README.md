@@ -67,3 +67,7 @@ dotnet bin/Release/net11.0/cpu-dissection.dll attr       # what a suspension all
   reports 48 B — the `Wake` alone — and that number is a lie of 500 B.
 - **A `B - C` that looks too small is the finding, not a bug in the build.** The state machine costs 42.7 ns
   a bus cycle and the suspension costs 421: the `async` keyword is free until it suspends.
+- **The bench builds with the machine's lowering.** `CpuDissection.csproj` carries
+  `<Features>runtime-async=on</Features>` since #65 L1, because it compiles the CPU's sources itself: a row
+  taken without it prices the compiler's state machines and is a different row. FINDINGS §19 has both, side
+  by side, and neither is subtracted from the other.

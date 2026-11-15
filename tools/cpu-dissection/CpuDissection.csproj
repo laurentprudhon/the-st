@@ -19,6 +19,10 @@
     <AssemblyName>cpu-dissection</AssemblyName>
     <RootNamespace>TheST.Dissect</RootNamespace>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <!-- This bench compiles the CPU's sources itself, so it needs the machine's lowering or it prices a
+         different compilation than the machine ships (#65 L1, FINDINGS §19). Kept in step with
+         src/TheST.Machine/TheST.Machine.csproj by hand: a Roslyn feature flag, not an SDK property. -->
+    <Features>runtime-async=on</Features>
   </PropertyGroup>
 
   <ItemGroup>
