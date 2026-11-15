@@ -200,6 +200,25 @@ Track:           40-80 (determined by media)
 Sector size:     128, 256, 512 bytes
 ```
 
+> ### Correction — 2026-11-15 (checked against Hatari's own readers and the Pasti format)
+>
+> The container descriptions in §5 are **wrong in ways that matter for the disk subsystem**, and this note is
+> the one the disk design would cite. Corrected here rather than silently rewritten:
+>
+> | format | what this note said | what it is |
+> |---|---|---|
+> | `.ST` | "each track stored as raw MFM-encoded sector data, includes IAM/IDAM/sync bytes" | a **raw sector dump**: 512-byte sectors concatenated, no MFM, no sync bytes, no headers. Size = sectors × tracks × sides × 512 (720 KB at 9 spt, 800 KB at 10, 880 KB at 11). The MFM layer is *not* in the file. |
+> | `.MSA` | "Monochrome MFM, 16 sectors/track, 4 MB" | **Magic Shadow Archiver**: a *compressed* sector image — a small header (sectors/track, sides, first track) then per-track RLE-compressed sector data. Typically 9–11 spt, 720–880 KB uncompressed. "Monochrome" and "4 MB" are both wrong. |
+> | `.DIM` | "double-image MFM, side-by-side" | a raw sector image with a small geometry header (sides, tracks, sectors/track) — the same sector data as `.ST` plus the geometry that `.ST` lacks. |
+> | `.STX` | "XBIOS raw sector image, 2-byte sector count then raw sectors" | **Pasti**: a *track-level* container. Per track it stores a descriptor and per-sector records with their IDs, CRCs, timing and **fuzzy-bit masks** — i.e. what the WD1772 sees, not a flat sector dump. Decoded by Hatari's own `src/floppies/stx.c` (2,134 lines, no external library). |
+>
+> The three levels that actually matter, and which the disk design must choose between:
+> **sector** (`.st`, `.msa`, `.dim` — a byte array, no track model) · **track** (`.stx` — sectors plus their
+> quirks) · **flux** (`.ipf`, `.scp`, `.hfe` — bit cells, needing an MFM stream and a bit-cell reader).
+> Hatari carries both IPF paths: `ipf_caps.c` delegates to the third-party `capsimage` library, and
+> `ipf_dsk.c` (MAME-derived, BSD-3-Clause) decodes IPF natively into **per-track flux transition lists** fed
+> through the same MFM stream path as SCP and Kryoflux.
+
 ## 5. .ST File Format (Floppy Image)
 
 ### .ST Image Layout
