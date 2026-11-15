@@ -1721,7 +1721,8 @@ The owner's mandate of 2026-11-15, verbatim: *"i want to balance readability wit
 and we will decide if it is worth it."* This section is that evidence. The prototype lives in
 `/opt/data/cache/scratch/st-leaf/` and **never touched `main`**; the tree at `62255f2` (then `abf3b9b`) is unchanged
 by anything below except this page. The step order was #42's own: **the denominator first**, because a count could
-end the question for a few hours instead of a week.
+end the question for a few hours instead of a week. **§24a** answers the owner's follow-up of the same day — a
+synchronous exchange with no subscriptions at all — and says why it is a scheduler change, not a leaf.
 
 ### Step 1 — the denominator: a counter, not a prototype
 
@@ -1856,3 +1857,60 @@ quoted (§47's 1.64 ms) belongs to a shape §7 does not permit.
   run** without it — measured (one extra `bus_answers` and two extra records, at the run's edge).
 - Artifacts: `/opt/data/cache/scratch/st-leaf/` (tree, `ST_LEAF=1|2`), `/opt/data/cache/scratch/st-leaf/leaf-pairs.sh`,
   `leaf-pairs/{off,leaf1,leaf2}-o{1..6}/`, and the Debug pair runs `/tmp/h300-{0,1,2}` for the folds.
+
+### 24a. The synchronous exchange (the owner's design, 2026-11-15): the premises hold, the machine's *now* does not
+
+The owner's reading of the model, after §24 landed:
+
+> the external slots for memory access in the SCU are fully reserved for CPU accesses, there can be no contention ·
+> the CPU and SCU in this model run on the same clock cadence · so the CPU can predict exactly what the timing of
+> its memory accesses will be · and nobody else can be affected by CPU memory accesses in its own time slots · so
+> there are no subscriptions / async work left · the SCU exposes a synchronous function to read / write a value at
+> an address · the CPU calls it and passes the time of the external slot it is using, and computes with arithmetic
+> the logs of signals on its side as if it ran a full exchange · the SCU executes its continuation synchronously and
+> does the same for the signals on its side
+
+**Four of those are facts of this machine, and they were verified**: there is one bus master, so a slot is the
+CPU's and nothing else's; `NextExternalSlot` is pure arithmetic on the assertion instant (`next 16-tick boundary + 8`),
+so the answer is dated without consulting any clock — **30.2 ticks** after the assertion; a store exchange touches no
+other chip (only the `MD` and `answer` records); and **76.5 %** of exchanges have nothing else due before the answer
+(§24). What is *not* a fact — and it is the premise the whole shape rests on — is that the CPU and the SCU share a
+clock: **each chip has its own clock, and neither is the machine's instant.** `Engine.MachineTime` is the **queue's
+head** (plus a chip's held date, #40) and only `Run` moves it. While the CPU executes, the thing that moves it is the
+bus cycle itself — *because a cycle leaves an entry behind*: four `ApplyWrite`s at the assertion when the core's clock
+is ahead of the drain (43 % of the time, §24), then the `Resume` that the answer fires. Remove the entries and the
+core outruns the machine.
+
+**Shape 3, built** (≈60 lines: `Engine.AppendQuiet`, `SystemControlUnit.TryExchange`, one branch in `Cycle`; the SCU
+appends the exchange's records in the reference order — the CPU's four, its own `MD`/`answer`, the CPU's `Z` release —
+moves its own clock, and returns the value; nothing subscribes, nothing queues, nothing suspends). Measured, Debug 300
+frames: **11 exchanges executed while `machine_time` stayed at 0**, the core's clock reaching tick **344**, so records
+landed in the logs at instants the machine had never reached; the SCU's beam then ran *past* the core (its wakes at
+8 224 … 36 864 while the core was parked at 376); the exchange the core was waiting for was answered by nobody, and
+the boot sat at **instruction 3** with 13 bus cycles and 300 frames of SCU beam — the silent stall
+(`the-st-perf-measurement`: a lost obligation fires no assertion), with a cause this time: **nothing tells the
+scheduler where the CPU is.**
+
+**Shape 4, built — the same idea stated the way this engine could carry it**: the core does its four writes, then
+instead of suspending it *drives the drain to its own slot* (`Engine.Run(answerInstant)`) and reads the answer where
+it lands. A **6-line diff in `Cycle`**, the most readable of every shape tried. Two failures, both the drain's:
+
+1. **The drain is resumable but not re-entrant.** Its per-instant due list was a field (`_dueChips`), so a nested
+   call rebuilt it under the outer loop's feet: a chip was resumed at the wrong instant and the core re-entered its
+   own drain — `Run` at depth 6 on one end instant, 6 exchanges driven and then the boot at instruction 7.
+2. **With the due list made per-depth** (5 lines, `_dueChipsByDepth`) it runs and diverges: **2 097 180 exchanges,
+   235 525 answers (11 %), 1 048 584 instructions inside a single frame**. `MachineTime`, `_previousInstant`,
+   `_datedChips` and the per-batch digest are all per-drain state written for *one batch at a time*; a nested drain
+   moves them while the outer batch is still open.
+
+**So this is not a leaf, it is a scheduler change**, and it needs three things the machine does not have: a **now the
+chips may advance**; a **drain that nests** (a stack of drain frames, `MachineTime` per frame); and a **fold keyed on a
+record's instant rather than on the batch that appended it** (the same definition question §24's shape 1 raises, one
+level deeper). That is `design/scheduler.md` §2–§3 and ADR 0006/0007 — the paper's loop — not a flag. Its prize is
+the **1.64 ms** ceiling #42 was filed against (§47's `A − B`); its price is exactly the risk the owner named in ADR
+0008 §7: *"it would really cripple the cpu and memory coroutines logic and readability"* — the coroutine model **is**
+the scheduler, so a chip that owns its own time is where the model ends.
+
+**What stands**: §24's three legal shapes, and the counter. **What does not**: any claim that a synchronous exchange
+is a local change. A session that wants the 1.64 ms should file a paper ticket ("the machine has a global now the
+chips may advance"), not a perf ticket — and should expect to re-derive the digest contract with it.
