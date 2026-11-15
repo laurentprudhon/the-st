@@ -1714,3 +1714,145 @@ defined — and G8 is green by ~0.4–0.5 ms. **ADR 0005's leaf was that ruling'
 the falsifier is now met without it**, so the leaf stops being the budget's answer and becomes a question of
 *margin for features not yet designed*: the owner's direction of 2026-11-15 is to prototype it (#42) and weigh its
 milliseconds against the coroutine model's readability, on the diff, before deciding.
+
+## 24. The memory leaf (#42), prototyped: 76.5 % of exchanges are closed, and the leaf is worth **0.16 ms** — a measured no
+
+The owner's mandate of 2026-11-15, verbatim: *"i want to balance readability with perf gains on a real prototype,
+and we will decide if it is worth it."* This section is that evidence. The prototype lives in
+`/opt/data/cache/scratch/st-leaf/` and **never touched `main`**; the tree at `62255f2` (then `abf3b9b`) is unchanged
+by anything below except this page. The step order was #42's own: **the denominator first**, because a count could
+end the question for a few hours instead of a week.
+
+### Step 1 — the denominator: a counter, not a prototype
+
+Every bus cycle the CPU opens is one CPU suspension (`Cycle` awaits `WaitFor(long.MaxValue, Wires.Answer, …)`), so
+the machine already tells us the population: **14 227.1 exchanges a frame** (`bus_cycles` 10 300 388 over 724). What
+was unknown is how many of them §7 permits inlining — one closed class-2 exchange whose answering instant comes from
+the System Control Unit's own slot counters, **with nothing else due first**. The counter (a scratch copy, proven
+inert: both folds byte-identical and every machine counter unmoved) asks exactly that at the moment the System
+Control Unit begins an exchange — the queue's head, the other chips' held dates, and its own beam, all O(1):
+
+| bucket | exchanges / frame | share |
+|---|---|---|
+| exchanges (all) | 14 227.1 | 100 % |
+| **closed** — nothing due at or before the answer | **10 880.5** | **76.5 %** |
+| the chip's own beam event inside the window | 3 339.7 | 23.5 % |
+| an entry in the engine's queue inside the window | 5.1 | 0.03 % |
+| another chip's held date inside the window | 2.6 | 0.02 % |
+| backdated assertion (answered in the wake that saw it) | 0 | — |
+
+Two shapes of that 76.5 % worth naming: on an **active line** only **64.7 %** are closed (a group boundary every 64
+ticks against a 30.2-tick answer window), during **blanking 96.9 %** are. The exchange is 30.2 ticks wide — 0.94 µs
+of a CPU that is suspended for it either way.
+
+**Step 1's projection, and why it was wrong.** The handoff's arithmetic — denominator × 1.64 ms = **1.25 ms** —
+assumed the leaf reaches the CPU's suspension, which is what the 1.64 ms prices (§47's bench `A − B`: 115.4 ns a bus
+cycle × 14 227.1). It does not, and the reason is §7 itself:
+
+- the exchange is answered by the **System Control Unit**, and it learns of the assertion only through its
+  `Wires.Bus` subscription — which **condition 5 forbids touching** (*"touches no subscription but the CPU's own"*);
+- so the System Control Unit **must be woken**, so the CPU **must be suspended** for the round trip. The bench's
+  variant B (`IsCompleted => true`, the device answers on the CPU's own stack) is outside §7 by construction. What
+  the leaf may substitute inside §7 is the System Control Unit's **own second wait** — its *slot wait*, the
+  `WaitFor(min(due, _answerInstant), …)` that sleeps to the external slot and is woken for it.
+
+One more measured obstruction, for the record: **43.0 %** of assertions are made by a CPU whose clock has run past
+the instant the machine has drained (19 318 620 ticks over 724 frames, 30.0 ticks an assertion), and in **every one
+of those** the exchange's own four records are already in the queue at that instant — so a CPU-side fast path could
+not even decide at the assertion without reading the queue. It is not built: it needs the subscription condition
+relaxed, and the handoff's rule applies — *"if the prototype needs a second condition relaxed to be worth anything,
+that is the finding: say so and stop."*
+
+### Step 2–3 — the prototype, and the two shapes that are not the same shape
+
+`ST_LEAF=1|2`, off for every other value (unset included), T=1 only — T>1 does not exist (#8). **No coroutine changes
+anywhere**: the CPU's `Cycle` is untouched, no `await` disappears, and the whole change is the System Control Unit's
+loop plus two engine primitives.
+
+| | shape 1 — `ST_LEAF=1` | shape 2 — `ST_LEAF=2` |
+|---|---|---|
+| what it does | answers the exchange on the stack that saw the assertion, appending `MD` and `answer` at the slot | the same, but the two records are **queued** at the slot through `Engine.Write` |
+| new machine code | `Engine.AppendNow` (a record at an instant not yet drained) + `Horizon` | the same minus `AppendNow`'s use: two `ApplyWrite` pops per exchange |
+| both folds (Debug 300) | **moved** — `77b3a6ed…` / `96e8a100…` | **byte-identical** — `2bfb229b…` / `238faddf…` / 9 136 634 and 9 135 915 |
+| every machine counter | identical (`instructions`, `bus_cycles` 10 300 388, `bus_answers`, `groups`, `timer_b_counts` 144 600, `timer_c` 2 863, `queue_pops` 46 041 098, `stale_wakes` 4 376) | identical |
+| every log's record total | identical (`records_retained` 4 628; `overwritten` per log: `bus` 51 501 683, `MD` 21 069 516, `answer` 10 300 131, `group` 2 891 744, `line` 225 995) | identical |
+| the only counter that moves | `scu_loops` 27 513 212 → 19 373 004 (the wakes removed) | the same, `scu_loops`, plus `queue_pops` |
+
+**Why shape 1 moves the folds while its records are identical — and why that is not a machine change.** A record
+appended at a future instant *during the batch that saw the assertion* lands in that batch's word: batch 0's fold is
+the empty-batch constant in one run and a hash in the other, and `MD`/`answer` move from the slot's batch to the
+assertion's. The record stream itself — order, instant, `seq`, channel, driver, mask, value — does not move, and the
+per-log totals above are the proof (a moved, added or dropped record would move them). The fold is **per drain
+batch**, so a leaf that answers early cannot be fold-neutral by construction; §7 condition 6 (*"leaves the digest
+stream identical"*) is therefore not a property of the exchange but of *when the record is appended*, which is a
+definition question the owner owns — shape 2 answers it the other way, at a price, below.
+
+### Step 4 — the pairs (Release, 800 frames, `frame_n` 723, alternating)
+
+`leaf-pairs.sh` on one binary, the flag as an environment variable, six adjacent alternating pairs, `alloc_mb_per_frame`
+beside the mean:
+
+| pair | off | `ST_LEAF=1` | Δ | `ST_LEAF=2` | Δ |
+|---|---|---|---|---|---|
+| 1 | 9.33 | 9.17 | **+0.16** | 9.87 | +0.28 |
+| 2 | 9.69 | 9.52 | **+0.17** | 9.69 | +0.09 |
+| 3 | 9.52 | 9.31 | **+0.21** | 9.63 | −0.05 |
+| 4 | 9.57 | 9.54 | **+0.03** | 9.67 | −0.11 |
+| 5 | 9.51 | 9.36 | **+0.15** | 9.68 | −0.10 |
+| 6 | 9.72 | 9.48 | **+0.24** | 9.67 | −0.10 |
+| mean | | | **+0.16** (6/6) | | +0.00 (3/6 against) |
+
+- **Shape 1: 0.16 ms a frame, 6/6 pairs unanimous, `alloc_mb_per_frame` 7.94 unchanged, `pops_per_frame` 63 592.7
+  unchanged.** That is **1.6 %** of a 9.73 ms frame, or **14.2 ns an inlined exchange** — its own gate included, and
+  the gate is paid on all 14 227 exchanges a frame while only 11 243 are taken.
+- **Shape 2: no win, and it pays for its neutrality elsewhere** — `alloc_mb_per_frame` **7.94 → 9.42** (+1.48 MB,
+  +19 %) and `pops_per_frame` **63 592.7 → 85 204.4** (+21 611.7, +34 %): two queued records at 48 B each against a
+  wake that was a *held date* and therefore no pop at all (#40). Its last four pairs read −0.05 … −0.11.
+
+**Why the 119.2 ns a dated wake did not materialise.** §22's 119.2 ns is a *continuation's* cost — the chip's own
+work plus the machinery — and the leaf moves the work, it does not delete it. §48 put the engine's own resume path
+at 8–18 ns, and 0.16 ms over 11 243 exchanges is **14.2 ns**: the measurement agrees with the attribution, and it is
+the third time a wake has been priced by its continuation instead of its rent (§50's rule).
+
+### Step 5 — the readability, in the only currency that decides it: the diff
+
+| | lines |
+|---|---|
+| `src/TheST.Machine/Chips/SystemControlUnit.cs` (shape 2's landable part; shape 1 adds `AppendNow`) | **+105**, one new branch in `Run`, `Emit`/`_writeNow`, `LeafCanAnswer`, `PerformBusCycle` split into a record read + `AnswerCycle` |
+| `src/TheST.Machine/Engine.cs` | **+17** (`AppendNow`; `Horizon`) |
+| `src/TheST.Machine/Cpu/M68000.cs` | **0** |
+| `await`s removed | **0** |
+| new invariants a reader must hold | the exchange may be answered *before* the batch reaches its instant; a record may be appended at an instant not yet drained; a chip must not answer past the run's horizon; the two folds are per-batch, so an early answer is not a neutral answer |
+
+The owner's fear — *"it would really cripple the cpu and memory coroutines logic and readability"* — lands
+**half-true, and the half that lands is the worse half**: the coroutines are untouched (no `await` disappears, the
+CPU's file is not edited at all), and what the leaf costs instead is **an instant the machine has not reached yet**,
+which is every invariant above at once. It buys 0.16 ms.
+
+### The decision, as numbered shapes
+
+| shape | cost | what it buys | what it does to the folds |
+|---|---|---|---|
+| **1 — land the leaf behind the flag** (`ST_LEAF`, off by default) | +122 lines, 2 files, no `await` removed; four invariants above | **9.73 → 9.57 ms** (6/6 pairs) | **moves both** by batch membership — needs a re-bless, or a fold defined per record instant instead of per batch |
+| **2 — land the fold-neutral shape** | the same lines plus two queued records per exchange | **nothing** (3/6 against) and **+1.48 MB** allocation | identical — which is what it pays for |
+| **3 — refuse it; land this page** | this page | the fact: §7's conditions bound the leaf to the System Control Unit's slot wake, worth 0.16 ms | — |
+
+**The recommendation is 3.** 0.16 ms is 1.6 % of the frame against a green row with ~0.4 ms of its own headroom,
+and the fold question — re-bless, or redefine the fold — is a design decision worth more than 0.16 ms. It is the
+**fourth** measured no of the ladder (#44, #46, §22's remaining sites, this) and the first that could have been
+mistaken for a win: **the denominator was healthy (76.5 %) and the prize was not**, because the ceiling the ticket
+quoted (§47's 1.64 ms) belongs to a shape §7 does not permit.
+
+### What is worth keeping
+
+- **The counter, not the leaf.** `leaf_exchanges` / `leaf_closed` / `leaf_by_*` in the scratch build price any future
+  fast path in an afternoon; the exchange population, its width (30.2 ticks) and the blanking/active split (96.9 % /
+  64.7 %) are facts about this machine, not about this leaf.
+- **The rule.** A fast path's prize is bounded by *which* suspension it removes: `/opt/data/the-st`'s own ticket text
+  priced the CPU's (`A − B`, 115.4 ns a cycle) while the permission bound it to the System Control Unit's
+  (`scu_loops`' wake, ~14 ns). Read the seven conditions before deriving the denominator from the ceiling.
+- **`Horizon` is a real finding**: the reference path never needs to know where the run stops, because the scheduler
+  simply never reaches the instant. A chip that answers early does, and answers one exchange **past the end of the
+  run** without it — measured (one extra `bus_answers` and two extra records, at the run's edge).
+- Artifacts: `/opt/data/cache/scratch/st-leaf/` (tree, `ST_LEAF=1|2`), `/opt/data/cache/scratch/st-leaf/leaf-pairs.sh`,
+  `leaf-pairs/{off,leaf1,leaf2}-o{1..6}/`, and the Debug pair runs `/tmp/h300-{0,1,2}` for the folds.
