@@ -48,6 +48,24 @@ carries `url` + `sha256` + `size`. Losing the cache costs bandwidth, never truth
 proves the rule** — once the full page is gone, the crop is its only surviving derivative, which is why crops are
 promoted into the catalogue rather than left in the cache.
 
+### 0.05 Scope: only what is about the Atari ST
+
+**Ruled** (owner, 2026-11-15): *"we will only keep the magazine articles related to the atari st or its games and
+software, not all articles from all magazines."* The corpus is not an archive of the magazines; it is an archive of
+the ST.
+
+In scope: a review of a game with an ST release (including the ST columns of a multi-machine review, plus the
+shared prose); a feature, news item or interview about the ST or ST software; a hints/cheats/map page for an ST
+game; an ad for an ST product. Out: Amiga-, C64- and console-only content, and general industry pieces with no ST
+content in them.
+
+A consequence worth writing down: **an article need not link to a title.** An STE hardware review, a monitor
+comparison or a "ST vs Amiga" feature is squarely in scope and has no game to point at, so `article_titles` is
+many-to-many *and* optional — the link exists when the article is about a particular work.
+
+This also moves the size estimates: the ~25 000-article crop figure below was derived before this rule and should
+be read as an upper bound.
+
 ### 0.1 Does this need git LFS?
 
 Yes, for the images — and the numbers say it needs a paid LFS pack, not the free 1 GB. Order of magnitude at the
@@ -75,6 +93,26 @@ Total order **25–30 GB**. Three consequences:
 Alternatives, and why not: plain git makes every clone pay the full history for ever; `git-annex` handles this size
 better but is not GitHub-native and is hard to explain to a reader; object storage plus a manifest contradicts the
 "full information in one place" goal this split exists to serve.
+
+**Host — checked, because the assumption was wrong.** GitHub's LFS metering does **not** depend on visibility: the
+same three rules apply and the usage counts against the *repository owner* whichever it is (storage on every push,
+bandwidth on every download), with a free quota of **1 GB storage and 1 GB/month bandwidth** and metered billing
+beyond it at **$5 per 50 GB** of each. So making the repository public does not raise the limit. The asymmetry the
+owner expected does exist, just elsewhere: **Hugging Face** gives free public repositories best-effort storage
+(recommended repo size **300 GB**, 200 GB per file) against **100 GB** for private, which is exactly the
+public-is-cheaper shape.
+
+Three options, and the trade: **(a) GitHub with paid LFS** — ~$3–5/month at this size, one place, the ecosystem the
+project already lives in; **(b) data and text on GitHub, images on a HF dataset** — free, but two homes and a join;
+**(c) everything on HF** — free at this size and one place, but an unusual home for a software catalogue, subject
+to their "genuinely useful to the community" norm. The project's own preference for simplicity points at (a) while
+the corpus stays under ~50 GB, with (c) as the fallback if manual scans push it past that.
+
+**And one tension to keep in view**: removal and LFS pull in opposite directions. LFS objects are immutable in
+history, so an item that must be withdrawn is removed from `HEAD` cheaply and from history only by a rewrite (plus
+a support request to purge the objects). If withdrawal has to stay cheap, contested material should not enter the
+store in the first place — which is the argument for crops over full pages, and for a takedown-shaped scope rule
+rather than a promise to delete later.
 
 ## 1. The five levels
 
