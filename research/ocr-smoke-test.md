@@ -22,7 +22,7 @@ before any pipeline code exists, and measure what one magazine page actually cos
 | **OvisOCR3** Q4 | `document_structured` | **23.5 s** | 2,172 in / 5,526 out | **58 blocks, valid JSON**, `{bbox, category, content}` — text 41, image 7, paragraph_title 3, table 1, doc_title 1, header 1, footer 1, number 1 |
 | **d1-2B** Q4 | 4 gate questions (`noul`×2, `choice`, `score`) | **2.5 s** | 7,619 in / **0 out** | `is_review` 0.17 · `has_score` 0.14 · `section` = **help** (0.886) · `text_density` = 3/3 (0.59) — all four correct for this page |
 | **LightOnOCR-3-0.8B** Q4 | transcription | **11.2 s** | 1,874 in / 2,690 out | 8,796 chars of Markdown + HTML table; contains `ST ANSWERS`, `72%`, `Word Finder`, `Meedmore`, `Compo` |
-| **LFM3-VL-2B** Q4 | English summary of the page | **4.5 s** at 600 tokens (truncated mid-think) → clean answer at ~2.5k | 1,918 in / 600 then ~2,500 out | 3 sentences, correct: *"the 'Answers / Help' section (Issue 49, ST Format) … no specific game titles or scores are mentioned; the only game reference is … an Amstrad CPC464 emulator (the only monetary figures given — £2.75 and £3.95 — are prices, not scores)"* |
+| **LFM3-VL-2B** Q4 | English summary of the page | **4.5 s** at 600 tokens (truncated mid-think) → **7.6 s** with a 2,500 budget | 1,918 in / **1,126 out** (3,879 chars of reasoning, 504 chars of answer) | 3 sentences, correct: *"the 'Answers / Help' section (Issue 49, ST Format) … no specific game titles or scores are mentioned; the only game reference is … an Amstrad CPC464 emulator (the only monetary figures given — £2.75 and £3.95 — are prices, not scores)"* |
 
 ## Five findings that change the pipeline
 
@@ -47,10 +47,11 @@ before any pipeline code exists, and measure what one magazine page actually cos
 ## The summary model thinks before it answers — budget for it
 
 LFM3-VL-2B is a reasoning VLM: at `max_tokens=600` it spent the whole budget narrating its own inspection
-(*"Let me look carefully at the image…"*) and returned **no final answer**; at ~2,500 tokens it produced a
-clean three-sentence summary. Two consequences for the pipeline: give the summary stage a **2–3k token
-budget** (or run the server with reasoning disabled), and read `content` only after the think block — the
-same trap as LightOnOCR's `reasoning_content`, in the opposite direction.
+(*"Let me look carefully at the image…"*) and returned **no final answer**; with a 2,500 budget it finished
+in **1,126 completion tokens** — 3,879 characters of reasoning, then 504 characters of answer. Two
+consequences for the pipeline: give the summary stage a **2k token budget** (or run the server with reasoning
+disabled), and read `content` only after the think block — the same trap as LightOnOCR's `reasoning_content`,
+in the opposite direction.
 
 The quality is worth noting because it is the discrimination the review extractor needs: on a page that
 mentions `72%`, it reported that the page has **no game scores**, and that `£2.75` and `£3.95` are **prices,
