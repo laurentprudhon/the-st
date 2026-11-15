@@ -1632,7 +1632,10 @@ still reads `2bfb229b…` / 9 136 634 and `238faddf…` / 9 135 915, with `drain
    9 136 634, `run.stream` `238faddf3c4cd19e262284d5b80fc8dfb89ed477203c382cc1dc3f3a6faedf1c` / 9 135 915. The
    synthetic `g1-a` is untouched (95 999 words, `58fcdddf…`), because the change cannot be reached from Debug.
 2. **Six adjacent alternating Release pairs**, §22.4: **11.13 → 9.73, −1.40, 6/6**, allocation beside the mean.
-3. **`scripts/validate.sh` — PASS, every row ok, G8 green at 9.60 ms** of 10.00 (`runs/20261115T141652Z`), n 724,
+3. **`tools/cpu-dissection check` — `same_work yes`**: all four variants replay the boot's 5 564 478 cycles to
+   `pc e02fe2` / `sr 2320`, an independent witness of the CPU against recorded wire traffic (the CPU is not what
+   moved, and this says so without the digest).
+4. **`scripts/validate.sh` — PASS, every row ok, G8 green at 9.60 ms** of 10.00 (`runs/20261115T141652Z`), n 724,
    `alloc_mb_per_frame` 7.93, `gc_ms_per_frame` 0.12, `G1: 9136634 digest words, identical`, `G2` identical, the
    synthetic green. **Two passes are quoted, because the first one is the honest one to quote**: the pass 7
    minutes earlier (`runs/20261115T141246Z`) read **10.02 ms** — 31 ok / 1 FAIL, G8 red by 0.02 — with the same
