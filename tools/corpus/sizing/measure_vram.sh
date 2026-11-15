@@ -11,12 +11,12 @@ echo "model,ctx,vram_mib"
 run(){ "$HERE/measure_one.sh" "$1" "$2" "$3" "$PORT"; }
 
 if [ "${1:-}" = "--quick" ]; then
-  run OvisOCR3-Q4_K_M.gguf OvisOCR3.mmproj-Q8_0.gguf 8192
-  run OvisOCR3-Q4_K_M.gguf OvisOCR3.mmproj-Q8_0.gguf 32768
+  run OvisOCR3.Q4_K_M.gguf OvisOCR3.mmproj-Q8_0.gguf 8192
+  run OvisOCR3.Q4_K_M.gguf OvisOCR3.mmproj-Q8_0.gguf 32768
   exit 0
 fi
 
-for spec in "OvisOCR3-Q4_K_M.gguf|OvisOCR3.mmproj-Q8_0.gguf" \
+for spec in "OvisOCR3.Q4_K_M.gguf|OvisOCR3.mmproj-Q8_0.gguf" \
             "d1-2B-Q4_K_M.gguf|mmproj-d1-2B-Q8_0.gguf" \
             "LFM3-VL-2B-Q4_K_M.gguf|mmproj-LFM3-VL-2B-Q8_0.gguf"; do
   m="${spec%%|*}"; mm="${spec##*|}"

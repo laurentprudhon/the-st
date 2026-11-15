@@ -11,7 +11,7 @@ set -euo pipefail
 MODELS_DIR="${MODELS_DIR:-$HOME/models}"
 LLAMA_DIR="${LLAMA_DIR:-$HOME/llama}"
 LLAMA_BUILD="${LLAMA_BUILD:-b12409}"
-CUDA_TAG="${CUDA_TAG:-cuda-12.8}"          # match the driver's CUDA UMD version; 12.8 works on 13.5
+CUDA_TAG="${CUDA_TAG:-cuda-13.5}"           # match the driver's CUDA UMD version (`nvidia-smi`); 12.8 runs fine on a 13.x driver
 BASE="https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_BUILD}"
 
 say(){ printf '\n\033[1m== %s\033[0m\n' "$*"; }
@@ -23,17 +23,20 @@ if ! command -v nvidia-smi >/dev/null; then
   exit 1
 fi
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
-nvidia-smi | grep -oE 'CUDA Version: [0-9.]+' || true
+nvidia-smi | grep -oE 'CUDA( UMD)? Version: [0-9.]+' || true
 
 say "llama.cpp ${LLAMA_BUILD} (${CUDA_TAG})"
 mkdir -p "$LLAMA_DIR" "$MODELS_DIR"
-if [ ! -x "$LLAMA_DIR/llama-${LLAMA_BUILD}/llama-server" ]; then
+CUDART_DIR="$LLAMA_DIR/cudart-llama-${LLAMA_BUILD}-bin-ubuntu-${CUDA_TAG}-x64"
+# Key the skip on the cudart tag too: the binary dir is tag-independent, so switching CUDA_TAG
+# would otherwise keep the old binaries and fail on the missing cudart.
+if [ ! -x "$LLAMA_DIR/llama-${LLAMA_BUILD}/llama-server" ] || [ ! -d "$CUDART_DIR" ]; then
   curl -fL -o "$LLAMA_DIR/llama.tar.gz"  "${BASE}/llama-${LLAMA_BUILD}-bin-ubuntu-${CUDA_TAG}-x64.tar.gz"
   curl -fL -o "$LLAMA_DIR/cudart.tar.gz" "${BASE}/cudart-llama-${LLAMA_BUILD}-bin-ubuntu-${CUDA_TAG}-x64.tar.gz"
   tar xzf "$LLAMA_DIR/llama.tar.gz"  -C "$LLAMA_DIR"
   tar xzf "$LLAMA_DIR/cudart.tar.gz" -C "$LLAMA_DIR"
 fi
-export LD_LIBRARY_PATH="$LLAMA_DIR/cudart-llama-${LLAMA_BUILD}-bin-ubuntu-${CUDA_TAG}-x64:${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="$CUDART_DIR:${LD_LIBRARY_PATH:-}"
 "$LLAMA_DIR/llama-${LLAMA_BUILD}/llama-server" --version | head -2
 "$LLAMA_DIR/llama-${LLAMA_BUILD}/llama-server" --list-devices
 
@@ -44,7 +47,7 @@ dl(){ # repo file
     echo "  get  $2"; curl -fL -C - -o "$MODELS_DIR/$2" "$url"
   fi
 }
-dl mradermacher/OvisOCR3-GGUF              OvisOCR3-Q4_K_M.gguf
+dl mradermacher/OvisOCR3-GGUF              OvisOCR3.Q4_K_M.gguf
 dl mradermacher/OvisOCR3-GGUF              OvisOCR3.mmproj-Q8_0.gguf
 dl LiquidAI/d1-2B-GGUF                     d1-2B-Q4_K_M.gguf
 dl LiquidAI/d1-2B-GGUF                     mmproj-d1-2B-Q8_0.gguf
