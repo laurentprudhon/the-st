@@ -5,7 +5,11 @@ concurrently, how many magazine pages can be in flight, and what does each one c
 
 Everything here is **measured on the 8 GB box** (llama.cpp b12409, RTX 3070 Ti Laptop) and then applied to a
 32 GB card by arithmetic. The calculator is `tools/corpus/sizing/size_pipeline.py`; the raw measurements are
-in `/opt/data/cache/scratch/sizing/vram.csv`.
+`tools/corpus/sizing/vram-measured.csv`. To re-derive the constants on another card (the 5090 will have a
+different driver and possibly a different llama.cpp build), run
+`tools/corpus/sizing/measure_vram.sh` — it starts each model at 8k and 32k context, reads `nvidia-smi`, and
+prints the CSV rows; `--quick` does one model as a sanity check. Verified on this box: it reproduces
+1,181 MiB and 1,493 MiB exactly.
 
 ## 1. The measured constants
 
