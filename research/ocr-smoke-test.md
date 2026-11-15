@@ -43,6 +43,21 @@ before any pipeline code exists, and measure what one magazine page actually cos
    blocks through the gate, then all reviews through the summary model. On a 32 GB card the same pipeline
    overlaps. Measured VRAM headroom at load: 7,097 MiB free before the first model.
 
+## The block vocabulary is closed, and the crops come free
+
+OvisOCR3's `document_structured` prompt fixes a **24-value category set** — `abstract, algorithm,
+aside_text, chart, content, display_formula, doc_title, figure_title, footer, footer_image, footnote,
+formula_number, header, header_image, image, inline_formula, number, paragraph_title, reference_content,
+seal, table, text, vertical_text, vision_footnote` — so the pipeline can **validate** every block instead of
+inventing a taxonomy, and a category outside the set is a parse error rather than a new kind of thing.
+
+Two conventions in the same prompt matter for the artefact store (#60):
+
+- image-like blocks (`image`, `chart`, `header_image`, `footer_image`) are emitted as
+  `<img src="images/bbox_{x_min}_{y_min}_{x_max}_{y_max}.jpg" />` — i.e. **the model hands us the crop
+  rectangle for every picture on the page**, so the cropper is a rectangle copy, not a detection problem;
+- `table` blocks come back as HTML, which is how a score table survives as structure instead of as prose.
+
 ## What the cross-check will measure (design, not yet run)
 
 Both OCR engines run on the same page; the comparison is not "which is prettier" but three numbers on the
