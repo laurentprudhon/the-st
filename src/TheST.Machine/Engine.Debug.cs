@@ -215,6 +215,15 @@ public sealed partial class Engine
     // `RecountEvery` batches — because a boot queues ~15 000 entries a frame and walking it per batch is
     // quadratic. The cheap side runs every batch; the independent side runs often enough to catch a
     // drifted counter within a few hundred instants, and the digest still names the first differing one.
+    //
+    // #58 — the engine used to keep a second copy of that count beside the chips, `Dictionary<Chip,int>
+    // _freshWakes`, written at all ten arm and resume sites, as the cheap side's witness. It was deleted
+    // rather than moved onto the chip: a temporary probe compared it with `Chip.Armed` at every batch
+    // boundary of a 300-frame Debug boot and found them equal 300 times out of 300 (both are bumped in
+    // `Arm` and cleared when a wake fires), so the field the ticket proposed would have carried the same
+    // duplication without the dictionary's cost, and the cheap side would have compared a number with
+    // itself. What is left to check every batch is what the chips can still say on their own: the held
+    // dates against the engine's tally, and a queue entry that no suspended chip could own.
     const int RecountEvery = 256;
 
     long _batchesSinceRecount;
@@ -227,8 +236,6 @@ public sealed partial class Engine
             AssertLiveWakesMatchTheQueue(instant);
         }
 
-        IReadOnlyDictionary<Chip, int> live = LiveWakes();
-
         int suspended = 0;
         int dated = 0;
         foreach (Chip chip in _chips)
@@ -236,10 +243,6 @@ public sealed partial class Engine
             if (chip.Armed > 0)
             {
                 suspended++;
-                if (live.GetValueOrDefault(chip) <= 0)
-                {
-                    throw Fail(2, $"at {instant}: {chip.Name} is suspended on {chip.Armed} wake(s) and owns nothing — {WhereIs(chip)}");
-                }
             }
 
             if (chip.HasDate)
@@ -254,14 +257,6 @@ public sealed partial class Engine
         if (dated != _datedChips)
         {
             throw Fail(2, $"at {instant}: the engine counts {_datedChips} held date(s); {dated} chip(s) hold one");
-        }
-
-        foreach ((Chip chip, int count) in live)
-        {
-            if (count > 0 && chip.Armed <= 0)
-            {
-                throw Fail(2, $"at {instant}: {chip.Name} has a live wake but believes it holds none");
-            }
         }
 
         if (suspended == 0 && _queue.Count > 0)
@@ -330,10 +325,12 @@ public sealed partial class Engine
             }
         }
 
+        // the chips' own verdict — `Armed` is the only ledger there is now (#58): a walk over the chips
+        // (seven today), which is cheaper than the dictionary it replaces
         var claimed = new HashSet<Chip>();
-        foreach ((Chip chip, int count) in LiveWakes())
+        foreach (Chip chip in _chips)
         {
-            if (count > 0)
+            if (chip.Armed > 0)
             {
                 claimed.Add(chip);
             }

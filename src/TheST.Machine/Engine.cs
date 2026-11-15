@@ -34,10 +34,6 @@ public sealed partial class Engine
 
     readonly List<Chip> _chips = [];
 
-    // Live wakes per chip, kept incrementally: assertion 2's second witness must not walk the queue
-    // (a boot queues tens of thousands of entries a frame, and a per-batch scan is quadratic).
-    readonly Dictionary<Chip, int> _freshWakes = [];
-
     // Two counters, one consumer each — #39's ruling. `_arrival` numbers queue entries and is read
     // by nothing but `Key.CompareTo`, the same-instant tie-break (ADR 0007: "the emitter sequence,
     // assigned at insertion"). `_recordSeq` numbers records and is read by the subscription
@@ -305,7 +301,6 @@ public sealed partial class Engine
 
         _datedChips--;
         Action continuation = chip.TakeDate();
-        _freshWakes[chip] = 0;
         chip.Disarm();
         chip.Clock = t;
         BeforeResume(chip);
@@ -348,7 +343,6 @@ public sealed partial class Engine
         OnWireWrite(chip, t);
 
         long token = chip.Arm();
-        _freshWakes[chip] = _freshWakes.GetValueOrDefault(chip) + 1;
         AwaitWriteSuspensions++;
 
         if (t <= MachineTime)
@@ -373,7 +367,6 @@ public sealed partial class Engine
         OnRead(chip, t);
 
         long token = chip.Arm();
-        _freshWakes[chip] = _freshWakes.GetValueOrDefault(chip) + 1;
         ReadSuspensions++;
 
         if (t <= MachineTime)
@@ -397,7 +390,6 @@ public sealed partial class Engine
         OnRead(chip, from);
 
         long token = chip.Arm();
-        _freshWakes[chip] = _freshWakes.GetValueOrDefault(chip) + 1;
         Subscriptions++;
 
         List<Subscriber> subscribers = SubscribersOf(channel).Pending;
@@ -448,7 +440,6 @@ public sealed partial class Engine
             // future is held in the chip (#40) — it is this half of the pair that loses most often, and
             // it is never enqueued and never popped now.
             chip.Arm();
-            _freshWakes[chip] = _freshWakes.GetValueOrDefault(chip) + 1;
             ReadSuspensions++;
             HoldDate(chip, instant, continuation);
         }
@@ -469,7 +460,6 @@ public sealed partial class Engine
     void AddSubscriber(Chip chip, Channel channel, long afterSeq, Action continuation)
     {
         long token = chip.Arm();
-        _freshWakes[chip] = _freshWakes.GetValueOrDefault(chip) + 1;
         Subscriptions++;
 
         List<Subscriber> subscribers = SubscribersOf(channel).Pending;
@@ -528,7 +518,6 @@ public sealed partial class Engine
 
                 // A Resume sets the chip's clock to the instant it resumes at, before the chip runs: it
                 // can then neither read nor write an earlier instant (assertion 7).
-                _freshWakes[resume.Chip] = 0;
                 resume.Chip.Disarm();
                 resume.Chip.Clock = t;
                 BeforeResume(resume.Chip);
@@ -540,11 +529,6 @@ public sealed partial class Engine
                 AppendRecordAndFire(t, apply.Channel, apply.Driver, apply.Mask, apply.Value);
                 if (apply.Waiter is { } waiter && apply.WaiterContinuation is { } continuation)
                 {
-                    if (apply.WaiterToken == waiter.WakeToken)
-                    {
-                        _freshWakes[waiter] = 0;
-                    }
-
                     Enqueue(new Resume(waiter, continuation, t, apply.WaiterToken));
                 }
 
@@ -579,7 +563,6 @@ public sealed partial class Engine
             subscribers.RemoveAt(index);
             if (subscriber.Token == subscriber.Chip.WakeToken)
             {
-                _freshWakes[subscriber.Chip] = 0;
                 Enqueue(new Resume(subscriber.Chip, subscriber.Continuation, t, subscriber.Token));
             }
             else
@@ -668,12 +651,6 @@ public sealed partial class Engine
     partial void OnWireWrite(Chip chip, long instant);
     partial void OnWriteAndWait(Chip chip, long instant);
     partial void OnRead(Chip chip, long instant);
-
-    /// <summary>
-    /// The chips' live wakes, for assertion 2: counted as they are armed and cleared as they fire, so
-    /// the check costs one pass over the chips rather than one over the queue.
-    /// </summary>
-    internal IReadOnlyDictionary<Chip, int> LiveWakes() => _freshWakes;
 
     // ---- The queue: two entry kinds, keyed (instant, seq) and nothing else -------------------
     abstract class Entry(long instant)

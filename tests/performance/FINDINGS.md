@@ -501,6 +501,10 @@ its own any more.**
 
 The gate: **31 ok, 1 FAIL (G8 21.20 ms)**, G5 and G6 green, G3 silent from reset to the desktop.
 
+*(The machine-wide counters above are the 300-frame Debug boot's. On the gate's 800-frame boot — 724
+frames timed — the same three read `groups` 2 892 000, `queue_pops` 46 041 098 and `subscriptions`
+50 131 313, and §14 quotes them that way.)*
+
 **The rule this establishes, for every chip still a stub.** A wire a chip reads for *events* must be an
 arm of its wake; a log may be *sampled* only for "what does it hold now" (a level read), never for a
 backlog. This chip has four more event inputs: `SINT` (still a cursor, silent only because Sound is a
@@ -508,3 +512,67 @@ stub), `FDINT`/`DINT` (Disk), `BINT` (Blitter), and `GPI4` (Controllers — a `G
 answers, not a cursor at all). `WaitFor` takes one date and **two** wires, so `SINT` joins as the same
 six lines when Sound drives a frame end. Until then assertion 8 is what says a cursor fell behind,
 which is why it was worth keeping.
+
+## 14. The live-wake ledger (#58): 2.66 ms of rent a frame, and the ticket's field that was not needed
+
+`Engine` kept `Dictionary<Chip,int> _freshWakes`, written at **every** arm (`Engine.cs`, five sites) and
+every resume (five more) and read only by assertion 2 — which lives inside `#if DEBUG`, so in Release it
+was ~96 M dictionary operations a run that nothing read: 50 131 313 arms + 46 041 098 pops over the gate's
+724 timed frames. The ticket projected **2.7–5.5 ms** from a 20–40 ns probe.
+
+**The ticket's step 1 was "move the count onto the chip". It was measured first, and then not done.** Both
+numbers it would have moved — `_freshWakes[chip]` and `Chip.Armed` — are bumped at arm and cleared when a
+wake fires, so the ledger was a second copy of a counter the chip already holds. A temporary probe in
+`AfterBatch` compared the two at every batch boundary of a 300-frame Debug boot and found them equal **at
+every one**; a `FreshWakes` field on the chip would therefore have compared a number with itself in the
+cheap half of assertion 2, and kept the duplication that was the rent. So the ledger was **deleted** and
+assertion 2 rewritten around what the chips can still say on their own:
+
+- every batch: the held dates against `_datedChips`, and the rule that a machine with nothing suspended
+  holds no queued `Resume`;
+- every 256th batch, unchanged: the full rebuild from the queue, the held dates and the subscription
+  store, compared **chip by chip with `Chip.Armed`** — still two independent halves, and the one that can
+  actually catch an armed-and-lost wake.
+
+Six adjacent alternating Release pairs, 800 frames, load 0.91–1.64 (pair 6 at 1.64 quoted only as
+agreement), `ea42288` (A) against the same tree without the ledger (B):
+
+| pair | A | B | delta |
+|---|---|---|---|
+| 1 (A→B) | 20.16 ms | 17.62 ms | **2.54** |
+| 2 (B→A) | 20.29 | 17.55 | **2.74** |
+| 3 (A→B) | 20.48 | 17.90 | **2.58** |
+| 4 (B→A) | 20.42 | 17.42 | **3.00** |
+| 5 (A→B) | 20.08 | 17.66 | **2.42** |
+| 6 (B→A) | 20.90 | 17.38 | **3.52** |
+
+**All six positive, mean 2.80 ms — 2.66 ms over the five pairs under the 1.5 load floor.** The measured
+number sits inside the ticket's projection and near its upper half; at 30 ns a probe over ~96 M probes the
+arithmetic would predict 2.9 ms, which is the first time since #40 that a projection of this shape survived
+contact at full size. `alloc_mb_per_frame` **11.47 in both** (a field write, no object), `gc_ms_per_frame`
+0.19 both, `stale_wakes` 828 on the 300-frame Debug boot in both.
+
+**Both folds are byte-identical**, and so is every counter the change could have touched:
+
+| | `ea42288` | with the ledger gone |
+|---|---|---|
+| `run.digest` (300-frame boot) | `6e657033…` / 10 801 967 words | `6e657033…` / 10 801 967 |
+| `run.stream` (300-frame boot) | `e0ca9570…` / 10 801 251 words | `e0ca9570…` / 10 801 251 |
+| gate boot row (800 frames) | `0b0bf88f…` / `1a6102ff…` | `0b0bf88f…` / `1a6102ff…` |
+| `instructions` / `bus_cycles` / `groups` | 4 484 320 / 10 300 388 / 2 892 000 | same |
+| `queue_pops` / `subscriptions` | 46 041 098 / 50 131 313 | same |
+| `stale_wakes` (gate) | 4 376 | 4 376 |
+
+The gate: **31 ok, 1 FAIL**, G8 **18.07 ms** (was 21.20 ms on the same gate an hour earlier, same host,
+same tree but for this change) — a third witness to the pairs, quoted across runs and therefore only as
+agreement. G5 and G6 green, G3 silent from reset to the desktop, and the ADR 0008 §6 rows still show no
+digest symbol and no `ASSERTION` text in Release.
+
+**The rule this establishes.** A Debug instrument that keeps a *counting* structure pays for it in Release
+at every event it counts. Before moving such a counter somewhere cheaper (which is what the ticket
+proposed, and what #40 did for a chip's date), check whether one already lives there: a duplicate ledger
+costs the write it was supposed to save, and its cheap-side assertion compares a number with itself. What
+is genuinely independent — the queue and the subscription store — is worth a sampled walk, not a per-batch
+copy. The same test applies to any future instrument written in `Engine.cs` outside `#if DEBUG`: **if
+Release can read it, only Release's own rows can show its cost; if it cannot, it is rent.**
+
