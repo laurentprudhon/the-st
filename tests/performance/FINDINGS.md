@@ -576,3 +576,137 @@ is genuinely independent — the queue and the subscription store — is worth a
 copy. The same test applies to any future instrument written in `Engine.cs` outside `#if DEBUG`: **if
 Release can read it, only Release's own rows can show its cost; if it cannot, it is rent.**
 
+## 15. The CPU's coroutine, dissected (#47): 84 % of a bus cycle is the suspension, and the wrappers are worth 1.1 ms
+
+#58's rule priced the instruments; this ticket prices the thing they were measuring. Three builds over the
+**boot's own bus cycles** — not a synthetic loop — plus a fourth that is the design-neutral cut the
+comparison turned up. Everything below is measured in `tools/cpu-dissection` on the laptop host
+(i7-12700H × 20), `main` = `29a849d`, and **nothing in it lands on the machine**: the CPU sources are
+linked from `src/` unchanged, `gen.py` derives the two variants from the same two files, and the whole
+deliverable is a tool and this page. The gate is untouched and still reads 31 ok / 1 FAIL, G8 18.07 ms at
+`runs/20261115T090825Z`.
+
+### The workload, and why it is the boot's
+
+A temporary capture (deleted before the commit, as #58's rule demands) dumped every bus cycle of a
+**300-frame Release boot** — address, size, flags, control, data, the asserted instant, the answering
+instant, the answer byte and the `MD` word — and every `IPL` record. The bench replays that trace into the
+real `M68000` sources and checks, at **every** cycle, that the replay asserted the same four lanes at the
+same instant; the pass ends when the trace does. A replay that drifts is not measured, it throws.
+
+| what the trace is | |
+|---|---|
+| bus cycles | **5 564 478** (18 548 a frame over 300 frames of 640 000 ticks) |
+| instructions | **2 655 080** (2.10 bus cycles an instruction) |
+| reads / writes / acknowledges | 5 400 783 / 162 234 / 1 461 |
+| `IPL` records | 188 979 (630 a frame) |
+| latency, asserted → answered | **never 0**: mean 30.1 ticks, so *every* bus cycle suspends |
+| sites | fetch 4 220 203 (75.7 %), data read 1 180 580, write 162 234, acknowledge 1 461, stop-wait 13 662 |
+
+**Same work, proven four ways.** All four variants replay the identical trace to the identical end state —
+5 564 478 bus cycles, 2 655 080 instructions, and the same `pc`, `sr`, `d0`, `a7` (`e02fe2`, `2320`,
+`000005e2`, `00000e96`). No delta below is a workload difference.
+
+### Experiment 1 — the same instructions, with and without continuations
+
+| variant | what it is | ns / bus cycle | ns / instruction | ms a pass | MB a pass |
+|---|---|---|---|---|---|
+| **A** | the real CPU, real suspension, one queue entry and a `Resume` a cycle | **501.0** | **1 049.9** | 2 787.6 | 3 080.5 |
+| **B** | the same code, every await already answered — no suspension, no `Resume` | **82.6** | **173.1** | 459.5 | 4.0 |
+| **C** | the same code with no `async` at all (generated: `await` deleted, the two real waits direct calls) | **40.8** | **85.5** | 226.9 | 4.0 |
+| **D** | A with the bus helpers folded into one leaf — one suspended frame a cycle instead of three | **421.6** | **883.5** | 2 345.8 | 2 638.7 |
+
+Six alternating passes each, order mirrored every pass (A B C D, then D C B A), each variant a fresh engine
+and a fresh CPU; the deltas are per adjacent pass, never across the run:
+
+| delta | ms a pass | ns a bus cycle | unanimity | share of A |
+|---|---|---|---|---|
+| **A − B** the price of suspension | **2 343.5** | **421.1** | 6/6 | **84.0 %** |
+| **B − C** the price of the state machine | **237.8** | **42.7** | 6/6 | 8.5 % |
+| **A − C** the whole coroutine | **2 581.2** | **463.9** | 6/6 | 92.6 % |
+| **A − D** the price of the wrapper frames | **446.7** | **80.3** | 6/6 | 16.0 % |
+
+**A resume costs ~420 ns**, and the four deltas say what it is: 84 % of the CPU's time on a bus cycle is
+*suspending and being resumed*, 8.5 % is the `async` machinery that never suspends, and about 7 % is the
+CPU's actual work — decode, execute, log reads. The ticket's "2.60 µs a resume, the other 2.5 µs
+unaccounted for" was measured on the Xeon host at a 65.8 ms frame; on this host, at this tree, the answer is
+that **there is nothing else in it**: the 2.5 µs is not hiding in decode, it *is* the continuation machinery,
+priced by removing it.
+
+### What a suspension allocates: the box is per frame, not per chip
+
+`GC.GetAllocatedBytesForCurrentThread` around each suspension (bracketed from the previous one, because the
+box and the continuation `Action` are allocated before the engine is reached), a whole pass:
+
+| | bytes |
+|---|---|
+| a `Wake` (the machine's `Resume`, same shape) | **48** |
+| an `Action` (measured, one per suspended frame) | **56** |
+| the state machine boxes `Unsafe.SizeOf` reports, boxed | 40–128 each (33 of them, 3 992 B if every one were boxed once) |
+| **A's allocation a pass** | **3 080.5 MB over 5 578 140 resumes = 579.1 B a resume** |
+| **D's allocation a pass** | **2 638.7 MB = 496.4 B a resume** (A − D = 83 B a resume) |
+
+The per-suspension histogram is the answer to #46's first question: the modes are **496 B** (3.39 M
+suspensions), **376 B** (0.83 M), **504 B** (0.39 M) and **1 176 B** (0.72 M), with a long tail — i.e. the
+380 B of §8 is not "a box and a `Resume`", it is **a stack of frames**: the fetch chain is
+`Run → FetchAsync → ReadWordAsync → Cycle`, a data read is that plus `ExecuteAsync → LineXAsync →
+ReadEaAsync`, and **every frame in the chain boxes its own state machine and allocates its own
+continuation**. `Run`'s box really is once per chip (the handoff's hypothesis is true there); every other
+box is per *invocation*, and `Cycle`/`ReadWordAsync` are invoked once per bus cycle.
+
+So the pooled-`Resume` idea (#46 question 3) can only reach the 48 B of 579 — 8 % — and the box is not one
+object to pool but 4–6 per resume. That is #46's measured ceiling, and it is the reason the ruling below is
+about *frames*, not about objects.
+
+### Experiment 2 — the attribution, per site and per opcode line
+
+Suspensions a bus cycle, by opcode line (the opcode the CPU was executing; a fetch belongs to the
+instruction it is fetching), `susp/ins` and the mean bytes a suspension:
+
+| line | instructions | suspensions | susp/ins | bytes/suspension |
+|---|---|---|---|---|
+| `2` MOVE.L | 374 065 | 1 841 651 | **4.92** | 619.9 |
+| `3` MOVE.W | 411 362 | 1 546 468 | 3.76 | 647.9 |
+| `6` Bcc/BSR | 1 044 028 | 1 050 006 | 1.01 | 497.1 |
+| `5` ADDQ/SUBQ/Scc/DBcc | 365 418 | 424 685 | 1.16 | 530.0 |
+| `0` ORI/ANDI/… | 14 247 | 32 724 | 2.30 | 706.8 |
+| `1`/`b`/`d` byte, CMP and ADD forms | 400 369 | 448 441 | 1.12 | 620/503/526 |
+| `4` | 38 843 | 222 065 | 5.72 | 531.7 |
+| `9`, `c`, `e` | 4 290 | 9 506 | 2.2 | 496/619/554 |
+
+**75.7 % of every suspension in the machine is an instruction fetch**, and a fetch is the *shortest* chain
+the CPU has — four frames. The instruction mix drives the rest: a `MOVE.L` costs ~5 bus cycles and a
+branch ~1, which is the whole difference between the lines.
+
+### The ruling
+
+1. **A design-neutral cut exists, and it is measured: fold the bus wrappers (D).** `ReadWordAsync`,
+   `FetchAsync`, `ReadByteAsync` and the two write helpers are one-line wrappers around `Cycle`, so a bus
+   cycle suspends **three** frames (the wrapper, the wrapper's wrapper for a fetch, and `Cycle`) where the
+   design needs **one**. Variant D moves the assertion, the wait, the answer, the fault bookkeeping, the
+   release and the fetch's `pc` advance into a single leaf, and the helpers become forwarders — same
+   records, same instants, same order, byte-identical work. Measured: **80.3 ns a bus cycle, 446.7 ms a
+   pass, 83 B a resume of allocation gone**, 6/6 unanimous, and at the gate's own density
+   (14 227 cycles a frame) that is **1.14 ms a frame**; on this trace's denser frames (18 548) **1.49 ms**.
+   Filed as **#62**, in the shape of #44, to be priced there over six pairs of the whole engine — this is a
+   bench number and the ticket says so.
+2. **The remaining 375 ns a cycle is irreducible inside the coroutine model without giving up the model.**
+   The frames left are the *instruction layer's* — `Run → ExecuteAsync → LineXAsync → ReadEaAsync` — one
+   per dispatch level, and they are the readability ADR 0009 bought. Nothing in this page prices that away:
+   folding them is the flat dispatch switch, which is a design change, not a perf change.
+3. **Therefore #42 is a real option, and here is its ceiling.** A CPU with no coroutine at all (C) costs
+   40.8 ns a bus cycle against 501.0: **460 ns a cycle, 6.55 ms a frame at the gate's density, ~37 % of an
+   18 ms frame**. That is the whole of the leaf's prize, and it is worth having — but no smaller step
+   reaches it, and #49's re-evaluation now has the number it was waiting for.
+
+### What this does *not* say
+
+- The bench's machine is **one chip**: the CPU's four bus writes append records and fire nothing, so the
+  `System Control Unit`'s answer cost and every subscription fire are absent. A's 501 ns a cycle is the CPU's
+  own chain over the machine's own `Resume` shape, and the real engine adds the wake-token check,
+  `DropDate` and the debug hooks around it. Treat it as a *share*, in the sense §3's 51 % was.
+- The trace's 18 548 cycles a frame is the **300-frame** boot's, not the gate's 724-frame row (14 227): the
+  early boot fetches far more per frame. Every per-frame figure above names which density it used.
+- Variants B and C are **not emulators**: B answers the bus from the trace, so nothing waits on another
+  chip; C is not even `async`. Nothing here is compared to a digest, and nothing here may be landed as a
+  CPU. That is the ticket's own rule twice over.
