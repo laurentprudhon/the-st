@@ -794,3 +794,87 @@ and the pre-#62 contrast reproduces from `115da43`.
 3. **`scripts/validate.sh` at `runs/20261115T100948Z`: 31 ok / 1 FAIL**, and the FAIL is G8 at its own
    figure — **16.58 ms** a frame of 20.00 (budget 10.00), n 724, 63 592.7 pops a frame. The row below G8 that
    verifies the fold's own witness stayed ok: `G1` on the boot, 10 801 967 digest words, identical.
+
+## 17. A rented `Resume` (#46): 1.80 MB a frame of allocation removed, the frame unchanged — a measured no
+
+The ticket's premise was stale in its own favour: it was filed against **380 B a resume and 20.77 MB a
+frame**, and §15 had already split that stack (48 B the `Resume`/`Wake`, 56 B the continuation `Action`,
+4–6 boxes of 40–128 B), while #62 then took the boxes of two frames away. On `af1c28b` a suspension
+allocates **246 B** and a frame **10.42 MB**, so this ticket's whole prize is the 48 B of the queue node:
+**~2.1 MB of the line, 20 %, and a GC total of 0.17 ms a frame.** It was measured anyway — the ticket says
+so, and a no has to be a number, not an estimate.
+
+### The three questions, answered
+
+1. **How much of the 380 B is the box and how much the `Resume`?** §15: the box is *per async frame*, not
+   per chip, 4–6 of them a resume at 40–128 B; the `Resume` is 48 B — one object per wake, and the only
+   part a queue change can reach.
+2. **Can a held date resolve without materialising a `Resume`?** It already does (#40): `SuspendForReadAt`
+   and `WaitForEither` hold the date in the chip and `ExecuteDate` calls the continuation directly, so a
+   dated wake allocates nothing. What is left is five `Enqueue` sites — the subscription fire
+   (`FireSubscriptions`), the awaited write's own resume, and three same-instant resolutions — one
+   `Resume` per wake, because the object *is* the queue node.
+3. **Can it be a struct in a pooled indexed array?** That shape was not built, deliberately: the pooled
+   *class* below is its conservative half, and it converts the same bytes. See the ruling.
+
+### What was built (measured, then reverted)
+
+`Resume` became rentable from an intrusive free list in `Engine` — no extra allocations for the pool
+itself, `Rent`/`Free` on four fields, the continuation **cleared on release** so a pooled entry cannot keep
+a finished state machine alive, `Entry.Instant` promoted to a member so a rented entry can take a new
+instant, and an `Enqueue(Resume)` overload so the hot path reads the instant off the concrete type instead
+of through a virtual call. Nothing else changed: same entry, same key, same order, same pop semantics.
+
+| | A, `af1c28b` | B, rented `Resume` |
+|---|---|---|
+| `alloc_mb_per_frame` | **10.42** (all six runs) | **8.62–8.63** |
+| `gc_ms_per_frame` | 0.16–0.18 | **0.13–0.14** |
+| `run.digest` / `run.stream`, 300-frame Debug | `6e657033…` / `10 801 967`, `e0ca9570…` / `10 801 251` | **identical** |
+| `pops_per_frame` / `stale_wakes_per_frame` | 63 592.7 / 6.0 | identical |
+| gate | 31 ok / 1 FAIL, G8 16.58 ms | **31 ok / 1 FAIL, G8 16.36 ms** at `runs/20261115T105032Z` |
+
+The 1.80 MB is ~39 300 objects of 48 B a frame — one resume per suspension, which is exactly §15's shape.
+
+### The pair — six adjacent, alternating, Release, 800 frames, and two earlier attempts
+
+| pair | A, ms | B, ms | A − B |
+|---|---|---|---|
+| 1 AB | 16.52 | 16.00 | +0.52 |
+| 2 BA | 16.04 | 16.63 | −0.59 |
+| 3 AB | 16.02 | 15.89 | +0.13 |
+| 4 BA | 17.65 | 15.83 | +1.82 |
+| 5 AB | 15.92 | 16.40 | −0.48 |
+| 6 BA | 16.69 | 16.62 | +0.07 |
+| **mean** | **16.47** | **16.23** | **+0.25, 3/6 positive** |
+
+**Unresolved, not a win.** The spread (−0.59…+1.82) is the ±1 ms floor with one host blip, and the earlier
+shapes agreed in the other direction: the plain pool (no `Enqueue` overload) read −0.26 ms over six pairs,
+4/6 *against*, and that shape with the overload read −0.15 over five before the host rebooted. **Seventeen
+pairs, three shapes, a mean of −0.05 ms** — the honest reading is "this change does not move the frame",
+not "a small win" and not "a regression".
+
+### The arithmetic that predicted it (write this first next time)
+
+39 300 allocations of 48 B at ~10 ns is ~0.4 ms of *allocation* work a frame, and the rent/release path
+gives most of it back (two reads, four writes, plus the continuation's null write) — and the collection
+line this change can reach is the 0.17 ms of `gc_ms_per_frame`, of which it recovered **0.03**. A ticket
+whose entire prize is a fifth of a 0.17 ms line cannot be resolved by six pairs at a ±1 ms floor.
+
+### The ruling
+
+[#46](https://github.com/laurentprudhon/the-st/issues/46) is **answered, not landed** (closed `not_planned`,
+as #44 was): the allocation comes off the line — 10.42 → 8.62 MB, −17.3 %, GC pauses −0.03 ms, both folds
+and the gate byte-identical — and the frame does not move. The change was reverted, because it buys a
+mutable entry and a free list for a number nobody can see; the tree stays `af1c28b`.
+
+- **The struct-union variant is not worth building.** `PriorityQueue<Entry, Key>` with an inline 48 B
+  `Entry` struct would remove the same object *plus* the entry-kind allocation, but it copies 48 B per sift
+  step in the queue that runs 63 592 times a frame and it loses the type switch that makes `Execute`
+  readable. Its bytes are this ticket's bytes, and those bytes bought nothing.
+- **The remaining 8.62 MB a frame is the coroutine itself** — state-machine boxes and continuation
+  delegates, 4–6 per suspension at 40–128 B. No queue shape reaches it; that is #42's leaf, or a pooled
+  *continuation* in the CPU, which is a different ticket and a different design question.
+- **What to price next** from this line of enquiry: nothing in the queue. The queue's share of the
+  allocation line is now 17 %, its share of the frame is unmeasurable, and `pops_per_frame` is the cost
+  control that already exists.
+
