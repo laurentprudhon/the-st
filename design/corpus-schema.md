@@ -127,7 +127,51 @@ routinely repackages games cracked by *different* groups, so one author per disk
 `modifications[] = {kind: trainer | cheat-menu | protection-removed | patch, detail, author}` — `author` being
 the cracking group, which is why **a crack never needs to become a release of its own**.
 
-## 6. Files, claims and verdicts
+## 6. Artefacts — manuals, boxes, disks, screenshots, ads
+
+**Ruled** (owner, 2026-11-15): *"in the catalog, it is important to store also manual, screenshots, disk and box
+cover files, ads"*, and *"ocr on the manual in several languages will be very important also"*.
+
+An artefact is a **document about** something in the catalogue: its bytes live in the artefact store (#60), its
+facts and its store pointer live here — the same asymmetry as the magazine half.
+
+| field | note |
+|---|---|
+| `artefact_id` | |
+| `kind` | `box-front` · `box-back` · `manual` · `leaflet` (copy-protection insert) · `disk-label` · `disk-scan` · `screenshot` · `ad` · `poster` · `map` |
+| `attached_kind` + `attached_id` | `title` · `release` · `disk` — the rule below |
+| `language` | on the **artefact**, never on the attachment |
+| `pages` | manuals and leaflets |
+| `source` | `own-scan` · `archived-scan` · `emulator-capture` · `magazine-page` |
+| `store_ref` | the store id (content-derived, stable before publication) |
+| `ocr` | `{engine, model_version, date, pages, confidence}` + a store ref for the text |
+
+**The attachment rule, one sentence:** *an artefact attaches to the most specific level whose artefact it is.* A
+box front, a manual and a protection leaflet belong to the **release** — they are edition- and language-specific.
+A disk label or a disk scan belongs to the **disk** — it is that physical floppy. A **screenshot** belongs to the
+**title**, because it shows the game rather than an artefact of one edition, with `source = emulator-capture` and
+the rendition it came from recorded in its provenance.
+
+**Multi-language manuals are not a special case**: the language is on the artefact, so a release with an English
+and a German manual has two `manual` artefacts and two OCR records. That is the whole of the requirement.
+
+**Screenshots are the one artefact kind the project can generate rather than collect**, so `emulator-capture` is a
+first-class `source` and the golden set (#64a) is where they come from — while `archived-scan` means what it
+says: a screenshot of unknown provenance, from the internet.
+
+**An ad is the bridge between the two halves of the corpus.** It is at once an `article` of kind `advert` in the
+magazine half (with its magazine, issue, page and the scan it was OCR'd from) and an `artefact` of kind `ad`
+attached to a **title** here; the artefact carries `article_id`, and it is the only entity that spans both
+documents.
+
+**Why manual OCR is the highest-value OCR in the project**, recorded because it changes its priority: a large
+share of ST games are unplayable without the manual, because the copy protection asks for a word from a given
+line and page, or a code from a printed wheel. A searchable manual text is what lets the emulator **answer that
+prompt** — which moves those titles out of `disk-protection-emulation-failure` with no emulator work at all. It
+also serves the later website, and it is the same pipeline as the magazines (blocks → gates → summary), so it
+costs an adaptation rather than a second system.
+
+## 7. Files, claims and verdicts
 
 A `file` is one fetchable URL: `host`, `path`, `url`, `http_status`, `size`, `sha256`, `fetched_at`, the
 `advertised` strings the source publishes, and a provenance tier.
@@ -157,14 +201,14 @@ A value is written only with its evidence; `undetermined` beats a guess. `run-st
 touches the file's verdict, so our own tooling bugs cannot inflate "how much of the corpus fails", and a wrong
 title cannot masquerade as an emulator defect.
 
-## 7. Evidence tiers
+## 8. Evidence tiers
 
 Every figure and every claim carries one: **`counted`** (fetched and parsed, method stated), **`stated`** (a source
 says so, quoted), **`derived`** (inference from counted shapes), **`unverified`** (believed, not observed). This
 applies to structure too: `release.disk_count` is stated while the disk rows are counted, and `disk` identity is
 a stated or inferred claim while the rendition hash is counted.
 
-## 8. The queries this model must answer
+## 9. The queries this model must answer
 
 ```sql
 -- every language version of a work
@@ -181,22 +225,25 @@ rendition_titles WHERE title_id = ? → modifications[].author
 -- what is missing from a release
 release.disk_count vs COUNT(disk)
 
+-- which releases ship without a manual, and in which language the manual is missing
+release LEFT JOIN artefact ON (attached_kind='release' AND kind='manual') WHERE artefact_id IS NULL
+
 -- the corpus's health, by fault domain
 SELECT runs, COUNT(*) FROM file GROUP BY runs;      -- excludes harness failures by construction
 ```
 
-## 9. What this forbids
+## 10. What this forbids
 
 `title.language` · per-language title rows · `title_id` on `release` · a `compilation_of` column · an `also_on`
 field · a "disk 2 of 3" string inside a filename · a `protection_state` column on a title or release · a
-`works: bool` column · deriving `disk` identity from a hash · deriving `release.disk_count` from the files.
+`works: bool` column · deriving `disk` identity from a hash · deriving `release.disk_count` from the files · an artefact attached to more than one level · a `manual` without a `language` · an `ad` without its `article_id` · a screenshot treated as a scan when the emulator made it.
 
-## 10. Open
+## 11. Open
 
 1. **`release.kind`'s closed set** — `retail` · `budget` · `compilation` · `coverdisk` · `homebrew`? A crack is
    *not* a kind (it is a rendition with modifications, §5), which keeps the set small.
 2. **Whether a title's canonical name is English** — the search index needs one name per work, and
    *L'Arche du Capitaine Blood* vs *Captain Blood* is the test case.
-3. **What pass 1 of §6 can actually decide** — to be established against a sample of real containers, not
+3. **What pass 1 of §7 can actually decide** — to be established against a sample of real containers, not
    assumed; a label blank on a cracked copy is the expected failure.
 4. **The artefact/rendition boundary and the store's id scheme** (#60).
