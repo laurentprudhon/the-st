@@ -55,6 +55,30 @@ this first; it is self-contained. Everything it cites is on `main`.
 `tools/corpus/setup.sh` installs llama.cpp and the models and verifies the GPU; `tools/corpus/sizing/` holds
 the calculator and the VRAM measurement scripts.
 
+## Running on wslc (the native WSL container engine) — no GPU flags needed
+
+The engine passes the GPU through a hook: a wslc container gets `/.wslc-gpu-hook`, `/dev/dxg` and an
+`/usr/lib/wsl/lib` overlay automatically, so `nvidia-smi` works inside with **no `--gpus` flag and no
+nvidia-container-toolkit** (that is docker's mechanism, not wslc's). Verified in the container this handoff
+was written from.
+
+```powershell
+# Windows PowerShell — wslc.exe is a Windows binary
+wslc container run -d --name hermes-5090 `
+  -p 127.0.0.1:8642:8642 -p 127.0.0.1:9119:9119 `
+  -v hermes-data-5090:/opt/data `
+  -e API_SERVER_HOST=0.0.0.0 `
+  nousresearch/hermes-agent:latest gateway run
+wslc container exec hermes-5090 nvidia-smi        # the one check that matters
+```
+
+wslc quirks that bite: **no `--restart` policy** (restart with `wslc container start`), **bridge networking
+only** (explicit `-p`), and its output carries NUL bytes through pipes (`| tr -d '\000'`). Models live under
+`/opt/data/models` so they persist in the data volume — no second volume needed.
+
+If a future engine build ever stops passing the GPU, the fallback is to run `llama-server` in the WSL distro
+and have the container call it over HTTP; the pipeline only needs the four endpoints, not the device.
+
 ## Traps that look like model failures
 
 1. LightOnOCR-3's output arrives in **`reasoning_content`**, not `content` — a naive client reads empty.
