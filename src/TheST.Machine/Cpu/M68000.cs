@@ -232,6 +232,11 @@ public sealed partial class M68000 : Chip
     /// One bus cycle (ADR 0009 §1): the assertion record, the subscription to the answer, the stack
     /// sample, the release. The core advances to the answering instant because the engine sets its
     /// clock there when it resumes it.
+    /// <para>
+    /// One bus cycle is also <em>one suspended frame</em> (#62): the fault bookkeeping and a fetch's
+    /// <c>_pc</c> advance live here, so the helpers below are forwarders and the frame a wrapper would
+    /// have boxed does not exist. Same records, same instants, same order.
+    /// </para>
     /// </summary>
     async ValueTask<BusResult> Cycle(uint address, int size, bool isWrite, ushort writeData, bool isCpuSpace = false)
     {
@@ -280,24 +285,34 @@ public sealed partial class M68000 : Chip
         // tells a release from an assertion
         Write(answerInstant, Wires.Bus, 0x8000, 0x8000);
 
-        return new BusResult(data, faulted, vector);
-    }
-
-    // ---- memory helpers ------------------------------------------------------------------
-
-    async ValueTask<ushort> ReadWordAsync(uint address)
-    {
-        BusResult result = await Cycle(address, 1, false, 0);
-        if (result.Faulted)
+        if (faulted)
         {
             _busFaulted = true;
             _faultAddress = address;
         }
 
+        return new BusResult(data, faulted, vector);
+    }
+
+    // ---- memory helpers: forwarders, one leaf a shape ----------------------------------------
+
+    async ValueTask<ushort> ReadCycleAsync(uint address, int size, int pcAdvance)
+    {
+        BusResult result = await Cycle(address, size, false, 0);
+        if (result.Faulted)
+        {
+            _busFaulted = true;
+            _faultAddress = address;
+        }
+        else if (pcAdvance != 0)
+        {
+            _pc += (uint)pcAdvance;
+        }
+
         return result.Data;
     }
 
-    async ValueTask<byte> ReadByteAsync(uint address)
+    async ValueTask<byte> ReadByteCycleAsync(uint address)
     {
         BusResult result = await Cycle(address, 0, false, 0);
         if (result.Faulted)
@@ -309,6 +324,23 @@ public sealed partial class M68000 : Chip
         return (byte)result.Data;
     }
 
+    async ValueTask WriteCycleAsync(uint address, int size, ushort value)
+    {
+        BusResult result = await Cycle(address, size, true, value);
+        if (result.Faulted)
+        {
+            _busFaulted = true;
+            _faultAddress = address;
+        }
+    }
+
+    ValueTask<ushort> ReadWordAsync(uint address) => ReadCycleAsync(address, 1, 0);
+
+    /// <summary>The next instruction word: one bus cycle at the program counter.</summary>
+    ValueTask<ushort> FetchAsync() => ReadCycleAsync(_pc, 1, 2);
+
+    ValueTask<byte> ReadByteAsync(uint address) => ReadByteCycleAsync(address);
+
     async ValueTask<uint> ReadLongAsync(uint address)
     {
         ushort high = await ReadWordAsync(address);
@@ -317,17 +349,9 @@ public sealed partial class M68000 : Chip
         return ((uint)high << 16) | low;
     }
 
-    async ValueTask WriteWordAsync(uint address, ushort value)
-    {
-        BusResult result = await Cycle(address, 1, true, value);
-        if (result.Faulted) _busFaulted = true;
-    }
+    ValueTask WriteWordAsync(uint address, ushort value) => WriteCycleAsync(address, 1, value);
 
-    async ValueTask WriteByteAsync(uint address, byte value)
-    {
-        BusResult result = await Cycle(address, 0, true, value);
-        if (result.Faulted) _busFaulted = true;
-    }
+    ValueTask WriteByteAsync(uint address, byte value) => WriteCycleAsync(address, 0, value);
 
     async ValueTask WriteLongAsync(uint address, uint value)
     {
@@ -337,18 +361,6 @@ public sealed partial class M68000 : Chip
     }
 
     // ---- the instruction stream ----------------------------------------------------------
-
-    /// <summary>The next instruction word: one bus cycle at the program counter.</summary>
-    async ValueTask<ushort> FetchAsync()
-    {
-        ushort word = await ReadWordAsync(_pc);
-        if (!_busFaulted)
-        {
-            _pc += 2;
-        }
-
-        return word;
-    }
 
     async ValueTask<uint> FetchLongAsync()
     {

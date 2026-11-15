@@ -710,3 +710,87 @@ branch ~1, which is the whole difference between the lines.
 - Variants B and C are **not emulators**: B answers the bus from the trace, so nothing waits on another
   chip; C is not even `async`. Nothing here is compared to a digest, and nothing here may be landed as a
   CPU. That is the ticket's own rule twice over.
+
+## 16. The bus wrappers folded (#62): 1.44 ms a frame measured, against 1.14 ms projected — and both folds unmoved
+
+§15's ruling 1 said the design-neutral cut existed and that the bench's number was a *share*; this is the
+engine's own pair. One file moved, `src/TheST.Machine/Cpu/M68000.cs` (+35/−35): `Cycle` now does the fault
+bookkeeping and, for a fetch, the `_pc` advance, and the five helpers are forwarders —
+`ReadWordAsync`/`FetchAsync`/`ReadByteAsync`/`WriteWordAsync`/`WriteByteAsync` each name one leaf
+(`ReadCycleAsync`, `ReadByteCycleAsync`, `WriteCycleAsync`) with no `await` in the wrapper. Nothing else in
+the tree changed: no record, no instant, no wire, no arm, no clock.
+
+**The landed code is variant D, not a rewrite of it.** `tools/cpu-dissection/gen.py` owns `FOLDED_BUS`, the
+string that generated the fastest and stream-identical variant of §15's table; this commit applied that same
+string to the source of record (a script that imports `gen.py` and calls its own `replace_block`, so a
+transcription cannot creep in) and restored only the comments — the section divider, ADR 0009 §1's cycle
+description, §7's address-error note, the release note, `FetchAsync`'s one-line summary. The bench and the
+CPU therefore still cannot drift.
+
+### The pair — six adjacent, alternating, Release, 800 frames (724 frames run)
+
+`ab2.sh`, A = `115da43`'s Release tree, B = the fold, order AB BA AB BA AB BA, load 0.87–1.20:
+
+| pair | A, ms a frame | B, ms a frame | A − B | `alloc_mb_per_frame` B |
+|---|---|---|---|---|
+| 1 (AB) | 16.87 | 15.70 | **1.17** | 10.42 |
+| 2 (BA) | 17.21 | 15.76 | **1.45** | 10.42 |
+| 3 (AB) | 17.23 | 15.64 | **1.59** | 10.42 |
+| 4 (BA) | 17.37 | 15.59 | **1.78** | 10.42 |
+| 5 (AB) | 17.18 | 15.80 | **1.38** | 10.42 |
+| 6 (BA) | 17.05 | 15.80 | **1.25** | 10.42 |
+| **mean** | **17.15** | **15.72** | **1.44** | **11.47 → 10.42** |
+
+**6/6 unanimous, mean 1.44 ms a frame (−8.4 %)**, `alloc_mb_per_frame` **11.47 → 10.42 (−1.05 MB, −9.2 %)**,
+`gc_ms_per_frame` 0.19 → 0.16. The counters that must *not* move did not: `bus_cycles` 10 300 388 in every
+run, `pops_per_frame` 63 592.7, `stale_wakes_per_frame` 6.0, `pops_per_bus_cycle` 4.47. This is a shape
+change and it reads as one — fewer boxes, the same machine.
+
+### The measured pair beside the projection
+
+| | ns / bus cycle | ms a frame at 14 227 cycles |
+|---|---|---|
+| **§15's bench, A − D (projection)** | 80.3 | **1.14** |
+| **this ticket's six pairs (measured)** | **101.0** | **1.44** |
+
+The projection was the *CPU's own chain* in a one-chip machine; the engine's frames also carry a `Resume`,
+its queue entry, the wake-token check and the debug hooks, so removing a frame here takes more than removing
+it there. #62's text expected the pair to read **less** than 1.14 ms because the bench's frames are denser
+(18 548 against the gate's 14 227); it read **26 % more**, and the reason is the other direction of the same
+asymmetry. Recorded as-is: the bench is a share, and this is the number that counts.
+
+### What it costs and what it does not buy
+
+- **The instruction layer is untouched.** `Run → ExecuteAsync → LineXAsync → ReadEaAsync` still suspends a
+  frame each; §15 measured folding *those* at ~375 ns a cycle and this ticket's out-of-scope clause says so.
+  A fetch chain is now `Run → FetchAsync (forwarder) → ReadCycleAsync → Cycle` — three frames to two.
+- **#46's ceiling stands, and its tree has moved.** Pooling the `Resume` still reaches the 48 B of ~500; the
+  fold took 83 B of that stack away by removing frames, not objects, so #46 prices what is left.
+- **#42's ceiling is unchanged in principle, but smaller in share**: 6.55 ms was 37 % of an 18.07 ms frame;
+  against 15.72 ms the same 6.55 ms is 42 %. A CPU with no coroutine at all still has to walk the
+  instruction layer as a flat switch — D proves folding *two* of the frames is free, not that all of them are.
+- **One declared nuance, on a path the boot never takes**: a *faulting write* now records `_faultAddress`
+  (the old wrapper set only `_busFaulted`, leaving the address stale from the previous fault). The trace has
+  no write fault, so neither the digest nor the stream can see it; it is the group-0 frame's address under
+  ADR 0009 §7, and it is named here rather than hidden.
+
+### The bench still works, and it now witnesses the fold
+
+`python3 gen.py` then `check` on the **folded** sources: all four variants replay the boot's 5 564 478 cycles
+to the same end state (`pc` `e02fe2`, `sr` `2320`, `d0` `000005e2`, `a7` `00000e96`) — a per-cycle check of
+the landed CPU against the recorded wire traffic, independent of any digest. One fix was needed in the tool:
+`gen.py`'s `strip_async` rewrote only `async ValueTask<T>`, so variant C stopped building once the wrappers
+became non-`async` forwarders; it now rewrites the bare `ValueTask<T>`/`ValueTask` signatures as well. A and
+D are now the same code modulo comments, so `bench`'s A − D row prices nothing but noise — the README says so,
+and the pre-#62 contrast reproduces from `115da43`.
+
+### The proof, three parts
+
+1. **Folds byte-identical.** `boot --frames 300` (Debug): `run.digest` **`6e657033…` / 10 801 967 words**,
+   `run.stream` **`e0ca9570…` / 10 801 251 words** — unmoved from `115da43`; the same run reads
+   `instructions` 2 655 080, `bus_cycles` 5 564 479, `pops_per_frame` 85 698.4, `stale_wakes_per_frame` 2.8.
+   The synthetic is untouched (`g1-a` 95 999 words).
+2. **The pair above**, `alloc_mb_per_frame` beside it.
+3. **`scripts/validate.sh` at `runs/20261115T100948Z`: 31 ok / 1 FAIL**, and the FAIL is G8 at its own
+   figure — **16.58 ms** a frame of 20.00 (budget 10.00), n 724, 63 592.7 pops a frame. The row below G8 that
+   verifies the fold's own witness stayed ok: `G1` on the boot, 10 801 967 digest words, identical.

@@ -5,10 +5,13 @@ The A/B variants are the machine's own files, linked straight from `src/` and ne
 variants do have to be different *code*:
 
   C  (Sync)   — the same instruction set with no async at all: every `await` is deleted, every
-                `async ValueTask<T>` becomes `T`, and the two real waits become direct device calls.
-                `B - C` is then the price of the state machine itself.
+                `ValueTask<T>` becomes `T` (a forwarder keeps its body, so its leaf's type is what it
+                returns), and the two real waits become direct device calls. `B - C` is then the price
+                of the state machine itself.
   D  (Folded) — the same async code with the bus helpers folded into one leaf, so a bus cycle costs
-                one suspended frame instead of three. `A - D` is the price of the extra frames.
+                one suspended frame instead of three. `A - D` was the price of the extra frames until
+                #62 landed the fold: since then A *is* folded and D is a control that must equal it.
+                To re-run the pre-#62 contrast, check the sources of record out of `115da43` first.
 
 Both are generated from the sources of record, so they cannot drift from the CPU they price.
 
@@ -31,7 +34,11 @@ def read(name: str) -> str:
 
 def strip_async(text: str) -> str:
     text = re.sub(r"async ValueTask<([^>\n]+)> ", r"\1 ", text)
+    text = re.sub(r"ValueTask<([^>\n]+)> ", r"\1 ", text)
     text = re.sub(r"async ValueTask ", "void ", text)
+    # a bare `ValueTask` is a wrapper's signature: #62's forwarders have no `async` to strip, and
+    # their leaf is synchronous here, so the return type follows it
+    text = re.sub(r"\bValueTask ", "void ", text)
     text = text.replace("await ", "")
     return text
 
