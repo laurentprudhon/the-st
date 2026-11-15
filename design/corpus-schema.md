@@ -107,6 +107,31 @@ Aspect vocabulary, seeded from what the magazines actually print: `graphics`, `s
   directly for catalogue facts, and when the store is private it degrades to "no image available".
 - The store id must be **stable before publication**, so it is content-derived, not path-derived (see #60).
 
+## 6. Engines (2026-11-15) — one runtime, three models, all GGUF
+
+Owner's constraint: **llama.cpp v1** as the only inference runtime. My earlier claim that `d1-2B` had no GGUF
+was wrong (I searched three of five models): `LiquidAI/d1-2B-GGUF` is an official Liquid AI repo and llama.cpp
+**b11960 / v0.8.0+** supports it. The two-runtime option is withdrawn — one runtime is enough.
+
+| role | model | GGUF | llama.cpp status | licence |
+|---|---|---|---|---|
+| page → blocks + typed extraction | **OvisOCR3** (0.8B) | community (`mradermacher`, `prithivMLmods`, `Soulfate24`) | community-grade vision path — **to be proven on the golden set** | Apache-2.0 |
+| gates: is-this-a-review, has-score-box, which-aspect | **d1-2B** | **official** `LiquidAI/d1-2B-GGUF` | `noul` / `choice` / `score` supported since b11960 | LFM Open License |
+| English summary paragraph | **LFM3-VL-2B** | **official** `LiquidAI/LFM3-VL-2B-GGUF` | supported | LFM Open License |
+| cross-check transcription (optional) | LightOnOCR-3-0.8B | community (`prithivMLmods`) | unverified | Apache-2.0 |
+
+**The one runtime constraint that shapes the design**: llama.cpp supports d1's `noul`, `choice` and `score`
+questions, but **not** its typed extraction (`text`/`number`/`date`), multiple-choice or boxes. That is fine by
+construction — typed extraction is OvisOCR3's job (KIE with our JSON template), and d1 only ever answers gates.
+If a later step needs d1 extraction, that single step goes to transformers, and the rest stays on llama.cpp.
+
+**Scheduling consequence for the 8 GB box**: the stages are sequential, not concurrent — all pages through the
+OCR server, then all blocks through the gate server, then all reviews through the summary server — so one model
+is resident at a time. On a 32 GB card the same pipeline runs with all three loaded.
+
+**Surya 2.5 is out**, and the reason is licence not quality: its weights are OpenRAIL-M, and this project is
+OSS with a public artefact site later.
+
 ## 5. Open, and deliberately not decided here
 
 1. **Q1 of #52** — the file model's identity rule above is still the *pending* question (five levels vs the
