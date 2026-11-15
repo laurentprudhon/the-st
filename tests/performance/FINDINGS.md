@@ -972,7 +972,9 @@ coroutine-free SCU may therefore save a fraction of 92 ns, not a multiple of it.
 | a beam event (line end, group, `DE` edge) | **3 434.7** | 0.241 | **131.3** |
 | an answer **and** a beam event | **1 380.1** | 0.097 | **190.3** |
 
-(Beam events are 4 819.2 a frame: 3 434.7 wakes that handled one and 1 380.1 that did so with an answer.)
+(Beam events are **4 814.8** a frame by work class: 3 434.7 wakes that handled one and 1 380.1 that did so with an
+answer — plus 4.4 that only began the next exchange in the same wake, which is why the chip's own `scu_events`
+reads 4 819.2.)
 
 Two facts fall out of the census that the profile never showed:
 
