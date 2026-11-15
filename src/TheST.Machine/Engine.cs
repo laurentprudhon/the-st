@@ -456,10 +456,27 @@ public sealed partial class Engine
             HoldDate(chip, instant, continuation);
         }
 
-        long wireToken = chip.Arm();
+        long token = chip.Arm();
         _freshWakes[chip] = _freshWakes.GetValueOrDefault(chip) + 1;
         Subscriptions++;
-        SubscribersOf(channel).Pending.Add(new Subscriber(chip.Clock, chip, continuation, wireToken, afterSeq));
+
+        List<Subscriber> subscribers = SubscribersOf(channel).Pending;
+
+        // A chip holds one pending subscription per (wire, cursor): re-arming the same afterSeq — what
+        // a chip woken by something else does on every resume — replaces the entry instead of adding a
+        // second one. Left to append, a chip woken n times between two records of a wire leaves n dead
+        // entries behind, and the next record tears them out one RemoveAt and one stale wake at a time
+        // (#50: 16 dead entries a DE record, 581 a frame on MFPCS alone, 23 680 stale wakes a frame).
+        for (int index = 0; index < subscribers.Count; index++)
+        {
+            if (subscribers[index].AfterSeq == afterSeq && ReferenceEquals(subscribers[index].Chip, chip))
+            {
+                subscribers[index] = new Subscriber(chip.Clock, chip, continuation, token, afterSeq);
+                return;
+            }
+        }
+
+        subscribers.Add(new Subscriber(chip.Clock, chip, continuation, token, afterSeq));
     }
 
     /// <summary>

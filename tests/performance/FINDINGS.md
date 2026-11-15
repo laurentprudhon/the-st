@@ -418,3 +418,37 @@ under retention the 128-batch cadence happened to keep what it needed, which is 
 `DE` therefore runs a 4 096-record window (twice its measured need: more than 1 024, no more than 2 048)
 and one silent loss on the boot is now impossible rather than unlikely. Making Timers subscribe — the
 catalogue's own row — would return `DE` to 256 and is a machine change, so it is filed, not absorbed.
+
+## 12. An abandoned arm is replaced, not appended (#50): 2.93 ms a frame, and both folds identical
+
+A chip re-arms every wake on every resume, and `WaitForEither` appended each re-arm as a fresh pending
+subscriber. A chip woken *n* times between two records of a wire therefore left *n* dead entries in that
+wire's list, and the next record tore them out one `RemoveAt` and one stale wake at a time. #50's
+instrument, on the 800-frame boot, per frame: Timers and events **6 373 resumes** and CPU / System
+Control Unit / Video exactly one arm a resume, `DE` emitting 400 records — so **16 dead arms accumulate
+per `DE` record**, 581 a frame on `MFPCS` alone. The whole tree paid it: `stale_wakes` **23 680 a
+frame** (17 144 113 over 724 frames).
+
+An arm the chip already holds on that wire at the same cursor is now **replaced** instead of appended
+(`Engine.AddSubscriber`), so a wire's pending list holds one entry per (chip, wire, cursor). Nothing is
+dropped: the replaced entry's token was already superseded, so the record that would have fired it
+fires its replacement and resumes the chip exactly as before.
+
+Six adjacent alternating Release pairs, 800 frames, load 0.55–1.05, `3eb1231` (A) against A + the fix
+(B):
+
+| pair | A | B | delta |
+|---|---|---|---|
+| 1 (A→B) | 21.86 ms | 18.99 ms | **2.87** |
+| 2 (B→A) | 21.45 | 18.75 | **2.70** |
+| 3 (A→B) | 21.66 | 18.86 | **2.80** |
+| 4 (B→A) | 21.71 | 18.61 | **3.10** |
+| 5 (A→B) | 21.55 | 18.76 | **2.79** |
+| 6 (B→A) | 22.53 | 19.20 | **3.33** |
+
+**All six positive, mean 2.93 ms**, `alloc_mb_per_frame` 11.12 unchanged, `gc_ms_per_frame` 0.18 →
+0.17, `stale_wakes` 17 144 113 → 823, `drain_ms` 14 344 → 12 551 over 724 frames. **Both folds are
+byte-identical**: `run.digest` `93c4dbd4…` / 10 801 967 words, `run.stream` `e52ed136…` / 10 801 251
+on the 300-frame Debug boot, with `queue_pops` (25 589 670) and `subscriptions` (23 226 950) unchanged
+too — a change that removes no record and no arrival number, exactly the shape #39's split was made to
+express.
