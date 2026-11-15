@@ -3,6 +3,27 @@
 STATUS: **complete (v1)** — written 2026-11-15 by the #52 session as the second half of the fact base.
 Method and roster: the owner's ruling on #52, executed as ticket #57.
 
+> ### Correction — 2026-11-15 (owner's Vroom check): this note's method was title-first and its host list is incomplete
+>
+> The owner ran one search on one title (*Vroom*, Lankhor 1991) and returned fifteen URLs, of which these
+> hosts were **missing from v1 entirely**: `wowroms.com`, `retrosic`/`retro**s**tic.com`, `emu-land.net`,
+> `archive.org/details/playtime_atariST` (~1,518 TOSEC-named zips, ~505 MB), `pouet.net`'s download link
+> (`ftp.untergrund.net/.../fujiology`), `obligement.free.fr`, `atari-forum.com` attachments.
+> Verified live by the lead session on 2026-11-15 (`curl -sI`, HTTP 200).
+>
+> **Worse, one row of this note is factually wrong**: `myabandonware.com` was recorded as having *no* ST
+> binaries. Its Vroom page lists **"Atari ST version — Game file — English — 5 MB"** with a download link
+> `/download/lwpc-vroom` (HTTP **303** without a session). The "excluded, no ST files" verdict is withdrawn;
+> the correct statement is *ST files exist behind a 303 gate the robots file disallows*.
+>
+> The root cause is the method, not the effort: searching 20 famous titles samples the web **through those
+> titles**, so a host that indexes a title under a local name, or under a different slug, or that simply
+> ranks below the publisher's own page, never appears. v2 replaces the method with **site-first
+> enumeration** — the aggregator families, the scene tier, the national-language tier, the Internet
+> Archive layer enumerated by API, and a format-led discovery pass with a stated stopping criterion —
+> and re-runs the twenty titles only as a cross-check. Until v2 lands, treat Part 3's host table as a
+> lower bound, not a census.
+
 The first survey (`research/st-software-sources.md`) bounded what a source can **answer** about a title.
 This note bounds what a source can **deliver** as bytes: for twenty titles from publishers in six
 countries, searched under every name they shipped under, every host that carries a file, opened and
@@ -176,7 +197,7 @@ what is lawful: **no host that stores ST binaries holds a rights grant.**
 | **atari.8bitchip.info** (Putnik) | **NEW** | HD/HxC-adapted builds; STX-of-original links 404 | `.ZIP` | `ASTGA/<letter>/<title>.php`; `<TITLE>.ZIP` | none | index walk | none stated |
 | **st-news.com** | **NEW** | ST NEWS diskmag issues | `.st`, `.zip` | `/uploads/ST-News/downloads/<name>.st` | none | index | none stated |
 | **atariuptodate.de**, **OGDB**, **devuego.es**, **abandonsocios.org**, **abandonware-france.org**, **jeuxvideovintage.com**, **retroarchives.fr**, **storiainformatica.it**, **oldgamesitalia.net** | **NEW** | local-language catalogues (DE/ES/IT/FR) — metadata, screens, in-browser play | none (0 file hrefs observed) | per-site | — | scrape for metadata only | varies; abandonsocios is login/attachment-gated |
-| **myabandonware.com** | **NEW, excluded** | claims ST downloads ("Game file", 5–7 MB) but download is 303-gated and `robots.txt` **disallows `/download/`**; an ST page carries **zero** `.zip`/`.7z` hrefs | unverified | `/download/<token>-<slug>` | none | **do not harvest** — metadata only | explicitly disallows crawling downloads |
+| **myabandonware.com** | **NEW, gated** | **does** offer per-platform "Game file" downloads incl. **Atari ST (5 MB for Vroom)**, per-language variants; download 303s to the game page without a session and `robots.txt` **disallows `/download/`** — so: files exist, crawlers are refused | unverified (303 gate not defeated) | `/download/<token>-<slug>` | none | **metadata only for a harvester**; the file exists but the site refuses bots by policy | explicitly disallows crawling `/download/` |
 | **gamesnostalgia.net**, **gametronik**, **file-hunter.com**, **retrostic**, **8bitchip listings** | probed | 403 / 301 / **MSX-only** (405 without a browser UA) / paywall-ish | — | — | — | recorded as dead ends | — |
 | **atarijookie/atari-st-floppy-image-downloader** | **NEW** | a *harvester itself*: compiled list of ~4,400 menu images (stated) with hash checking | `.msa` | GitHub release + embedded image list | per-image hash check (stated) | read its list; it is a ready-made menu-disk index | GitHub ToS |
 
