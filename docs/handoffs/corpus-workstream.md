@@ -1,5 +1,11 @@
 # The corpus workstream — handoff to the GPU machine
 
+> **Moved 2026-11-15 (ticket #60).** The corpus now has its own repository:
+> [`laurentprudhon/the-st-software`](https://github.com/laurentprudhon/the-st-software) — private,
+> text and data only. The schema, the tooling (`tools/corpus/**`) and the data left this repository;
+> `design/corpus-*.md` and `tools/corpus/README.md` here are pointers. Read any path below as being
+> relative to that repository. The tracker, the maps and these handoffs stay in `the-st`.
+
 STATUS: ready to pick up — 2026-11-15. Written on the 3070 Ti box, for a fresh container on the RTX 5090.
 Everything here is landed on `main` of `laurentprudhon/the-st` unless it says otherwise.
 

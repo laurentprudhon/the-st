@@ -1,5 +1,11 @@
 # Handoff — the magazine OCR pipeline (map #51, tickets #52 / #60 / #61 / #64)
 
+> **Moved 2026-11-15 (ticket #60).** The corpus now has its own repository:
+> [`laurentprudhon/the-st-software`](https://github.com/laurentprudhon/the-st-software) — private,
+> text and data only. The schema, the tooling (`tools/corpus/**`) and the data left this repository;
+> `design/corpus-*.md` and `tools/corpus/README.md` here are pointers. Read any path below as being
+> relative to that repository. The tracker, the maps and these handoffs stay in `the-st`.
+
 Written 2026-11-15 at the end of the session that built the corpus fact base and proved the OCR stack. Read
 this first; it is self-contained. Everything it cites is on `main`.
 
