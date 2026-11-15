@@ -24,6 +24,22 @@ Method and roster: the owner's ruling on #52, executed as ticket #57.
 > and re-runs the twenty titles only as a cross-check. Until v2 lands, treat Part 3's host table as a
 > lower bound, not a census.
 
+> ### v2 — the site-first pass has landed (2026-11-15)
+>
+> `research/st-host-registry.md` is now the canonical host census: ~330 domains probed across five channels
+> (aggregator families, the scene tier, the national-language tier, format-and-list-led discovery, and the
+> Internet Archive by API), **~45 hosts that actually serve ST bytes**, **22 with a countable inventory**,
+> and an explicit stopping point (last new host at query 118, then 20 clean queries).
+> **Part 3 of this note is superseded and left as the historical lower bound.** The hosts that pass missed
+> and the registry now carries: `ftp.untergrund.net`/fujiology (**14,644 ST files**, MD5 manifest),
+> `sync.wtf` **5,106** flux/msa/stx images, `ftp.pigwa.net`, `edgeemu.net` (311 zips, direct),
+> `romspedia.com` (direct zip), `wowroms.com` (4,261 `.st` + 1,167 `.stx`), `retrostic.com`,
+> `emuparadise.me/.org` (8,400), `klapauzius.net`, `spiny.org` (Medway/M.L.P.), `d-bug.mooo.com`,
+> `oldgames.sk` (281), `lankhor.net` (**the only rights-holder permission in the ST world**),
+> `page6.org`, the Floppyshop PDL (4,072 disks), and IA's `stream-ipf` (100 GB of flux, misfiled under
+> `softwarelibrary_apple`). Two losses recorded there: **`myrient.erista.me` is shut down** (its URLs are
+> everywhere) and **`tosec-main` is login-gated (403)**.
+
 The first survey (`research/st-software-sources.md`) bounded what a source can **answer** about a title.
 This note bounds what a source can **deliver** as bytes: for twenty titles from publishers in six
 countries, searched under every name they shipped under, every host that carries a file, opened and
