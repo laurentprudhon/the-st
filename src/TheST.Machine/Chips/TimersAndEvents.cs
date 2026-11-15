@@ -18,9 +18,8 @@ public sealed class TimersAndEvents : Chip
 
     // counters
     long _cExpiry = long.MaxValue;
-    long _dExpiry = long.MaxValue;
+    long _dExpiry = long.MaxValue;    // Timer D arms nothing while the USART is a stub (ADR 0013, #63)
     long _cRemainder;
-    long _dRemainder;
     int _cCounter;
     int _dCounter;
     int _bCounter;
@@ -87,11 +86,6 @@ public sealed class TimersAndEvents : Chip
             if (Clock >= _cExpiry)
             {
                 ExpireTimerC();
-            }
-
-            if (Clock >= _dExpiry)
-            {
-                ExpireTimerD();
             }
 
             CountEventRecords();
@@ -375,22 +369,16 @@ public sealed class TimersAndEvents : Chip
             _cExpiry = long.MaxValue;
         }
 
-        // Timer D is arithmetic only while the USART is a stub: it counts, nothing observes it
-        int dField = _r[0x1D] & 0x07;
-        int dDivider = Divider(dField);
+        // Timer D is arithmetic only while the USART is a stub: it counts, nothing observes it, and its
+        // only output is the baud clock of a USART that answers "idle" (ADR 0013 §4 and §5). So it does
+        // not arm a wake (ticket #63, 2026-11-15, the owner's re-bless): the counter is still loaded here,
+        // so a read of TDDR answers what this write programmed, and a write to TCDCR/TDDR still restarts
+        // it — it just produces no instant, no anchor and no wake. Six thousand expiries a frame for a log
+        // nothing reads was 5.4 % of the frame. Reversal is additive and exactly one line: arm
+        // `_dExpiry` from `dData × dDivider` again and put `ExpireTimerD` back on the chip's deadline.
         int dData = _r[0x25] == 0 ? 256 : _r[0x25];
         _dCounter = dData;
-
-        if (dDivider != 0)
-        {
-            _dRemainder = 0;
-            long ticks = MfpClock.TicksFor((long)dData * dDivider, ref _dRemainder);
-            _dExpiry = instant + Math.Max(1, ticks);
-        }
-        else
-        {
-            _dExpiry = long.MaxValue;
-        }
+        _dExpiry = long.MaxValue;
 
         // Timer B: an event counter on DE while its mode bit is set, otherwise interval
         if ((_r[0x1B] & 0x08) != 0)
@@ -426,14 +414,6 @@ public sealed class TimersAndEvents : Chip
         int cDivider = Divider((_r[0x1D] >> 4) & 0x07);
         long ticks = MfpClock.TicksFor((long)_cCounter * cDivider, ref _cRemainder);
         _cExpiry = Clock + Math.Max(1, ticks);
-    }
-
-    void ExpireTimerD()
-    {
-        Anchor(Channels.Slot(2, "timer D"), (ushort)_dCounter);
-        int dDivider = Divider(_r[0x1D] & 0x07);
-        long ticks = MfpClock.TicksFor((long)_dCounter * dDivider, ref _dRemainder);
-        _dExpiry = Clock + Math.Max(1, ticks);
     }
 
     /// <summary>A <c>DE</c> record: Timer B's event input (crossings.md §2, one count per active line).</summary>

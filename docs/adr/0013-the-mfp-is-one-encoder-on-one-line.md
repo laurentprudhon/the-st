@@ -102,6 +102,16 @@ as *inputs* — two new crossings, one per line — to reproduce what one chip a
   Timer B would disagree with the beam on every line that is not exactly 2 048 ticks. Timer D's only job is
   the USART baud clock, and the USART is a stub — so ADR 0008 §5's own rule retires it from the wake list:
   **the chip's `nextDeadline` is the minimum over A, B and C**.
+
+  **The code did not follow this section until ticket #63, and the cost of the gap was 5.4 % of the frame.**
+  Armed, Timer D expired **6 008.7 times a frame** — 4 353 103 anchors in 724 frames written to a `timer D`
+  log with no subscriber and no reader, its counter never decremented, its USART absent. It now **arms no
+  date at all** while the USART is a stub: the register file still loads Timer D's counter, so a read of
+  `TDDR` answers what the OS programmed and a write to `TCDCR`/`TDDR` still restarts it in the register
+  sense, but it produces no instant, no anchor and no wake. Measured 2026-11-15 at the owner's re-bless,
+  which is what a moved fold costs: **12.29 → 11.02 ms a frame, −1.27 ms, 6/6 pairs**, allocation and pops
+  unmoved (`alloc_mb_per_frame` 7.93, `pops_per_frame` 63 592.7 — a dated wake was never a queue entry).
+  FINDINGS §21; the new reference pair is `2bfb229b…` / 9 136 634 and `238faddf…` / 9 135 915.
 - **The MFP clock enters the one time domain as an exact rational**: one master tick = 48/625 MFP clocks;
   counters keep subticks, expiries round **up** to a whole tick, the remainder is carried. No float, no
   fractional instant, and the 200 Hz tick lands on 160 000 exactly. ADR 0001 is revised in place: one time
@@ -115,7 +125,8 @@ as *inputs* — two new crossings, one per line — to reproduce what one chip a
 - **USART**: a register file that always answers "idle" (`TSR` sets the empty flag, `RSR` reads 0, `UDR`
   reads 0 and discards writes, `UCR`/`SCR` store). **No USART source ever sets a pending bit.** A debug
   assertion reports any write that enables one. Reversal is additive: a serial ticket gives sources 9–12 a
-  producer and puts Timer D back on the wake list.
+  producer and puts Timer D back on the wake list — one line in `RestartCounters` to arm `_dExpiry` from
+  `data × divider` again, and the expiry back on the chip's deadline.
 - **`GPIP`**: four live lines (bit 3 `BINT`, 4 keyboard ACIA, 5 `FDINT`/`DINT`, 7 `SINT`), four inputs tied
   inactive-high (bits 0, 1, 2, 6), `DDR = 0x00` at reset. Edge rule: an input line sets its pending bit when
   the new level equals its `AER` bit, so an `AER` or `DDR` write can itself be an edge.

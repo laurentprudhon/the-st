@@ -1414,3 +1414,107 @@ suspension the compiler was allocating **181 B** (its box *and* its `Action`), n
 is the number for the *shape*, and the CSM column is what proves the shape's instrument against §18. The
 reproduction is `/opt/data/cache/scratch/ra20/ab.sh` over `st-census-ra` and `st-census-csm`, with the mode in
 `ST_CENSUS_TIMING` (`outer`, `body`, `alloc`).
+
+## 21. Timer D (#63): the ADR's own decision, implemented late — 12.29 → 11.02 ms a frame, and the pair doubled the projection
+
+ADR 0013 §4 has said since it was written that **"the chip's `nextDeadline` is the minimum over A, B and C"**,
+because Timer D's only job is the USART baud clock and the USART is a stub. The chip did not do that: it armed
+Timer D anyway, expired it **6 008.7 times a frame**, and appended an anchor each time — 4 353 103 records in 724
+frames into a log with no subscriber and no reader, its counter never decremented, all of them carrying the same
+repeated number. #48 filed the cut, the owner **re-blessed it on 2026-11-15** (a moved `run.stream` is his call),
+and this section is the landing.
+
+### 21.1 The change: one arming removed, no register semantics touched
+
+`TimersAndEvents.RestartCounters` no longer arms `_dExpiry`; the counter is still loaded from `TDDR`, so a read
+answers what the OS programmed and a write to `TCDCR`/`TDDR` still restarts it in the register sense — it just
+produces no instant, no anchor and no wake. `ExpireTimerD` and its sub-tick remainder are gone, and the chip's
+deadline is Timer C's alone. Reversal is the one line ADR 0013 §5 now names, for the day a serial ticket gives
+the USART a producer.
+
+**Exactly what moved, and what did not** (300-frame Debug boot, before/after, same tree otherwise):
+
+| | before (#20's tree) | after |
+|---|---|---|
+| `run.digest` | `6e657033…` / 10 801 967 | **`2bfb229b…` / 9 136 634** |
+| `run.stream` | `e0ca9570…` / 10 801 251 | **`238faddf…` / 9 135 915** |
+| `records_overwritten` | 47 208 998 | 45 461 207 (−1 747 791 = every `timer D` anchor) |
+| the logs in the window | 22 | **21** — the `timer D` log is no longer touched at all |
+| `bus_cycles` · `timer_c` · `timer_b_counts` · `pops` | 5 564 479 · 1 167 · 59 924 · 85 698.4 | **identical** |
+| `read_suspensions` (Debug 300) | 16 567 131 | 14 820 227 (−1 746 904) |
+
+The synthetic is untouched (`g1-a` 95 999 words, `58fcdddf…`). This is #63's declared shape exactly: a dated wake
+is not a queue entry, so no pop counter moves; the records and the two folds do, which is why it was the owner's
+call and not a perf ticket's.
+
+**The new reference pair is `2bfb229b1211215413613c954262673929dba864a363651e0350ff048d380c61` / 9 136 634 and
+`238faddf3c4cd19e262284d5b80fc8dfb89ed477203c382cc1dc3f3a6faedf1c` / 9 135 915**, re-blessed by the owner on
+2026-11-15; every older section of this page that quotes `6e657033…` / `e0ca9570…` is a record of what the tree
+read *then* and is left as written.
+
+### 21.2 The pair — six adjacent, alternating, Release, 800 frames, load 1.05–1.22
+
+A = `dc1fed9` built in this session, B = the same tree with the arming removed (both built here, §16's trap).
+
+| pair | A, ms | B, ms | A − B |
+|---|---|---|---|
+| 1 AB | 12.37 | 10.99 | +1.38 |
+| 2 BA | 12.34 | 10.95 | +1.39 |
+| 3 AB | 12.02 | 11.04 | +0.98 |
+| 4 BA | 12.27 | 10.94 | +1.33 |
+| 5 AB | 12.28 | 11.10 | +1.18 |
+| 6 BA | 12.44 | 11.09 | +1.35 |
+| **mean** | **12.29** | **11.02** | **+1.27, 6/6 positive** |
+
+Nothing else in the machine moved: `alloc_mb_per_frame` **7.93** on both sides, `gc_ms_per_frame` 0.12,
+`pops_per_frame` 63 592.7 (4.47 a bus cycle), `stale_wakes_per_frame` 6.0, n 724. What fell is the crossings:
+
+| | A | B |
+|---|---|---|
+| `subscriptions_per_frame` | 69 242.1 | **57 224.8** (−12 017.3 = exactly two per expiry) |
+| `suspensions_per_frame` | 44 417.5 | **38 408.9** (−6 008.6 = exactly the expiries) |
+
+### 21.3 The measured number beside the projection, and why the pair doubled it
+
+**Projected 0.67 ms** (§20.5, re-priced from §18.6's 0.52: 6 008.7 expiries × the Timers chip's 111.1 ns mean
+wake). **Measured 1.27 ms** — 211 ns per expiry, 1.9× the projection, and 10.3 % of the frame.
+
+The census priced *the wake*; the pair also collected what the arm cost everywhere else, and the Debug counters
+say where:
+
+- The arm put a **22nd log in every instant's trim**. `drain_ms` fell 21 282 → 20 404 ms over 300 frames
+  (**−2.9 ms a Debug frame**, the same work the Release frame carries cheaper) for one log fewer, and
+  `records_overwritten` fell by 1.75 M — 4.35 M anchors per 724 frames is ring traffic the per-wake bracket
+  never sees.
+- Each expiry also carried **two subscriptions** (the `MfpSelect` and `DE` re-arms) and one dated read, i.e. the
+  chip's whole loop re-entered per expiry; when the loop runs 410 times a frame instead of 6 419, the work per
+  visit is larger and the per-wake mean measured in the dense regime does not transfer.
+
+So this is #62's and #65's rule again, in the same direction: **the pair beats the projection**, and the census is
+the shape of the cost, never its size. It is also the reason #63's own arithmetic was right to say the pops would
+not move: they did not.
+
+### 21.4 The three-part proof
+
+1. **Both folds, re-blessed by the owner**: `run.digest` **`2bfb229b…` / 9 136 634**, `run.stream`
+   **`238faddf…` / 9 135 915** (300-frame Debug boot, §21.1's table for what moved and what did not).
+2. **Six adjacent alternating Release pairs**, above: **12.29 → 11.02 ms, −1.27, 6/6**, `alloc_mb_per_frame` 7.93
+   beside them.
+3. **`scripts/validate.sh` at `runs/20261115T133640Z`: 31 ok / 1 FAIL**, G8 red at its own figure —
+   **11.40 ms** of 10.00, n 724, 63 592.7 pops a frame, `alloc_mb_per_frame` 7.93, `gc_ms_per_frame` 0.12;
+   `G1: 9136634 digest words, identical`, `G2` identical to G1's stream, the synthetic green.
+
+**G8 is now 1.02 ms from green** (11.02 in pairs, 11.40 in the gate), where it was 2.29 ms short after L1. The
+frame has fallen 65.8 → 12.29 → **11.02 ms** across this page's three landings.
+
+### 21.5 What it does to the ladder
+
+- **#49 — the device chips' share falls with the frame.** §20's table loses the Timers chip: 0.71 ms becomes
+  ~0.04, so the three device chips are **~4.5 ms of 11.02 (≈41 %)** rather than 5.21 of 12.29 (42.4 %). The CPU's
+  4.86 is unchanged and is now 44 % of the frame. #49's best case is the same order and its case is unchanged.
+- **#42 — unchanged in absolute terms** (the CPU is not what moved), and its 1.64 ms is now 15 % of an 11.02 ms
+  frame instead of 13 % of 12.29. Nothing in §20.5's ruling is disturbed.
+- **#63 — closed.** This section is its Done: policy in ADR 0013, the pair re-blessed and recorded here, six
+  pairs, the measured number beside the projection, the gate at 31/1.
+- **No new lever is filed.** What is left unmeasured is still §20's residual (~2.2 ms before this cut, and the
+  next session's step), and the two design-cost levers the owner has not asked for.
