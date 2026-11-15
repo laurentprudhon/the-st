@@ -170,8 +170,11 @@ Two different failures, kept separate on purpose:
    pin-event rate in a reference emulator") sizes the scheduler — how often a chip must suspend
    versus return — and sets #7's batching question. With a synchronous fast path, a wire-event rate ten
    times higher changes the scheduler's design, not the language.
-4. **A .NET 11 failure is not a falsifier.** If runtime-async proves unavailable or unhelpful, the
-   1.91 ns path on .NET 10 is inside budget and this ADR stands unchanged.
+4. **A .NET 11 runtime regression is not a falsifier.** Runtime-async is available to this machine and it
+   is 23 % of the frame (revision of 2026-11-15, below), so the fallback this clause once authorised —
+   staying on .NET 10 — is not a path this project would take. A regression in a later .NET 11 runtime is
+   met by **pinning the last working 11.x**, not by reopening the language: the reopening conditions are
+   clauses 2 and 3, and a runtime's own regression is neither.
 
 ## Notes on evidence
 
@@ -243,7 +246,9 @@ reads **false in both halves**:
   CPU's own trace: **400.2 → 169.9 ns**. The gate reads **31 ok / 1 FAIL**, G8 at **12.42 ms**.
 
 So the sentence's premise is measured out, and the fallback it authorises is not the one this project
-would take. **This revision records the measurement; striking the sentence is the owner's decision**, as
-it is a language/ADR question and not a performance one. What the measurement does settle is that .NET
+would take. **This revision records the measurement; the sentence itself is the owner's decision**, as it is
+a language/ADR question and not a performance one. On 2026-11-15 the owner **restated it** rather than
+struck it: clause 4 now says a runtime regression is met by pinning the last working 11.x, so the guard
+against a .NET 11 miss survives while the falsified condition (*"unavailable or unhelpful"*) does not. What the measurement does settle is that .NET
 11's runtime is not a bet any more — it is the largest single perf result the project has landed, and it
 cost the source nothing (FINDINGS §19).
