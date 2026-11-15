@@ -1043,6 +1043,22 @@ Two things this page found on the way and does **not** file as perf tickets:
   stack (`Timers.Register`), and the record only exists so a suspended chip learns its deadline moved. It is
   206 a frame — nothing worth restructuring.
 
+**The same census on the 300-frame boot** (Debug, 300 frames, 18 548 bus cycles a frame against the 800-frame
+run's 14 227) — the counts are a property of the machine, not of the run, and the shape survives the density:
+
+| chip | resumes a frame | found no work | the work |
+|---|---|---|---|
+| CPU | 18 593.8 | 45.5 (0.2 %) | 18 548.3 bus cycles |
+| SystemControlUnit | 49 001.6 | **8 831.6** (18.0 %) | 18 548.3 answers, 18 545.9 exchanges begun (8 829.2 of them woken on the assertion lane), 4 817.3 beam events |
+| Video | 3 994.9 | 0 | 3 994.9 chunks |
+| TimersAndEvents | 6 232.3 | 205.6 (3.3 %) | 5 826.8 Timer D + 3.9 Timer C + 199.7 `DE` |
+
+Every ratio holds to within the phase's different bus density: the wasted release wake is 0.48 a bus cycle here
+against 0.43 there, Video is 1:1 at both, and Timer D is 5 827 against 6 009 expiries a frame — its period is
+104 ticks, so the count follows the frame's own density and not the run's length. Both folds reproduce from this
+run (`6e657033…` / 10 801 967, `e0ca9570…` / 10 801 251), which is what makes the counts in this table
+quotable at all.
+
 ### 18.7 The rulings
 
 | chip | ruling | the number it rests on |
