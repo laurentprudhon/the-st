@@ -78,17 +78,26 @@ set, so the union is far smaller than the sum; only PlanetEmu adds protected for
 | **emu-land.net** (RU) | TOSEC set incl. `[STX]`-labelled files | `.zip` → `.st`, `.stx` | unverified (12 pages for letter V) | `?act=getmfile&id=` AJAX | **Anubis proof-of-work wall** | none | **disallows GPTBot/ClaudeBot/anthropic-ai by name** |
 | **atari-st-abandonware.neocities.org** | hand-kept index | Drive IDs | **121** distinct file IDs (counted) | Google Drive links | index 200; files on Drive | none | n/a |
 
-### 1.2 Hosts that hold ST files but must not be harvested (policy, not capability)
+### 1.2 Tier T2 — reachable, terms-restricted (explore during the dev phase, private cache only)
+
+> **Amendment 2026-11-15 (owner).** These hosts are **no longer discarded**. Owner's ruling: *"during the
+> emulator development phase, we want to build a private cache of everything that is available online : so
+> don't discard the sources behind logins or robots.txt yet - we will explore them now, and then see if they
+> are useful or not"*. The rows below keep the **term each host states**, because the term still travels with
+> the fetch, and the end-state is unchanged: real users fetch one title at a time, on request.
+> Access tiers: **T1 open** (crawl freely) · **T2 terms-restricted** (this table: explore, record the term,
+> private cache only) · **T3 account-gated** (owner's own logged-in session; no credential entry, no bot-wall
+> circumvention).
 
 | Host | Why | Recorded as |
 |---|---|---|
-| `myabandonware.com` | real ST "Game file" (5 MB for Vroom) at `/download/lwpc-vroom` — **`robots.txt` disallows `/download/`**, and the endpoint 303s to the game page | capability recorded, bytes off-limits |
-| `computeremuzone.com` | files reachable (302 → zip) but robots disallows `/download.php` and `/*.zip$` | capability recorded |
+| `myabandonware.com` | real ST "Game file" (5 MB for Vroom) at `/download/lwpc-vroom` — **`robots.txt` disallows `/download/`**, endpoint 303s without a session | T2: explore with a real session, record the term |
+| `computeremuzone.com` | files reachable (302 → zip) but robots disallows `/download.php` and `/*.zip$` | T2: counted, fetch only behind the owner's word |
 | `exxosforum.co.uk` Floppyshop `dl.php` | captcha/session gate | catalogue countable via `floppyshop_info_dump.txt` (3,460,310 B) |
 | `theoldcomputer.com` | paid membership wall | count only |
-| `emu-land.net` | Anubis PoW **and** robots naming AI crawlers | count unverified; do not harvest |
-| `retrostic.com`, `wowroms.com`, `emuparadise.me` | HTML interstitials/session gates, no file URL in the response | **naming value only** |
-| `atari-forum.com` | Cloudflare 403 to clients; guests see no attachment links | human-only tier; its binaries reach IA as `stream-ipf` |
+| `emu-land.net` | Anubis PoW **and** robots naming AI crawlers | T3: needs a real browser session; count unverified |
+| `retrostic.com`, `wowroms.com`, `emuparadise.me` | HTML interstitials/session gates, no file URL in the response | T2: catalogue counted, bytes need a browser session |
+| `atari-forum.com` | Cloudflare 403 to clients; guests see no attachment links | T3: owner's session only; its binaries also reach IA as `stream-ipf` |
 
 ### 1.3 The community link list, harvested in full (the coverage proof for the scene tier)
 
