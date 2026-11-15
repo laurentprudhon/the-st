@@ -7,54 +7,74 @@ the corpus lives in `design/corpus-magazines.md`.
 This is the document the harvester (#53), the artefact store (#60) and the test pipeline (#61) read. It is a
 design note, not a database migration: no table exists yet.
 
-## 0. Three tiers, and the one rule that decides which
+## 0. Two repositories and one cache
 
-| tier | where | holds | published? |
+| tier | location | holds | published? |
 |---|---|---|---|
-| **the repo** | this repository (`the-st`) | facts, hashes, provenance, prose **we** wrote, the schema, the code | public, permanently |
-| **the store** | a separate private repository (#60) | other people's expression in bytes: scans, page crops, OCR text, screenshots | private now, public later |
-| **the cache** | a local directory beside the checkout | the containers themselves, raw downloads, model weights, run artefacts | never — disposable |
+| **the emulator** | `laurentprudhon/the-st` — this repository | the emulator, its design, the wayfinder maps, the research | public |
+| **the catalogue** | `laurentprudhon/the-st-software` | **everything about the software**: the facts, the OCR text, the crops, the covers, the leaflets, the manual text | private now, public later |
+| **the cache** | a local directory beside the checkout | **the disk images and the full magazine pages** — nothing else | never |
 
-**The decision rule, asked in this order; the first *yes* wins:**
+**Ruled** (owner, 2026-11-15): *"everything about the catalog is stored in a catalog/store repo named the-st-software
+... the only link with the-st repo (besides the name) is the version of the emulator which first ran the rendition
+of a game with success. only the disk images and the full magazine pages live in the local download cache."*
 
-1. **Can it be re-fetched from a recorded URL, or re-derived from a recorded hash and a recipe?** → **cache**.
-   Nothing in the cache is knowledge; losing it costs bandwidth, not truth. This is why every file row carries
-   `url` + `sha256` + `size`: the manifest in the repo is what makes the cache rebuildable.
-2. **Is it a fact *about* something** — a hash, a size, a count, a score, a date, a host, a status code, a
-   provenance note, or a sentence *we* wrote? → **the repo**.
-3. **Otherwise it is someone else's expression in bytes** → **the store**.
+**The only link between the two repositories is one string.** For a rendition that ran, the catalogue records
+`first_played_by = {emulator version, date}`. Nothing else crosses — no shared schema, no shared code, no build
+dependency — so the emulator stays releasable without the catalogue and the catalogue stays readable without the
+emulator.
 
-The test that settles any future item in one question: *if this vanished, could it be rebuilt from what the repo
-records?* Yes → cache. No, and it is a fact or our own writing → repo. No, and it is their picture or their prose →
-store.
+**Why the boundary is exactly there**, from the owner's reasoning: the disk images *are* the games and are never
+redistributed; a whole magazine issue is a reproduction nobody would defend. What makes the catalogue worth having
+is the **crop** of an article's illustrations (mostly screenshots) and the **OCR text**, and the owner's position
+is that those are acceptable.
 
-| item | tier | why |
+| what | where |
+|---|---|
+| `title` / `release` / `disk` / `rendition` / `file` / `artefact` rows, scores, verdicts | **catalogue** |
+| SHA-256, sizes, HTTP status, advertised strings, origin URLs | **catalogue** |
+| our English summaries, the ≤200-char quotes | **catalogue** |
+| OCR **text** — articles and manuals, every language | **catalogue** |
+| OCR metadata: engine, model, version, date, pages, confidence | **catalogue** |
+| page crops, box fronts/backs, manual page images, leaflets, disk labels | **catalogue** |
+| screenshots, emulator-captured or archived | **catalogue** |
+| the schema, the pipeline code that fills it, the design notes | **catalogue** |
+| `.st` / `.stx` / `.ipf` / `.scp` / `.msa`, the zips holding them | **cache** |
+| full magazine page scans, and any issue-level PDF or JP2 | **cache** |
+| GGUF weights, intermediate OCR JSON, run artefacts | **cache** |
+
+The cache is not knowledge: every entry in it is re-fetchable from a recorded `url`, which is why each `file` row
+carries `url` + `sha256` + `size`. Losing the cache costs bandwidth, never truth. **A crop is the exception that
+proves the rule** — once the full page is gone, the crop is its only surviving derivative, which is why crops are
+promoted into the catalogue rather than left in the cache.
+
+### 0.1 Does this need git LFS?
+
+Yes, for the images — and the numbers say it needs a paid LFS pack, not the free 1 GB. Order of magnitude at the
+corpus we can already count:
+
+| class | estimate | how derived |
 |---|---|---|
-| `title` / `release` / `disk` / `rendition` / `file` / `artefact` rows | **repo** | facts |
-| SHA-256, sizes, HTTP status, advertised strings, fetch dates, host | **repo** | facts about files |
-| review scores, `aspect_score` values, `raw` strings | **repo** | facts about a page |
-| our English summaries, the ≤200-char verdict quotes | **repo** | our prose / fair quotation |
-| OCR *metadata*: engine, model, version, date, page count, confidence | **repo** | facts about a job |
-| the DPI distribution, the host registry, the censuses | **repo** | our measurements |
-| the schema, the pipeline code, the handoffs | **repo** | ours |
-| magazine page images, page crops | **store** | their scan |
-| formatted article text, OCR text of articles | **store** | their prose, transcribed |
-| **OCR text of manuals**, in every language | **store** | their prose, transcribed — and the most valuable of it |
-| box front/back, manual pages, leaflets, disk labels, disk photos | **store** | their artwork |
-| screenshots, whether captured by the emulator or archived | **store** | pixels of a copyrighted game |
-| `.st` / `.stx` / `.ipf` / `.scp` / `.msa` containers, and the zips holding them | **cache** | the games themselves — never redistributed |
-| raw downloaded scans before normalisation | **cache** | re-fetchable from the recorded URL |
-| GGUF model weights | **cache** | third-party downloads, re-fetchable |
-| emulator runs, screenshots awaiting review, intermediate OCR JSON | **cache** | re-derivable |
+| article crops | **7–8 GB** | ~25 000 articles × ~2 crops × ~150 KB |
+| box fronts/backs | **4–5 GB** | ~10 000 releases × 2 × ~250 KB |
+| manual page images | **8–10 GB** | ~5 000 releases × ~16 pages × ~120 KB |
+| leaflets, disk labels | **~1 GB** | ~10 000 × ~100 KB |
+| screenshots | **~4 GB** | ~10 per title × ~40 KB |
+| OCR text | **~1.5 GB** | text, so ordinary git — it does not need LFS |
 
-**The line that matters legally, stated once:** the game containers are **never in either repository**. The
-emulator fetches a file from the recorded URL at the user's request; the dev-phase cache exists only to test the
-emulator at scale, is never committed, and is rebuildable from the manifest. The repo holds *where it is and what
-it hashes to*, never the disk.
+Total order **25–30 GB**. Three consequences:
 
-**And nothing in the repo is a binary:** a scan, an image, a container, a model or an OCR transcript never enters
-it, and the check is mechanical — if `git add` would store bytes a human did not type, it belongs somewhere else.
+1. **Put the images in LFS and the text in plain git.** Text diffs, greps and merges; images must not.
+2. **Cap quality before the first commit, not after.** LFS objects are immutable — re-encoding an image leaves the
+   old object in storage for ever, so a "recompress later" decision is a permanent size increase. Fix the crop
+   width and JPEG quality once, as a schema constant.
+3. **Tell clones not to smudge.** `GIT_LFS_SKIP_SMUDGE=1` on clone, so a reader who wants the schema does not
+   pull 30 GB, and the public site later serves images from an object-store mirror rather than making browsers
+   clone.
 
+Alternatives, and why not: plain git makes every clone pay the full history for ever; `git-annex` handles this size
+better but is not GitHub-native and is hard to explain to a reader; object storage plus a manifest contradicts the
+"full information in one place" goal this split exists to serve.
 
 ## 1. The five levels
 
@@ -183,7 +203,8 @@ facts and its store pointer live here — the same asymmetry as the magazine hal
 | `language` | on the **artefact**, never on the attachment |
 | `pages` | manuals and leaflets |
 | `source` | `scan` · `emulator-capture` · `official` (publisher-released art) |
-| `producer` | `us` · `third-party` — **who made the image**, kept apart from its quality |
+| `origin_url` | **the URL the image came from** — to credit its author, and to re-fetch it |
+| `credit` | the author or site as it should be displayed |
 | `dpi` | measured, nullable — **degradation is derived from it against the floor, never stored as a class** |
 | `store_ref` | the store id (content-derived, stable before publication) |
 | `ocr` | `{engine, model_version, date, pages, confidence}` + a store ref for the text |
@@ -197,13 +218,12 @@ the rendition it came from recorded in its provenance.
 **Multi-language manuals are not a special case**: the language is on the artefact, so a release with an English
 and a German manual has two `manual` artefacts and two OCR records. That is the whole of the requirement.
 
-**Two axes, not one label.** An earlier draft of this table had a single class (`own-scan` /
-`archived-scan-degraded` / `third-party-ocr-fallback`) and it was wrong: it fused *who made the image* with *how
-good it is*, so a good scan from an archive and a bad one from us would have needed a third and a fourth value,
-and the value could never be re-checked. Split, the two questions are answerable independently and degradation
-becomes arithmetic: **`producer` says who, `dpi` says how good, and `dpi < floor` is the degradation test** rather
-than a stored opinion. `producer = us` is empty today and is a legitimate future value — the project may one day
-scan a box the owner owns.
+**Two axes, not one label.** An earlier draft had a single class (`own-scan` / `archived-scan-degraded` /
+`third-party-ocr-fallback`) and it was wrong twice over: it fused *where the image came from* with *how good it
+is*, and it invented a `us` producer that will never exist — the owner does not scan anything himself. Ruled
+instead: **`origin_url` says where it came from, `dpi` says how good it is, and degradation is derived**
+(`dpi < floor`) rather than stored as an opinion. The origin URL is not bookkeeping: it is how every image is
+credited to its author, and if a source ever withdraws one it is how the item is found and removed.
 
 **Screenshots are the one artefact kind the project can generate rather than collect**, so `emulator-capture` is a
 first-class `source` and the golden set (#64a) is where they come from.
@@ -235,6 +255,10 @@ per-listing, not per-bytes: two files of one rendition can be advertised as diff
 | `runs` | the **file** | `plays` · `boots` · `disk-image-corrupted` · `disk-protection-emulation-failure` · `machine-emulation-failure` · `unknown` — total, exactly one per file |
 | `is-what-it-claims` | the **file** | `agrees` / `disagrees` / `undetermined` on title, version, disk count and language, **with the compared strings recorded** |
 | `run-status` | the **run**, never the file | `ok` · `harness-failure` (cache, path, decoder, screenshot) |
+
+**`first_played_by` is the whole interface with the emulator** (§0): `{emulator version, date}`, written once,
+when a rendition first reaches `runs = plays`. It is a fact about the pair, not about the emulator — which is why
+the catalogue never needs to know anything else about it.
 
 `runs` is an enum rather than a boolean because it names **whose** fault: `disk-image-corrupted` is a fact about
 the dump (a catalogue note), `disk-protection-emulation-failure` is a gap in our emulator, and

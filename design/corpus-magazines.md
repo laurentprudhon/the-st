@@ -19,7 +19,7 @@ its own record, because reviews are the filter axis over games while articles ar
 | `title_as_printed` | string | as it appears on the page |
 | `summary_en` | text | **ours**, 1–3 sentences |
 | `artefact_refs` | list | store ids: page crops, formatted text |
-| `provenance` | list | scan source, `producer` (`us` / `third-party`), measured `dpi`, OCR engine + version + date, confidence — **degradation is derived from `dpi` against the floor, never stored as a class** |
+| `provenance` | list | `origin_url` (where the page image came from — for credit and removal), measured `dpi`, OCR engine + version + date, confidence — **degradation is derived from `dpi` against the floor, never stored as a class** |
 
 ## 2. Review
 
@@ -72,10 +72,14 @@ title, and what did they score it", and the magazine half answers "what was in t
 
 ## 3. Where the material lives
 
+Everything in this document lives in **`the-st-software`** (§0 of `design/corpus-schema.md`), together with the
+software catalogue — the magazine half and the software half are two indexes of one repository, linked by
+`article_titles`. Only the **full page scans** stay in the local cache, and the disk images with them.
+
 | content | location |
 |---|---|
-| facts, scores, summaries, provenance | this repo |
-| formatted text, page crops, box/disk/manual/leaflet scans and their OCR | the private artefact store (#60), public later |
+| facts, scores, summaries, provenance | `the-st-software` too — the catalogue is one repository, not two |
+| formatted text, page crops, box/disk/manual/leaflet scans and their OCR | the catalogue repository `the-st-software` (#60), public later |
 
 Ruled: *"i think it is ok to reproduce magazine articles 30 years later even if it is not public domain, so i
 would say : facts and summaries in the git repo, formatted text and pages crops in a private distinct repo for
