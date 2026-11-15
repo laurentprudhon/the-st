@@ -1526,8 +1526,8 @@ frame has fallen 65.8 → 12.29 → **11.02 ms** across this page's three landin
 between the four chips (measured to the wake) and a queue priced twice. This section brackets it. The bracket's
 first result is that **the residual was not dispatch at all**: 1.40 ms of it was the harness-facing clock the
 engine was reading four times an instant — in Release — to fill two lines of `run.state`. Removing that clock
-from Release is **−1.40 ms a frame over six alternating pairs (6/6)**, and G8 now reads **10.02 ms** in the gate
-against a 10.00 budget, where #63 left it 1.02 ms short.
+from Release is **−1.40 ms a frame over six alternating pairs (6/6)**, and G8 is **green at 9.60 ms** of its
+10.00 budget — 10.02 in the gate pass seven minutes before it — where #63 left it 1.02 ms short.
 
 ### 22.1 The instrument: one mode per site, and what makes it quotable
 
