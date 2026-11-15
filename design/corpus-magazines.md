@@ -19,7 +19,7 @@ its own record, because reviews are the filter axis over games while articles ar
 | `title_as_printed` | string | as it appears on the page |
 | `summary_en` | text | **ours**, 1–3 sentences |
 | `artefact_refs` | list | store ids: page crops, formatted text |
-| `provenance` | list | scan source, DPI, class (`own-scan` / `archived-scan-degraded` / `third-party-ocr-fallback`), OCR engine + version + date, confidence |
+| `provenance` | list | scan source, `producer` (`us` / `third-party`), measured `dpi`, OCR engine + version + date, confidence — **degradation is derived from `dpi` against the floor, never stored as a class** |
 
 ## 2. Review
 
@@ -59,6 +59,16 @@ All four fields, not one `score` column, from the counted corpus:
 Aspect vocabulary, seeded from what the magazines print: `graphics`, `sound`, `animation`, `interest`, `overall`,
 `gameplay`, `price`, `fun`. Open set, one row per aspect per review. `raw` is kept so a disagreement between our
 parse and the printed page is always visible.
+
+## 2.5 The link to the software catalogue
+
+`article_titles (article_id, title_id, role)` — many-to-many, `role` = the article's `kind`. **Every article
+about a game links to its title**, not only the ads: a review, a preview, a hints page, a cheats page, a feature,
+a news item. A `review` *additionally* carries `release_reviewed`, because a review is about a specific edition
+while the rest are about the work. One sentence: **article → title always; review → release additionally.**
+
+That makes the two halves one corpus with two indexes: the catalogue answers "which articles exist about this
+title, and what did they score it", and the magazine half answers "what was in this issue".
 
 ## 3. Where the material lives
 

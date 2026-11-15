@@ -7,14 +7,54 @@ the corpus lives in `design/corpus-magazines.md`.
 This is the document the harvester (#53), the artefact store (#60) and the test pipeline (#61) read. It is a
 design note, not a database migration: no table exists yet.
 
-## 0. The two layers
+## 0. Three tiers, and the one rule that decides which
 
-| layer | lives in | holds |
+| tier | where | holds | published? |
+|---|---|---|---|
+| **the repo** | this repository (`the-st`) | facts, hashes, provenance, prose **we** wrote, the schema, the code | public, permanently |
+| **the store** | a separate private repository (#60) | other people's expression in bytes: scans, page crops, OCR text, screenshots | private now, public later |
+| **the cache** | a local directory beside the checkout | the containers themselves, raw downloads, model weights, run artefacts | never — disposable |
+
+**The decision rule, asked in this order; the first *yes* wins:**
+
+1. **Can it be re-fetched from a recorded URL, or re-derived from a recorded hash and a recipe?** → **cache**.
+   Nothing in the cache is knowledge; losing it costs bandwidth, not truth. This is why every file row carries
+   `url` + `sha256` + `size`: the manifest in the repo is what makes the cache rebuildable.
+2. **Is it a fact *about* something** — a hash, a size, a count, a score, a date, a host, a status code, a
+   provenance note, or a sentence *we* wrote? → **the repo**.
+3. **Otherwise it is someone else's expression in bytes** → **the store**.
+
+The test that settles any future item in one question: *if this vanished, could it be rebuilt from what the repo
+records?* Yes → cache. No, and it is a fact or our own writing → repo. No, and it is their picture or their prose →
+store.
+
+| item | tier | why |
 |---|---|---|
-| **catalogue** | this repo (`the-st`) | facts, hashes, provenance, our summaries — **no binaries** |
-| **artefact store** | a separate private repo, public later (#60) | formatted text, page crops, box/disk/manual/leaflet scans and their OCR |
+| `title` / `release` / `disk` / `rendition` / `file` / `artefact` rows | **repo** | facts |
+| SHA-256, sizes, HTTP status, advertised strings, fetch dates, host | **repo** | facts about files |
+| review scores, `aspect_score` values, `raw` strings | **repo** | facts about a page |
+| our English summaries, the ≤200-char verdict quotes | **repo** | our prose / fair quotation |
+| OCR *metadata*: engine, model, version, date, page count, confidence | **repo** | facts about a job |
+| the DPI distribution, the host registry, the censuses | **repo** | our measurements |
+| the schema, the pipeline code, the handoffs | **repo** | ours |
+| magazine page images, page crops | **store** | their scan |
+| formatted article text, OCR text of articles | **store** | their prose, transcribed |
+| **OCR text of manuals**, in every language | **store** | their prose, transcribed — and the most valuable of it |
+| box front/back, manual pages, leaflets, disk labels, disk photos | **store** | their artwork |
+| screenshots, whether captured by the emulator or archived | **store** | pixels of a copyrighted game |
+| `.st` / `.stx` / `.ipf` / `.scp` / `.msa` containers, and the zips holding them | **cache** | the games themselves — never redistributed |
+| raw downloaded scans before normalisation | **cache** | re-fetchable from the recorded URL |
+| GGUF model weights | **cache** | third-party downloads, re-fetchable |
+| emulator runs, screenshots awaiting review, intermediate OCR JSON | **cache** | re-derivable |
 
-The catalogue never holds a scan; the store never holds a fact the catalogue does not also point at.
+**The line that matters legally, stated once:** the game containers are **never in either repository**. The
+emulator fetches a file from the recorded URL at the user's request; the dev-phase cache exists only to test the
+emulator at scale, is never committed, and is rebuildable from the manifest. The repo holds *where it is and what
+it hashes to*, never the disk.
+
+**And nothing in the repo is a binary:** a scan, an image, a container, a model or an OCR transcript never enters
+it, and the check is mechanical — if `git add` would store bytes a human did not type, it belongs somewhere else.
+
 
 ## 1. The five levels
 
@@ -142,7 +182,9 @@ facts and its store pointer live here — the same asymmetry as the magazine hal
 | `attached_kind` + `attached_id` | `title` · `release` · `disk` — the rule below |
 | `language` | on the **artefact**, never on the attachment |
 | `pages` | manuals and leaflets |
-| `source` | `own-scan` · `archived-scan` · `emulator-capture` · `magazine-page` |
+| `source` | `scan` · `emulator-capture` · `official` (publisher-released art) |
+| `producer` | `us` · `third-party` — **who made the image**, kept apart from its quality |
+| `dpi` | measured, nullable — **degradation is derived from it against the floor, never stored as a class** |
 | `store_ref` | the store id (content-derived, stable before publication) |
 | `ocr` | `{engine, model_version, date, pages, confidence}` + a store ref for the text |
 
@@ -155,14 +197,23 @@ the rendition it came from recorded in its provenance.
 **Multi-language manuals are not a special case**: the language is on the artefact, so a release with an English
 and a German manual has two `manual` artefacts and two OCR records. That is the whole of the requirement.
 
-**Screenshots are the one artefact kind the project can generate rather than collect**, so `emulator-capture` is a
-first-class `source` and the golden set (#64a) is where they come from — while `archived-scan` means what it
-says: a screenshot of unknown provenance, from the internet.
+**Two axes, not one label.** An earlier draft of this table had a single class (`own-scan` /
+`archived-scan-degraded` / `third-party-ocr-fallback`) and it was wrong: it fused *who made the image* with *how
+good it is*, so a good scan from an archive and a bad one from us would have needed a third and a fourth value,
+and the value could never be re-checked. Split, the two questions are answerable independently and degradation
+becomes arithmetic: **`producer` says who, `dpi` says how good, and `dpi < floor` is the degradation test** rather
+than a stored opinion. `producer = us` is empty today and is a legitimate future value — the project may one day
+scan a box the owner owns.
 
-**An ad is the bridge between the two halves of the corpus.** It is at once an `article` of kind `advert` in the
-magazine half (with its magazine, issue, page and the scan it was OCR'd from) and an `artefact` of kind `ad`
-attached to a **title** here; the artefact carries `article_id`, and it is the only entity that spans both
-documents.
+**Screenshots are the one artefact kind the project can generate rather than collect**, so `emulator-capture` is a
+first-class `source` and the golden set (#64a) is where they come from.
+
+**The magazine half links to this one by `article_titles (article_id, title_id, role)`** — ruled after the ads:
+*"we can also link a title with a review or other articles on a game"*. Any article about a game links to its
+**title**, with `role` being the article's own kind (`advert`, `review`, `preview`, `hints`, `cheats`, `feature`,
+`news`); a `review` additionally carries `release_reviewed`, because a review is about a specific *edition* while
+the others are about the work. One sentence to remember it: **article → title always; review → release
+additionally.**
 
 **Why manual OCR is the highest-value OCR in the project**, recorded because it changes its priority: a large
 share of ST games are unplayable without the manual, because the copy protection asks for a word from a given
@@ -236,7 +287,7 @@ SELECT runs, COUNT(*) FROM file GROUP BY runs;      -- excludes harness failures
 
 `title.language` · per-language title rows · `title_id` on `release` · a `compilation_of` column · an `also_on`
 field · a "disk 2 of 3" string inside a filename · a `protection_state` column on a title or release · a
-`works: bool` column · deriving `disk` identity from a hash · deriving `release.disk_count` from the files · an artefact attached to more than one level · a `manual` without a `language` · an `ad` without its `article_id` · a screenshot treated as a scan when the emulator made it.
+`works: bool` column · deriving `disk` identity from a hash · deriving `release.disk_count` from the files · an artefact attached to more than one level · a `manual` without a `language` · an `ad` without its `article_id` · a screenshot treated as a scan when the emulator made it · a stored degradation class where `dpi` would answer.
 
 ## 11. Open
 
