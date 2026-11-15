@@ -166,6 +166,13 @@ public sealed partial class Engine
             }
 
             MachineTime = t;
+
+            // The per-instant clock is a Debug instrument, not part of the machine. Release carries no
+            // digest for it to explain (ADR 0008 §6) and it is not free: four reads an instant over
+            // ~24 000 instants is 1.40 ms a frame of the 11.1 the gate measures (FINDINGS §22), which
+            // is more than the whole distance G8 was short by. `drain_ms` and `instrument_ms` are
+            // Debug-only for the same reason — a Release run.state reports neither.
+#if DEBUG
             long phaseStart = System.Diagnostics.Stopwatch.GetTimestamp();
             BeforeBatch(t);
 
@@ -175,6 +182,13 @@ public sealed partial class Engine
             phaseStart = System.Diagnostics.Stopwatch.GetTimestamp();
             AfterBatch(t);
             InstrumentTicks += System.Diagnostics.Stopwatch.GetTimestamp() - phaseStart;
+#else
+            BeforeBatch(t);
+
+            DrainInstant(t);
+
+            AfterBatch(t);
+#endif
         }
     }
 

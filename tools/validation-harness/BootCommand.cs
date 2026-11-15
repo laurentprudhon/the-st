@@ -481,8 +481,10 @@ internal static class BootCommand
             "panic_aregs=" + string.Join(",", Enumerable.Range(0, 8).Select(k => machine.PeekLong(ProcAregs + (uint)(k * 4)).ToString("x8"))),
             $"panic_usp={machine.PeekLong(ProcUsp):x8}",
             $"queue_count={machine.Engine.QueueCount}",
+#if DEBUG
             $"drain_ms={(machine.Engine.DrainTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency):F0}",
             $"instrument_ms={(machine.Engine.InstrumentTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency):F0}",
+#endif
             $"records_retained={machine.Engine.RetainedRecords.ToString(CultureInfo.InvariantCulture)}",
             $"records_overwritten={machine.Engine.OverwrittenRecords.ToString(CultureInfo.InvariantCulture)}",
             $"window={Engine.WindowSummary()} records per log, {machine.Engine.Logs.Count} logs",

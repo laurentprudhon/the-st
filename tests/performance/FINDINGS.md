@@ -1518,3 +1518,154 @@ frame has fallen 65.8 → 12.29 → **11.02 ms** across this page's three landin
   pairs, the measured number beside the projection, the gate at 31/1.
 - **No new lever is filed.** What is left unmeasured is still §20's residual (~2.2 ms before this cut, and the
   next session's step), and the two design-cost levers the owner has not asked for.
+
+
+## 22. The residual, bracketed — and the instrument Release was paying for: 11.02 → 9.73 ms a frame, G8 green
+
+§20 left exactly one line of the frame unmeasured: the engine's own per-instant work, ~1.6 ms of 11.02, sitting
+between the four chips (measured to the wake) and a queue priced twice. This section brackets it. The bracket's
+first result is that **the residual was not dispatch at all**: 1.40 ms of it was the harness-facing clock the
+engine was reading four times an instant — in Release — to fill two lines of `run.state`. Removing that clock
+from Release is **−1.40 ms a frame over six alternating pairs (6/6)**, and G8 now reads **10.02 ms** in the gate
+against a 10.00 budget, where #63 left it 1.02 ms short.
+
+### 22.1 The instrument: one mode per site, and what makes it quotable
+
+#48's shape, one mode per site, chosen by `ST_RESIDUAL_TIMING` and echoed into `run.state` (a mode switch whose
+default arm is "off" turns a typo into nine successful-looking runs in the wrong mode — §20.4's rule):
+
+| mode | the one pair it adds | per |
+|---|---|---|
+| `count` | none — the tallies only | — |
+| `next` | around `NextInstant()` | instant |
+| `execute` | around the whole `Execute` | queue pop |
+| `resume` | around the Resume case's engine half (token test → `Disarm` → `Clock`) | resume |
+| `cont` | around the continuation call | resume and dated wake |
+| `apply` | around the ApplyWrite case | apply |
+| `date` | around `ExecuteDate`'s engine half | dated wake |
+| `branch` | all of the inner sites at once | — |
+| `null` | every site's pair **with nothing between its two reads** — the rent | — |
+
+**Proved inert before a ratio was quoted**: with every counter in and no pair, the 300-frame **Debug** boot
+reproduces `2bfb229b…` / 9 136 634 and `238faddf…` / 9 135 915, `bus_cycles` 5 564 479, `timer_c` 1 167,
+`timer_b_counts` 59 924, `queue_pops` 25 709 518, `alloc_mb_per_frame` 22.27 — every machine counter §21 landed.
+
+**The counts reconcile against numbers that existed before the instrument** (Release, 800 frames / 724 run):
+
+| | a frame |
+|---|---|
+| instants drained | **23 777.3** (Debug 300: 30 455.4, and there `batches` = 9 136 634 = the instant count, exactly) |
+| `Resume` entries | 39 147.6 |
+| `ApplyWrite` entries | 24 445.0 |
+| the two together | **63 592.6** = the gate's `pops_per_frame` 63 592.7 ✓ |
+| dated wakes | 17 671.4 — **not** pops and **not** suspensions: §18's 23 680.4 is the pre-#63 figure |
+
+### 22.2 The split, net of the pair's own 16 ns
+
+The rent is measured, not assumed: `null` mode runs the same code shape with the interval emptied, and it agrees
+with a tight loop of empty pairs in the same binary (15.4 ns) to 0.6 ns — **16.2 ns a pair, uniform to 0.3 ns
+across the six sites**, which is what says it measured the pair and not the work.
+
+| line | ms a frame | an entry | share of 11.13 |
+|---|---|---|---|
+| chip continuations — 39 147.6 resumes | 6.44 | **164.5 ns** | 57.9 % |
+| chip continuations — 17 671.4 dated wakes | 2.11 | **119.2 ns** | 18.9 % |
+| `ApplyWrite` dispatch (append + fire + enqueue) — 24 445.0 | 0.45 | **18.4 ns** | 4.0 % |
+| `NextInstant` — the head peek and the four-chip date scan, 23 777.3 | 0.17 | **7.2 ns** | 1.5 % |
+| `Resume` dispatch, engine half — 39 147.6 | 0.14 | **3.7 ns** | 1.3 % |
+| `ExecuteDate` dispatch, engine half — 17 671.4 | 0.02 | **1.2 ns** | 0.2 % |
+| **the per-instant clock: 4 reads an instant** | **1.40** | 14.7 ns a read | 12.6 % |
+| switch, dequeue, drain prologue, GC 0.12, the harness's own frame | 0.40 | | 3.6 % |
+| **the frame** | **11.13** | | |
+
+The column closes: 8.55 (continuations) + 0.79 (the engine's own sites) + 1.40 (the clock) + 0.40 (the rest) =
+**11.14 against a pair mean of 11.13**, which is the whole reason this split is believed and a bracket with a
+subtracted guess would not have been.
+
+### 22.3 The arithmetic this settles
+
+The handoff's estimate was "~1.6 ms ÷ 63 592.7 pops = **25 ns an entry** if the whole residual were queue
+dispatch", to be checked against §18's 8–18 ns a wake. The bracket lands **below** both on the dispatch:
+**18.4 ns an `ApplyWrite`, 3.7 ns a `Resume`**, and it says the 25 ns arithmetic had the right queue and the wrong
+residual — 1.40 of the residual's 2.58 ms was the clock and 0.40 the loop's own bookkeeping, so queue dispatch was
+never more than ~0.6 ms of it.
+
+### 22.4 The lever: a Debug instrument that Release could read is rent
+
+§14 and §58 already have this rule for *counters* (`_freshWakes`: 2.66 ms a frame by its own removal). This is the
+same rule in its purest form, because the thing Release was paying for was not even a counter — it was the clock:
+
+```csharp
+long phaseStart = System.Diagnostics.Stopwatch.GetTimestamp();   // ×2, every instant, in Release
+```
+
+Four reads an instant over 23 777 instants, and the pair of values pinned `phaseStart` live across `DrainInstant`
+and wrote two `Engine` fields — so a read in situ costs **14.7 ns**, not the 7.7 ns a bare read costs, and the
+whole thing is 1.40 ms of an 11 ms frame.
+
+Six adjacent, alternating Release pairs, A = `9e9dfa2` built here, B = the same tree with the four reads and the
+two `run.state` lines behind `#if DEBUG` (load 1.01–1.16):
+
+| pair | A, ms | B, ms | A − B |
+|---|---|---|---|
+| 1 AB | 11.07 | 10.04 | +1.03 |
+| 2 BA | 10.85 | 9.79 | +1.06 |
+| 3 AB | 11.11 | 9.50 | +1.61 |
+| 4 BA | 11.18 | 9.75 | +1.43 |
+| 5 AB | 11.21 | 9.70 | +1.51 |
+| 6 BA | 11.37 | 9.60 | +1.77 |
+| **mean** | **11.13** | **9.73** | **+1.40, 6/6 positive** |
+
+`alloc_mb_per_frame` **7.93 on both sides**, `gc_ms_per_frame` 0.12, `pops_per_frame` 63 592.7, n 724, and B's
+`run.state` carries no `drain_ms` (the guard worked; A's does).
+
+**Why this is not a design question.** `drain_ms` was only ever quoted from a Debug boot (§21.3 reads "−2.9 ms a
+Debug frame"), no gate row reads it, and ADR 0008 §6 had already decided that Release carries no digest — a
+Release clock whose only output is a Debug report is that same decision applied to a second instrument. Debug is
+untouched, so the folds are byte-identical **by construction**, and measured: the Debug 300 boot after the change
+still reads `2bfb229b…` / 9 136 634 and `238faddf…` / 9 135 915, with `drain_ms` and `instrument_ms` still in its
+`run.state`. **No re-bless is implied and none was asked for.**
+
+### 22.5 The three-part proof
+
+1. **Both folds**: unchanged — `run.digest` `2bfb229b1211215413613c954262673929dba864a363651e0350ff048d380c61` /
+   9 136 634, `run.stream` `238faddf3c4cd19e262284d5b80fc8dfb89ed477203c382cc1dc3f3a6faedf1c` / 9 135 915. The
+   synthetic `g1-a` is untouched (95 999 words, `58fcdddf…`), because the change cannot be reached from Debug.
+2. **Six adjacent alternating Release pairs**, §22.4: **11.13 → 9.73, −1.40, 6/6**, allocation beside the mean.
+3. **`scripts/validate.sh` — PASS, every row ok, G8 green at 9.60 ms** of 10.00 (`runs/20261115T141652Z`), n 724,
+   `alloc_mb_per_frame` 7.93, `gc_ms_per_frame` 0.12, `G1: 9136634 digest words, identical`, `G2` identical, the
+   synthetic green. **Two passes are quoted, because the first one is the honest one to quote**: the pass 7
+   minutes earlier (`runs/20261115T141246Z`) read **10.02 ms** — 31 ok / 1 FAIL, G8 red by 0.02 — with the same
+   build and the same counters. The pair mean 9.73 sits between them, so what the budget is now decided by is the
+   host's own ±0.3 ms and nothing in the machine.
+
+**This is the first green gate on this page, and it is green by 0.4 ms — not by 1.4.** The reading that survives
+both passes: G8 went **11.40 → 10.02 → 9.60** as the clock came out (the gate's own figures), the pairs say
+**11.13 → 9.73** (6/6), and the two routes agree on the size of the change to within 0.02 ms.
+
+### 22.6 The ruling
+
+**The residual is closed, and nothing in it is a lever.** After the clock is gone the frame is 9.73 ms, made of
+8.55 ms of chip continuations (88 %), 0.79 ms of the engine's own dispatch and 0.40 ms of the loop's bookkeeping,
+GC and the harness. The kill-early rule's total test is met (the residual is 1.18 ms ≤ 1.3) and its share test is
+met for everything except `ApplyWrite`, which is **4 % of the frame** — and that 4 % is ADR 0008 §1's one record
+per write: an append into a 256-record ring plus a subscription scan. There is no shape change there that the
+ADRs have not already priced (§20 closed the bytes; #46 and #44 closed the queue).
+
+**The measurement lesson, for the next session.** `ApplyWrite` at 18.4 ns an entry is **1.1× the cost of the
+stopwatch pair used to time it**. Per-entry work in this engine is now at the resolution limit of every bracket
+this page owns: any further lever here has to be priced by *removal over six pairs*, never by a bracket — and, as
+this section found, a bracket's own rent is 1.40 ms of the frame's 11, which is why the removal that found it cost
+nothing to run and everything to believe.
+
+**What each open ticket inherits:**
+
+- **#42 — unchanged in absolute terms** (the CPU is not what moved) and now **17 % of a 9.73 ms frame** against
+  15 % of 11.02. Its 1.64 ms ceiling and ADR 0008 §7's seven conditions are untouched; its case is still the owner's.
+- **#49 — the same ~4.5 ms of device chips, now 47 % of the frame** (CPU 4.86 is 50 % of 9.73 — the two are of the
+  same order, which was already #49's premise). Its ordering contract is untouched.
+- **#38 — G8 is green, and by 0.4 ms**: 9.60 in the gate's second pass, 10.02 in the pass before it, 9.73 in six
+  pairs. That is a *marginal* pass, and what the budget should *be* — and whether frame 1's ~110 ms of JIT belongs
+  in a 724-frame mean (it is 0.15 ms of the mean) — is that ticket's decision, not a session's.
+- **#65 — the ledger gains one row**: "the per-instant clock in `Engine.Run`" — no design cost, no machine
+  counter, **1.40 ms**, and it has been in the tree since #34's retention work.
