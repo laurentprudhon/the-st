@@ -1672,3 +1672,45 @@ nothing to run and everything to believe.
   in a 724-frame mean (it is 0.15 ms of the mean) — is that ticket's decision, not a session's.
 - **#65 — the ledger gains one row**: "the per-instant clock in `Engine.Run`" — no design cost, no machine
   counter, **1.40 ms**, and it has been in the tree since #34's retention work.
+
+## 23. G8's row excludes the warm-up frame — the owner's decision of 2026-11-15
+
+The row's mean was over every frame the boot timed, and **frame 1 is not a frame of this machine's steady state**: it
+carries the JIT of the engine and all four chips and the first touch of every log ring. Measured here at
+**frame_max_ms ~110**, i.e. **0.15 ms of a 724-frame mean** — more than a third of the 0.4 ms of headroom §22's green
+was standing on, and the reason two adjacent passes could read 10.02 (red) and 9.60 (green) on the same build.
+
+**The decision (owner, 2026-11-15):** the mean excludes the first frame, the budget stays **10 ms**, and the work
+continues — *"we still need a real margin under 10 ms, so we must continue optimizing."* Recorded in
+`design/validation.md` §3's row and its ruling block; it is a **definition**, not a code change in the machine.
+
+**What changed, and it is the harness only:**
+
+- `BootCommand.cs`: `const int WarmupFrames = 1`; the frame loop accounts the mean and the max only from frame 2,
+  `run.state` gains **`frame_warmup_excluded=1`** and `frame_n` now reports **the frames the mean actually used**
+  (723), and `run.report` says "over {framesTimed} frames after the warm-up".
+- Nothing in `src/` moved: both folds are byte-identical — `2bfb229b…` / 9 136 634 and `238faddf…` / 9 135 915
+  (Debug 300 after the change), and `frame_n` 299 with the same 300-frame boot.
+
+**The numbers, two passes on the landed tree:**
+
+| | old mean (n 724) | new mean (n 723, warm-up excluded) |
+|---|---|---|
+| pass A `runs/20261115T141246Z` → `runs/20261115T145300Z` | 10.02 (G8 **red**, 31 ok / 1 FAIL) | **9.53 (green, every row ok)** |
+| pass B `runs/20261115T141652Z` → `runs/20261115T145510Z` | 9.60 (green) | **9.62 (green)** |
+
+`pops_per_frame` 63 592.7, `alloc_mb_per_frame` 7.93–7.94, `gc_ms_per_frame` 0.12, M1 still the owner's. **The two
+denominators are deliberately different and both are printed**: the mean divides by the 723 frames it measured, the
+per-frame counters still divide by the 724 frames the boot ran — do not "fix" one to match the other, and quote
+`frame_n` beside any G8 figure.
+
+**The rule this creates:** a mean taken before 2026-11-15 is **not comparable** with one taken after — 11.40, 10.02
+and 9.60 are 724-frame means, 9.53 and 9.62 are 723-frame means, and the difference is ~0.15 ms of JIT that the old
+row was charging the machine. Every earlier section of this page that quotes a frame mean is a record of the row as
+it read *then* and is left as written.
+
+**What it settles, and what it hands on.** #38's budget question is answered — 10 ms, with the row's measurement
+defined — and G8 is green by ~0.4–0.5 ms. **ADR 0005's leaf was that ruling's chosen response to the falsifier, and
+the falsifier is now met without it**, so the leaf stops being the budget's answer and becomes a question of
+*margin for features not yet designed*: the owner's direction of 2026-11-15 is to prototype it (#42) and weigh its
+milliseconds against the coroutine model's readability, on the diff, before deciding.

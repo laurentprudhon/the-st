@@ -170,6 +170,10 @@ internal static class BootCommand
         // program counter stays inside one small ROM loop is the ROM waiting on a timeout rather
         // than working; the FDC's own register traffic inside the run says which wait it was.
         const int WaitFrames = 10;
+
+        // The frame the mean skips: the owner's ruling of 2026-11-15 (FINDINGS §23) — frame 1 is the JIT
+        // and first touch, not the machine's steady-state frame.
+        const int WarmupFrames = 1;
         const int WaitBox = 16;
         var waits = new List<WaitWindow>();
         int waitFrom = 1;
@@ -196,11 +200,20 @@ internal static class BootCommand
                 machine.Engine.Run(frame * frameTicks);
                 double frameMs = (System.Diagnostics.Stopwatch.GetTimestamp() - frameStarted)
                     * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
-                frameMsTotal += frameMs;
-                framesTimed++;
-                if (frameMs > frameMsMax)
+
+                // G8's mean excludes the warm-up frame (the owner's ruling of 2026-11-15, FINDINGS §23):
+                // frame 1 carries the JIT of every chip and the engine plus first touch of the log rings,
+                // ~110 ms here, i.e. 0.15 ms of a 724-frame mean — a third of the row's own headroom. The
+                // row is a steady-state budget; the warm-up is the harness's startup, not the machine's
+                // frame cost. `frame_n` reports the frames the mean actually used, so nothing hides.
+                if (frame > WarmupFrames)
                 {
-                    frameMsMax = frameMs;
+                    frameMsTotal += frameMs;
+                    framesTimed++;
+                    if (frameMs > frameMsMax)
+                    {
+                        frameMsMax = frameMs;
+                    }
                 }
 
                 if (desktopFrames > 0)
@@ -505,6 +518,7 @@ internal static class BootCommand
             $"cpu={cpuName}",
             $"cores={Environment.ProcessorCount.ToString(CultureInfo.InvariantCulture)}",
             $"frame_n={framesTimed.ToString(CultureInfo.InvariantCulture)}",
+            $"frame_warmup_excluded={WarmupFrames.ToString(CultureInfo.InvariantCulture)}",
             $"frame_mean_ms={meanFrameMs.ToString("F2", CultureInfo.InvariantCulture)}",
             $"frame_mean_on_desktop_ms={meanDesktopMs.ToString("F2", CultureInfo.InvariantCulture)}",
             $"frame_max_ms={frameMsMax.ToString("F2", CultureInfo.InvariantCulture)}",
@@ -573,7 +587,7 @@ internal static class BootCommand
         report.Add("  a Debug frame carries the per-instant digest and the seven assertions: its wall time is a");
         report.Add("  measurement of the instruments, not of the machine (validation.md §2's two-table row).");
 #else
-        report.Add($"  mean frame              {meanFrameMs,8:F2} ms of {FrameMs:F2} ms   budget {BudgetMs:F2} ms (50 %)   {(g8Green ? "green" : "RED")}");
+        report.Add($"  mean frame              {meanFrameMs,8:F2} ms of {FrameMs:F2} ms   budget {BudgetMs:F2} ms (50 %)   {(g8Green ? "green" : "RED")}   over {framesTimed} frames after the warm-up");
 #endif
 
         report.Add($"  n                       {Program.Number(framesTimed)} frames timed (max {frameMsMax:F2} ms)");
