@@ -2013,3 +2013,79 @@ variants, with the counter), `/opt/data/cache/scratch/st-sync-min/` (**only** th
 `leaf-pairs.sh` / `sync-pairs.sh` (the runners). The counter (`leaf_exchanges`, `leaf_closed`, `leaf_by_*`) prices any
 future fast path in an afternoon; the rule from §24a stands: **a fast path's prize is bounded by the suspension it is
 *allowed* to remove, and inside ADR 0008 §7 that is the System Control Unit's slot wake, worth 0.16 ms.**
+
+## 25. #49, the chips on separate threads: the premise is gone, and the residue is machinery — a ruling of **no-go**
+
+#49 was filed 2026-11-14 *deliberately last*, blocked by #44, #43, #46, #47, #48 and #42, on one observation:
+*"FINDINGS §3: **51 % of a frame is the chips' coroutines' own work**, spread over four chips paying 1.0–2.6 µs a
+resolve … The machine has 20 cores and uses one of them."* Every blocker is now landed or ruled out with numbers
+(#42 was refused by the owner on 2026-11-15, §24b), so the ticket's own entry condition is met. This section is its
+ruling; **no implementation, by the ticket's own Done.**
+
+### 1. The premise is stale by a factor of three, and by an order of magnitude in the per-resume figure
+
+The observation was taken on a **30.2 ms** frame with resumes at **1.0–2.6 µs**. Today (§22, `9.73 ms`, 724 frames):
+
+| | then (§3, 2026-11-14) | now (§22, 2026-11-15) |
+|---|---|---|
+| frame | 30.2 ms | **9.73 ms** |
+| a resume | 1.0–2.6 µs | **164.5 ns** (39 147.6 a frame) |
+| a dated wake | — (not a kind yet) | **119.2 ns** (17 671.4 a frame) |
+| the continuations' total | ~51 % of the frame | **8.55 ms = 88 %** of the frame |
+
+So the *share* went **up** (51 % → 88 %) while the frame fell by 3× — the rest of the machine is now cheap and the
+continuations are almost all of what is left. That sounds like a stronger case for the ticket, and it is the opposite:
+what those 88 % are made of changed as well.
+
+### 2. The discriminator the ticket named is answered: it is machinery, not chip work
+
+#49 asked precisely the right question — *"whether the per-resume cost is machinery (parallelism does not touch it) or
+chip work (parallelism might)"* — and #47/#48 answered it before the ticket could start:
+
+- **§47's bench**: of a bus cycle's cost, the **suspension is 84 %**, the state machine **42.7 ns (8.5 %)** and the
+  **CPU's own work ~7 %**. That is the split by *cause*, measured by removing each in turn.
+- **§48's census**: the engine's own resume path is **8–18 ns a wake**; everything else in a resume is the
+  continuation — the state machine's `MoveNext` **plus** the chip's own code, which no bracket can split further.
+- **§20's per-chip re-pricing** (runtime async): the CPU pays 337.1 ns a wake, the SCU 101.1, Video 164.1, Timers
+  111.1 — and the SCU is **38 001.7 of the 39 147.6 queue resumes** a frame (§48), because its wake *is* the beam and
+  the bus.
+
+Two consequences, both fatal to the threads idea as filed:
+
+1. **The residue a thread could touch is the chip's own code, ~7 % of a resume** — 8.55 ms × 0.07 ≈ **0.6 ms a frame**
+   as an upper bound, before any concurrency cost. It is an estimate with its derivation, not a measurement; a
+   measurement would need the split §47 could not make.
+2. **The three chips whose work is largest are causally serial with each other by construction**: the SCU's beam
+   produces the group deliveries that wake Video, the `DE` edges and `MFPCS` records that wake Timers, and the `IPL`
+   lanes that wake the CPU. Concurrency would have to run the *cause* beside the *effect*.
+
+### 3. What the ordering contract would cost, and what the recent measurements say about it
+
+The determinism #49 asks to preserve is `(instant, seq)` with the arrival number drawn at insertion (ADR 0006/0007)
+and subscribers fired in registration order (ADR 0008 §1). A deterministic concurrency would need exactly what §24b
+found out of reach: chips advancing the machine's instant themselves. **§24b measured that shape at +1.41 ms a frame
+when only the CPU drove it, and it cost the model** (one clock the CPU owns, a re-entrant drain, the pin sampled at the
+core's boundaries) — the owner refused it on 2026-11-15 for 1.4 ms. #49 would have to buy a *four-way* version of the
+same change for a **0.6 ms** ceiling, and pay it in the same currency plus a reconciliation rule between speculative
+chips. The ticket's own words are the ruling: *"a scheduler nobody can follow is a worse outcome than a frame that
+misses a restated budget."*
+
+### 4. And the budget question it was filed against is answered
+
+The ticket asks whether the answer changes #38's budget, #43's ring or makes #42's leaf unnecessary. All three are
+settled without it: the budget is **10 ms with the warm-up excluded** and the row is green at ~9.5 (§23); the ring is
+#43's derived capacity, untouched by who runs the chips; and #42's leaf was measured twice (§24, §24b) and **refused**
+by the owner. Nothing #49 can say reopens them, because its ceiling (0.6 ms) is below the margin the row already has.
+
+### 5. The ruling
+
+**No-go, and the ticket closes `not_planned`.** What it would take to reopen it, stated so nobody re-derives this:
+a measurement that splits a continuation's 164.5 ns into **chip code** against **machinery** (the split §47 could not
+make), showing the chip code to be a large share *and* a machine whose chips are not causally chained through the
+beam — i.e. a different machine, not a different scheduler. If that measurement ever appears, the first experiment is
+not threads but **a serial-fraction bracket**: run one chip's work twice per wake and read the frame's slope.
+
+**Recorded in:** this section. The ADR revision (`design/scheduler.md`, ADR 0005/0008 §3) is the owner's to make —
+the numbers above are what he asked #49 to produce, and this page is their evidence. #42's refusal (§24b) and this
+ruling are the same decision seen twice: **the model's one-clock-per-chip loop is the product; 1.4 ms and 0.6 ms are
+not worth it.**
