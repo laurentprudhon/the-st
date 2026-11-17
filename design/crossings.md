@@ -68,7 +68,7 @@ resumes).
 | `MD0–MD15` (U401.56–71) | System Control Unit | Video (samples, does not subscribe) | tristate bus | data | — | 16 000 records | 4 records per group; payload only |
 | `SREQ` (`U401.36` → U400.107; **driver: Sound**) | Sound | System Control Unit | single-driver, active low | 1 | the sample FIFO is about to underflow | ≤ 313 | one refill per line at 50 kHz (3.2 of 4 words consumed per line); ~125 at 25 kHz, ~63 at 12.5, ~31 at 6.25. A 4-word FIFO holds 1.25 lines at the top rate, so refills cannot exceed one per line |
 | `SLOAD` (U400.106 port group: 1 control lane + 16 data lanes) | System Control Unit | Sound | single-driver | 2 | answers the `SREQ` it just served | ≤ 313 | up to 4 words per refill, one internal slot (250 ns) each |
-| `DE` (U400.141) | System Control Unit | Video | single-driver | 1 | the display window opens (and, as a release record, closes) | 400 (200 asserting + 200 releasing) | one window per vertically active line, so **two** records a line: a level in an append-only log is its two edges (owner's ruling, 2026-11-13, below). Gates the fetch and the pixel output |
+| `DE` (U400.141) | System Control Unit | Video (level read, no subscription) | single-driver | data | — | 400 (200 asserting + 200 releasing) | one window per vertically active line, so **two** records a line: a level in an append-only log is its two edges (owner's ruling, 2026-11-13, below). Gates the fetch and the pixel output: Video **samples** the level at each group delivery (`Video.cs`, `ValueAt`), and a group only exists inside the window — `DeliverGroup` runs from the assert edge and from the cadence inside it — so the sample answers 1 by construction and an arm would wake Video 400 times a frame to tell it what its own group record already implies (ticket #55) |
 | `DE` — second subscriber: `TBI` (U203.20) | System Control Unit | Timers and events | single-driver | 1 | the same write, counted by Timer B | 200 counts (of the 400 records) | one count per active line: **the assert edge** is what Timer B counts, the release carries no count. Documented (`board-inventory.md` §6.15), not drawn in the redraw |
 | `BLANK` (U400.140) | System Control Unit | Video (level read, no subscription) | single-driver | data | — | 313 records | Video is already running when blanking changes, so it reads the level; nothing starts |
 
@@ -82,6 +82,15 @@ resumes).
 > carrying the window's two instants in its lanes makes `DE`'s value composite and takes the level query
 > away from `ValueAt`; one record with no release leaves the level reading "open" for the rest of the frame,
 > which no reader of the past can undo without looking forward in time.
+>
+> **Correction — 2026-11-15 (ticket #55).** The ruling above is right about the records and was wrong about
+> *who reads them*: the second subscriber is **Timer B only**, and Video is a **level read** — `Video.cs` samples
+> `ValueAt(Wires.De, delivery.Instant)` at each group delivery and paints nothing when it answers 0, which is the
+> shape `BLANK` already had. The two rows above are now `DE → Video (level read)` and `DE → Timer B`; the record
+> count is unchanged at **400**, and so is the class-1 figure below, because a group delivery only exists inside the
+> window (`DeliverGroup` runs from the assert edge and from the cadence inside it), so an arm would wake Video 400
+> times a frame to tell it what its own group record already implies. `design/video.md`'s own row said this before
+> the catalogue did; the three ADRs that still repeat "two subscribers" are filed as their own correction.
 | `HSYNC` 143, `VSYNC` 142 | System Control Unit | **nobody in the machine** | single-driver | data | — | 313 + 1 records | the host display stage is not a virtual chip; it reads the log per frame (ADR 0004) |
 > **Correction — 2026-11-11** (ticket #27, `research/ste-super-hires.md`). This table's last row read
 > `MWE`/`MWD`/`MWK` | **System Control Unit** | **Video** | "a Super Hi-Res write" | ~0 | "never exercised at
@@ -220,7 +229,7 @@ Class-1 wakes per frame, by workload:
 
 | Workload | Wakes/frame | Dominant terms |
 |---|---|---|
-| GEM desktop, idle | **≈ 4 734** | video groups 4 000 · `DE` 400 (two subscribers) · HBL 313 · VBL 1 · Shifter/MFP register writes ~20 |
+| GEM desktop, idle | **≈ 4 734** | video groups 4 000 · `DE` 400 (Timer B counts the assert edge; Video reads the level) · HBL 313 · VBL 1 · Shifter/MFP register writes ~20 |
 | Floppy load | ≈ 4 810 | + `RDY` ~60, `FDINT` ~20, disk selects |
 | Raster demo | ≈ 5 670 | + up to 939 Shifter register writes |
 
