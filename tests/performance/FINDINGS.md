@@ -1989,3 +1989,27 @@ gains **1.4 ms a frame (15 %) and loses 55 % of its allocation** — but it stop
 timelines and becomes a machine with one clock that the CPU owns. That is a paper decision (ADR 0003/0006/0007), not a
 perf ticket, and it is now priced: 1.4 ms against the coroutine model. §24's three legal shapes are unchanged; the
 0.16 ms leaf is the best available *without* the paper.
+
+
+**The ruling (owner, 2026-11-15): refused, and #42 closed with it.** *"not worth it, register all this experiment and
+the analysis result, give up this change, and move on to the next ticket"* — after reading the minimal diff: **209
+changed lines in five files** (`Cpu/M68000.cs` 126, `Engine.cs` 49, `Machine.cs` 16, `Chips/SystemControlUnit.cs` 6,
+`BootCommand.cs` 1), of which **124 are code**, 34 comment and 40 blank, 9 code lines removed. The line count is not
+the ground: the *model* moves — the CPU owns the machine's clock, `Cycle` has two ways to complete, the drain becomes
+re-entrant (`Horizon`/`RunDepth` exist to say "one batch at a time" holds per depth only), and "every contact with the
+machine is an `await`" (ADR 0008 §3) stops being true. **1.41 ms is not worth that sentence.**
+
+What stands from the three experiments, in one place:
+
+| shape | ms | what it costs | verdict |
+|---|---|---|---|
+| §24 shape 1 — the leaf behind a flag (the System Control Unit answers in its own wake) | **0.16** (6/6) | +122 lines, 2 files, no `await` removed; moves both folds by batch membership | refused — 1.6 % of the frame |
+| §24 shape 2 — the same, records queued (fold-identical) | ~0 | +1.48 MB and +21 611.7 pops a frame | refused — a loss with no gain |
+| §24b — the single machine sync (CPU-driven, re-entrant drain) | **1.41** (3/3) | +209 lines, one clock the CPU owns, a re-entrant drain, the pin sampled at the core's boundaries, the folds redefined | **refused, 2026-11-15 — the model, not the lines** |
+
+The artifacts are kept, not shipped: `/opt/data/cache/scratch/st-leaf/` (`ST_LEAF=1|2`, `ST_SYNC=1` on the same-tree
+variants, with the counter), `/opt/data/cache/scratch/st-sync-min/` (**only** the sync change, the diff-of-record),
+`/opt/data/cache/scratch/sync-min.diff` (the 209-line diff), `/opt/data/cache/scratch/st-leaf/leaf-pairs/` and
+`leaf-pairs.sh` / `sync-pairs.sh` (the runners). The counter (`leaf_exchanges`, `leaf_closed`, `leaf_by_*`) prices any
+future fast path in an afternoon; the rule from §24a stands: **a fast path's prize is bounded by the suspension it is
+*allowed* to remove, and inside ADR 0008 §7 that is the System Control Unit's slot wake, worth 0.16 ms.**
