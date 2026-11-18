@@ -119,6 +119,16 @@ at the single trailing-fetch call site. It changes no cycle count, and it is the
 self-modifying code and a fetch past the end of a block can observe. The exact per-opcode micro-op
 placement stays Level 2.
 
+**As built, and the gap priced (2026-11-18, #37).** The core under `src/TheST.Machine/Cpu` shipped without
+this section: every instruction word is one bus cycle at the counter when the decoder asks for it, and the
+group-0 frame's saved counter is reconstructed with an offset (`pc − 2`, `pc − 4`) instead of read out of a
+queue. The corpus prices the gap at **1 136 of 1 000 060 records** — `MOVE.w` 355, `MOVE.l` 377,
+`MOVEM.l` 404, every first difference in a frame byte. ADR 0009 §4's revision — **accepted by the owner on
+2026-11-18** — withdraws the deferral: Level 1 gets the three registers, the closing steps, the
+fetch-per-word count and the class; the frame's counter comes out of the queue; `length` becomes checkable but
+stays ungated because the internal residue of §8 is a separate build. The build is #70, and it is checked
+against each corpus record's own bus trace (`transactions`), not only against the final state.
+
 ## 4. Reset: the first cycle
 
 Documented (UM §6.3.1): supervisor, trace off, mask 7, vector 0, and **nothing stacked** — the first
