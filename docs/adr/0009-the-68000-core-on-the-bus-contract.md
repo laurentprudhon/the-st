@@ -172,6 +172,35 @@ manual's decomposition: **`clocks = 4 × bus cycles + internal residue`**, with
 > the class do not explain — i.e. a test needs a particular prefetch *instant* inside the instruction — then
 > §4's class is not a sufficient Level-1 account, and the per-opcode placement is promoted to Level 1 in its
 > place. Reopening that way is a revision of this block, not a bug hunt.
+>
+> ### Outcome of the build — 2026-11-18 (ticket #70)
+>
+> Built on branch `37-prefetch-queue`. **1 000 008 / 1 000 060** (99.995 %), the sample **2 976 / 2 976**,
+> against the prediction above of 1 000 057 — so **49 records** of the 1 136 stayed red, and they are the
+> falsifier's own case rather than a bug: `MOVE.w` 23 and `MOVE.l` 26, every one a `MOVE` into an odd
+> `(xxx).l` destination, where the reference spends **one fetch fewer** between the destination's two
+> address words than this core does. Its EA machine consumes the pair and *then* validates the address, so
+> the read the second word owes and the trailing fetch are both cancelled by the fault; this core pays the
+> read at the word. `IR`'s address and the class explain 1 087 of the 1 136 — so the class **is** the right
+> Level-1 datum, and what §4's Level 2 keeps is not decoration: the read's placement inside the instruction
+> is what a faulting record's frame measures. **Confirmed later in the same session, and it is a script,
+> not a rule**: the obvious Level-1 rule ("a long destination address defers its last word's refill until
+> the address is validated") was built and measured — it fixes 23 records and breaks 278 (**999 753**), and
+> `33ea [MOVE.w (d16,A2),(xxx).l]` pays two reads where `33fc [MOVE.w #,(xxx).l]` pays three with the same
+> odd destination. So the placed read is per opcode; the instrument that carries the evidence is
+> `cpu-tests --reads FILE` (both fetch lists, record by record), and the promotion is a build of its own.
+>
+> What the build measured about the class, over and above "MOVE vs the rest": the trailing fetch is issued
+> **before the write only for a plain `MOVE` whose destination is `-(An)`**, at the closing steps for every
+> other instruction, and it is *cancelled* when the faulting address came out of the instruction stream
+> (a `(d16,An)`/`(d8,An,Xn)`/absolute destination is validated where it is built, before the fetch). Four
+> families of corpus records pin exactly that split.
+>
+> Also measured: the machine's records are unchanged (300 frames: 1 198 480 group deliveries, 119 848 `DE`,
+> 93 750 `HBL`, 299 `VBL`, 4 626 retained) and its bus cycles are +0.2 % over the same 300 frames, while a
+> jump, a branch, an `RTE`/`RTR` and an exception entry now pay the two fetches the manual's rows charge for
+> them — which is why the boot reaches the desktop at frame 591 instead of 568 and the frame figure moves.
+> The fold pair moved by construction and awaits the owner's re-bless; `length` stays reported, never gated.
 
 Documented (Cwik 2005): `IRD` is the decode register, `IR` and `IRC` the two-word queue; **before any
 instruction starts, its opcode and the next word are already fetched**; every instruction ends with the

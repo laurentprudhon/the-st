@@ -171,6 +171,15 @@ public sealed partial class M68000
                 return;
         }
 
+        // the prefetch class: a plain MOVE's trailing fetch is issued before its write. The corpus's
+        // traces put it there only for a `-(An)` destination — that address's own step is where the
+        // bus comes free — while `(An)`/`(An)+` and the stream-built addresses take it at the closing
+        // steps or lose it to the fault
+        if (PrefetchBeforeWrite && mode == 4)
+        {
+            await TrailingFetchAsync();
+        }
+
         // A long store into -(An) steps down a word at a time and writes the low word first, so an
         // odd register faults on that first word with the register down 2, not 4 — while a long
         // *read* steps down 4 and faults at A − 4. The corpus measures both (FINDINGS row 44).
@@ -185,6 +194,20 @@ public sealed partial class M68000
 
         uint address = await EaAddressAsync(mode, reg, size);
         if (_busFaulted) return;
+
+        // An address the instruction stream built is validated where it is built: a word access to an
+        // odd `(d16,An)`/`(d8,An,Xn)`/absolute destination faults there, *before* the trailing fetch,
+        // which is why the corpus's traces show one fetch fewer for those destinations than for a
+        // `-(An)` one (whose address comes from a register and is checked at the bus cycle).
+        if (size != 0 && (address & 1) != 0 && mode is 5 or 6 or 7)
+        {
+            _faultAddress = address;
+            _faultWrite = true;
+            _faultIsFetch = false;
+            _addressError = true;
+            _busFaulted = true;
+            return;
+        }
 
         if (size == 0) await WriteByteAsync(address, (byte)value);
         else if (size == 1) await WriteWordAsync(address, (ushort)value);
@@ -908,6 +931,18 @@ public sealed partial class M68000
             for (int bit = 0; bit < 16; bit++)
             {
                 if ((mask & (1 << bit)) == 0) continue;
+
+                // A long store into -(An) steps down a word at a time, so an odd base faults on the low
+                // word at A − 2 rather than on the long at A − 4 — the same rule the plain MOVE's store
+                // follows (FINDINGS row 44). The corpus measures it: the frame's access address is A − 2.
+                if (size == 2 && (address & 1) != 0)
+                {
+                    int faulting = 15 - bit;
+                    ushort low = (ushort)(faulting < 8 ? _d[faulting] : GetA(faulting - 8));
+                    await WriteWordAsync(address - 2, low);
+                    if (_busFaulted) return;
+                }
+
                 address -= (uint)bytes;
                 await StoreMovemAsync(address, 15 - bit, size);
                 if (_busFaulted) return;
@@ -972,6 +1007,7 @@ public sealed partial class M68000
                 _pc = await ReadLongAsync(A7);
                 if (_busFaulted) return;
                 A7 += 4;
+                await RefillAsync(_pc);
                 Clocks(1);
                 return;
             }
@@ -989,6 +1025,7 @@ public sealed partial class M68000
                 _pc = await ReadLongAsync(A7);
                 if (_busFaulted) return;
                 A7 += 4;
+                await RefillAsync(_pc);
                 Clocks(1);
                 return;
             }
@@ -1064,25 +1101,36 @@ public sealed partial class M68000
 
             // an odd target faults on the fetch that follows the jump, so nothing is pushed: the
             // corpus measures the stack untouched and the group-0 frame where the return address
-            // would have gone (FINDINGS row 43). Handing the odd PC to the prefetch's own check
-            // (the caller's) raises the right frame; the push only happens for a reachable target.
+            // would have gone (FINDINGS row 43). The refill is skipped for an odd target too — the
+            // fault belongs to the prefetch, so the loop's own odd-PC check raises it.
             if ((target & 1) != 0)
             {
                 _pc = target;
+                _flowTransferred = true;
                 return;
             }
 
             uint stack = A7 - 4;
             A7 = stack;
             await WriteLongAsync(stack, _pc);
-            _pc = target;
+            await RefillAsync(target);
             Clocks(2);
             return;
         }
 
         if ((op & 0xFFC0) == 0x4EC0)   // JMP
         {
-            _pc = await EaAddressAsync(mode, reg, 2);
+            uint target = await EaAddressAsync(mode, reg, 2);
+            if (_busFaulted) return;
+
+            if ((target & 1) != 0)
+            {
+                _pc = target;
+                _flowTransferred = true;
+                return;
+            }
+
+            await RefillAsync(target);
             Clocks(1);
             return;
         }
@@ -1119,6 +1167,7 @@ public sealed partial class M68000
         }
 
         _pc = pc;
+        await RefillAsync(_pc);
         Clocks(2);
     }
 
@@ -1146,7 +1195,8 @@ public sealed partial class M68000
                     if (counter != 0xFFFF)
                     {
                         short displacement = (short)await FetchAsync();
-                        _pc = _pc - 2 + (uint)displacement;
+                        uint target = _pc - 2 + (uint)displacement;
+                        await RefillAsync(target);
                         Clocks(2);
                         return;
                     }
@@ -1250,14 +1300,14 @@ public sealed partial class M68000
             uint stack = A7 - 4;
             A7 = stack;
             await WriteLongAsync(stack, _pc);
-            _pc = (uint)target;
+            await RefillAsync((uint)target);
             Clocks(2);
             return;
         }
 
         if (Condition(condition))
         {
-            _pc = (uint)target;
+            await RefillAsync((uint)target);
         }
 
         Clocks(1);

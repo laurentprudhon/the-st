@@ -129,6 +129,22 @@ fetch-per-word count and the class; the frame's counter comes out of the queue; 
 stays ungated because the internal residue of §8 is a separate build. The build is #70, and it is checked
 against each corpus record's own bus trace (`transactions`), not only against the final state.
 
+**As built, the queue (2026-11-18, #70).** The core now has the queue: `IRD` is the word being executed,
+`IR` the word the queue holds ready and `IRC` the slot the fetch pointer names, so the stream runs a word
+ahead of the decoder and every instruction fetches exactly its own word count (one word: one read at
+`pc + 4`; four words: four reads). `_irAddress` is the address of the word in `IR`, and a group-0/2 frame
+saves **that**, with no offset arithmetic — the measured rule is `last program read − 2`, and it holds on
+every record. A jump, a branch, an `RTE`/`RTR` or an exception entry refills the queue at its target (two
+reads, the `r fc6 target`, `n 2`, `r fc6 target + 2` every handler entry in the traces shows). Fetches are
+program space, so the bus carries `FC = 6` (2 in user mode), never the data codes the fetch-on-demand core
+used. The one datum that is *not* Level 1 after all is where inside an instruction the read lands: a store
+that faults keeps its trailing fetch when it is a plain `MOVE` into `-(An)` (class 0), loses it when the
+destination's address came out of the instruction stream, and every other instruction loses it — the 49
+records still red are exactly that difference, and it is Level 2's per-opcode placement (ADR 0009 §4's
+falsifier) — measured, not assumed: a single rule for it fixes 23 records and breaks 278, and two records of
+the same opcode and the same odd-destination shape pay a different number of reads. Corpus: **1 000 008 /
+1 000 060**, sample 2 976 / 2 976.
+
 ## 4. Reset: the first cycle
 
 Documented (UM §6.3.1): supervisor, trace off, mask 7, vector 0, and **nothing stacked** — the first
