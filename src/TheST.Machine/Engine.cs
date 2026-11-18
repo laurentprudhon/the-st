@@ -159,8 +159,14 @@ public sealed partial class Engine
         {
             // The next instant is the queue's head *or* the smallest date a chip holds (#40): a fire is
             // still a queue entry, because a writer chooses its instant, but a chip's own date is not.
+            //
+            // `long.MaxValue` is NextInstant's "nothing is pending anywhere" — the queue is empty and no
+            // chip holds a date. A host that asks for "everything" with `Run(long.MaxValue)` (the corpus
+            // harness does, one instruction at a time) must stop there: `t > endInstant` is false at the
+            // end of time, so without this the loop drains an empty batch at `long.MaxValue` for ever —
+            // an unbounded digest and an out-of-memory, and every later write backdated against it.
             long t = NextInstant();
-            if (t > endInstant)
+            if (t == long.MaxValue || t > endInstant)
             {
                 break;
             }

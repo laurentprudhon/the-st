@@ -101,6 +101,7 @@ internal static class CpuTestsCommand
         List<string> files = Directory
             .GetFiles(directory)
             .Where(path => path.EndsWith(".json", StringComparison.Ordinal) || path.EndsWith(".json.gz", StringComparison.Ordinal))
+            .Where(LooksLikeTests)
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToList();
 
@@ -204,6 +205,24 @@ internal static class CpuTestsCommand
         }
 
         return failed == 0 ? 0 : 1;
+    }
+
+    /// <summary>
+    /// A corpus directory may also carry the decode map (<c>68000.official.json</c>), which is an object:
+    /// only a file whose JSON opens with an array is a test file.
+    /// </summary>
+    static bool LooksLikeTests(string path)
+    {
+        using Stream file = File.OpenRead(path);
+        using Stream stream = path.EndsWith(".gz", StringComparison.Ordinal) ? new GZipStream(file, CompressionMode.Decompress) : file;
+
+        int first = stream.ReadByte();
+        while (first is ' ' or '\n' or '\r' or '\t')
+        {
+            first = stream.ReadByte();
+        }
+
+        return first == '[';
     }
 
     static string OpcodeName(string path)
