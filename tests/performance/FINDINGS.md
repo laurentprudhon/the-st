@@ -2089,3 +2089,42 @@ not threads but **a serial-fraction bracket**: run one chip's work twice per wak
 the numbers above are what he asked #49 to produce, and this page is their evidence. #42's refusal (§24b) and this
 ruling are the same decision seen twice: **the model's one-clock-per-chip loop is the product; 1.4 ms and 0.6 ms are
 not worth it.**
+
+## 26. The re-bless of 2026-11-18 (#36): the folds move by three batches, and the frame does not
+
+#36's twenty decode and effective-address fixes (FINDINGS 39–53 of `tests/680x0/FINDINGS.md`) change what
+EmuTOS itself executes, so both folds move. **The owner blessed the new pair on 2026-11-18.**
+
+| Fold | Before (`74f7c14`, re-blessed 2026-11-15) | After (`36-corpus-decode-ea`) |
+|---|---|---|
+| `run.digest` | `2bfb229b…` / 9 136 634 | **`d7768cb1301694d344b3c74996e06c1f4d4aecc405daa3f0ffff3768561838c1` / 9 136 637** |
+| `run.stream` | `238faddf…` / 9 135 915 | **`96348b1269e737ed3dc629fd030243f510319e055b6b257bf9706b4ebc537628` / 9 135 918** |
+
+Debug, `boot --frames 300`, `frame_n` 299. **Three words more in each fold, not one word moved:** the
+shift rule ("C and X are zero when the count exceeds the operand's width") drains three instants that
+used to append no record, and an instant with no record folds to nothing (§24's own rule).
+
+Attribution, by reverting one group of fixes at a time and re-booting (each reversion rebuilt and taken
+back to back):
+
+| fix reverted from the tree | `run.digest` | moves it? |
+|---|---|---|
+| CMPI's flags (a comparison no longer clears X) | `8f690ab7…` | **yes** |
+| the frame's saved SR (masked to `0xA71F`) | `faa6c1e1…` | **yes** — the frame's bytes are records |
+| `NEGX`'s zero rule | `d7768cb1…` | no |
+| `MOVE`'s flags set before the store | `d7768cb1…` | no |
+| `DIV`'s overflow clearing C | `d7768cb1…` | no |
+
+and applied alone to `74f7c14` in a worktree: **the shift rules alone** give `81427bab…` — so the three
+things that move this boot are CMPI's X, the shifts' C/X/N/Z and the frame's SR bytes.
+
+**What did not move:** the desktop is still reached at **frame 574**; `scripts/validate.sh` is PASS twice
+after the change, G8 at 9.67 and 9.85 ms of its 10.00 budget (n 723, 63 592.9 pops a frame, 4.47 a bus
+cycle, `alloc_mb_per_frame` 7.94); six alternating Release pairs of `74f7c14` against the new tree read
+9.47/9.82/9.37/9.91/9.58/9.53 against 9.50/9.50/9.60/9.44/9.52/9.51 ms — deltas −0.03 +0.32 −0.23 +0.47
++0.06 +0.02, three each way, mean +0.10, i.e. **no frame effect**. A fidelity landing is priced by the
+gate, not by the mean: the corpus is the thing that changed, 974 788 → 998 921 of 1 000 060.
+
+The instrument repair that made the corpus measurable at all (`Engine.Run` draining an empty batch at
+`long.MaxValue` for ever since #40, and `cpu-tests --dir` choking on `68000.official.json`) is **`56a3ac0`
+on `main`**, and it is fold-neutral: a finite `Run(frameEnd)` never took the broken branch.
