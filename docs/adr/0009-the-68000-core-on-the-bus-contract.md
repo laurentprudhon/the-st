@@ -100,6 +100,61 @@ manual's decomposition: **`clocks = 4 × bus cycles + internal residue`**, with
 
 ### 4. The prefetch is three registers and one rule
 
+> ### Revision — 2026-11-18 (ticket #37): the prefetch is Level 1, and the build owes it
+>
+> **Status: proposed** — the owner's acceptance is ticket #37's closing step, and this block quotes
+> nothing yet because the question was put to him after this text was written.
+>
+> §4 below decided the queue on 2026-11-07 and the build shipped without it: `M68000` fetches every
+> instruction word on demand, one bus cycle at its own counter, and `EnterExceptionAsync` subtracts two
+> bytes from that counter (`pc − 4`) to imitate the frame a prefetching core would save. The deferral was
+> recorded as a fidelity gap. The corpus has now priced it, re-measured on `a3580fc`:
+>
+> - **998 921 / 1 000 060 (99.89 %), 119 of 124 files**, whole set 24.7 s.
+> - **1 136 of the 1 139 failures are one class** — `MOVE.w` 355, `MOVE.l` 377, `MOVEM.l` 404 — and every
+>   one of them differs first in a byte of the group-0 frame at `$7F7`/`$7FF`: the saved program counter
+>   and its upper word. The other three are upstream records that contradict themselves (`ASL.b` ×2,
+>   `DIVU` ×1); they stay red and are not chased.
+> - Two measurements pin the mechanism. A four-word instruction's frame is **two bytes lower** than this
+>   core's `pc − 2` — the corpus's counter has run ahead of the instruction it is executing — and a memory
+>   shift on an odd operand frames access address `$07840BFB` against this core's `$00000BFB`, because the
+>   reference takes its first long extension word out of the queue instead of off the bus
+>   (`tests/680x0/FINDINGS.md`, conventions 1 and 3).
+>
+> **What Level 1 takes.** All of §4 except the per-opcode micro-op placement: the three registers
+> `IRD`/`IR`/`IRC`, the three closing steps, the fetch count equal to the instruction's word count, and the
+> two-bit prefetch class honoured at the single trailing-fetch call site. Level 2 keeps only *where inside
+> the instruction* that trailing fetch lands (the `PREFETCH` steps of the micro-op script). The class is not
+> deferred because it costs no cycle: it is the only Level-1 datum self-modifying code observes.
+>
+> **One stream counter, and the frame reads the queue.** The core holds one instruction-stream counter, and
+> it runs ahead of the instruction being executed; the program counter a group-0/2 frame saves is **the
+> address of the last word the queue had fetched ahead** — for the four-word `MOVE.w (d16,A2),(xxx).l`, the
+> corpus's `opcode + 4`. The model's `pc − 2`/`pc − 4` arithmetic was reconstructing that offset by hand,
+> and the revision removes it: a frame saves what the queue holds. A jump, a branch, an `RTE`/`RTR` and an
+> exception entry **refill the queue at their target** (Cwik's four steps) instead of carrying the old words
+> across a boundary.
+>
+> **What each dependent artefact inherits:**
+>
+> | artefact | inherits |
+> |---|---|
+> | the bus leaf (§1, invariant 3) | a fetch is one read at the stream counter in program space (`FC=2`), never at instruction start; an extension word already **in** the queue costs no bus cycle of its own, because the previous instruction's closing fetch paid for it |
+> | the exception frame (§7) | the saved program counter comes out of the queue, not out of an offset expression; a fetch's own fault frames the word before the one that failed. **No offset arithmetic survives in `EnterExceptionAsync`.** |
+> | reset (§5) | six bus cycles, not four: two vector reads and Cwik's two prefetch reads, the first of them the CPU's first suspension |
+> | the corpus's `length` column | becomes *checkable* — the fetch count is the word count, which is the half of §3's arithmetic the bus owns — but stays reported and ungated, because `length` also needs the internal residue, which is a separate build |
+> | the folds | **move by construction**, and that is the cost of this ticket: a fetch lands at a different instant and at a different address, so `run.stream` and `run.digest` are both new. The pair is the **owner's re-bless**, never a session's: the build goes to a branch and `main` keeps the landed pair until that sentence exists. |
+> | the gate | bus cycles per instruction are unchanged — one fetch per consumed word before and after — so the frame time is expected to hold; the risk this change carries is record *placement*, not record count |
+>
+> **Predicted outcome, so the build can be graded rather than believed:** **1 000 057 / 1 000 060** — the
+> 1 136 frame records green, `MOVE.w`, `MOVE.l` and `MOVEM.l` at 8065/8065, the three self-contradicting
+> upstream records still red.
+>
+> **Falsifier.** If the queue as specified leaves a first difference in those 1 136 that `IR`'s address and
+> the class do not explain — i.e. a test needs a particular prefetch *instant* inside the instruction — then
+> §4's class is not a sufficient Level-1 account, and the per-opcode placement is promoted to Level 1 in its
+> place. Reopening that way is a revision of this block, not a bug hunt.
+
 Documented (Cwik 2005): `IRD` is the decode register, `IR` and `IRC` the two-word queue; **before any
 instruction starts, its opcode and the next word are already fetched**; every instruction ends with the
 same three steps (`IRC → IR`, fetch a new word `→ IRC`, `IR → IRD`); and an instruction performs exactly
@@ -175,6 +230,11 @@ so no record and no digest can differ.
 - **#10** implements this core shape: three machines, the bus leaf, the reset and prefetch rules, the
   entry script, and the two debug assertions (the manual-row agreement, the nested-entry budget). Its
   measurement of the whole model against the 40 % bill is unaffected by this ADR.
+- **#37** retires the deferral §4's build made: the queue lands on a branch, the corpus grades it against
+  the prediction in §4's revision block, and the reference pair is re-blessed by the owner before the
+  branch merges. Until then `main` keeps the landed pair and the 1 136 frame records stay red.
+- **`tests/680x0/FINDINGS.md`** conventions 1 and 3 stop being things the core imitates and become
+  consequences of §4: the frame's saved counter is the queue's, and extension words come out of it.
 - **#8** measures one thing this ADR created beyond ADR 0008's two: the **per-instruction cost of the
   three nested entries**, against the 1 CPU clock threshold below.
 - **#11** inherits no new determinism surface: the log query (`SampleWithInstant`) reads only records
