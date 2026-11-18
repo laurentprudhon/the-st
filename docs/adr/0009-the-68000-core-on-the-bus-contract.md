@@ -120,6 +120,12 @@ manual's decomposition: **`clocks = 4 × bus cycles + internal residue`**, with
 >   shift on an odd operand frames access address `$07840BFB` against this core's `$00000BFB`, because the
 >   reference takes its first long extension word out of the queue instead of off the bus
 >   (`tests/680x0/FINDINGS.md`, conventions 1 and 3).
+> - **The frame rule is verified, not inferred.** Each corpus record carries its reference's own bus trace
+>   (`transactions`: kind, cycles, function code, address, size, data — which the harness does not read yet).
+>   On **60 of 60** failing records across `MOVE.w`, `MOVE.l` and `MOVEM.l`, the frame's saved program
+>   counter is **the trace's last instruction-stream fetch minus two bytes**, i.e. `counter − 4`: the word
+>   in `IR`. This core writes `counter − 2`, which is the same number only for a one-word instruction — and
+>   that is exactly why the failures are `MOVE.w`, `MOVE.l` and `MOVEM.l` and not the single-word families.
 >
 > **What Level 1 takes.** All of §4 except the per-opcode micro-op placement: the three registers
 > `IRD`/`IR`/`IRC`, the three closing steps, the fetch count equal to the instruction's word count, and the
@@ -129,11 +135,11 @@ manual's decomposition: **`clocks = 4 × bus cycles + internal residue`**, with
 >
 > **One stream counter, and the frame reads the queue.** The core holds one instruction-stream counter, and
 > it runs ahead of the instruction being executed; the program counter a group-0/2 frame saves is **the
-> address of the last word the queue had fetched ahead** — for the four-word `MOVE.w (d16,A2),(xxx).l`, the
-> corpus's `opcode + 4`. The model's `pc − 2`/`pc − 4` arithmetic was reconstructing that offset by hand,
-> and the revision removes it: a frame saves what the queue holds. A jump, a branch, an `RTE`/`RTR` and an
-> exception entry **refill the queue at their target** (Cwik's four steps) instead of carrying the old words
-> across a boundary.
+> address of the word in `IR`**, which is `counter − 4` and is what the trace above measures. The model's
+> `pc − 2`/`pc − 4` arithmetic was reconstructing that offset by hand, and the revision removes it: a frame
+> saves what the queue holds. A jump, a branch, an `RTE`/`RTR` and an exception entry **refill the queue at
+> their target** — two fetches, the trace shows them for every handler entry — instead of carrying the old
+> words across a boundary.
 >
 > **What each dependent artefact inherits:**
 >
@@ -142,7 +148,7 @@ manual's decomposition: **`clocks = 4 × bus cycles + internal residue`**, with
 > | the bus leaf (§1, invariant 3) | a fetch is one read at the stream counter in program space (`FC=2`), never at instruction start; an extension word already **in** the queue costs no bus cycle of its own, because the previous instruction's closing fetch paid for it |
 > | the exception frame (§7) | the saved program counter comes out of the queue, not out of an offset expression; a fetch's own fault frames the word before the one that failed. **No offset arithmetic survives in `EnterExceptionAsync`.** |
 > | reset (§5) | six bus cycles, not four: two vector reads and Cwik's two prefetch reads, the first of them the CPU's first suspension |
-> | the corpus's `length` column | becomes *checkable* — the fetch count is the word count, which is the half of §3's arithmetic the bus owns — but stays reported and ungated, because `length` also needs the internal residue, which is a separate build |
+> | the corpus's `length` column | becomes *checkable* — the fetch count is the word count, which is the half of §3's arithmetic the bus owns — and the corpus already carries the oracle for it: each record's `transactions` is a full bus trace with per-cycle costs, which `cpu-tests` does not read today. Gating it is the build's option, not this revision's promise: `length` also needs §3's internal residue |
 > | the folds | **move by construction**, and that is the cost of this ticket: a fetch lands at a different instant and at a different address, so `run.stream` and `run.digest` are both new. The pair is the **owner's re-bless**, never a session's: the build goes to a branch and `main` keeps the landed pair until that sentence exists. |
 > | the gate | bus cycles per instruction are unchanged — one fetch per consumed word before and after — so the frame time is expected to hold; the risk this change carries is record *placement*, not record count |
 >
