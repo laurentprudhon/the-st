@@ -54,6 +54,11 @@ public sealed partial class M68000 : Chip
     // steps for class 1)
     bool _trailingFetched;
 
+    // a MOVE's absolute-long destination consumed the queue whole (its pair is one pop, ADR 0009 §4's
+    // per-opcode placement): IRD/IR hold the address's own two words, so the closing steps read the
+    // next opcode's pair instead of shifting what is there
+    bool _queueShort;
+
     bool _halted;
     bool _stopped;
 
@@ -566,6 +571,12 @@ public sealed partial class M68000 : Chip
     /// </summary>
     async ValueTask CloseInstructionAsync()
     {
+        if (_queueShort)
+        {
+            await CloseAfterLongDestinationAsync();
+            return;
+        }
+
         if (!_busFaulted)
         {
             await TrailingFetchAsync();
@@ -577,11 +588,60 @@ public sealed partial class M68000 : Chip
     }
 
     /// <summary>
+    /// The closing steps of a plain <c>MOVE</c> whose destination was an absolute long: that address
+    /// took the queue whole, so nothing in <c>IRD</c>/<c>IR</c> belongs to the next opcode and the
+    /// shift above would hand the decoder the address's own low word. The reference refills twice
+    /// here (<c>Prefetch(); Prefetch();</c> after the store, one of them before it for a source that
+    /// took no bus cycle), which is why these two reads are the ones the corpus counts.
+    /// </summary>
+    async ValueTask CloseAfterLongDestinationAsync()
+    {
+        if (_busFaulted)
+        {
+            return;
+        }
+
+        // the pair's prefetch-first, when the class ran it, has already paid one of the two
+        ushort first = _ircValid ? _irc : await ReadQueueWordAsync();
+        _ircValid = false;
+        if (_busFaulted)
+        {
+            return;
+        }
+
+        ushort second = await ReadQueueWordAsync();
+        if (_busFaulted)
+        {
+            return;
+        }
+
+        _ird = first;
+        _ir = second;
+    }
+
+    /// <summary>
     /// The instruction's prefetch class (ADR 0009 §4): 0 = the trailing fetch is issued <em>before</em>
     /// the final write, 1 = after it. The corpus pins which is which — a plain <c>MOVE</c> into
     /// <c>-(An)</c> has its trailing fetch before the write, every other instruction after it.
     /// </summary>
     bool PrefetchBeforeWrite => (_opcode >> 12) is 1 or 2 or 3;
+
+    /// <summary>
+    /// Whether a <c>MOVE</c>'s <em>source</em> operand cost no bus cycle of its own — a data or address
+    /// register direct, or an immediate. The reference calls this class
+    /// <c>MOVE_bw_AbsoluteLong_prefetch_first</c> / <c>MOVE_l_AbsoluteLong_prefetch_first</c>: with an
+    /// absolute-long destination the bus is free while the store waits, so the CPU prefetches the word
+    /// after the address before it writes, where every other source stores first.
+    /// </summary>
+    bool MoveSourceNeedsNoBusCycle
+    {
+        get
+        {
+            int sourceMode = (_opcode >> 3) & 0x7;
+            int sourceReg = _opcode & 0x7;
+            return sourceMode is 0 or 1 || (sourceMode == 7 && sourceReg == 4);
+        }
+    }
 
     /// <summary>
     /// The instruction's trailing fetch: the one read that keeps the queue a word ahead. It is issued
@@ -651,6 +711,53 @@ public sealed partial class M68000 : Chip
         return (high << 16) | low;
     }
 
+    /// <summary>
+    /// A plain <c>MOVE</c>'s absolute-long destination address, which the corpus places in a class of
+    /// its own: the reference's <c>MOVE_bw_AbsoluteLong</c> / <c>MOVE_l_AbsoluteLong</c> state builds
+    /// the pair from one read — the pop that takes the high word fetches the low one, and the low one
+    /// is read out of the queue rather than popped — so the address costs one read and leaves the
+    /// queue a word short (<see cref="_queueShort"/>, which the closing steps pay).
+    /// <para>
+    /// That single read is the whole of the 49-record residue: on a memory source the fault lands
+    /// before the address's low word's refill, so the read is never issued and the frame saves the
+    /// word before the address instead of the address's own high word. A source that took no bus
+    /// cycle (a register or an immediate) is the other half of the class and is handled at the store.
+    /// </para>
+    /// </summary>
+    async ValueTask<uint> FetchMoveAbsoluteLongAsync()
+    {
+        uint high = await FetchAsync();
+        if (_busFaulted) return 0;
+
+        uint low = _ir;
+        _pc += 2;               // the low word is consumed here, not by a pop of its own
+        _queueShort = true;
+        return (high << 16) | low;
+    }
+
+    /// <summary>
+    /// One read of the instruction stream at the fetch pointer, returned rather than queued: the
+    /// closing steps use it when the queue holds an instruction's own consumed words (the
+    /// absolute-long pair), so there is nothing to shift.
+    /// </summary>
+    async ValueTask<ushort> ReadQueueWordAsync()
+    {
+        uint address = _fetchPointer;
+        _irAddress = address - 2;
+
+        BusResult result = await Cycle(address, 1, false, 0, isProgram: true);
+        if (result.Faulted)
+        {
+            _busFaulted = true;
+            _faultAddress = address;
+            _faultIsFetch = true;
+            return 0;
+        }
+
+        _fetchPointer = address + 2;
+        return result.Data;
+    }
+
     // ---- reset ---------------------------------------------------------------------------
 
     async ValueTask ResetSequenceAsync()
@@ -716,6 +823,7 @@ public sealed partial class M68000 : Chip
             _pc += 2;
             _flowTransferred = false;
             _trailingFetched = false;
+            _queueShort = false;
 
             if (_busFaulted)
             {
