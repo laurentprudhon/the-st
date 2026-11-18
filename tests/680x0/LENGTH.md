@@ -209,8 +209,8 @@ already has in its hand at the moment it executes.
 
 **`BCHG`/`BCLR`/`BSET` on a data register pay 6 or 8 clocks on the same shape**, about half each
 (`BCHG` 1 301 records: 643 at 6, 658 at 8; `BCLR` and `BSET` the same; `BTST` on a data register, 2 clocks,
-does not vary). Nothing in
-the record separates the two: not the bit index (register or immediate), not the bit being set or clear,
+does not vary). Nothing in the record separates the two: not the bit index (register or immediate), not the
+bit being set or clear,
 not the operand's value or its sign, not the flags, not the position in the file. Two records of the same
 opcode, the same operand shape and the same operands differ. Until the reference's own state machine says
 why, this family cannot be graded — settle it from CLK's source the way row 58 was settled, not by
@@ -226,8 +226,8 @@ Three shapes, in the order they cost:
    plus the instruction's own work, the `#74` shape), the harness compares `4 x bus + residue` against
    `length` and fails the file when it differs. Cost: the table in §4 as data, the five counters of §5,
    the §6 datum settled; the exception class (§2) excluded with a named reason, because its `length` is an
-   entry's and the entry is `#72`'s contested frame. Payoff: 805 512 records become a verdict where 18
-   used to agree by accident, and the tick table cannot rot silently. **It cannot be a `validate.sh` gate
+   entry's and the entry is `#72`'s contested frame. Payoff: 805 512 records become a verdict where **0**
+   agree today, and the tick table cannot rot silently. **It cannot be a `validate.sh` gate
    row** — the corpus is 194 MB and 26 s and stays out of the gate by design (`design/validation.md` §3);
    "graded" here means the corpus's own run has a pass/fail number, which it does not today.
 3. **The residue on the bus timeline** — the core waits the residue before its next access, so the
