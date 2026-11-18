@@ -2132,3 +2132,47 @@ gate, not by the mean: the corpus is the thing that changed, 974 788 → 998 921
 The instrument repair that made the corpus measurable at all (`Engine.Run` draining an empty batch at
 `long.MaxValue` for ever since #40, and `cpu-tests --dir` choking on `68000.official.json`) is **`56a3ac0`
 on `main`**, and it is fold-neutral: a finite `Run(frameEnd)` never took the broken branch.
+
+## 27. The re-bless of 2026-11-18 (#70): the prefetch queue moves both folds, and the frame pays 0.16 ms
+
+`#70` implements ADR 0009 §4's queue, so the instruction stream runs a word ahead of the decoder and a
+jump, a branch, an `RTE`/`RTR` or an exception entry now pays **the two fetches the manual's rows charge**
+(the fetch-on-demand core fetched the target's opcode on demand, one read). Records and instants move, so
+both folds move. **The owner re-blessed the pair on 2026-11-18** — the sentence this page records.
+
+| Fold | Before (`36-corpus-decode-ea`, re-blessed 2026-11-18) | After (`37-prefetch-queue`) |
+|---|---|---|
+| `run.digest` | `d7768cb1…` / 9 136 637 | **`2615b600653778f6c79f46b03f21172cd4566f5144fd9ae37786c63f6d21286e` / 8 558 021** |
+| `run.stream` | `96348b12…` / 9 135 918 | **`876c79fbd30bc2bd7ed240350a0ecc7cd9f723c71d18af758c7a2fa4165d5323` / 8 557 232** |
+
+Debug, `boot --frames 300`, `frame_n` 299. **578 616 words fewer in each fold (−6.3 %), and not one word
+moved:** the count is one word per drain batch, and the queue's fetch instants coalesce into fewer, denser
+batches. What did *not* change is the work — 300 frames of both trees carry the **same records**: 1 198 480
+group deliveries, 119 848 `DE`, 93 750 `HBL`, 299 `VBL`, 1 198 480 chunk writes, 4 626 retained across 21
+logs — which is the proof that this is placement, not behaviour.
+
+The frame, measured the way this project measures it:
+
+| | `main` before | `37-prefetch-queue` |
+|---|---|---|
+| G8 (Release, gate) | 9.65 ms of 10.00, n 723 | **9.84 ms of 10.00, n 747** — green |
+| `pops_per_frame` | 63 592.9 (4.47 a bus cycle) | **59 397.0 (4.08)** |
+| `alloc_mb_per_frame` / `gc_ms_per_frame` | 7.94 / 0.13 | **8.15 / 0.13** |
+| the desktop | frame 568 (`_frclock_at_desktop`) | **591** |
+| corpus | 998 921 / 1 000 060 | **1 000 008 / 1 000 060**, sample 2 976 / 2 976 |
+
+**Why the frame rose, and what it cost to stop it rising more.** Bus cycles per frame are **+2.3 %** and
+instructions **−4.7 %** over the same 800-frame window: the emulated CPU is more expensive per instruction
+because a control transfer pays its two fetches, so the boot needs ~4 % more frames to reach the desktop.
+On top of that the queue first read as three `async` hops on the hottest path (`FetchAsync → FillAsync →
+ReadProgramAsync → Cycle`) and G8 came out **11.05 ms**; folding the two forwarders gave **10.10**; inlining
+the read into `FetchAsync` and the trailing fetch gave **9.84**. Three gate passes, one build, the same
+counters — #62's rule ("a forwarder is a frame") re-paid for twice, and the shape to look for first when a
+bus-level change lands.
+
+**Attribution, for the next session that quotes a number off this page:** `pops_per_frame` fell 6.6 % and
+`subscriptions_per_frame` fell 7.2 % while the frame rose 2 % — so the queue did not remove records, it moved
+them; `pops_per_bus_cycle` 4.47 → 4.08 says the same thing from the other side. `alloc_mb_per_frame` rose
+0.21 MB (the extra fetch suspensions). **Every per-chip and per-population figure this page quotes from §20,
+§22 and §24 was taken before this change** — the CPU's share of the frame is now measured with two fetches per
+control transfer in it, and those sections' absolute ns-per-wake numbers are a different tree's.
