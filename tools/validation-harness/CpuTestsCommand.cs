@@ -42,6 +42,7 @@ internal static class CpuTestsCommand
         bool quiet = false;
         string? outPath = null;
         string? failurePath = null;
+        int traceIndex = -1;
 
         for (int index = 0; index < args.Length; index++)
         {
@@ -87,6 +88,14 @@ internal static class CpuTestsCommand
                     failurePath = args[index];
                     break;
 
+                case "--trace":
+                    if (++index >= args.Length || !int.TryParse(args[index], NumberStyles.Integer, CultureInfo.InvariantCulture, out traceIndex) || traceIndex < 0)
+                    {
+                        return Program.Unknown(args[Math.Max(index - 1, 0)]);
+                    }
+
+                    break;
+
                 default:
                     return Program.Unknown(args[index]);
             }
@@ -114,6 +123,11 @@ internal static class CpuTestsCommand
         {
             Console.Error.WriteLine($"cpu-tests FAILED — no test file matches '{only}' in {directory}");
             return 1;
+        }
+
+        if (traceIndex >= 0)
+        {
+            return TraceRecord(files[0], traceIndex);
         }
 
         var failures = new List<string>();
@@ -290,7 +304,9 @@ internal static class CpuTestsCommand
                 initial.GetProperty("usp").GetUInt32(),
                 initial.GetProperty("ssp").GetUInt32(),
                 (ushort)initial.GetProperty("sr").GetUInt32(),
-                pc);
+                pc,
+                (ushort)prefetch[0].GetUInt32(),
+                (ushort)prefetch[1].GetUInt32());
 
             cpu.Load(state);
 
@@ -330,6 +346,114 @@ internal static class CpuTestsCommand
         }
 
         return (total, passed, failures, busCycles, expectedCycles, exactCycles);
+    }
+
+    /// <summary>
+    /// Prints the core's own cycle list beside one record's <c>transactions</c> — the bar ADR 0009 §4's
+    /// revision sets for the prefetch: the same addresses, in the same order, with the same function
+    /// codes (6 = program fetch, 5 = supervisor data), not merely the same final state. A green
+    /// <c>final</c> reached by a different fetch pattern is agreement by luck.
+    /// </summary>
+    static int TraceRecord(string path, int index)
+    {
+        using Stream file = File.OpenRead(path);
+        using Stream input = path.EndsWith(".gz", StringComparison.Ordinal) ? new GZipStream(file, CompressionMode.Decompress) : file;
+        using JsonDocument document = JsonDocument.Parse(input);
+
+        JsonElement[] records = document.RootElement.EnumerateArray().ToArray();
+        if (index >= records.Length)
+        {
+            Console.Error.WriteLine($"cpu-tests FAILED — {OpcodeName(path)} has {records.Length} records, no index {index}");
+            return 1;
+        }
+
+        JsonElement test = records[index];
+        JsonElement initial = test.GetProperty("initial");
+        JsonElement final = test.GetProperty("final");
+        uint pc = initial.GetProperty("pc").GetUInt32();
+        JsonElement prefetch = initial.GetProperty("prefetch");
+
+        var engine = new Engine();
+        var bus = new SingleStepBus(engine, 1);
+        var cpu = new M68000(engine, 2);
+        engine.Add(bus);
+        engine.Add(cpu);
+        bus.Launch();
+
+        bus.PokeWord(pc, (ushort)prefetch[0].GetUInt32());
+        bus.PokeWord(pc + 2, (ushort)prefetch[1].GetUInt32());
+        foreach (JsonElement pair in initial.GetProperty("ram").EnumerateArray())
+        {
+            bus.Poke(pair[0].GetUInt32(), (byte)pair[1].GetUInt32());
+        }
+
+        cpu.Load(new M68000.SingleStepState(
+            Registers(initial, "d"),
+            Registers(initial, "a", 7),
+            initial.GetProperty("usp").GetUInt32(),
+            initial.GetProperty("ssp").GetUInt32(),
+            (ushort)initial.GetProperty("sr").GetUInt32(),
+            pc,
+            (ushort)prefetch[0].GetUInt32(),
+            (ushort)prefetch[1].GetUInt32()));
+
+        var ours = new List<string>();
+#if DEBUG
+        cpu.CycleObserver = (write, code, address, data) =>
+            ours.Add($"{(write ? "w" : "r")} fc{code} {address:x6} {data:x4}");
+#else
+        Console.Error.WriteLine("cpu-tests --trace needs a Debug build: the cycle observer is a debug instrument");
+#endif
+
+        string? mismatch;
+        try
+        {
+            mismatch = Step(cpu, engine, bus, final);
+        }
+        catch (Exception failure)
+        {
+            mismatch = $"harness: {failure.GetType().Name}: {failure.Message}";
+        }
+
+        var reference = new List<string>();
+        foreach (JsonElement cycle in test.GetProperty("transactions").EnumerateArray())
+        {
+            if (cycle[0].GetString() == "n")
+            {
+                reference.Add($"n {cycle[1].GetInt32(),-16}");
+                continue;
+            }
+
+            reference.Add($"{cycle[0].GetString()} fc{cycle[2].GetInt32()} {cycle[3].GetUInt32():x6} {cycle[5].GetUInt32():x4}");
+        }
+
+        string name = test.GetProperty("name").GetString() ?? "(unnamed)";
+        Console.WriteLine($"{OpcodeName(path)} #{index}  {name}");
+        Console.WriteLine($"  pc {pc:x6}  prefetch {prefetch[0].GetUInt32():x4} {prefetch[1].GetUInt32():x4}  " +
+            $"final pc {final.GetProperty("pc").GetUInt32():x6}  length {test.GetProperty("length").GetInt32()}");
+        Console.WriteLine();
+        Console.WriteLine($"  {"reference's transactions",-34}   ours");
+
+        int rows = Math.Max(reference.Count, ours.Count);
+        int first = -1;
+        for (int row = 0; row < rows; row++)
+        {
+            string left = row < reference.Count ? reference[row] : string.Empty;
+            string right = row < ours.Count ? ours[row] : string.Empty;
+            bool same = left == right;
+            if (!same && first < 0)
+            {
+                first = row;
+            }
+
+            Console.WriteLine($"  {left,-34} {(same ? string.Empty : "≠ ")}{right}");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine($"  cycles: reference {reference.Count(row => !row.StartsWith("n "))}, ours {ours.Count}" +
+            (first < 0 ? ", identical" : $", first difference at row {first}"));
+        Console.WriteLine($"  state: {(mismatch ?? "matches the corpus")}");
+        return first < 0 && mismatch is null ? 0 : 1;
     }
 
     /// <summary>A0–A6 (or D0–D7) — the corpus keeps A7 out of the set and splits it into usp/ssp.</summary>

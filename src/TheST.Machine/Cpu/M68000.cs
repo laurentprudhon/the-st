@@ -10,10 +10,13 @@ namespace TheST.Machine.Cpu;
 /// <para>
 /// What this build does and does not carry from the ADR, stated so it is not mistaken for the finished
 /// core: the three machines are here as state fields and a driving switch; the bus leaf, the reset
-/// sequence and the exception script are ADR 0009's. The prefetch is fetch-on-demand — each
-/// instruction word is one bus cycle, fetched when the decoder needs it — rather than the three
-/// registers running ahead; that is a fidelity gap recorded in the rulings file, and it is why
-/// self-modifying code beyond one instruction boundary would not be exact.
+/// sequence and the exception script are ADR 0009's. The prefetch is §4's queue — <c>IRD</c>, <c>IR</c>
+/// and <c>IRC</c>, with a jump, a branch, an <c>RTE</c>/<c>RTR</c> or an exception entry refilling it at
+/// its target — so an instruction fetches as many words as it has, extension words come out of the
+/// queue rather than off the bus, and the program counter a group-0/2 frame saves is the address of the
+/// word in <c>IR</c> with no offset arithmetic. What is still deferred is Level 2's per-opcode placement
+/// of the trailing fetch inside the instruction (the prefetch class's order against a write), because
+/// §4's revision takes the class as a datum and leaves its placement to the micro-op script.
 /// </para>
 /// </summary>
 public sealed partial class M68000 : Chip
@@ -29,6 +32,27 @@ public sealed partial class M68000 : Chip
 
     uint _pc;
     ushort _sr;
+
+    // ---- the prefetch queue (ADR 0009 §4) ------------------------------------------------
+    // IRD is the word being executed, IR the head of the two-word queue and IRC the word behind it, so
+    // the instruction stream runs a word ahead of the decoder: an instruction's extension words come
+    // out of the queue, and what it fetches is its own word count. `_irAddress` is the address of the
+    // word in IR — what a group-0/2 frame saves — and it trails the fetch pointer by one word.
+    // `_fetchPointer` is the address of the next read, i.e. the hardware's program counter.
+    ushort _ird;
+    ushort _ir;
+    ushort _irc;
+    bool _ircValid;
+    uint _irAddress;
+    uint _fetchPointer;
+
+    // a jump, a branch, a return or an exception entry refilled the queue at its target: the closing
+    // steps belong to an instruction that fell through, so the loop skips them for this one
+    bool _flowTransferred;
+
+    // the instruction has issued its one trailing fetch (before the write for class 0, at the closing
+    // steps for class 1)
+    bool _trailingFetched;
 
     bool _halted;
     bool _stopped;
@@ -53,6 +77,15 @@ public sealed partial class M68000 : Chip
 
     /// <summary>A debug-build instruction hook: instant, opcode and the address it was read from.</summary>
     public Action<long, ushort, uint>? Observer { get; set; }
+
+#if DEBUG
+    /// <summary>
+    /// A debug instrument: every bus cycle the core performs, as the corpus's own <c>transactions</c>
+    /// records it — write?, function code, address, data. It exists so the core's cycle list can be
+    /// printed beside a record's reference trace (ADR 0009 §4's revision: that trace is the bar).
+    /// </summary>
+    public Action<bool, int, uint, ushort>? CycleObserver { get; set; }
+#endif
 
     public M68000(Engine engine, int id)
         : base(engine, id, "CPU")
@@ -322,7 +355,7 @@ public sealed partial class M68000 : Chip
     /// have boxed does not exist. Same records, same instants, same order.
     /// </para>
     /// </summary>
-    async ValueTask<BusResult> Cycle(uint address, int size, bool isWrite, ushort writeData, bool isCpuSpace = false)
+    async ValueTask<BusResult> Cycle(uint address, int size, bool isWrite, ushort writeData, bool isCpuSpace = false, bool isProgram = false)
     {
         // an address error is not a bus cycle: a word access at an odd address never reaches the
         // wire, and the group-0 frame records what it was trying to reach (ADR 0009 §7)
@@ -343,7 +376,7 @@ public sealed partial class M68000 : Chip
             (isWrite ? 0x0100 : 0) |
             ((size == 0 ? 0 : 1) << 4) |
             ((address & 1) != 0 ? 1 : 0) |
-            ((isCpuSpace ? 7 : (Supervisor ? 5 : 1)) << 12));
+            ((isCpuSpace ? 7 : isProgram ? (Supervisor ? 6 : 2) : (Supervisor ? 5 : 1)) << 12));
 
         Write(asserted, Wires.Bus, 0xFF00, (ushort)(address >> 16));
         Write(asserted, Wires.Bus, 0xFFFE, (ushort)(address & 0xFFFE));
@@ -365,6 +398,10 @@ public sealed partial class M68000 : Chip
         bool faulted = (answer & 0x0002) != 0;
         bool vector = (answer & 0x0004) != 0;
         ushort data = isWrite ? (ushort)0 : Engine.ValueAt(Wires.Md, answerInstant);
+
+#if DEBUG
+        CycleObserver?.Invoke(isWrite, isCpuSpace ? 7 : isProgram ? (Supervisor ? 6 : 2) : (Supervisor ? 5 : 1), address, isWrite ? writeData : data);
+#endif
 
         // the release: AS high, and Z on the data lanes — a record of its own, and the lane that
         // tells a release from an assertion
@@ -425,9 +462,6 @@ public sealed partial class M68000 : Chip
 
     ValueTask<ushort> ReadWordAsync(uint address) => ReadCycleAsync(address, 1, 0);
 
-    /// <summary>The next instruction word: one bus cycle at the program counter.</summary>
-    ValueTask<ushort> FetchAsync() => ReadCycleAsync(_pc, 1, 2);
-
     ValueTask<byte> ReadByteAsync(uint address) => ReadByteCycleAsync(address);
 
     async ValueTask<uint> ReadLongAsync(uint address)
@@ -449,7 +483,165 @@ public sealed partial class M68000 : Chip
         await WriteWordAsync(address + 2, (ushort)value);
     }
 
-    // ---- the instruction stream ----------------------------------------------------------
+    // ---- the instruction stream: the prefetch queue of ADR 0009 §4 -------------------------
+
+    /// <summary>
+    /// One read of the instruction stream: program space, so the bus records FC 6 in supervisor mode
+    /// and FC 2 in user mode — never the data codes a fetch-on-demand core used for the same cycle.
+    /// A fault here is a <em>fetch</em> fault (<see cref="_faultIsFetch"/>), which is what the frame's
+    /// status word records.
+    /// </summary>
+    async ValueTask<ushort> ReadProgramAsync(uint address)
+    {
+        // the queue trails the fetch pointer by one word, which is the whole of the frame's rule:
+        // a group-0/2 frame saves the address of the word in IR, and it is set by the read, not by a
+        // subtraction on the counter
+        _irAddress = address - 2;
+
+        BusResult result = await Cycle(address, 1, false, 0, isProgram: true);
+        if (result.Faulted)
+        {
+            _busFaulted = true;
+            _faultAddress = address;
+            _faultIsFetch = true;
+            return 0;
+        }
+
+        _fetchPointer = address + 2;
+        return result.Data;
+    }
+
+    /// <summary>
+    /// The next instruction word: the queue's head, with the word behind it refilled by one read, so an
+    /// instruction performs exactly its own word count of fetches (Cwik's rule: one word fetches once
+    /// at <c>pc + 4</c>, four words fetch four times).
+    /// </summary>
+    async ValueTask<ushort> FetchAsync()
+    {
+        if (_busFaulted)
+        {
+            return 0;
+        }
+
+        // the slot behind the head is filled first, so the head hands back a word the queue already
+        // held and the refill is this one word's own fetch. The read is inlined — address bookkeeping
+        // then the bus leaf — because this is the hottest path in the core and a forwarder is a frame
+        // (#62's rule, which #70 re-paid for once: two hops here cost 0.95 ms of the frame)
+        if (!_ircValid)
+        {
+            uint address = _fetchPointer;
+            _irAddress = address - 2;
+
+            BusResult result = await Cycle(address, 1, false, 0, isProgram: true);
+            if (result.Faulted)
+            {
+                _busFaulted = true;
+                _faultAddress = address;
+                _faultIsFetch = true;
+                return 0;
+            }
+
+            _fetchPointer = address + 2;
+            _irc = result.Data;
+            _ircValid = true;
+        }
+
+        ushort word = _ir;
+        _ir = _irc;
+        _ircValid = false;
+        _pc += 2;
+        return word;
+    }
+
+    /// <summary>
+    /// The three closing steps (Cwik): <c>IRC → IR</c>, one fetch into <c>IRC</c>, <c>IR → IRD</c>. One
+    /// read per instruction, so the queue is a word ahead when the next opcode is decoded, and the
+    /// address a frame saves has already moved to the word the instruction has not consumed.
+    /// <para>
+    /// The trailing fetch is this instruction's one read, and a fault that comes before it cancels it —
+    /// which is why a faulting instruction's frame saves a counter two bytes lower than a completed
+    /// instruction of the same shape. A class-0 instruction (plain <c>MOVE</c> to <c>-(An)</c>) has
+    /// already issued it before its write, so its store fault leaves the fetch in the trace.
+    /// </para>
+    /// </summary>
+    async ValueTask CloseInstructionAsync()
+    {
+        if (!_busFaulted)
+        {
+            await TrailingFetchAsync();
+        }
+
+        _ird = _ir;
+        _ir = _irc;
+        _ircValid = false;
+    }
+
+    /// <summary>
+    /// The instruction's prefetch class (ADR 0009 §4): 0 = the trailing fetch is issued <em>before</em>
+    /// the final write, 1 = after it. The corpus pins which is which — a plain <c>MOVE</c> into
+    /// <c>-(An)</c> has its trailing fetch before the write, every other instruction after it.
+    /// </summary>
+    bool PrefetchBeforeWrite => (_opcode >> 12) is 1 or 2 or 3;
+
+    /// <summary>
+    /// The instruction's trailing fetch: the one read that keeps the queue a word ahead. It is issued
+    /// once per instruction, before the write for class 0 and at the closing steps otherwise; a fault
+    /// that comes first cancels it, and the corpus's traces count exactly that difference.
+    /// </summary>
+    async ValueTask TrailingFetchAsync()
+    {
+        if (_trailingFetched)
+        {
+            return;
+        }
+
+        _trailingFetched = true;
+
+        if (_ircValid)
+        {
+            return;
+        }
+
+        uint address = _fetchPointer;
+        _irAddress = address - 2;
+
+        BusResult result = await Cycle(address, 1, false, 0, isProgram: true);
+        if (result.Faulted)
+        {
+            _busFaulted = true;
+            _faultAddress = address;
+            _faultIsFetch = true;
+            return;
+        }
+
+        _fetchPointer = address + 2;
+        _irc = result.Data;
+        _ircValid = true;
+    }
+
+    /// <summary>
+    /// A jump, a branch, an <c>RTE</c>/<c>RTR</c> or an exception entry does not carry the old words
+    /// across the boundary: it refills the queue at its target, two fetches, which is what every
+    /// handler entry in the corpus's traces shows (`r fc6 target`, `n 2`, `r fc6 target + 2`). The
+    /// closing steps are for an instruction that fell through, so a refilled queue sets
+    /// <see cref="_flowTransferred"/> and the loop skips them.
+    /// </summary>
+    async ValueTask RefillAsync(uint target)
+    {
+        _flowTransferred = true;
+        _ird = await ReadProgramAsync(target);
+        if (_busFaulted)
+        {
+            return;
+        }
+
+        _ir = await ReadProgramAsync(target + 2);
+        _ircValid = false;
+
+        // the boundary convention: `_pc` is the address of the opcode the queue has fetched, and the
+        // loop's own decode step is what advances it past that word
+        _pc = target;
+    }
 
     async ValueTask<uint> FetchLongAsync()
     {
@@ -476,6 +668,22 @@ public sealed partial class M68000 : Chip
             return;
         }
 
+        // Cwik's prefetch initialisation: the first instruction's opcode and the word behind it, which
+        // makes the reset sequence six bus cycles rather than the vector's four (ADR 0009 §5)
+        _ird = await ReadProgramAsync(_pc);
+        if (!_busFaulted)
+        {
+            _ir = await ReadProgramAsync(_pc + 2);
+        }
+
+        if (_busFaulted)
+        {
+            _halted = true;
+            return;
+        }
+
+        _ircValid = false;
+        _fetchPointer = _pc + 4;
         _busFaulted = false;
     }
 
@@ -502,12 +710,12 @@ public sealed partial class M68000 : Chip
                 continue;
             }
 
-            long before = Clock;
-            ushort opcode = await FetchAsync();
-            if (_halted)
-            {
-                return;
-            }
+            // the opcode is in the decode register — the queue fetched it before the instruction
+            // started, so decoding costs no bus cycle of its own
+            ushort opcode = _ird;
+            _pc += 2;
+            _flowTransferred = false;
+            _trailingFetched = false;
 
             if (_busFaulted)
             {
@@ -521,6 +729,15 @@ public sealed partial class M68000 : Chip
             Observer?.Invoke(Clock, opcode, _pc - 2);
             await ExecuteAsync(opcode);
 
+            // the closing steps: an instruction that fell through fetches its last word here. A
+            // faulting instruction keeps its trailing fetch only when the class puts the fetch before
+            // the faulting write (a plain MOVE / MOVEM store) — every other fault cancels it, which is
+            // why the corpus's traces show a differing fetch count per family
+            if (!_flowTransferred)
+            {
+                await CloseInstructionAsync();
+            }
+
             if (_busFaulted)
             {
                 await TakeFaultAsync(_faultAddress, _addressError);
@@ -528,16 +745,14 @@ public sealed partial class M68000 : Chip
                 continue;
             }
 
-            // the prefetch's own address error: the two words the hardware fetches after the
-            // instruction land on an odd program counter (a branch to an odd address)
+            // the prefetch's own address error: the word the queue fetched after the instruction
+            // landed on an odd program counter (a branch or a jump to an odd address)
             if ((_pc & 1) != 0)
             {
                 _faultIsFetch = true;
                 await TakeFaultAsync(_pc, true);
                 continue;
             }
-
-            _ = before;
 
             await CheckInterruptAsync();
         }
@@ -632,13 +847,15 @@ public sealed partial class M68000 : Chip
             _sr = (ushort)((_sr & ~0x0700) | (level << 8));   // the mask is I2–I0, bits 8–10
         }
 
-        // the saved program counter: the next word the instruction had not read — or, for the
-        // prefetch's fault, the word the two-word prefetch was fetching (the 68000's own rule)
+        // the saved program counter: the address of the word in the queue for a group-0/2 frame (the
+        // prefetch has run ahead, so it is not the instruction's own counter — ADR 0009 §4's revision
+        // measured it on the corpus's traces and removed the old `pc − 2` / `pc − 4` arithmetic), and
+        // the next instruction for every other frame
         bool group0 = vector == 2 || vector == 3;
 
-        // the saved program counter: a group-0 frame saves the word the fetch-on-demand core had not
-        // read yet (see tests/680x0/FINDINGS.md); every other frame saves the next instruction
-        uint returnPc = group0 ? (_faultIsFetch ? _pc - 4 : _pc - 2) : _pc;
+        // a data fault saves the address of the word in IR; a fetch's own fault saves the word before
+        // the one that failed (the fetch never completed, so the queue did not reach it)
+        uint returnPc = group0 ? (_faultIsFetch ? _faultAddress - 4 : _irAddress) : _pc;
 
         if (group0)
         {
@@ -683,7 +900,8 @@ public sealed partial class M68000 : Chip
             return;
         }
 
-        _pc = newPc;
+        // the handler's first two words: every entry in the corpus's traces is two program fetches
+        await RefillAsync(newPc);
         _busFaulted = false;
     }
 

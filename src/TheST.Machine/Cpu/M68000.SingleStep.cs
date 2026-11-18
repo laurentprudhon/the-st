@@ -15,14 +15,21 @@ namespace TheST.Machine.Cpu;
 /// </summary>
 public sealed partial class M68000
 {
-    /// <summary>The state a corpus test hands the core, and reads back: exactly the 680x0 corpus's shape.</summary>
+    /// <summary>
+    /// The state a corpus test hands the core, and reads back: exactly the 680x0 corpus's shape, plus
+    /// the two words the corpus's <c>prefetch</c> field gives the core already fetched — which is the
+    /// whole point of ADR 0009 §4's queue (a test starts with its opcode <em>and</em> the word behind it
+    /// in the instruction stream, at <c>pc</c> and <c>pc + 2</c>).
+    /// </summary>
     public readonly record struct SingleStepState(
         uint[] D,
         uint[] A,
         uint Usp,
         uint Ssp,
         ushort Sr,
-        uint Pc);
+        uint Pc,
+        ushort Prefetch0,
+        ushort Prefetch1);
 
     /// <summary>What the core looks like after a step — the same shape, read back.</summary>
     public readonly record struct SingleStepResult(
@@ -49,6 +56,16 @@ public sealed partial class M68000
         _ssp = state.Ssp;
         _sr = state.Sr;
         _pc = state.Pc;
+
+        // the corpus hands over the two words the hardware has already fetched: IRD is the opcode and
+        // IR the word behind it, so no read happens for either of them
+        _ird = state.Prefetch0;
+        _ir = state.Prefetch1;
+        _ircValid = false;
+        _irAddress = state.Pc;
+        _fetchPointer = state.Pc + 4;
+        _flowTransferred = false;
+        _trailingFetched = false;
 
         _halted = false;
         _stopped = false;
@@ -79,16 +96,20 @@ public sealed partial class M68000
     public uint Ssp => _ssp;
 
     /// <summary>
-    /// One instruction: the fetch, the execute, and a fault taken as the exception it would be — no
+    /// One instruction: the decode, the execute, and a fault taken as the exception it would be — no
     /// interrupt sampling, no STOP wait. The instruction counter and the observer see it exactly as the
-    /// machine's loop would.
+    /// machine's loop would, and the closing steps are the same ones (one fetch, then the shift).
     /// </summary>
     public async ValueTask StepAsync()
     {
-        ushort opcode = await FetchAsync();
+        ushort opcode = _ird;
+        _pc += 2;
+        _flowTransferred = false;
+        _trailingFetched = false;
+
         if (_busFaulted)
         {
-            await TakeFaultAsync(_faultAddress, false);
+            await TakeFaultAsync(_faultAddress, _addressError);
             _busFaulted = false;
             return;
         }
@@ -97,6 +118,11 @@ public sealed partial class M68000
         _opcode = opcode;
         Observer?.Invoke(Clock, opcode, _pc - 2);
         await ExecuteAsync(opcode);
+
+        if (!_flowTransferred)
+        {
+            await CloseInstructionAsync();
+        }
 
         if (_busFaulted)
         {

@@ -77,6 +77,7 @@ care why a flag is wrong as long as the branch lands).
 | 53 | `JMP`/`JSR (xxx).l` — `pc` came back 24-bit | the absolute-long effective address was masked to 24 bits; the bus truncates at the wire, but the counter a jump stores is the whole value | the long form of `(xxx).l` keeps its 32 bits |
 | 54 | **the whole corpus instrument**: every test failing, `OutOfMemoryException`, `ASSERTION 1 failed — CPU's write at 20 is dated before the batch being drained (9223372036854775807)` | `#40` made `Engine.Run` take the minimum over the queue *and* the chips' held dates; with nothing pending that minimum is `long.MaxValue`, and the corpus harness calls `Run(long.MaxValue)` for one instruction — so the loop drained an empty batch at the end of time for ever | `Run` stops when `NextInstant()` answers `long.MaxValue` |
 | 55 | `cpu-tests --dir tests/680x0/full` died on `68000.official.json` | the decode map is an object, not an array of tests, and the file scan took every `*.json` | the scan keeps only files whose JSON opens with `[` |
+| 56 | **`MOVE.w` 355, `MOVE.l` 377, `MOVEM.l` 404** — every one differs first in a byte of the group-0 frame at `$7F7`/`$7FF` | the core fetched each instruction word on demand and imitated the queue's saved counter with `pc − 4`/`pc − 2`. The corpus's reference has ADR 0009 §4's queue, so at a fault the frame saves the word in `IR` — and how far that has run ahead depends on how many fetches the instruction had *already issued*: a store that faults on a `-(An)` address keeps its trailing fetch (class 0), an extension-built address or any other fault cancels the read that was owed | the queue itself: `IRD`/`IR`/`IRC`, one read per consumed word, a refill at a jump's/branch's/exception's target, and `returnPc = _irAddress` with no arithmetic. 1 000 008 / 1 000 060; the 49 records left are a `MOVE` into an odd `(xxx).l` destination, where the reference takes the address's two words with one fetch fewer (ADR 0009 §4's falsifier: the read's placement inside the instruction) |
 
 ## What is still open
 
@@ -85,10 +86,11 @@ Measured 2026-11-17 (the session that wrote rows 39–55) against the whole corp
 | Run | Tests | Passed | Opcode files fully green |
 |---|---|---|---|
 | the whole corpus as found — after `#40` had broken the instrument, before rows 39–55 | 1 000 060 | 974 788 (97.5 %) | 62 of 124 |
-| the whole corpus after rows 39–53 | 1 000 060 | **998 921 (99.89 %)** | **119 of 124** |
-| the vendored sample (`tests/680x0/v1`, 24 tests a file) | 2 976 | 2 974 (99.93 %) | 120 of 124 |
+| the whole corpus after rows 39–53 | 1 000 060 | 998 921 (99.89 %) | 119 of 124 |
+| the whole corpus after `#70` (the prefetch queue, row 56) | 1 000 060 | **1 000 008 (99.995 %)** | **120 of 124** |
+| the vendored sample (`tests/680x0/v1`, 24 tests a file) | 2 976 | **2 976 (100 %)** | 124 of 124 |
 
-The sample runs in **0.4 s** again (`--dir tests/680x0/v1`), and the whole corpus in **25 s** — the
+The sample runs in **0.4 s** again (`--dir tests/680x0/v1`), and the whole corpus in **26 s** — the
 "5–6 min, 194 MB" of the earlier pages was row 54's instrument bug, not the corpus's size.
 
 | Family | State | What it needs |
@@ -97,20 +99,21 @@ The sample runs in **0.4 s** again (`--dir tests/680x0/v1`), and the whole corpu
 | `ASR`/`ASL`/`LSR`/`LSL`/`ROX`/`ROL`/`ROR`, `.b`/`.w`/`.l` | green but for the memory-shift frame cases below | — |
 | `DIVU`/`DIVS`, `MULU`/`MULS`, `CMP`/`CMPA`/`CMPM`, `CHK`, `BTST`/`BCHG`/`BCLR`/`BSET` | green | — |
 | `JSR`, `RTE`, `RTR`, `LEA`, `PEA`, `JMP`, `CLR`, `TST`, `NOT`, `NEG`, `EOR`, `OR`, `AND`, `ADD`, `SUB`, `MOVE from SR`, `MOVE to CCR/SR` | green | — |
-| `MOVE.w` 355, `MOVE.l` 377, `MOVEM.l` 404 | the group-0 frame's saved `pc` and the frame's SR/status bytes | the real prefetch queue (`#37`): every remaining failure's first difference is a byte of the exception frame at `$7F7`/`$7FF` |
+| `MOVE.w` 23, `MOVE.l` 26 | the second word of a long destination address (`(xxx).l`, odd address) | row 56: the reference spends one fetch fewer between the destination's two words than this core does, because its EA machine takes the pair and *then* validates the address. The saved `pc` therefore lands two bytes higher here. This is the residue ADR 0009 §4's falsifier describes (the read's placement inside the instruction, i.e. Level 2), not a decode bug |
 | `ASL.b` 2, `DIVU` 1 | — | upstream's own records disagree with any `ASL.b`/`DIVU`: `ASL.b #2` on `$CDFB7FBE` is documented as `$2E5E4304`, which no byte operation can produce (the high 24 bits changed). 3 tests of 1 000 060; do not chase them |
 
-The remaining 1 139 failures are **one class**: the group-0/2 frame's own words (the saved `pc` from
-the two-word prefetch, and the access class the status word carries — see the conventions below). That
-is design work — the real prefetch queue, ADR 0009 §4 — not a bug list.
+The remaining 52 failures are two classes: **49** records of a `MOVE` into an odd `(xxx).l` destination
+(a fetch-placement difference inside the instruction, row 56 and ADR 0009 §4's falsifier) and the
+**3** upstream records that contradict themselves.
 
 ## Three things the corpus fixes that the manuals leave to the implementation
 
-1. **The group-0 frame's saved program counter is one word behind this core's.** The corpus's model has
-   the 68000's two-word prefetch queue, so at a fault it saves a program counter that already ran two
-   words ahead. This core fetches on demand (ADR 0009 §4's recorded gap), so its saved value is `pc − 2`
-   of its own counter. Measured: `pc − 2` matches the frame tests, `pc` does not, `pc − 4` matches the
-   *prefetch* fault's frame.
+1. **The group-0 frame's saved program counter is the address of the word in the queue.** Since `#70`
+   the core runs ADR 0009 §4's queue, so the frame saves `_irAddress` (the word in `IR`, i.e. the last
+   program read − 2) with no offset arithmetic — and the measured rule holds on every record: a faulting
+   instruction's frame is as many words ahead as the fetches it had *already issued*, so a fault that
+   comes before the trailing fetch saves a counter two bytes lower than the same instruction completed
+   (row 56).
 2. **The group-0 frame's first word carries the implementation's access class.** The corpus sets the read
    bit for every instruction except a plain `MOVE` or a `MOVEM` store writing to memory: its model
    classifies the access by the instruction's operand handling, not by the direction of the faulting
@@ -118,9 +121,8 @@ is design work — the real prefetch queue, ADR 0009 §4 — not a bug list.
    corpus is the oracle.
 3. **Extension words come out of the prefetch queue, not off the bus.** A test's base memory carries the
    two prefetch words and then only the bytes the reference model actually read, so an instruction's
-   extension word is the prefetched one. This is the same ADR 0009 gap as (1), and it is why the real
-   prefetch queue is the largest single item between this core and a green corpus: it is design work,
-   not debugging.
+   first extension word is the prefetched one. `#70` implemented the queue (row 56) and it took 1 087
+   records with it: 998 921 → 1 000 008 of 1 000 060.
 
 A fourth, smaller one: the corpus's `length` is in CPU clock cycles and this core models only the bus's.
 18 of the 2 976 sample tests happen to agree, which is exactly the size of the internal-cycle table that
