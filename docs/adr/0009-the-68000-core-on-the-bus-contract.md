@@ -228,10 +228,11 @@ manual's decomposition: **`clocks = 4 × bus cycles + internal residue`**, with
 > the desktop at frame **598** (`_frclock_at_desktop` 591), and the 300-frame records are **unchanged**
 > (1 198 480 group deliveries, 119 848 `DE`, 93 750 `HBL`, 299 `VBL`, 4 626 retained).
 >
-> **The folds moved, and only in bytes.** `run.digest` keeps 8 558 021 words and `run.stream` 8 557 232 —
-> the same counts as the blessed pair — while their bytes differ, because a bus cycle now lands at a
-> different instant. The new pair is quoted on #74 and awaits the owner's second re-bless; nothing in this
-> build writes `main`'s pair.
+> **The folds moved, and only in bytes, and the owner re-blessed them on 2026-11-18.** `run.digest` keeps
+> 8 558 021 words and `run.stream` 8 557 232 — the same counts as `#70`'s pair — while their bytes differ,
+> because a bus cycle now lands at a different instant. The new pair, `main`'s since the merge:
+> `d02f38b5045cd00e70c2f2f7fd5b5c58f5dc188fce9c53b873b14c7e5c8ccec9` / `5674792b247ea6325ca84a394b0891aec5ef7b54a63e6b89f585515bb5fa928e`
+> (`tests/performance/FINDINGS.md` §28).
 
 Documented (Cwik 2005): `IRD` is the decode register, `IR` and `IRC` the two-word queue; **before any
 instruction starts, its opcode and the next word are already fetched**; every instruction ends with the

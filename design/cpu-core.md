@@ -154,8 +154,8 @@ half is a **prefetch-first class**: when the source cost no bus cycle of its own
 address register or an immediate) the CPU fetches the word after the address *before* it stores, so an odd
 destination's fault keeps that read; every other source stores first and the fault cancels it. That is the
 whole difference between `33ea` (2 reads) and `33fc` (3), and it is why no single clause could hold.
-Corpus: **1 000 057 / 1 000 060**, 122 of 124 files, sample 2 976 / 2 976, G8 9.75 ms at n 747 (both folds
-move in bytes and not in word count, so the pair needs the owner's re-bless).
+Corpus: **1 000 057 / 1 000 060**, 122 of 124 files, sample 2 976 / 2 976, G8 9.75 ms at n 747 (both folds keep
+their word counts and move in bytes — **re-blessed by the owner on 2026-11-18**, `tests/performance/FINDINGS.md` §28).
 
 ## 4. Reset: the first cycle
 

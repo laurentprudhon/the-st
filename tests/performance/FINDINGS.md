@@ -2176,3 +2176,46 @@ them; `pops_per_bus_cycle` 4.47 → 4.08 says the same thing from the other side
 0.21 MB (the extra fetch suspensions). **Every per-chip and per-population figure this page quotes from §20,
 §22 and §24 was taken before this change** — the CPU's share of the frame is now measured with two fetches per
 control transfer in it, and those sections' absolute ns-per-wake numbers are a different tree's.
+
+
+## 28. The re-bless of 2026-11-18 (#74): the read's placement moves both folds in bytes — and the frame pays nothing
+
+`#74` gives a plain `MOVE`'s absolute-long destination the micro-op script the reference keeps for it: the
+address pair costs **one** read instead of two, and a source that took no bus cycle of its own (`Dn`, `An`,
+`#`) fetches the word after the address *before* its store. That moves **no record** and no instant count —
+it moves the instant a bus cycle lands on. **The owner re-blessed the pair on 2026-11-18** — the sentence
+this page records.
+
+| Fold | Before (`#70`, re-blessed 2026-11-18) | After (`#74`) |
+|---|---|---|
+| `run.digest` | `2615b600…` / 8 558 021 | **`d02f38b5045cd00e70c2f2f7fd5b5c58f5dc188fce9c53b873b14c7e5c8ccec9` / 8 558 021** |
+| `run.stream` | `876c79fb…` / 8 557 232 | **`5674792b247ea6325ca84a394b0891aec5ef7b54a63e6b89f585515bb5fa928e` / 8 557 232** |
+
+Debug, `boot --frames 300`, `frame_n` 299. **Both word counts are identical to the blessed pair and every
+word's *count* is untouched** — this is the shape a CPU placement change must have: it never adds or removes
+a record, it moves one. Which is also why the workload proof is the same one as §27's: 300 frames carry
+**1 198 480 group deliveries, 119 848 `DE`, 93 750 `HBL`, 299 `VBL`, 1 198 480 chunk writes, 4 626 retained**.
+
+The frame, measured the way this project measures it:
+
+| | `#70` | `#74` |
+|---|---|---|
+| G8 (Release, gate) | 9.84 ms of 10.00, n 747 | **9.75 ms of 10.00, n 747** — green |
+| `pops_per_frame` | 59 397.0 (4.08 a bus cycle) | **59 397.0 (4.08)** — identical |
+| `alloc_mb_per_frame` / `gc_ms_per_frame` | 8.15 / 0.13 | **8.15 / 0.15** |
+| the desktop | frame 591 | **591** |
+| corpus | 1 000 008 / 1 000 060 | **1 000 057 / 1 000 060**, sample 2 976 / 2 976 |
+
+**It is a zero, and it was measured as one twice.** Two interleaved A/B brackets of the two binaries,
+alternating order, three runs each: `9.82 / 9.55 / 10.02` against `9.94 / 9.91 / 9.61` on the warmer
+bracket, and `9.19 / 9.12 / 9.23` against `8.79 / 8.98 / 8.97` once the box had cooled — means 9.18 vs 8.91
+and 9.79 vs 9.82. Same direction as noise, ~±0.3 ms of host drift between brackets. **A single gate row read
+11.57 ms** on the first pass and would have been filed as a 1.7 ms regression: it was taken straight after a
+26 s corpus run and four 800-frame boots. Re-read §4's noise floor and the "discard a run taken on a busy
+box" rule before believing one row.
+
+**Attribution, for the next session:** unlike §27, **nothing in the per-cycle or per-chip accounting moves
+here**. The pops, the bus cycles, the suspension counts and the denominators are the same line; a MOVE into an
+absolute long simply changes *which* read delivers which word and where the store falls between them. §20's,
+§22's and §24's figures keep the standing they had after §27 — still pre-queue, still needing a re-take — and
+this page adds nothing to that debt.
