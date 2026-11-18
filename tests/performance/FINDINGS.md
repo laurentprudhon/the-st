@@ -2118,9 +2118,13 @@ back to back):
 and applied alone to `74f7c14` in a worktree: **the shift rules alone** give `81427bab…` — so the three
 things that move this boot are CMPI's X, the shifts' C/X/N/Z and the frame's SR bytes.
 
-**What did not move:** the desktop is still reached at **frame 574**; `scripts/validate.sh` is PASS twice
-after the change, G8 at 9.67 and 9.85 ms of its 10.00 budget (n 723, 63 592.9 pops a frame, 4.47 a bus
-cycle, `alloc_mb_per_frame` 7.94); six alternating Release pairs of `74f7c14` against the new tree read
+**What did not move:** the desktop is still reached at **frame 574**; `scripts/validate.sh` is PASS three
+times after the change, G8 at **9.93, 9.67 and 9.85 ms** of its 10.00 budget (n 723, 63 592.9 pops a frame, 4.47 a bus
+cycle, `alloc_mb_per_frame` 7.94). One pass of the same build read **10.23 ms and FAILed** — discarded as host
+drift, and named here because a discard that is not written down becomes a trend: the six alternating pairs
+below put the tree's own mean at 9.51 against `74f7c14`'s 9.61, and a 0.4 ms-wide green cannot be read off
+single rows. Three green of four, no pair against it; six alternating Release pairs of `74f7c14` against the
+new tree read
 9.47/9.82/9.37/9.91/9.58/9.53 against 9.50/9.50/9.60/9.44/9.52/9.51 ms — deltas −0.03 +0.32 −0.23 +0.47
 +0.06 +0.02, three each way, mean +0.10, i.e. **no frame effect**. A fidelity landing is priced by the
 gate, not by the mean: the corpus is the thing that changed, 974 788 → 998 921 of 1 000 060.
