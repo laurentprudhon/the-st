@@ -66,6 +66,7 @@ public sealed partial class M68000
         _fetchPointer = state.Pc + 4;
         _flowTransferred = false;
         _trailingFetched = false;
+        _queueShort = false;
 
         _halted = false;
         _stopped = false;

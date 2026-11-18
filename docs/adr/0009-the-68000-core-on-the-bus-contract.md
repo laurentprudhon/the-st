@@ -201,6 +201,37 @@ manual's decomposition: **`clocks = 4 × bus cycles + internal residue`**, with
 > jump, a branch, an `RTE`/`RTR` and an exception entry now pay the two fetches the manual's rows charge for
 > them — which is why the boot reaches the desktop at frame 591 instead of 568 and the frame figure moves.
 > The fold pair moved by construction and awaits the owner's re-bless; `length` stays reported, never gated.
+>
+> ### Outcome of the placement build — 2026-11-18 (ticket #74)
+>
+> The falsifier fired, and this is the promotion it called for: the read's placement inside the instruction
+> is now **one Level-1 datum per opcode class**, not a clause on the EA machine. The oracle's own source
+> names the class — CLK's `MOVE_bw_AbsoluteLong` and `MOVE_l_AbsoluteLong`, states of their own next to the
+> generic `CalcEffectiveAddress(AbsoluteLong)` — and it has two halves:
+>
+> - **the pair for one read.** A plain `MOVE`'s absolute-long destination consumes the address's two words
+>   as *one* pop: the read that fetches the high word brings the low word into the queue, and the low word
+>   is taken out of the queue rather than popped. The generic EA machine every other instruction uses spends
+>   two reads on the same pair, which is why `CLR.w`/`ADD.w`/`AND.w` into `(xxx).l` were already green.
+> - **a prefetch-first class.** With the queue left a word short, the instruction fetches the word after the
+>   address *before* its store when its **source cost no bus cycle of its own** — a data register, an
+>   address register or an immediate — and stores first otherwise. An odd destination's fault therefore
+>   keeps that fetch in the first case and cancels it in the second: `33fc [MOVE.w #,(xxx).l]` pays three
+>   reads, `33ea [MOVE.w (d16,A2),(xxx).l]` two, and that single sentence is the whole of §4's residue.
+>
+> **Measured:** 1 000 008 → **1 000 057 / 1 000 060** (122 of 124 files, sample 2 976 / 2 976, the three
+> self-contradicting upstream records still red). `cpu-tests --reads` reports **0** records mismatched on
+> `MOVE.w` and `MOVE.l`, and the read lists of the other **16 081** records of those two files did not move
+> at all — the difference between a placement and a blanket rule, which is what row 57 of
+> `tests/680x0/FINDINGS.md` measured as a failure. The gate passes with **G8 9.75 ms at n 747** (A/B against
+> `main`: 9.82/9.55/10.02 versus 9.94/9.91/9.61 — parity, if anything a hair cheaper), the boot still reaches
+> the desktop at frame **598** (`_frclock_at_desktop` 591), and the 300-frame records are **unchanged**
+> (1 198 480 group deliveries, 119 848 `DE`, 93 750 `HBL`, 299 `VBL`, 4 626 retained).
+>
+> **The folds moved, and only in bytes.** `run.digest` keeps 8 558 021 words and `run.stream` 8 557 232 —
+> the same counts as the blessed pair — while their bytes differ, because a bus cycle now lands at a
+> different instant. The new pair is quoted on #74 and awaits the owner's second re-bless; nothing in this
+> build writes `main`'s pair.
 
 Documented (Cwik 2005): `IRD` is the decode register, `IR` and `IRC` the two-word queue; **before any
 instruction starts, its opcode and the next word are already fetched**; every instruction ends with the

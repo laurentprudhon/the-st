@@ -192,8 +192,25 @@ public sealed partial class M68000
             return;
         }
 
-        uint address = await EaAddressAsync(mode, reg, size);
+        // A plain MOVE's absolute-long destination is ADR 0009 §4's per-opcode placement: the pair is
+        // consumed by one pop (the reference's MOVE_bw_AbsoluteLong), so the address costs one read
+        // and the queue is left a word short — see FetchMoveAbsoluteLongAsync for the whole rule.
+        bool moveAbsoluteLong = plainMove && mode == 7 && reg == 1;
+        uint address = moveAbsoluteLong
+            ? await FetchMoveAbsoluteLongAsync()
+            : await EaAddressAsync(mode, reg, size);
         if (_busFaulted) return;
+
+        // The class's other half: a source that cost no bus cycle of its own — a register or an
+        // immediate (the reference's MOVE_bw/MOVE_l_AbsoluteLong_prefetch_first states) — leaves the
+        // bus free, so the word after the address is fetched *before* the store and an odd
+        // destination's fault keeps it. Every other source stores first and the fault cancels it:
+        // that single datum is all that separates records `33ea` (2 reads) and `33fc` (3).
+        if (moveAbsoluteLong && MoveSourceNeedsNoBusCycle)
+        {
+            await TrailingFetchAsync();
+            if (_busFaulted) return;
+        }
 
         // An address the instruction stream built is validated where it is built: a word access to an
         // odd `(d16,An)`/`(d8,An,Xn)`/absolute destination faults there, *before* the trailing fetch,

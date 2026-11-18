@@ -140,10 +140,22 @@ program space, so the bus carries `FC = 6` (2 in user mode), never the data code
 used. The one datum that is *not* Level 1 after all is where inside an instruction the read lands: a store
 that faults keeps its trailing fetch when it is a plain `MOVE` into `-(An)` (class 0), loses it when the
 destination's address came out of the instruction stream, and every other instruction loses it — the 49
-records still red are exactly that difference, and it is Level 2's per-opcode placement (ADR 0009 §4's
+records still red were exactly that difference, and it is Level 2's per-opcode placement (ADR 0009 §4's
 falsifier) — measured, not assumed: a single rule for it fixes 23 records and breaks 278, and two records of
 the same opcode and the same odd-destination shape pay a different number of reads. Corpus: **1 000 008 /
 1 000 060**, sample 2 976 / 2 976.
+
+**As built, the placement (2026-11-18, #74).** The falsifier's residue is closed by taking the per-opcode
+script at its own word rather than as a rule: the reference gives a plain `MOVE`'s **absolute-long
+destination** its own state (`MOVE_bw_AbsoluteLong` / `MOVE_l_AbsoluteLong`), which builds the address pair
+from **one** read — the pop that takes the high word fetches the low one and the low word is read out of the
+queue rather than popped — where the generic EA machine every other instruction uses spends two. Its second
+half is a **prefetch-first class**: when the source cost no bus cycle of its own (a data register, an
+address register or an immediate) the CPU fetches the word after the address *before* it stores, so an odd
+destination's fault keeps that read; every other source stores first and the fault cancels it. That is the
+whole difference between `33ea` (2 reads) and `33fc` (3), and it is why no single clause could hold.
+Corpus: **1 000 057 / 1 000 060**, 122 of 124 files, sample 2 976 / 2 976, G8 9.75 ms at n 747 (both folds
+move in bytes and not in word count, so the pair needs the owner's re-bless).
 
 ## 4. Reset: the first cycle
 
