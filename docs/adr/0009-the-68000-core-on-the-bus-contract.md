@@ -102,8 +102,12 @@ manual's decomposition: **`clocks = 4 × bus cycles + internal residue`**, with
 
 > ### Revision — 2026-11-18 (ticket #37): the prefetch is Level 1, and the build owes it
 >
-> **Status: proposed** — the owner's acceptance is ticket #37's closing step, and this block quotes
-> nothing yet because the question was put to him after this text was written.
+> **Status: accepted (2026-11-18), on the owner's ruling during ticket #37's grilling session.** Owner's
+> words: *"question 1 : A, question 2 : ok, question 3 : ok to build in #70"* — form A is §4 in full (the
+> three registers, the closing steps, the fetch-per-word count **and** the two-bit class), the frame reads
+> the queue with no offset arithmetic, and the build is ticket #70. And the requirement he attached to it:
+> *"we need to use transactions from the corpus to be sure to match a real 68000"* — the build is checked
+> against each record's own bus trace, not only against its final state.
 >
 > §4 below decided the queue on 2026-11-07 and the build shipped without it: `M68000` fetches every
 > instruction word on demand, one bus cycle at its own counter, and `EnterExceptionAsync` subtracts two
@@ -155,6 +159,14 @@ manual's decomposition: **`clocks = 4 × bus cycles + internal residue`**, with
 > **Predicted outcome, so the build can be graded rather than believed:** **1 000 057 / 1 000 060** — the
 > 1 136 frame records green, `MOVE.w`, `MOVE.l` and `MOVEM.l` at 8065/8065, the three self-contradicting
 > upstream records still red.
+>
+> **How the build is checked (the owner's requirement).** Each record's `transactions` is the reference's
+> own bus trace — `["n", cycles]` for internal work, `["r"|"w", cycles, functionCode, address, size, data]`
+> for a cycle — and it is the bar, per record, not the final state: the core's cycle list must carry the same
+> addresses, in the same order, with the same function codes (6 = program fetch, 5 = supervisor data). A
+> green final state with a different fetch pattern is a model that agrees by luck, and this ticket exists
+> because the machine must agree by rule. Cheapest use of it: print our list beside the record's for one
+> failing test, fix the choreography, re-run the family.
 >
 > **Falsifier.** If the queue as specified leaves a first difference in those 1 136 that `IR`'s address and
 > the class do not explain — i.e. a test needs a particular prefetch *instant* inside the instruction — then
