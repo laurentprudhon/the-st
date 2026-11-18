@@ -141,7 +141,9 @@ used. The one datum that is *not* Level 1 after all is where inside an instructi
 that faults keeps its trailing fetch when it is a plain `MOVE` into `-(An)` (class 0), loses it when the
 destination's address came out of the instruction stream, and every other instruction loses it — the 49
 records still red are exactly that difference, and it is Level 2's per-opcode placement (ADR 0009 §4's
-falsifier). Corpus: **1 000 008 / 1 000 060**, sample 2 976 / 2 976.
+falsifier) — measured, not assumed: a single rule for it fixes 23 records and breaks 278, and two records of
+the same opcode and the same odd-destination shape pay a different number of reads. Corpus: **1 000 008 /
+1 000 060**, sample 2 976 / 2 976.
 
 ## 4. Reset: the first cycle
 

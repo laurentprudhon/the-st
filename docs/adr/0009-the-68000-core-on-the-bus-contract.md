@@ -183,7 +183,12 @@ manual's decomposition: **`clocks = 4 × bus cycles + internal residue`**, with
 > the read the second word owes and the trailing fetch are both cancelled by the fault; this core pays the
 > read at the word. `IR`'s address and the class explain 1 087 of the 1 136 — so the class **is** the right
 > Level-1 datum, and what §4's Level 2 keeps is not decoration: the read's placement inside the instruction
-> is what a faulting record's frame measures.
+> is what a faulting record's frame measures. **Confirmed later in the same session, and it is a script,
+> not a rule**: the obvious Level-1 rule ("a long destination address defers its last word's refill until
+> the address is validated") was built and measured — it fixes 23 records and breaks 278 (**999 753**), and
+> `33ea [MOVE.w (d16,A2),(xxx).l]` pays two reads where `33fc [MOVE.w #,(xxx).l]` pays three with the same
+> odd destination. So the placed read is per opcode; the instrument that carries the evidence is
+> `cpu-tests --reads FILE` (both fetch lists, record by record), and the promotion is a build of its own.
 >
 > What the build measured about the class, over and above "MOVE vs the rest": the trailing fetch is issued
 > **before the write only for a plain `MOVE` whose destination is `-(An)`**, at the closing steps for every

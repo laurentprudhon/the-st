@@ -43,6 +43,7 @@ internal static class CpuTestsCommand
         string? outPath = null;
         string? failurePath = null;
         int traceIndex = -1;
+        string? readPath = null;
 
         for (int index = 0; index < args.Length; index++)
         {
@@ -88,6 +89,11 @@ internal static class CpuTestsCommand
                     failurePath = args[index];
                     break;
 
+                case "--reads":
+                    if (++index >= args.Length) return Program.Unknown(args[index - 1]);
+                    readPath = args[index];
+                    break;
+
                 case "--trace":
                     if (++index >= args.Length || !int.TryParse(args[index], NumberStyles.Integer, CultureInfo.InvariantCulture, out traceIndex) || traceIndex < 0)
                     {
@@ -128,6 +134,11 @@ internal static class CpuTestsCommand
         if (traceIndex >= 0)
         {
             return TraceRecord(files[0], traceIndex);
+        }
+
+        if (readPath is not null)
+        {
+            return ReadCounts(files[0], readPath);
         }
 
         var failures = new List<string>();
@@ -346,6 +357,89 @@ internal static class CpuTestsCommand
         }
 
         return (total, passed, failures, busCycles, expectedCycles, exactCycles);
+    }
+
+    /// <summary>
+    /// Per record: the program-space fetch addresses this core issued beside the reference's, so the
+    /// read's placement inside an instruction can be compared across a whole family instead of one
+    /// record at a time. Writes a tab-separated line per record to <paramref name="outPath"/>.
+    /// </summary>
+    static int ReadCounts(string path, string outPath)
+    {
+        using Stream file = File.OpenRead(path);
+        using Stream input = path.EndsWith(".gz", StringComparison.Ordinal) ? new GZipStream(file, CompressionMode.Decompress) : file;
+        using JsonDocument document = JsonDocument.Parse(input);
+
+        var lines = new List<string>();
+        foreach (JsonElement test in document.RootElement.EnumerateArray())
+        {
+            JsonElement initial = test.GetProperty("initial");
+            JsonElement final = test.GetProperty("final");
+            uint pc = initial.GetProperty("pc").GetUInt32();
+            JsonElement prefetch = initial.GetProperty("prefetch");
+
+            var engine = new Engine();
+            var bus = new SingleStepBus(engine, 1);
+            var cpu = new M68000(engine, 2);
+            engine.Add(bus);
+            engine.Add(cpu);
+            bus.Launch();
+
+            bus.PokeWord(pc, (ushort)prefetch[0].GetUInt32());
+            bus.PokeWord(pc + 2, (ushort)prefetch[1].GetUInt32());
+            foreach (JsonElement pair in initial.GetProperty("ram").EnumerateArray())
+            {
+                bus.Poke(pair[0].GetUInt32(), (byte)pair[1].GetUInt32());
+            }
+
+            cpu.Load(new M68000.SingleStepState(
+                Registers(initial, "d"),
+                Registers(initial, "a", 7),
+                initial.GetProperty("usp").GetUInt32(),
+                initial.GetProperty("ssp").GetUInt32(),
+                (ushort)initial.GetProperty("sr").GetUInt32(),
+                pc,
+                (ushort)prefetch[0].GetUInt32(),
+                (ushort)prefetch[1].GetUInt32()));
+
+            var ours = new List<string>();
+#if DEBUG
+            cpu.CycleObserver = (write, code, address, data) =>
+            {
+                if (!write && code == 6)
+                {
+                    ours.Add($"{address:x6}");
+                }
+            };
+#endif
+
+            string? mismatch;
+            try
+            {
+                mismatch = Step(cpu, engine, bus, final);
+            }
+            catch (Exception failure)
+            {
+                mismatch = $"harness: {failure.GetType().Name}";
+            }
+
+            var reference = new List<string>();
+            foreach (JsonElement cycle in test.GetProperty("transactions").EnumerateArray())
+            {
+                if (cycle[0].GetString() == "r" && cycle[2].GetInt32() == 6)
+                {
+                    reference.Add($"{cycle[3].GetUInt32():x6}");
+                }
+            }
+
+            // the handler-entry reads are the same in both; keep them, they are part of the count
+            string name = test.GetProperty("name").GetString() ?? "(unnamed)";
+            lines.Add($"{name}\t{string.Join(",", reference)}\t{string.Join(",", ours)}\t{(mismatch ?? "ok")}");
+        }
+
+        File.WriteAllLines(outPath, lines);
+        Console.WriteLine($"wrote {outPath} ({lines.Count} records)");
+        return 0;
     }
 
     /// <summary>

@@ -75,10 +75,12 @@ internal static class Program
                                                  batch, the instant it drained at, and each run's tail
                                                  (G1/G2's one-line diff)
               cpu-tests [--dir DIR] [--file NAME] [--limit N] [--show N] [--quiet] [--out FILE]
-                        [--failures FILE] [--trace N]
+                        [--failures FILE] [--trace N | --reads FILE]
                                                  the 680x0 corpus against the core, one instruction at a
                                                  time (default dir: tests/680x0/v1); --trace prints our
-                                                 cycle list beside record N's own transactions
+                                                 cycle list beside record N's own transactions, --reads
+                                                 writes every record's fetch addresses beside the
+                                                 reference's (the read-placement evidence, Debug only)
               run [--frames N] [--inject] [--out DIR]
                                                  the synthetic trace; writes run.digest, run.state and
                                                  run.report into DIR (default runs/<stamp>/)
