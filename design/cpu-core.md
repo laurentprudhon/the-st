@@ -157,6 +157,19 @@ whole difference between `33ea` (2 reads) and `33fc` (3), and it is why no singl
 Corpus: **1 000 057 / 1 000 060**, 122 of 124 files, sample 2 976 / 2 976, G8 9.75 ms at n 747 (both folds keep
 their word counts and move in bytes — **re-blessed by the owner on 2026-11-18**, `tests/performance/FINDINGS.md` §28).
 
+**As measured, the internal residue (2026-11-18, `tests/680x0/LENGTH.md`).** `length = 4 x (bus cycles) + the
+reference's own `n`/`t` clocks` on all 1 000 060 records, and that residue is a function of the instruction's
+**shape** on 73.4 % of the 805 512 plain records (85.0 % keyed by the whole opcode word). Everything outside is
+nineteen families, and each is a counter on a value the core already holds when it executes: the shifts are
+`base + 2 x count` exactly (177 314 records, `base` 2 for `.b`/`.w` and 4 for `.l`), `MUL`/`DIV` follow the
+operand's bits, `Bcc`/`DBcc`/`Scc` follow the branch, and the data-register bit ops follow their result — with
+one datum still open (a `BCHG`/`BCLR`/`BSET` on a data register pays 6 or 8 clocks on the same shape, and
+nothing in the record separates them; read CLK's source). Two splits come first: 194 548 records (19.5 %) are
+**exception entries**, whose `length` is the group-0 frame and the handler's first fetches rather than an
+instruction's, and their cost is #72's contested frame. So the column can become a **graded column of
+`cpu-tests`** — never a `validate.sh` row, since the corpus stays out of the gate — once the table is data in
+the core and that one datum is read; until then it stays reported, which is ADR 0009 §4's standing ruling.
+
 ## 4. Reset: the first cycle
 
 Documented (UM §6.3.1): supervisor, trace off, mask 7, vector 0, and **nothing stacked** — the first

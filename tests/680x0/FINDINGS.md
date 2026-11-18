@@ -80,6 +80,7 @@ care why a flag is wrong as long as the branch lands).
 | 56 | **`MOVE.w` 355, `MOVE.l` 377, `MOVEM.l` 404** — every one differs first in a byte of the group-0 frame at `$7F7`/`$7FF` | the core fetched each instruction word on demand and imitated the queue's saved counter with `pc − 4`/`pc − 2`. The corpus's reference has ADR 0009 §4's queue, so at a fault the frame saves the word in `IR` — and how far that has run ahead depends on how many fetches the instruction had *already issued*: a store that faults on a `-(An)` address keeps its trailing fetch (class 0), an extension-built address or any other fault cancels the read that was owed | the queue itself: `IRD`/`IR`/`IRC`, one read per consumed word, a refill at a jump's/branch's/exception's target, and `returnPc = _irAddress` with no arithmetic. 1 000 008 / 1 000 060; the 49 records left are a `MOVE` into an odd `(xxx).l` destination, where the reference takes the address's two words with one fetch fewer (ADR 0009 §4's falsifier: the read's placement inside the instruction) |
 | 57 | the 49 records of row 56, and a **measured no** for the obvious rule: "a long destination address defers its last word's refill until the address is validated" | the rule was built and measured: it fixes 23 records and breaks 278 (**999 753 / 1 000 060**). The reference's placement is **per opcode**, not per shape — `33ea [MOVE.w (d16,A2),(xxx).l]` (odd destination) pays 2 reads where `33fc [MOVE.w #,(xxx).l]` (odd destination too) pays 3, and `MOVE.l` has records with the same source mode and the same destination parity landing in both buckets | reverted; the datum is Level 2's per-opcode script (ADR 0009 §4), and its first tool is `--reads`, which writes both lists per record. Resolved by row 58 |
 | 58 | **`MOVE.w` 23, `MOVE.l` 26** — the whole residue of row 56: a `MOVE` into an odd `(xxx).l` destination, first difference in the group-0 frame's saved `pc` (`$7FE`/`$7FF`), two bytes high | a plain `MOVE`'s absolute-long destination has **its own micro-op script** in the reference (`MOVE_bw_AbsoluteLong`, `MOVE_l_AbsoluteLong`): it builds the pair from **one** read — the pop that takes the high word fetches the low one and the low one is read out of the queue rather than popped — where the generic EA machine (the one every other instruction uses) spends two. The script's second half is a **prefetch-first class**: a source that cost no bus cycle of its own (a data register, an address register or an immediate) fetches the word *after* the address before it stores, so an odd destination's fault keeps that read; every other source stores first and the fault cancels it. That is the whole difference between `33ea` (2 reads) and `33fc` (3), and it is why row 57's single clause could never hold | `FetchMoveAbsoluteLongAsync` takes the pair whole and leaves the queue a word short; `CloseAfterLongDestinationAsync` pays the two words the reference's closing prefetches read; `MoveSourceNeedsNoBusCycle` is the class read off the opcode's own source field. `--reads` on both files: **0 records** mismatched, and the read lists of the **other 16 081 records did not move** — the evidence that this is a placement, not a blanket rule. **1 000 057 / 1 000 060**, 122 of 124 files green, sample 2 976 / 2 976; the 3 left are the self-contradicting upstream records. Gate PASS, G8 9.75 ms, 300-frame records unchanged |
+| 59 | the `length` column — `cpu-tests` prints "0 of 2 976 exact-cycle tests" (18 before `#70`'s queue), and the internal-clocks table ADR 0009 §3 calls missing | not a mystery and not a per-instruction datum: `length = 4 x (bus cycles) + the reference's own n/t clocks` on **all 1 000 060 records**, and the residue `length - 4 x bus` is a function of the instruction's **shape** (family, size, operand EA modes) for 1 231 of 1 333 plain-class shapes (73.4 % of 805 512 records; 85.0 % if the key is the whole opcode word). Every record outside that is in nineteen families — the shifts (177 314), `MUL`/`DIV` (19 888), `Bcc`/`DBcc`/`Scc` (13 246) and the data-register bit ops (3 873) — and each follows a value the core has in hand when it executes. Two splits were needed first: 194 548 records (19.5 %) are **exception entries** (a fault's `length` covers the group-0 frame and the handler's first fetches), and the shift family is `base + 2 x count` exactly (`base` 2 for `.b`/`.w`, 4 for `.l`), 177 314 records with no exception | `scripts/corpus-length-census.py` measures it, `LENGTH.md` is the table and the ruling. One datum stays open: a `BCHG`/`BCLR`/`BSET` on a data register pays 6 or 8 clocks with nothing in the record to separate the two — read CLK's source, do not guess (row 57) |
 
 ## What is still open
 
@@ -131,8 +132,11 @@ mismatches over `MOVE.w`, `MOVE.l`, `MOVE.b`, `CLR.w`, `ADD.w` and `AND.w`).
    before the store — 1 000 057 of 1 000 060.
 
 A fourth, smaller one: the corpus's `length` is in CPU clock cycles and this core models only the bus's.
-18 of the 2 976 sample tests happen to agree, which is exactly the size of the internal-cycle table that
-is missing.
+**0 of the 2 976** sample tests agree today (18 did before `#70`'s queue). Row 59 and `LENGTH.md` measure that
+gap instead of naming it:
+the residue is a function of the instruction's shape on 73.4 % of the plain records, the shifts are
+`2 (or 4 for .l) + 2 x count` exactly, and the rest are four counters and one open datum — a build order,
+not a research question.
 
 ## How to reproduce
 
@@ -140,6 +144,7 @@ is missing.
 scripts/fetch-680x0-tests.sh --full
 tools/validation-harness/bin/Debug/net11.0/validation-harness cpu-tests --dir tests/680x0/full \
     --quiet --out report.txt --failures failures.tsv
+scripts/corpus-length-census.py --dir tests/680x0/full --table     # LENGTH.md's numbers, 20 s
 ```
 
 `--out` writes the per-file table; `--failures` writes up to 20 detail lines per opcode file, tab
