@@ -71,6 +71,13 @@ never a chip's. It compares, in this order, and reports the **first** difference
 `d0…d7`, `a0…a6`, `usp`, `ssp`, the defined bits of `sr` (`0xA71F`: T, S, I2–I0, CCR), `pc`, then every
 byte of `final.ram`.
 
+## What the corpus cannot tell you
+
+It is emulator output, not silicon. `tests/680x0/CONFORMANCE.md` records the hardware-captured and
+hardware-corrected sources we have (flamewing's exhaustive BCD tables, WinUAE's CPU tester), what each
+checks, and where the corpora disagree with them — read it before deciding that a frame convention is
+settled by a corpus diff.
+
 ## Upstream licence
 
 The corpus declares **no licence** upstream (the repository has none). It is vendored here as test data

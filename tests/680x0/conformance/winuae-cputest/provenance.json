@@ -1,0 +1,23 @@
+{
+  "source": "tonioni/WinUAE",
+  "url": "https://github.com/tonioni/WinUAE",
+  "commit": "1977af501f6c3389c2eefe119ecb10c82d6582f3",
+  "committed": "2026-09-17",
+  "tier": "T2",
+  "what": "cputest/readme.txt and cputest/cputestgen.ini — the CPU tester's recipe and its preset list (which cases are generated: every instruction and addressing mode, trace, odd source/destination, odd user stack, odd exception vectors, interrupts, and bus errors). This is the harness that is compared against real Amigas.",
+  "not_vendored": "the expected values: they are produced by the tester core `gencpu` emits when built with CPU_TESTER, and judged on the Amiga side against hardware. Building that core on Linux is ticket #72.",
+  "what_it_checks": "every register, SR and PC; the exception number and the whole group-0 frame field by field; memory writes; undefined CCR bits; the clock total including exception processing to within 2 clocks ($DFF006)",
+  "hardware_scope": "author's reports: '09.02.2020 All 68000 tests are 100% confirmed, including full cycle-count support'; 'All prefetch bus error tests verified' (16.02.2020)",
+  "files": {
+    "cputestgen.ini": {"size": 17569, "sha256": "2488e9cd2fc1308bd87749aa8a22aa0e0f54af52229472c7163bf989384b5a34"},
+    "readme.txt": {"size": 12240, "sha256": "10dfbbd56a16a2e080c8b2f9f2d5e7089afd7eca89fbfe7c6227baf61f73a514"}
+  },
+  "referee_run_cited": {
+    "project": "alewman/m68000-python",
+    "commit": "c827cca6617ddcfb82e2735f3f30fe14971335f0",
+    "documents": ["docs/referees.md", "docs/undocumented-behavior.md"],
+    "date": "2026-09-21",
+    "result": "308416 of 314988 judged cases agree against SingleStepTests/m68000; all 779253 judgeable cases agree against SingleStepTests/680x0 where CLK and MAME's core agree"
+  },
+  "licence": "GPL-2.0+ (WinUAE); vendored as two configuration/documentation files with attribution — see NOTICE"
+}

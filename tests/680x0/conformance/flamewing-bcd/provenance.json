@@ -1,0 +1,14 @@
+{
+  "source": "flamewing/68k-bcd-verifier",
+  "url": "https://github.com/flamewing/68k-bcd-verifier",
+  "commit": "39a01be528b0744302bf1dc9b3463fc22a3fc45f",
+  "committed": "2018-08-31",
+  "tier": "T1",
+  "what": "bcd-table.bin — the exhaustive ABCD/SBCD/NBCD expectation table the verifier's ROM embeds. The ROM passes on real hardware (Model 1 Sega Genesis, Model 3 VA2).",
+  "generated_by": "g++ -O2 -o bcd-gen bcd-gen.cc bcd-emul.cc && ./bcd-gen   (writes data/bcd-table.bin)",
+  "size": 1050624,
+  "sha256": "8432868c9aa93c92574bae48bebd4efb2834e298340eb09530625365b80147e5",
+  "layout": "2 bytes per entry [flags, result]; flags = X<<4|N<<3|Z<<2|V<<1|C; ABCD 262144 entries at 0, SBCD 262144 at 524288, NBCD 1024 at 1048576; index ((src*256+dst)*4 + X*2 + Z)*2 (NBCD: ((dst*4 + X*2 + Z)*2) + 1048576)",
+  "self_check": {"abcd_09_plus_01_x0_z0": ["0x10", "0x00"], "sbcd_00_minus_01_x0_z0": ["0x99", "0x19"]},
+  "licence": "GPL-3.0 (the generator; the table is generated data, vendored as test data with attribution — see NOTICE)"
+}
