@@ -45,6 +45,7 @@ public sealed partial class M68000
             {
                 uint address = GetA(reg);
                 SetA(reg, address + (uint)(size == 0 && reg == 7 ? 2 : SizeBytes(size)));
+                PostIncremented(reg, address);
                 return address;
             }
 
@@ -75,7 +76,9 @@ public sealed partial class M68000
                 switch (reg)
                 {
                     case 0: return (uint)(short)await FetchAsync();
-                    case 1: return (await FetchLongAsync()) & 0x00FFFFFF;
+                    // the full 32-bit address: the bus is 24-bit and truncates at the wire, but the
+                    // program counter a jump stores is the whole value the corpus hands back
+                    case 1: return await FetchLongAsync();
                     case 2:
                     {
                         short displacement = (short)await FetchAsync();
@@ -168,6 +171,18 @@ public sealed partial class M68000
                 return;
         }
 
+        // A long store into -(An) steps down a word at a time and writes the low word first, so an
+        // odd register faults on that first word with the register down 2, not 4 — while a long
+        // *read* steps down 4 and faults at A − 4. The corpus measures both (FINDINGS row 44).
+        bool plainMove = (_opcode >> 12) is 1 or 2 or 3;
+        if (plainMove && mode == 4 && size == 2 && (GetA(reg) & 1) != 0)
+        {
+            uint start = GetA(reg);
+            SetA(reg, start - 2);
+            await WriteWordAsync(start - 2, (ushort)value);
+            return;
+        }
+
         uint address = await EaAddressAsync(mode, reg, size);
         if (_busFaulted) return;
 
@@ -188,13 +203,17 @@ public sealed partial class M68000
         uint value = await ReadEaAsync(sourceMode, sourceReg, size);
         if (_busFaulted) return;
 
-        await WriteEaAsync(destinationMode, destinationReg, size, value);
-        if (_busFaulted) return;
-
+        // The flags are the corpus's, and they are set by the *move*, not by the store landing: a
+        // destination that faults on an odd address still leaves N, Z, V and C read off the value
+        // that was on its way there (the model's `move()` updates the status, then the bus cycle
+        // raises the address error).
         if (destinationMode != 1)
         {
             SetLogicFlags(value, size);
         }
+
+        await WriteEaAsync(destinationMode, destinationReg, size, value);
+        if (_busFaulted) return;
 
         Clocks(1);
     }
@@ -260,9 +279,9 @@ public sealed partial class M68000
                 _ => old,                      // CMPI
             };
 
-            if (operation == 6)
+            if (operation == 6)   // CMPI: a comparison, so X is untouched
             {
-                SetSubFlags(immediate, old, old - immediate, size);
+                SetCompareFlags(immediate, old, old - immediate, size);
                 return;
             }
 
@@ -291,9 +310,9 @@ public sealed partial class M68000
             _ => current,
         };
 
-        if (operation == 6)
+        if (operation == 6)   // CMPI: a comparison, so X is untouched
         {
-            SetSubFlags(immediate, current, current - immediate, size);
+            SetCompareFlags(immediate, current, current - immediate, size);
             return;
         }
 
@@ -380,6 +399,22 @@ public sealed partial class M68000
             }
 
             _sr = (ushort)(set ? _sr & ~FlagZ : _sr | FlagZ);
+            Clocks(2);
+            return;
+        }
+
+        // `BTST Dn,#data`: the operand is the immediate word that follows the opcode — not an
+        // address. Without this the EA helper answered 0 and the bit was read out of low memory,
+        // and the extension word was never fetched (the corpus's pc was two bytes short).
+        if (mode == 7 && reg == 4)
+        {
+            ushort immediate = await FetchAsync();
+            if (_busFaulted) return;
+
+            // `BTST Dn,#data` is a *byte* test — only the immediate's low byte and the bit numbers
+            // 0–7 are reachable, whatever a matching word might hold
+            bool immediateSet = (((immediate & 0xFF) >> (int)(bitNumber & 7)) & 1) != 0;
+            _sr = (ushort)(immediateSet ? _sr & ~FlagZ : _sr | FlagZ);
             Clocks(2);
             return;
         }
@@ -585,7 +620,9 @@ public sealed partial class M68000
                         if (_busFaulted) return;
                     }
 
-                    SetSubFlags(negxValue + extend, 0, negxResult, sz);
+                    // NEGX carries ADDX/SUBX's zero rule: Z is only ever cleared, so a chain of
+                    // borrows reports the whole result (0 − operand − X is a subtract from zero)
+                    SetExchangeFlags(true, negxValue, 0, negxResult, sz);
                     Clocks(1);
                     return;
                 }
@@ -1023,6 +1060,18 @@ public sealed partial class M68000
         if ((op & 0xFFC0) == 0x4E80)   // JSR
         {
             uint target = await EaAddressAsync(mode, reg, 2);
+            if (_busFaulted) return;
+
+            // an odd target faults on the fetch that follows the jump, so nothing is pushed: the
+            // corpus measures the stack untouched and the group-0 frame where the return address
+            // would have gone (FINDINGS row 43). Handing the odd PC to the prefetch's own check
+            // (the caller's) raises the right frame; the push only happens for a reachable target.
+            if ((target & 1) != 0)
+            {
+                _pc = target;
+                return;
+            }
+
             uint stack = A7 - 4;
             A7 = stack;
             await WriteLongAsync(stack, _pc);
@@ -1282,7 +1331,9 @@ public sealed partial class M68000
 
             if (quotient > 32767 || quotient < -32768)
             {
-                _sr |= FlagV;
+                // an overflow leaves the register alone and touches V and C only: N, Z and X are the
+                // instruction's own undefined case and the corpus keeps whatever they were
+                _sr = (ushort)((_sr | FlagV) & ~FlagC);
                 return;
             }
 
@@ -1301,7 +1352,7 @@ public sealed partial class M68000
 
             if (quotient > 0xFFFF)
             {
-                _sr |= FlagV;
+                _sr = (ushort)((_sr | FlagV) & ~FlagC);
                 return;
             }
 
@@ -1369,6 +1420,12 @@ public sealed partial class M68000
         if (predecrement)
         {
             source = await PredecrementAsync(sourceReg, size);
+
+            // The source's read decides the rest: if it faulted, the destination register is untouched.
+            // The corpus pins it — on an odd address the CPU never reaches the destination's own
+            // predecrement, so `ADDX.w -(A2), -(A6)` leaves A6 where it was (FINDINGS row 39).
+            if (_busFaulted) return;
+
             destination = await PredecrementAsync(destinationReg, size);
             if (_busFaulted) return;
         }
@@ -1383,8 +1440,10 @@ public sealed partial class M68000
             ? (destination - source - extended) & SizeMask(size)
             : (destination + source + extended) & SizeMask(size);
 
-        if (subtract) SetSubFlags(source + extended, destination, result, size);
-        else SetAddFlags(source + extended, destination, result, size);
+        // the extend bit is read inside the flag setter, from the status as it stands before the
+        // flags move — passing `source + extended` here would count it twice
+        if (subtract) SetExchangeFlags(true, source, destination, result, size);
+        else SetExchangeFlags(false, source, destination, result, size);
 
         if (predecrement)
         {
@@ -1399,8 +1458,29 @@ public sealed partial class M68000
         Clocks(2);
     }
 
+    /// <summary>
+    /// <c>-(An)</c>: the register steps down <em>before</em> the read, one access at a time. A long
+    /// steps down a word at a time and reads the low word first (at <c>A − 2</c>), which is what the
+    /// corpus pins: an odd <c>A</c> faults on that first word with the register down 2, not 4
+    /// (FINDINGS row 40).
+    /// </summary>
     async ValueTask<uint> PredecrementAsync(int reg, int size)
     {
+        if (size == 2)
+        {
+            uint start = GetA(reg);
+
+            SetA(reg, start - 2);
+            ushort low = await ReadWordAsync(start - 2);
+            if (_busFaulted) return 0;
+
+            SetA(reg, start - 4);
+            ushort high = await ReadWordAsync(start - 4);
+            if (_busFaulted) return 0;
+
+            return ((uint)high << 16) | low;
+        }
+
         uint delta = (uint)(size == 0 && reg == 7 ? 2 : SizeBytes(size));
         uint address = GetA(reg) - delta;
         SetA(reg, address);
@@ -1415,13 +1495,18 @@ public sealed partial class M68000
 
         if ((op & 0xF138) == 0xB108 && size != 3)   // CMPM
         {
-            uint delta = (uint)(size == 0 ? 2 : SizeBytes(size));
+            // a byte steps the register by one, unless it is A7, which always moves a whole word
+            uint delta = (uint)(size == 0 && (op & 0x7) == 7 ? 2 : SizeBytes(size));
             uint sourceAddress = GetA(reg);
             SetA(reg, sourceAddress + delta);
             uint source = await ReadAtAsync(sourceAddress, size);
             if (_busFaulted) return;
-            uint destinationAddress = GetA((op >> 9) & 0x7);
-            SetA((op >> 9) & 0x7, destinationAddress + delta);
+
+            // the destination has its own step: a byte moves A7 by a word, every other register by one
+            int destinationReg = (op >> 9) & 0x7;
+            uint destinationDelta = (uint)(size == 0 && destinationReg == 7 ? 2 : SizeBytes(size));
+            uint destinationAddress = GetA(destinationReg);
+            SetA(destinationReg, destinationAddress + destinationDelta);
             uint destination = await ReadAtAsync(destinationAddress, size);
             if (_busFaulted) return;
             SetCompareFlags(source, destination, (destination - source) & SizeMask(size), size);
@@ -1731,28 +1816,39 @@ public sealed partial class M68000
     /// extend, 3 = rotate. <paramref name="left"/> is the direction bit.
     ///
     /// <para>
-    /// The flag rules are the ones the corpus pins down: the shifting kinds move the last bit out into
-    /// C <i>and</i> X; the rotate-through-extend kinds move it into X alone; a plain rotate leaves X
-    /// untouched. V is set only by a left arithmetic or logical shift whose sign changed, and N and Z
-    /// are left alone when the count is zero.
+    /// The flag rules are the ones the corpus pins down — and they are not the manual's "a zero count
+    /// touches nothing":
     /// </para>
+    /// <list type="bullet">
+    /// <item>N and Z are always read off the result, a zero count included.</item>
+    /// <item>The shifting kinds move the <em>last</em> bit out into C <i>and</i> X, and that bit is decided
+    /// by the width, not by the loop: a count past the operand shifts that bit out and nothing else, so C
+    /// and X come out <b>zero</b> (ASR.b by 17 on `0x92` clears both — the loop would keep the sign bit).</item>
+    /// <item>The rotate-through-extend kinds move it into C and X alike, the plain rotates into C alone
+    /// (X untouched).</item>
+    /// <item>V is set only by a left arithmetic shift whose sign changed at some step.</item>
+    /// <item>A zero count clears C for every kind but the through-extend ones, which leave C and X as
+    /// they were, and never writes X.</item>
+    /// </list>
     /// </summary>
     uint Shift(uint value, int count, int size, int kind, bool left)
     {
         int bits = SizeBits(size);
         uint mask = SizeMask(size);
         uint sign = (uint)SignBit(size);
-        uint result = value & mask;
-        bool carry = (_sr & FlagC) != 0;
+        uint operand = value & mask;
+        uint result = operand;
         bool extend = (_sr & FlagX) != 0;
+        bool carry = false;
         bool overflow = false;
 
         count &= 63;
 
-        if (count == 0)
+        // the bit a shift kind moves out last — empty when the count runs past the operand's width
+        uint lastOut = 0;
+        if (kind <= 1 && count != 0 && count <= bits)
         {
-            _sr = (ushort)(_sr & ~FlagC);   // a zero count clears C and touches nothing else
-            return result;
+            lastOut = left ? (operand >> (bits - count)) & 1u : (operand >> (count - 1)) & 1u;
         }
 
         for (int step = 0; step < count; step++)
@@ -1822,15 +1918,29 @@ public sealed partial class M68000
             }
         }
 
-        _sr = (ushort)(carry ? _sr | FlagC : _sr & ~FlagC);
-
-        if (kind == 0 || kind == 1)
+        // C: the shifting kinds take it from the width rule above; a rotate from the last bit the loop
+        // turned; through-extend moves C with X, and leaves both alone when nothing shifts.
+        if (kind <= 1)
         {
-            _sr = (ushort)(carry ? _sr | FlagX : _sr & ~FlagX);   // a shift moves the bit into X too
+            _sr = (ushort)(lastOut != 0 ? _sr | FlagC : _sr & ~FlagC);
+            if (count != 0)
+            {
+                _sr = (ushort)(lastOut != 0 ? _sr | FlagX : _sr & ~FlagX);   // a shift moves the bit into X too
+            }
         }
         else if (kind == 2)
         {
-            _sr = (ushort)(extend ? _sr | FlagX : _sr & ~FlagX);
+            // through extend: C takes the extend bit's value always (at a zero count that is a copy of
+            // X), and X itself is written only when something actually turns
+            _sr = (ushort)(extend ? _sr | FlagC : _sr & ~FlagC);
+            if (count != 0)
+            {
+                _sr = (ushort)(extend ? _sr | FlagX : _sr & ~FlagX);
+            }
+        }
+        else
+        {
+            _sr = (ushort)(carry ? _sr | FlagC : _sr & ~FlagC);
         }
 
         _sr = (ushort)((result & mask) == 0 ? _sr | FlagZ : _sr & ~FlagZ);

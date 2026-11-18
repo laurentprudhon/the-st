@@ -131,6 +131,9 @@ public sealed partial class M68000 : Chip
     const ushort FlagN = 0x0008;
     const ushort FlagX = 0x0010;
 
+    /// <summary>The bits a 68000 stores in its status register: T, S, I2–I0 and the condition codes.</summary>
+    const ushort DefinedSr = 0xA71F;
+
     int SizeBits(int size) => size == 0 ? 8 : size == 1 ? 16 : 32;
 
     uint SizeMask(int size) => size == 0 ? 0xFFu : size == 1 ? 0xFFFFu : 0xFFFFFFFFu;
@@ -184,6 +187,56 @@ public sealed partial class M68000 : Chip
     }
 
     /// <summary>
+    /// <c>ADDX</c>/<c>SUBX</c> flags: N, V, C and X as for a plain add or subtract, and <b>Z only ever
+    /// cleared, never set</b> — Motorola's rule, so that a multi-precision chain reports the whole
+    /// result rather than its last limb. The corpus pins it: a byte sum that comes out zero leaves Z
+    /// as it was (FINDINGS row 41).
+    /// </summary>
+    void SetExchangeFlags(bool subtract, uint source, uint destination, uint result, int size)
+    {
+        // The carry has to be seen in a wider width than the operand: `0xFF + 0x4A + X` carries out
+        // of a byte, and masking the source first loses exactly that carry.
+        uint mask = SizeMask(size);
+        uint sign = (uint)SignBit(size);
+        uint src = source & mask;
+        uint dst = destination & mask;
+        uint res = result & mask;
+        uint extended = (uint)((_sr & FlagX) != 0 ? 1 : 0);
+
+        bool carry;
+        bool overflow;
+
+        if (subtract)
+        {
+            carry = dst < src + extended;
+            overflow = (((src ^ dst) & (res ^ dst) & sign) != 0);
+        }
+        else
+        {
+            carry = (ulong)src + dst + extended > mask;
+
+            // the extend bit does not enter the overflow test: V is "the result's sign does not fit
+            // the operands' signs", and the corpus pins it on `0x7F + 0x6A + X` (V set) as well as
+            // on `0xE9 + 0x7B + X` (V clear)
+            overflow = ((src ^ res) & (dst ^ res) & sign) != 0;
+        }
+
+        ushort zero = (ushort)(_sr & FlagZ);
+
+        _sr = (ushort)(_sr & ~(FlagN | FlagZ | FlagV | FlagC | FlagX));
+        if (carry) _sr |= (ushort)(FlagC | FlagX);
+        if ((res & sign) != 0) _sr |= FlagN;
+        if (overflow) _sr |= FlagV;
+
+        // Z is only ever cleared: a zero result leaves it as it was, so that a multi-precision chain
+        // reports the whole result rather than its last limb
+        if (res == 0)
+        {
+            _sr = (ushort)(_sr | zero);
+        }
+    }
+
+    /// <summary>
     /// A comparison's flags: N, Z, V and C as a subtraction, and X untouched (CMP, CMPA, CMPM).
     /// </summary>
     void SetCompareFlags(uint source, uint destination, uint result, int size)
@@ -228,6 +281,37 @@ public sealed partial class M68000 : Chip
     bool _busFaulted;
     long _answerSeq = long.MinValue;
 
+    // ---- a post-increment lands with the access, not with the address ---------------------------
+    // `(An)+` computes its address, performs the access, and only then moves the register. The core
+    // still increments eagerly (one assignment), but remembers where it started, so an access that
+    // faults can put the register back: the corpus measures it — `MOVE.w <ea>, (A5)+` onto an odd
+    // address leaves A5 where it was, while `-(An)` keeps its decrement (FINDINGS row 42).
+    int _postIncrementReg = -1;
+    uint _postIncrementFrom;
+
+    void PostIncremented(int reg, uint from)
+    {
+        _postIncrementReg = reg;
+        _postIncrementFrom = from;
+    }
+
+    /// <summary>
+    /// Puts a post-incremented register back when the access did not land — but only for a plain
+    /// <c>MOVE</c>, whose model increments *after* the write. Every other instruction increments
+    /// before the access, so a fault keeps the increment (the corpus measures both, FINDINGS row 42).
+    /// </summary>
+    void SettlePostIncrement(bool faulted)
+    {
+        bool movesAfterTheWrite = (_opcode >> 12) is 1 or 2 or 3;
+
+        if (faulted && movesAfterTheWrite && _postIncrementReg >= 0)
+        {
+            SetA(_postIncrementReg, _postIncrementFrom);
+        }
+
+        _postIncrementReg = -1;
+    }
+
     /// <summary>
     /// One bus cycle (ADR 0009 §1): the assertion record, the subscription to the answer, the stack
     /// sample, the release. The core advances to the answering instant because the engine sets its
@@ -249,6 +333,7 @@ public sealed partial class M68000 : Chip
             _faultIsFetch = false;
             _addressError = true;
             _busFaulted = true;
+            SettlePostIncrement(isWrite);
             return new BusResult(0, true, false);
         }
 
@@ -290,6 +375,10 @@ public sealed partial class M68000 : Chip
             _busFaulted = true;
             _faultAddress = address;
         }
+
+        // the register goes back only for a faulted *write*: a read that faults has already moved it
+        // (the corpus measures both directions, and they differ)
+        SettlePostIncrement(faulted && isWrite);
 
         return new BusResult(data, faulted, vector);
     }
@@ -561,7 +650,10 @@ public sealed partial class M68000 : Chip
             _ssp = frame;
 
             await WriteWordAsync(frame + 12, (ushort)returnPc);
-            await WriteWordAsync(frame + 8, oldSr);
+
+            // the frame's status register carries only the bits a 68000 stores: the undefined ones
+            // (7–5) read back as zero, and the corpus compares the frame's bytes (FINDINGS row 45)
+            await WriteWordAsync(frame + 8, (ushort)(oldSr & DefinedSr));
             await WriteWordAsync(frame + 10, (ushort)(returnPc >> 16));
             await WriteWordAsync(frame + 6, _opcode);
             await WriteWordAsync(frame + 4, (ushort)(_faultAddress & 0xFFFF));
@@ -575,7 +667,7 @@ public sealed partial class M68000 : Chip
             _ssp = frame;
             await WriteWordAsync(frame + 4, (ushort)returnPc);
             await WriteWordAsync(frame + 2, (ushort)(returnPc >> 16));
-            await WriteWordAsync(frame, oldSr);
+            await WriteWordAsync(frame, (ushort)(oldSr & DefinedSr));
         }
 
         if (_busFaulted)

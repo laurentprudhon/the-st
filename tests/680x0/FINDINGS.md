@@ -60,22 +60,49 @@ care why a flag is wrong as long as the branch lands).
 | 36 | `MOVE from CCR` (`42C0`–`42FF`) executed instead of raising an illegal instruction — found by the *boot*, not the corpus: EmuTOS's `_detect_cpu` probes it first, so the ROM believed it ran on a 68060 | the whole `0x42xx` block with operand size `11` was implemented as the 68010 instruction, and the test masked the low six bits so only `move.w ccr,d0` was caught | `(op & 0xFF00) == 0x4200 && size == 3` → `EnterExceptionAsync(4)` |
 | 38 | after log retention landed, **36 of 124 opcode files went from green to failing** — most with `stalled at pc=000c00: nothing is queued and the instruction is not finished`, a few with `ASSERTION 1 failed — CPU's write at 0 is dated before the batch being drained (4)` | `SingleStepBus` (the corpus's own bus) kept an **index into the `Bus` wire's log** across a suspension: it recorded `_assertionIndex`, answered four ticks later, and read `log[at..at+3]`. Retention discards from the front, so the index landed on other records or past the end, the answer never landed, and the CPU waited on a bus that had forgotten its exchange | the four records are now read **on the resume that sees them** and kept as values (`_addressHigh/_addressLow/_control/_writeData`, filled in order). The rule the retention session wrote down — *an index into a log is only valid inside one resume* — is what this instrument violated. Corpus after the fix: 960 752/1 000 060 (96.1 %), 43 files green |
 | 37 | `EOR` with a data-register destination (`EOR Dn,Dm`, `mode 000`) read and wrote address 0 and set its flags from that byte — the boot hung inside EmuTOS's `detect_monitor_change`, whose `eor.b d0,d1` over two GPIP reads never stopped branching | the `EOR Dn,<ea>` branch went straight to the effective-address helper, which answers 0 for a register operand | handle `mode == 0` on the register before any address is resolved |
+| 39 | `ADDX`/`SUBX` 9 078 (and `ABCD`/`SBCD` before them) — on `-(Ay),-(Ax)` the base registers came out **2 short** | the destination register was pre-decremented *before* the source's read was known to have landed, so a faulted source left its decrement behind | `if (_busFaulted) return;` between the two pre-decrements |
+| 40 | `ADDX.l`/`SUBX.l` on an odd register: the register came out 4 short | a long pre-decrement stepped straight to A − 4 and read there; the corpus's model steps a word at a time and reads the **low** word first, at A − 2, so an odd register faults with the register down 2 | `PredecrementAsync` handles a long as two word accesses, `A − 2` then `A − 4` |
+| 41 | `ADDX.b`/`SUBX.b` 39 + 34 — the carry and the flags on a byte | three rules the manual leaves to the implementation: **Z is only ever cleared** (never set, so a chain reports the whole result), **V ignores the extend bit** (the operands' signs decide it), and the carry needs a **wider width** than the operand (`0xFF + 0x4A + X` carries out of a byte, and masking the source first loses it) | `SetExchangeFlags`: its own arithmetic, Z restored when the result is zero |
+| 42 | any `(An)+` store: the register moved even when the access faulted | the post-increment was applied when the address was computed; the model applies it **when the access lands** — for a plain `MOVE` only (every other instruction increments before the access, and a fault keeps the increment) | `PostIncremented`/`SettlePostIncrement`: the register is put back on a faulted plain-`MOVE` store |
+| 43 | `JSR` 4 036 — `ssp` was 18 bytes down instead of 14 on a jump to an odd address | the return address was pushed, *then* the prefetch's address error was raised | an odd target hands the PC to the prefetch's own fault check and pushes nothing |
+| 44 | `MOVE.l <ea>,-(An)` on an odd register: the register came out 2 short, and the frame recorded A − 4 | a plain `MOVE`'s long store steps down a word at a time and writes the **low** word first (at A − 2), unlike a long *read*, which steps down 4 | `WriteEaAsync` handles the odd plain-`MOVE` long store at A − 2 |
+| 45 | `RTE` 3 986 and `RTR` 3 547 — one byte of the frame's saved status register | the frame carried the status as it stood, bits 7–5 included; the 68000 stores only the defined ones, and the corpus compares raw frame bytes | the frame writes `oldSr & 0xA71F` |
+| 46 | every shift and rotate 3 897 — and the `length`-table's tail | three rules: a count past the operand's width shifts the last bit out and nothing else, so **C and X come out zero** (the loop kept the sign bit running); **N and Z are read off the result even at a zero count**; a through-extend rotate at count zero leaves C and X as they were — except that C takes X's value | `Shift` computes the last bit out from the width, writes C/X from it, and reads N/Z/V from the result |
+| 47 | `CMPI` (`CMP.b` 1 294, and every immediate compare) cleared or set `X` | the immediate path used the subtract's flag setter | `SetCompareFlags`, which leaves X alone |
+| 48 | `CMPM.b` stepped both registers by 2 | a byte steps by one, except `A7`, which always moves a word — and the *destination* register has the same exception | a step per register, `size == 0 && reg == 7 ? 2 : SizeBytes(size)` |
+| 49 | `DIVU`/`DIVS` 3 315 — the overflow case left `C` set and `N`/`Z` moved | an overflow touches `V` and clears `C`; `N`, `Z` and `X` stay as they were and the register is untouched | `_sr = (_sr \| FlagV) & ~FlagC` |
+| 50 | `BTST Dn,#data` 138 — the bit came out of low memory and `pc` was 2 short | the immediate operand is the word that follows the opcode; the effective-address helper answered "no address" (0) and nothing was fetched | the immediate form fetches its word and tests its **low byte**, bits 0–7 |
+| 51 | `NEGX` 31 — `Z` followed the result | `0 − operand − X` is a subtract from zero, so it carries `ADDX`'s zero rule: **Z only ever cleared** | `SetExchangeFlags(true, value, 0, result, size)` |
+| 52 | `MOVE` onto an odd address: the flags stayed as they were | the model's `move()` updates the status from the value it is moving, and the bus cycle raises the address error afterwards — so a faulted store still leaves `N`, `Z`, `V`, `C` read off the value | the flags are set before the store, not after it |
+| 53 | `JMP`/`JSR (xxx).l` — `pc` came back 24-bit | the absolute-long effective address was masked to 24 bits; the bus truncates at the wire, but the counter a jump stores is the whole value | the long form of `(xxx).l` keeps its 32 bits |
+| 54 | **the whole corpus instrument**: every test failing, `OutOfMemoryException`, `ASSERTION 1 failed — CPU's write at 20 is dated before the batch being drained (9223372036854775807)` | `#40` made `Engine.Run` take the minimum over the queue *and* the chips' held dates; with nothing pending that minimum is `long.MaxValue`, and the corpus harness calls `Run(long.MaxValue)` for one instruction — so the loop drained an empty batch at the end of time for ever | `Run` stops when `NextInstant()` answers `long.MaxValue` |
+| 55 | `cpu-tests --dir tests/680x0/full` died on `68000.official.json` | the decode map is an object, not an array of tests, and the file scan took every `*.json` | the scan keeps only files whose JSON opens with `[` |
 
 ## What is still open
 
-Measured 2026-11-13 (third session) against the whole corpus, after rows 28–34:
+Measured 2026-11-17 (the session that wrote rows 39–55) against the whole corpus:
+
+| Run | Tests | Passed | Opcode files fully green |
+|---|---|---|---|
+| the whole corpus as found — after `#40` had broken the instrument, before rows 39–55 | 1 000 060 | 974 788 (97.5 %) | 62 of 124 |
+| the whole corpus after rows 39–53 | 1 000 060 | **998 921 (99.89 %)** | **119 of 124** |
+| the vendored sample (`tests/680x0/v1`, 24 tests a file) | 2 976 | 2 974 (99.93 %) | 120 of 124 |
+
+The sample runs in **0.4 s** again (`--dir tests/680x0/v1`), and the whole corpus in **25 s** — the
+"5–6 min, 194 MB" of the earlier pages was row 54's instrument bug, not the corpus's size.
 
 | Family | State | What it needs |
 |---|---|---|
-| `MOVEP.w/l`, `ABCD`, `SBCD`, `NBCD` | green | — |
-| `MOVEM.w/l` | 7 556 / 8 065 | the residue is the exception frame's access-address/status words (the conventions below), not the transfer |
-| `CHK` | 7 990 / 8 065 | the same frame words on its two trap paths |
-| everything else | one-bit flag differences on instructions whose access faulted, and the frame conventions below |
+| `ADDX`/`SUBX`, `NEGX`, `ABCD`, `SBCD`, `NBCD`, `MOVEP` | green | — |
+| `ASR`/`ASL`/`LSR`/`LSL`/`ROX`/`ROL`/`ROR`, `.b`/`.w`/`.l` | green but for the memory-shift frame cases below | — |
+| `DIVU`/`DIVS`, `MULU`/`MULS`, `CMP`/`CMPA`/`CMPM`, `CHK`, `BTST`/`BCHG`/`BCLR`/`BSET` | green | — |
+| `JSR`, `RTE`, `RTR`, `LEA`, `PEA`, `JMP`, `CLR`, `TST`, `NOT`, `NEG`, `EOR`, `OR`, `AND`, `ADD`, `SUB`, `MOVE from SR`, `MOVE to CCR/SR` | green | — |
+| `MOVE.w` 355, `MOVE.l` 377, `MOVEM.l` 404 | the group-0 frame's saved `pc` and the frame's SR/status bytes | the real prefetch queue (`#37`): every remaining failure's first difference is a byte of the exception frame at `$7F7`/`$7FF` |
+| `ASL.b` 2, `DIVU` 1 | — | upstream's own records disagree with any `ASL.b`/`DIVU`: `ASL.b #2` on `$CDFB7FBE` is documented as `$2E5E4304`, which no byte operation can produce (the high 24 bits changed). 3 tests of 1 000 060; do not chase them |
 
-The remaining failures across the corpus are dominated by one class: **the group-0/2 frame's own words**
-(the saved `pc` from the two-word prefetch, and the status word's access class — see the three
-conventions below). That is design work — the real prefetch queue, ADR 0009 §4 — not a bug list.
-
+The remaining 1 139 failures are **one class**: the group-0/2 frame's own words (the saved `pc` from
+the two-word prefetch, and the access class the status word carries — see the conventions below). That
+is design work — the real prefetch queue, ADR 0009 §4 — not a bug list.
 
 ## Three things the corpus fixes that the manuals leave to the implementation
 
