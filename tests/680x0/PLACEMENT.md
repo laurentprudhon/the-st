@@ -33,7 +33,13 @@ in the *count*, never in the shape:
   CLK has 8–14); the shape differs too. This is the same family whose exception frame the two corpora
   already contest (`the-st-68000-core` §5, `FINDINGS.md`), so it is named, not averaged.
 
-Where they disagree the core follows **CLK**, because that is the corpus it is graded against.
+**Where they disagree the core follows MAME** — the owner's ruling of 2026-11-19, and it reverses the
+choice this page was first written with. MAME's microcoded core is the source of truth for an instruction's
+clock count and placement; the vendored CLK corpus stays the oracle for an instruction's *final state*
+(1 000 057 / 1 000 060), which is what the harness actually gates. So the table above keeps both columns:
+CLK's numbers are quoted beside MAME's so the disagreement stays visible rather than silently resolved, and
+`TAS` and `TRAPV` are excluded from any "100 %" claim because MAME's own README says its TAS read-modify-write
+timing and its TRAPV tests are not trustworthy.
 
 ## The four charge points (what the traces say, and what the core now does)
 

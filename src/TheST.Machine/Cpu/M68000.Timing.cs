@@ -34,9 +34,11 @@ namespace TheST.Machine.Cpu;
 /// <para>
 /// What is <b>not</b> here: the exception entry's own bus cycles (the frame, the vector) — those are
 /// cycles the core already performs — and the <c>MOVE</c> into an odd <c>(xxx).l</c> destination, whose
-/// placement is <c>#74</c>'s and unchanged. Where CLK and MAME disagree the corpus is CLK, and the
-/// disagreement is named in <c>PLACEMENT.md</c> §4 (<c>MUL</c>/<c>DIV</c> differ by 2, <c>MOVEM</c>
-/// differs in its register count).
+/// placements is <c>#74</c>'s and unchanged. **Where CLK and MAME disagree, MAME wins** (the owner's
+/// ruling of 2026-11-19): its microcoded core is the source of truth for an instruction's clocks, so
+/// <c>MUL</c>/<c>MULS</c> charge what MAME charges per source EA, <c>DIV</c>/<c>DIVS</c> its longer path,
+/// and <c>MOVEM</c> its per-register count — <c>PLACEMENT.md</c> keeps CLK's numbers beside them so the
+/// disagreement stays visible. CLK remains the oracle for an instruction's final state.
 /// </para>
 /// </summary>
 public sealed partial class M68000
