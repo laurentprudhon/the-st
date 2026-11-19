@@ -56,7 +56,7 @@ public sealed partial class M68000
         if (!_eaCharged && (mode == 4 || mode == 6 || (mode == 7 && reg == 3)))
         {
             _eaCharged = true;
-            await ClocksAsync(2);
+            await ClocksAsync(2, prefetch: true);
         }
 
         switch (mode)
@@ -883,6 +883,11 @@ public sealed partial class M68000
         uint address = mode == 3 ? GetA(reg) : await EaAddressAsync(mode, reg, size);
         if (_busFaulted) return;
 
+        // the transfer's own prefetch: MAME's microcode keeps the pipeline full while it walks the mask,
+        // which is why a `MOVEM` fault saves a counter two words deeper than its word count (#76)
+        await PrefetchAsync();
+        if (_busFaulted) return;
+
         for (int bit = 0; bit < 16; bit++)
         {
             if ((mask & (1 << bit)) == 0) continue;
@@ -936,6 +941,10 @@ public sealed partial class M68000
 
         bool predecrement = mode == 4;
         uint address = mode is 3 or 4 ? GetA(reg) : await EaAddressAsync(mode, reg, size);
+        if (_busFaulted) return;
+
+        // the transfer's own prefetch, as in the other direction (#76)
+        await PrefetchAsync();
         if (_busFaulted) return;
 
         if (predecrement)
@@ -1470,6 +1479,11 @@ public sealed partial class M68000
         int sourceReg = op & 0x7;
         int destinationReg = (op >> 9) & 0x7;
         bool predecrement = (op & 0x0008) != 0;
+
+        // ADDX/SUBX issue their prefetch before the access even with no idle clock to spend (#76: their
+        // memory forms charge no own clocks, and MAME's frame still saves one prefetch deeper)
+        await PrefetchAsync();
+        if (_busFaulted) return;
 
         uint source;
         uint destination;

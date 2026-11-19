@@ -133,6 +133,7 @@ public sealed partial class M68000
     {
         ushort opcode = _ird;
         _pc += 2;
+        _opcodeAddress = _pc - 2;
         _streamStart = _fetchPointer;
         _flowTransferred = false;
         _trailingFetched = false;

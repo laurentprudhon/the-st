@@ -54,6 +54,13 @@ public sealed partial class M68000 : Chip
     /// </summary>
     uint _streamStart;
 
+    /// <summary>
+    /// The address of the instruction's own opcode word. A group-1/2 frame saves it for the illegal and
+    /// privilege exceptions (MAME's corpus, measured over 21 311 frames) and the address past the
+    /// instruction for `TRAP`/`TRAPV`/`CHK`/a divide — see `SavesInstructionAddress`.
+    /// </summary>
+    uint _opcodeAddress;
+
     // a jump, a branch, a return or an exception entry refilled the queue at its target: the closing
     // steps belong to an instruction that fell through, so the loop skips them for this one
     bool _flowTransferred;
@@ -192,11 +199,24 @@ public sealed partial class M68000 : Chip
     /// so the machine advances in step and the CPU resumes at exactly <c>Clock + n × 4</c> ticks.
     /// </para>
     /// </summary>
-    async ValueTask ClocksAsync(int cpuClocks)
+    /// <param name="prefetch">
+    /// Whether an idle clock may be spent on the pipeline's prefetch — the hardware's own use of one,
+    /// and the reason a faulting instruction's frame saves a deeper counter than this core's lazy queue
+    /// used to (#76: MAME's microcode has an explicit prefetch op between its idle runs). Only the two
+    /// body charges ask for it; a leading charge (a branch, a jump) must not, because the word it would
+    /// fetch is the fall-through the control transfer is about to abandon, and an exception entry's
+    /// charges must not, because the handler's refill has not happened yet.
+    /// </param>
+    async ValueTask ClocksAsync(int cpuClocks, bool prefetch = false)
     {
         if (cpuClocks <= 0)
         {
             return;
+        }
+
+        if (prefetch)
+        {
+            await PrefetchAsync();
         }
 
         InternalClocks += cpuClocks;
@@ -535,6 +555,36 @@ public sealed partial class M68000 : Chip
     // ---- the instruction stream: the prefetch queue of ADR 0009 §4 -------------------------
 
     /// <summary>
+    /// The pipeline's prefetch: the word behind the queue's head, read <em>now</em> — inside an idle
+    /// clock of the instruction's own body — instead of when the instruction next consumes a word.
+    /// One read, and the queue's slot is then full, so the instruction's later fetch takes the word
+    /// without a bus cycle of its own: the count per instruction is unchanged, the <em>placement</em>
+    /// is the hardware's, and it is what a MAME-true exception frame saves (the address of the last word
+    /// fetched, `_fetchPointer − 2`).
+    /// </summary>
+    async ValueTask PrefetchAsync()
+    {
+        if (_busFaulted || _ircValid || _queueShort)
+        {
+            return;
+        }
+
+        uint address = _fetchPointer;
+        BusResult result = await Cycle(address, 1, false, 0, isProgram: true);
+        if (result.Faulted)
+        {
+            _busFaulted = true;
+            _faultAddress = address;
+            _faultIsFetch = true;
+            return;
+        }
+
+        _fetchPointer = address + 2;
+        _irc = result.Data;
+        _ircValid = true;
+    }
+
+    /// <summary>
     /// One read of the instruction stream: program space, so the bus records FC 6 in supervisor mode
     /// and FC 2 in user mode — never the data codes a fetch-on-demand core used for the same cycle.
     /// A fault here is a <em>fetch</em> fault (<see cref="_faultIsFetch"/>), which is what the frame's
@@ -623,7 +673,7 @@ public sealed partial class M68000 : Chip
 
         if (!_busFaulted)
         {
-            await ClocksAsync(_own);           // the instruction's own work, before its closing fetch
+            await ClocksAsync(_own, prefetch: true);   // the instruction's own work, before its closing fetch
             _own = 0;
             await TrailingFetchAsync();
         }
@@ -867,6 +917,7 @@ public sealed partial class M68000 : Chip
             // started, so decoding costs no bus cycle of its own
             ushort opcode = _ird;
             _pc += 2;
+            _opcodeAddress = _pc - 2;
             _streamStart = _fetchPointer;
             _flowTransferred = false;
             _trailingFetched = false;
@@ -1017,9 +1068,11 @@ public sealed partial class M68000 : Chip
 
         // a data fault saves the address of the word in IR; a fetch's own fault saves the word before
         // the one that failed (the fetch never completed, so the queue did not reach it)
+        // a group-0 data fault saves the address of the last word the pipeline fetched — MAME's depth
+        // (#76); a fetch's own fault keeps the queue's rule, which the control-transfer records pin
         uint returnPc = group0
-            ? (_faultIsFetch ? _faultAddress - 4 : _irAddress)
-            : _pc;
+            ? _fetchPointer - 2
+            : SavesInstructionAddress(vector) ? _opcodeAddress : _pc;
 
 #if DEBUG
         // the frame's program counter, measured rather than assumed (#76): the MAME corpus decides it,
@@ -1091,6 +1144,15 @@ public sealed partial class M68000 : Chip
         await EnterExceptionAsync(addressError ? 3 : 2, 0);
         _faultIsFetch = false;
     }
+
+    /// <summary>
+    /// Which group-1/2 exceptions save the faulting <em>instruction's</em> address rather than the address
+    /// past it: MAME's corpus measures the instruction's own word for the illegal lines (4, 10, 11) and
+    /// the privilege violation (8), and the word past the instruction for `TRAP`, `TRAPV`, `CHK` and a
+    /// divide by zero. Getting this wrong for `TRAP` is not a corpus failure but a **hang**: an `RTE`
+    /// through the frame returns to the `TRAP` itself, and EmuTOS runs on `TRAP` (#76).
+    /// </summary>
+    static bool SavesInstructionAddress(int vector) => vector is 4 or 8 or 10 or 11;
 
     /// <summary>
     /// The group-0 frame's first word: the instruction being executed, its low five bits replaced by
