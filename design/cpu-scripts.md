@@ -153,3 +153,12 @@ operand's *faulting* shape (one each in `AND.l`, `CMP.l`, `SUBA.l`) do cross fro
 frame's status word is the one the corpus dispute is about, and the script reads a PC-relative
 operand's first word with the instruction stream's bus status (`SSW_PROGRAM`), which is what MAME's
 records want — the same three records' MAME counterparts pass.
+
+`validate.sh` **PASS**: desktop at frame 612 (unchanged), G8 **8.98 ms** at n 761, 34 279 pops a frame.
+Both folds moved and the owner **blessed the new pair on 2026-11-19**:
+`run.digest` `554205a3e5c3b98628e893e6395e1126d20215e711bc2a5f563c3abdc0e9da20`,
+`run.stream` `e9f72d4b4c86b444be5d61307ac98c4b7a32ecb2fd672ed19afef4ff9b9c7ed2` (Debug
+`boot --frames 800`) — row 66's `afaf347c…` / `81f34a11…` was the pair before it. The machine's own
+counters moved by ~0.04 % (pops 34 291 → 34 279 a frame, instructions 4 100 721 → 4 099 631, exceptions
+7 654 → 7 644): a script fetches the queue's word inside the idle run instead of at the closing, so a few
+refills coalesce.
