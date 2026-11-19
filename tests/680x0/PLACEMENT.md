@@ -77,6 +77,14 @@ clocks == the corpus's length`:
 Corpus state is unchanged throughout: **1 000 057 / 1 000 060**, sample 2 976 / 2 976 — the charges move
 the clock, never a register.
 
+**And it is cheaper, not dearer** — six adjacent Release pairs of the 800-frame boot, alternating order:
+`main` **9.13 ms** a frame against **8.35** here (**−0.78, 6/6 unanimous**), `alloc_mb_per_frame`
+**8.15 → 6.92**. The denominator has to be quoted with it: `frame_n` 747 → 756 and the desktop frame
+598 → **607**, because the guest now spends those clocks — `instructions` and `bus_cycles` are each
+**−3.9 %** in the same 20 ms frame, and the video and timer counts are unchanged, which is what says the
+machine is the same machine. `pops_per_frame` falls 59 397.0 → **35 811.6** (−40 %): the CPU's own dates
+coalesce the engine's instants, and that is where the allocation goes.
+
 ## What is still outside
 
 The remaining 20 % is four named classes, in descending volume:
