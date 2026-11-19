@@ -64,6 +64,7 @@ public sealed partial class M68000
         _ircValid = false;
         _irAddress = state.Pc;
         _fetchPointer = state.Pc + 4;
+        _streamStart = _fetchPointer;
         _flowTransferred = false;
         _trailingFetched = false;
         _queueShort = false;
@@ -92,6 +93,31 @@ public sealed partial class M68000
         return new SingleStepResult(d, a, _usp, _ssp, _sr, _pc);
     }
 
+#if DEBUG
+    /// <summary>
+    /// The frame's saved program counter and the three quantities a corpus can be used to choose between
+    /// (#76): the counter past the last consumed word, the fetch pointer, and the queue's own address.
+    /// The MAME corpus's exception frames are the oracle for which one a group-0 frame saves, so the
+    /// harness prints all four per record in <c>--clocks</c> and the rule is read off the table instead
+    /// of assumed. Debug builds only: this is an instrument, not state.
+    /// </summary>
+    public uint LastFramePc { get; private set; }
+
+    public uint LastFrameFetchPointer { get; private set; }
+
+    public uint LastFramePcCounter { get; private set; }
+
+    public uint LastFrameIrAddress { get; private set; }
+
+    /// <summary>Whether the instruction had fetched a word of its own, and whether its trailing fetch ran.</summary>
+    public bool LastFrameRefetched { get; private set; }
+
+    public bool LastFrameTrailing { get; private set; }
+
+    /// <summary>The vector whose frame was written (2/3 are the group-0 frames).</summary>
+    public int LastFrameVector { get; private set; }
+#endif
+
     /// <summary>The user stack pointer, whatever mode the core is in — the corpus keeps both.</summary>
     public uint Usp => _usp;
 
@@ -107,6 +133,7 @@ public sealed partial class M68000
     {
         ushort opcode = _ird;
         _pc += 2;
+        _streamStart = _fetchPointer;
         _flowTransferred = false;
         _trailingFetched = false;
         _own = 0;

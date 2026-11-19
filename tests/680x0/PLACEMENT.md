@@ -113,3 +113,111 @@ The remaining 20 % is four named classes, in descending volume:
 
 So the column is now a **80 % verdict**, not a coincidence, and each remaining class is a ticket of its own
 rather than a tuning knob.
+
+## The MAME gate: how it runs, and where the core stands (2026-11-19)
+
+The owner's ruling moved the **state** gate to MAME's microcoded corpus as well (`PLACEMENT.md` §the
+coverage condition, `the-st-68000-core` §5): `cpu-tests --corpus mame` grades it, `--corpus clk` reports
+the denser suite beside it, and the two numbers are never subtracted from one another.
+
+```
+scripts/fetch-m68000-tests.sh                 # 127 files, 138 MB of .json.bin + the decoded JSON (git-ignored)
+validation-harness cpu-tests --corpus mame --quiet --out report.txt --failures failures.tsv --clocks clocks.tsv
+validation-harness cpu-tests --corpus clk --dir tests/680x0/full
+```
+
+Its conventions live in two places in `CpuTestsCommand`: `pc` is `m_au` (the next prefetch address, so
+the opcode sits at `pc − 4`) and a byte's lane is `UDS && !LDS ? data >> 8 : data & 0xFF`. Its `ram` map
+is already 16-bit-piece-decoded into bytes by upstream's own `decode.py`, `re`/`we` are the aborted
+address-error cycles (4 clocks in `length`, no bus cycle performed) and `idle` is the internal run.
+
+| measure | MAME (the gate) | CLK (reported beside it) |
+|---|---|---|
+| records | 317 500 (127 files) | 1 000 060 (124 files) |
+| state, first measurement | **256 897 / 317 500 (80.9 %)** | 983 625 / 1 000 060 (98.36 %) |
+| `exact-clock` (`4 × bus + internal == length`) | **205 038 (64.6 %)** | 799 562 (80.0 %) |
+| `exact-cycle` (bus alone) | 0 | 0 |
+
+**The CLK figure is 16 432 below the 1 000 057 the branch started with, and that is the ruling's cost, not
+a regression**: the two corpora disagree about the frame's saved program counter, and every record the
+core loses on one it wins on the other. Report them side by side and never as one number.
+
+### What the 60 603 MAME failures are, class by class (measured)
+
+| class | records | what it needs |
+|---|---|---|
+| **group-0 frame's saved `pc`** | 30 522 | MAME's *pipeline depth* — see below; this is the one that needs a decision |
+| **group-1/2 frame's saved `pc`** | 16 276 | the same question one frame smaller: MAME saves the *instruction's* address for `ANDI`/`ORI`/`EORI`-to-`SR`, `MOVE`-to/from-`SR`, `MOVE`-to/from-`USP`, `RESET` and the illegal lines, but **not** for `TRAP`/`TRAPV`/`CHK`/`RTE` (and the boot depends on `TRAP`'s: see the trap below) |
+| `sr` (flags) | 3 026 | real flag differences: shifts (`X`/`C` on `ASR`/`ASL`/`LSR`/`LSL`), `DIVS`/`DIVU` (1 459), `MOVE.l` |
+| `a0`–`a6` | 4 842 | a **long** access at an odd address steps the register by **2** in MAME (we step 4, CLK's rule): `ADDX.l`/`SUBX.l` 1 442, `CMP.l`/`MOVE.l`/`CLR.l` the rest |
+| `ram`, not in a frame | 2 159 | `LINK`'s and `UNLINK`'s stack writes (`LINK A7,#` differs by 4 bytes) |
+| `pc` | 1 230 | `STOP` only: MAME leaves the counter at the **`STOP` opcode's** address, we at the word after its immediate |
+| `usp`/`ssp` | 1 115 | `UNLINK`'s popped `A7` |
+| `d0`–`d7` | 687 | `DBcc`'s counter (off by one: the wrong side of the condition's true/false split) |
+| other frames | 801 | frame sizes the classifier does not recognise (an 18-byte frame: a fault inside a frame write) |
+
+### The finding: a frame's saved `pc` is the pipeline's depth, and MAME prefetches during the idle clocks
+
+Over the 74 201 records that carry a frame, the saved `pc` is **not** a function of anything the core holds
+today. Tested per record against our own quantities (`--clocks` prints them: `frame_pc`, `fetch_ptr`,
+`pc_counter`, `ir_addr`, plus whether the instruction had fetched a word of its own):
+
+| candidate | records where it is the corpus's value |
+|---|---|
+| `_fetchPointer − 2` (the last word fetched) | 23 058 |
+| `_pc` (past the last consumed word) | 20 173 |
+| `_irAddress` (`_pc − 2`, what the core saves) | 17 440 |
+| `_pc + 2` | 11 947 |
+| `_fetchPointer` | 11 726 |
+
+No candidate wins, and the *same opcode shape* takes different values record to record (`MOVE.w` alone
+splits 50/50). The rule the corpus does obey is arithmetic on **how many words the pipeline has fetched**:
+
+```
+saved pc = opcode + 2 + 2 × (prefetch words the microcode had issued before the fault)
+```
+
+which is `_fetchPointer − 2` **if** the core issued the same reads, at the same points. It does not: MAME
+issues its prefetch **inside the instruction's idle clocks** (it has an explicit `prefetch` micro-op
+between the idle runs), while this core fills the queue lazily and fetches at the closing. That single
+difference explains every value in the table above — e.g. `CLR.w (An)` has no idle before its access and
+saves `opcode + 2` (no prefetch), `CLR.w -(An)` has the EA's `n 2` and saves `opcode + 4` (one prefetch),
+`MOVEM` saves `opcode + 6`/`+ 8`/`+ 10` (two to four), `MOVE Dn,(An)` one, `MOVE (An),Dn` none.
+
+So 100 % on MAME's state needs one of two things, and it is the owner's call which:
+
+1. **model the prefetch as a bus read inside the idle clocks** — one rule, and it is the hardware's
+   ("the CPU spends idle clocks prefetching the next word"), but it moves the read placement `#70`/`#74`
+   landed on CLK's schedule and changes the bus's ordering inside an instruction (frames, folds, a
+   re-bless); or
+2. **a per-form depth table** — measured `saved = opcode + 2 + 2k` per (family, EA shape, fault kind);
+   96.0 % of the group-0 frame records sit in shapes where that depth is a single value, so it would take
+   the class from 30 522 to about 2 000 — at the cost of a table the core would carry, which is the kind
+   of mapping the design prefers not to have.
+
+Until that is decided the core keeps CLK's queue rule for the group-0 frame (so the CLK figure stays
+where it is) and MAME's figure is reported as it stands.
+
+### The trap a group-1/2 frame rule set: it greens 11 114 records and hangs the boot
+
+Setting the group-1/2 frame's saved `pc` to the **instruction's own address** — which is what MAME's
+illegal-line, privilege, `ANDI`/`ORI`/`EORI`-to-`SR`, `MOVE`-to/from-`USP`, `MOVE`-to-`SR` and `RESET`
+records measure, and a single rule rather than a table — raised the state verdict **256 983 → 268 097
+(+11 114)** and the boot then **never reached the desktop** (`frames_to_desktop=never`, `_frclock` 796,
+`pops_per_frame` 5 223 against the tree's 35 811; the 800-frame boot's 4 108 457 instructions collapse to
+an idle loop). Cause: EmuTOS runs on `TRAP`, and `TRAP`'s frame is *not* the instruction's address — an
+`RTE` through the changed frame returns to the `TRAP` itself. **So a group-1/2 frame rule must be taken per
+family and the boot run before it lands**; on MAME's corpus alone it looks like a pure win, which is
+exactly why the gate is not the whole verdict. The change was reverted; the class is 16 276 records of
+measured convention, not of arithmetic.
+
+### The clock gap on MAME's numbers (64.6 %)
+
+Same shape as CLK's, different constants, and the four charge points are not in question — the *counts* are.
+The largest classes, as `our total − length` summed per file: the immediate-to-`CCR` forms **−12 clocks a
+record** (`ANDI`/`ORI`/`EORI` to `CCR`, 7 500 records: our core takes both words from the queue where MAME
+fetches them, so three bus cycles are missing — `#70`/`#74`'s ground), `MOVEtoCCR` **−8** (2 500),
+`DIVS` **−25 a record** (54 000 clocks over 2 109), `CHK` −6, `CLR`/`Scc` −4…−6, `MULS` −4, `ADDA.w`/
+`SUBA.w` −4, and the faulting records' **missing aborted cycle** (`re`/`we` is 4 clocks of `length` and no
+bus cycle). `TAS` stays outside any 100 % claim, as the ruling says (MAME disowns its own RMW timing).
+

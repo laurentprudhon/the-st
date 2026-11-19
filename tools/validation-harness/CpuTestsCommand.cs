@@ -29,13 +29,30 @@ namespace TheST.Harness;
 internal static class CpuTestsCommand
 {
     const string DefaultDirectory = "tests/680x0/v1";
+    const string DefaultMameDirectory = "tests/680x0/mame";
 
     /// <summary>The bits of SR a 68000 defines: T, S, I2–I0 and the condition codes.</summary>
     const ushort DefinedSr = 0xA71F;
 
+    /// <summary>
+    /// Which corpus a run grades against. The two carry the same architectural state and differ in two
+    /// conventions only, both of which live in this file: the program counter (<c>CLK</c> points at the
+    /// opcode; MAME's is <c>m_au</c>, the *next prefetch address*, so the opcode sits at <c>pc − 4</c>)
+    /// and, in a trace, the byte lane and the <c>re</c>/<c>we</c> aborted cycles.
+    /// </summary>
+    enum Corpus
+    {
+        Clk,
+        Mame,
+    }
+
+    /// <summary>Where a corpus's <c>pc</c> sits relative to the opcode word.</summary>
+    static uint PcShift(Corpus corpus) => corpus == Corpus.Mame ? 4u : 0u;
+
     internal static int Run(string[] args)
     {
-        string directory = DefaultDirectory;
+        Corpus corpus = Corpus.Clk;
+        string? directory = null;
         string? only = null;
         int limit = int.MaxValue;
         int show = 10;
@@ -53,6 +70,22 @@ internal static class CpuTestsCommand
                 case "--clocks":
                     if (++index >= args.Length) return Program.Unknown(args[index - 1]);
                     clocksPath = args[index];
+                    break;
+
+                case "--corpus":
+                    if (++index >= args.Length) return Program.Unknown(args[index - 1]);
+                    switch (args[index])
+                    {
+                        case "clk":
+                            corpus = Corpus.Clk;
+                            break;
+                        case "mame":
+                            corpus = Corpus.Mame;
+                            break;
+                        default:
+                            return Program.Unknown(args[index]);
+                    }
+
                     break;
 
                 case "--dir":
@@ -113,9 +146,13 @@ internal static class CpuTestsCommand
             }
         }
 
+        directory ??= corpus == Corpus.Mame ? DefaultMameDirectory : DefaultDirectory;
+
         if (!Directory.Exists(directory))
         {
-            Console.Error.WriteLine($"cpu-tests FAILED — no corpus at {directory} (scripts/fetch-680x0-tests.sh fetches it)");
+            Console.Error.WriteLine(corpus == Corpus.Mame
+                ? $"cpu-tests FAILED — no MAME corpus at {directory} (scripts/fetch-m68000-tests.sh fetches it)"
+                : $"cpu-tests FAILED — no corpus at {directory} (scripts/fetch-680x0-tests.sh fetches it)");
             return 1;
         }
 
@@ -139,12 +176,12 @@ internal static class CpuTestsCommand
 
         if (traceIndex >= 0)
         {
-            return TraceRecord(files[0], traceIndex);
+            return TraceRecord(files[0], traceIndex, corpus);
         }
 
         if (readPath is not null)
         {
-            return ReadCounts(files[0], readPath);
+            return ReadCounts(files[0], readPath, corpus);
         }
 
         var failures = new List<string>();
@@ -154,8 +191,9 @@ internal static class CpuTestsCommand
         long total = 0;
         long passed = 0;
         long failed = 0;
+        KeepAllFailures = failurePath is not null;
         ClockDump = clocksPath is null ? null : new StreamWriter(clocksPath);
-        ClockDump?.WriteLine("file\tname\tlength\tour_bus\tour_internal\tour_total");
+        ClockDump?.WriteLine("file\tname\tlength\tour_bus\tour_internal\tour_total" + FrameColumns);
         long busCycles = 0;
         long internalClocks = 0;
         long expectedCycles = 0;
@@ -166,7 +204,7 @@ internal static class CpuTestsCommand
         {
             string name = OpcodeName(file);
             var (fileTotal, filePassed, fileFailures, fileBusCycles, fileInternalClocks, fileExpectedCycles,
-                fileExactCycles, fileExactClocks) = RunFile(file, limit, show, byKind);
+                fileExactCycles, fileExactClocks) = RunFile(file, limit, show, byKind, corpus);
 
             total += fileTotal;
             passed += filePassed;
@@ -199,6 +237,7 @@ internal static class CpuTestsCommand
 
         Console.WriteLine();
         Console.WriteLine($"cpu-tests: {Program.Number(passed)} / {Program.Number(total)} passed, {Program.Number(failed)} failed");
+        Console.WriteLine($"  corpus                  {(corpus == Corpus.Mame ? "MAME microcoded (the gate)" : "CLK (the denser suite)")}");
         Console.WriteLine($"  corpus directory        {directory}");
         Console.WriteLine($"  opcode files            {files.Count}");
         Console.WriteLine($"  bus cycles              {Program.Number(busCycles)} over {Program.Number(total)} instructions");
@@ -256,6 +295,20 @@ internal static class CpuTestsCommand
     static StreamWriter? ClockDump;
 
     /// <summary>
+    /// The clock dump's frame columns (#76): the group-0/1 frame's saved program counter and the three
+    /// candidates a corpus chooses between. Debug only — the instrument is a debug build's.
+    /// </summary>
+    const string FrameColumns = "\tframe_pc\tfetch_ptr\tpc_counter\tir_addr\trefetched\ttrailing\tvector";
+
+    /// <summary>
+    /// <c>--failures FILE</c> asks for the whole failure list, not the first 20 of each file: the file is
+    /// the audit, and a per-family count is only honest when nothing is dropped.
+    /// </summary>
+    static bool KeepAllFailures;
+
+    static bool ShowDetails(int show, int count) => KeepAllFailures || count < Math.Max(show, 20);
+
+    /// <summary>
     /// A corpus directory may also carry the decode map (<c>68000.official.json</c>), which is an object:
     /// only a file whose JSON opens with an array is a test file.
     /// </summary>
@@ -286,7 +339,8 @@ internal static class CpuTestsCommand
         string path,
         int limit,
         int show,
-        Dictionary<string, int> byKind)
+        Dictionary<string, int> byKind,
+        Corpus corpus)
     {
         using Stream file = File.OpenRead(path);
         using Stream stream = path.EndsWith(".gz", StringComparison.Ordinal) ? new GZipStream(file, CompressionMode.Decompress) : file;
@@ -322,7 +376,7 @@ internal static class CpuTestsCommand
             string name = test.GetProperty("name").GetString() ?? "(unnamed)";
             int length = test.GetProperty("length").GetInt32();
 
-            uint pc = initial.GetProperty("pc").GetUInt32();
+            uint pc = initial.GetProperty("pc").GetUInt32() - PcShift(corpus);
 
             // the corpus's base memory: zero everywhere, with the instruction stream's first two words
             // at the program counter
@@ -352,7 +406,7 @@ internal static class CpuTestsCommand
             string? mismatch;
             try
             {
-                mismatch = Step(cpu, engine, bus, final);
+                mismatch = Step(cpu, engine, bus, final, corpus);
             }
             catch (Exception failure)
             {
@@ -361,7 +415,12 @@ internal static class CpuTestsCommand
 
             long ourBus = cpu.BusCycles - cyclesBefore;
             long ourInternal = cpu.InternalClocks - internalBefore;
-            ClockDump?.WriteLine($"{OpcodeName(path)}\t{name}\t{length}\t{ourBus}\t{ourInternal}\t{ourBus * 4 + ourInternal}");
+            string frame = string.Empty;
+#if DEBUG
+            frame = $"\t{cpu.LastFramePc:x6}\t{cpu.LastFrameFetchPointer:x6}\t{cpu.LastFramePcCounter:x6}\t{cpu.LastFrameIrAddress:x6}" +
+                $"\t{(cpu.LastFrameRefetched ? 1 : 0)}\t{(cpu.LastFrameTrailing ? 1 : 0)}\t{cpu.LastFrameVector}";
+#endif
+            ClockDump?.WriteLine($"{OpcodeName(path)}\t{name}\t{length}\t{ourBus}\t{ourInternal}\t{ourBus * 4 + ourInternal}{frame}");
             busCycles += ourBus;
             internalClocks += ourInternal;
             expectedCycles += length;
@@ -382,7 +441,7 @@ internal static class CpuTestsCommand
             {
                 string kind = mismatch.Split(' ')[0];
                 byKind[kind] = byKind.GetValueOrDefault(kind) + 1;
-                if (failures.Count < Math.Max(show, 20))
+                if (ShowDetails(show, failures.Count))
                 {
                     failures.Add($"{name}\n  {mismatch}");
                 }
@@ -399,7 +458,7 @@ internal static class CpuTestsCommand
     /// read's placement inside an instruction can be compared across a whole family instead of one
     /// record at a time. Writes a tab-separated line per record to <paramref name="outPath"/>.
     /// </summary>
-    static int ReadCounts(string path, string outPath)
+    static int ReadCounts(string path, string outPath, Corpus corpus)
     {
         using Stream file = File.OpenRead(path);
         using Stream input = path.EndsWith(".gz", StringComparison.Ordinal) ? new GZipStream(file, CompressionMode.Decompress) : file;
@@ -410,7 +469,7 @@ internal static class CpuTestsCommand
         {
             JsonElement initial = test.GetProperty("initial");
             JsonElement final = test.GetProperty("final");
-            uint pc = initial.GetProperty("pc").GetUInt32();
+            uint pc = initial.GetProperty("pc").GetUInt32() - PcShift(corpus);
             JsonElement prefetch = initial.GetProperty("prefetch");
 
             var engine = new Engine();
@@ -451,7 +510,7 @@ internal static class CpuTestsCommand
             string? mismatch;
             try
             {
-                mismatch = Step(cpu, engine, bus, final);
+                mismatch = Step(cpu, engine, bus, final, corpus);
             }
             catch (Exception failure)
             {
@@ -483,7 +542,7 @@ internal static class CpuTestsCommand
     /// codes (6 = program fetch, 5 = supervisor data), not merely the same final state. A green
     /// <c>final</c> reached by a different fetch pattern is agreement by luck.
     /// </summary>
-    static int TraceRecord(string path, int index)
+    static int TraceRecord(string path, int index, Corpus corpus)
     {
         using Stream file = File.OpenRead(path);
         using Stream input = path.EndsWith(".gz", StringComparison.Ordinal) ? new GZipStream(file, CompressionMode.Decompress) : file;
@@ -499,7 +558,7 @@ internal static class CpuTestsCommand
         JsonElement test = records[index];
         JsonElement initial = test.GetProperty("initial");
         JsonElement final = test.GetProperty("final");
-        uint pc = initial.GetProperty("pc").GetUInt32();
+        uint pc = initial.GetProperty("pc").GetUInt32() - PcShift(corpus);
         JsonElement prefetch = initial.GetProperty("prefetch");
 
         var engine = new Engine();
@@ -537,7 +596,7 @@ internal static class CpuTestsCommand
         string? mismatch;
         try
         {
-            mismatch = Step(cpu, engine, bus, final);
+            mismatch = Step(cpu, engine, bus, final, corpus);
         }
         catch (Exception failure)
         {
@@ -559,7 +618,7 @@ internal static class CpuTestsCommand
         string name = test.GetProperty("name").GetString() ?? "(unnamed)";
         Console.WriteLine($"{OpcodeName(path)} #{index}  {name}");
         Console.WriteLine($"  pc {pc:x6}  prefetch {prefetch[0].GetUInt32():x4} {prefetch[1].GetUInt32():x4}  " +
-            $"final pc {final.GetProperty("pc").GetUInt32():x6}  length {test.GetProperty("length").GetInt32()}");
+            $"final pc {(final.GetProperty("pc").GetUInt32() - PcShift(corpus)):x6}  length {test.GetProperty("length").GetInt32()}");
         Console.WriteLine();
         Console.WriteLine($"  {"reference's transactions",-34}   ours");
 
@@ -601,7 +660,7 @@ internal static class CpuTestsCommand
     /// Runs exactly one instruction and returns null when the state is the corpus's, or the first
     /// difference in the corpus's own vocabulary ("d3", "sr", "pc", "ram", "cycles").
     /// </summary>
-    static string? Step(M68000 cpu, Engine engine, SingleStepBus bus, JsonElement final)
+    static string? Step(M68000 cpu, Engine engine, SingleStepBus bus, JsonElement final, Corpus corpus)
     {
         ValueTask step = cpu.StepAsync();
         int guard = 0;
@@ -668,12 +727,13 @@ internal static class CpuTestsCommand
             return $"sr {state.Sr:x4} (corpus {wantedSr:x4})";
         }
 
-        uint wantedPc = final.GetProperty("pc").GetUInt32();
+        uint wantedPc = final.GetProperty("pc").GetUInt32() - PcShift(corpus);
         if (state.Pc != wantedPc)
         {
             return $"pc {state.Pc:x6} (corpus {wantedPc:x6})";
         }
 
+        var ramDiffs = new List<(uint Address, byte Got, byte Wanted)>();
         foreach (JsonElement pair in final.GetProperty("ram").EnumerateArray())
         {
             uint address = pair[0].GetUInt32() & 0xFFFFFF;
@@ -681,8 +741,27 @@ internal static class CpuTestsCommand
             byte got = bus.Read(address);
             if (got != wanted)
             {
-                return $"ram {address:x6} {got:x2} (corpus {wanted:x2})";
+                ramDiffs.Add((address, got, wanted));
+                if (ramDiffs.Count == 4)
+                {
+                    break;
+                }
             }
+        }
+
+        // the first differing byte is the verdict (every row in FINDINGS.md is keyed on it); the rest are
+        // appended because a frame that differs in several words is one cause, not several, and a delta
+        // that is constant across a family is how the cause is named
+        if (ramDiffs.Count > 0)
+        {
+            var text = new System.Text.StringBuilder(
+                $"ram {ramDiffs[0].Address:x6} {ramDiffs[0].Got:x2} (corpus {ramDiffs[0].Wanted:x2})");
+            foreach (var (address, got, wanted) in ramDiffs.Skip(1))
+            {
+                text.Append($" +{address:x6} {got:x2} (corpus {wanted:x2})");
+            }
+
+            return text.ToString();
         }
 
         return null;

@@ -74,13 +74,18 @@ internal static class Program
                                                  compare two runs' digest streams: the first differing
                                                  batch, the instant it drained at, and each run's tail
                                                  (G1/G2's one-line diff)
-              cpu-tests [--dir DIR] [--file NAME] [--limit N] [--show N] [--quiet] [--out FILE]
-                        [--failures FILE] [--trace N | --reads FILE]
+              cpu-tests [--corpus clk|mame] [--dir DIR] [--file NAME] [--limit N] [--show N]
+                        [--quiet] [--out FILE] [--failures FILE] [--clocks FILE]
+                        [--trace N | --reads FILE]
                                                  the 680x0 corpus against the core, one instruction at a
-                                                 time (default dir: tests/680x0/v1); --trace prints our
-                                                 cycle list beside record N's own transactions, --reads
-                                                 writes every record's fetch addresses beside the
-                                                 reference's (the read-placement evidence, Debug only)
+                                                 time. --corpus mame grades MAME's microcoded corpus (the
+                                                 gate, scripts/fetch-m68000-tests.sh; pc = m_au, so the
+                                                 opcode is at pc - 4), --corpus clk the denser CLK suite
+                                                 (default dir: tests/680x0/v1, scripts/fetch-680x0-tests.sh).
+                                                 --trace prints our cycle list beside record N's own
+                                                 transactions, --reads writes every record's fetch
+                                                 addresses beside the reference's (Debug only), --clocks
+                                                 dumps one line per record for the per-family deltas
               run [--frames N] [--inject] [--out DIR]
                                                  the synthetic trace; writes run.digest, run.state and
                                                  run.report into DIR (default runs/<stamp>/)

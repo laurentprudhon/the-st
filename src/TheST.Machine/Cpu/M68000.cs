@@ -46,6 +46,14 @@ public sealed partial class M68000 : Chip
     uint _irAddress;
     uint _fetchPointer;
 
+    /// <summary>
+    /// The fetch pointer when the current instruction began: `_fetchPointer` still being this value says
+    /// the instruction has fetched no word of its own yet. It is #76's instrument, not a rule — the frame
+    /// columns of <c>cpu-tests --clocks</c> report it beside the frame's saved program counter, because
+    /// where MAME's pipeline puts its prefetch is what a MAME-true frame has to reproduce.
+    /// </summary>
+    uint _streamStart;
+
     // a jump, a branch, a return or an exception entry refilled the queue at its target: the closing
     // steps belong to an instruction that fell through, so the loop skips them for this one
     bool _flowTransferred;
@@ -859,6 +867,7 @@ public sealed partial class M68000 : Chip
             // started, so decoding costs no bus cycle of its own
             ushort opcode = _ird;
             _pc += 2;
+            _streamStart = _fetchPointer;
             _flowTransferred = false;
             _trailingFetched = false;
             _queueShort = false;
@@ -1008,7 +1017,21 @@ public sealed partial class M68000 : Chip
 
         // a data fault saves the address of the word in IR; a fetch's own fault saves the word before
         // the one that failed (the fetch never completed, so the queue did not reach it)
-        uint returnPc = group0 ? (_faultIsFetch ? _faultAddress - 4 : _irAddress) : _pc;
+        uint returnPc = group0
+            ? (_faultIsFetch ? _faultAddress - 4 : _irAddress)
+            : _pc;
+
+#if DEBUG
+        // the frame's program counter, measured rather than assumed (#76): the MAME corpus decides it,
+        // and these three quantities are the candidates a session tests it against — see cpu-tests --clocks
+        LastFramePc = returnPc;
+        LastFrameFetchPointer = _fetchPointer;
+        LastFramePcCounter = _pc;
+        LastFrameIrAddress = _irAddress;
+        LastFrameRefetched = _fetchPointer != _streamStart;
+        LastFrameTrailing = _trailingFetched;
+        LastFrameVector = vector;
+#endif
 
         if (group0)
         {
