@@ -34,9 +34,16 @@ in the *count*, never in the shape:
   already contest (`the-st-68000-core` §5, `FINDINGS.md`), so it is named, not averaged.
 
 **Where they disagree the core follows MAME** — the owner's ruling of 2026-11-19, and it reverses the
-choice this page was first written with. MAME's microcoded core is the source of truth for an instruction's
-clock count and placement; the vendored CLK corpus stays the oracle for an instruction's *final state*
-(1 000 057 / 1 000 060), which is what the harness actually gates. So the table above keeps both columns:
+choice this page was first written with: MAME's microcoded core is the source of truth for an instruction's
+clock count and placement **and for its final state**. The state gate moves to it because the coverage
+condition the owner set is met: MAME's corpus is **127 files against CLK's 124** (a strict superset — it adds
+`ILLEGAL_LINEA`, `ILLEGAL_LINEF`, `STOP`), and by instruction **form** (the opcode with its mode/register
+fields masked) the two cover **53 of 53, identically**, over the 30 files both corpora have decoded. What
+MAME has less of is *vectors*: 2 500 records a file against CLK's 8 065, and 13 277 distinct opcodes against
+CLK's 17 884 on those 30 files (5 078 of CLK's are not in MAME, 471 of MAME's not in CLK, concentrated in
+`Bcc` −1 760, `MOVE.w` −1 262, `MOVE.l` −1 235, `ADD`/`SUB` ≈ −200 each). So the *instruction set* is covered
+as fully and a little more; the *data samples per instruction* are 3.1 times thinner. CLK stays vendored as
+the denser second suite, reported beside the gate rather than gating. The table above keeps both columns:
 CLK's numbers are quoted beside MAME's so the disagreement stays visible rather than silently resolved, and
 `TAS` and `TRAPV` are excluded from any "100 %" claim because MAME's own README says its TAS read-modify-write
 timing and its TRAPV tests are not trustworthy.
