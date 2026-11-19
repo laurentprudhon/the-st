@@ -55,41 +55,106 @@ public sealed partial class M68000
     /// <summary>The ALU's width, in the core's own size code (0 = byte, 1 = word, 2 = long).</summary>
     int _aluWidth;
 
-    /// <summary><c>alu_or</c> — the ALU's OR, at the current width.</summary>
-    void AluOr(uint a, uint b) => _aluo = (a | b) & SizeMask(_aluWidth);
+    /// <summary>
+    /// The ALU's operation select for the two-operand long families — MAME's <c>r=</c> field
+    /// (2 add, 4 and, 5 sub, 13 eor, 14 or).
+    /// </summary>
+    enum AluLong
+    {
+        Or,
+        And,
+        Eor,
+        Sub,
+        Add
+    }
 
-    /// <summary><c>alu_and</c> — the ALU's AND, at the current width.</summary>
-    void AluAnd(uint a, uint b) => _aluo = (a & b) & SizeMask(_aluWidth);
+    /// <summary>
+    /// <c>alu_or</c> / <c>alu_and</c> / <c>alu_eor</c> / <c>alu_add</c> + <c>alu_addc</c> /
+    /// <c>alu_sub</c> + <c>alu_subc</c> — one long operation, thirty-two bits wide, into
+    /// <c>m_aluo</c>. <paramref name="a"/> is the source operand and <paramref name="b"/> the
+    /// destination, so a subtract is <c>b − a</c>.
+    /// </summary>
+    /// <remarks>
+    /// The chip's ALU is <b>sixteen</b> bits wide, so a long operation is two word ALUs with the first
+    /// one's carry feeding the second — which is why MAME's states name <c>alu_add</c> and then
+    /// <c>alu_addc</c>. A thirty-two-bit operation gives the same result and the same <em>final</em>
+    /// flags, because the carry out of the low word is exactly the carry into the high one; the flags
+    /// are therefore stated once (<see cref="SetLongFlags"/>) instead of twice. What the two halves
+    /// would have shown is only an intermediate status, which no instruction's own store can observe:
+    /// the writes stay where the script puts them (low word, prefetch, high word).
+    /// </remarks>
+    void AluLongOp(uint a, uint b, AluLong kind)
+    {
+        _aluWidth = 2;
+        _aluo = kind switch
+        {
+            AluLong.Or => b | a,
+            AluLong.And => b & a,
+            AluLong.Eor => b ^ a,
+            AluLong.Sub => b - a,
+            _ => b + a
+        };
+    }
+
+    /// <summary>
+    /// <c>sr_nzvc</c> + <c>sr_nzvc_u</c> for a logic operation, <c>sr_xnzvc</c> + <c>sr_xnzvc_u</c>
+    /// for an add or a subtract (which move X with C) — the flags of one long operation.
+    /// </summary>
+    /// <remarks>
+    /// The <c>_u</c> half is Motorola's rule: the high word may <b>clear</b> Z but never set it, so a
+    /// long result is zero only when both halves are — which, on a thirty-two-bit result, is just
+    /// <c>result == 0</c>. <paramref name="extend"/> is false for a comparison (<c>CMP</c>/<c>CMPA</c>
+    /// leave X alone); the arithmetic families set X from the carry.
+    /// </remarks>
+    void SetLongFlags(AluLong kind, uint a, uint b, uint result, bool extend)
+    {
+        const uint sign = 0x8000_0000;
+        bool arithmetic = kind is AluLong.Add or AluLong.Sub;
+
+        _sr = (ushort)(_sr & ~(FlagN | FlagZ | FlagV | FlagC | (arithmetic && extend ? FlagX : 0)));
+        if (result == 0)
+        {
+            _sr |= FlagZ;
+        }
+
+        if ((result & sign) != 0)
+        {
+            _sr |= FlagN;
+        }
+
+        bool carry = false;
+        switch (kind)
+        {
+            case AluLong.Add:
+                if (((a ^ result) & (b ^ result) & sign) != 0)
+                {
+                    _sr |= FlagV;
+                }
+
+                carry = result < a || result < b;
+                break;
+
+            case AluLong.Sub:
+                if (((a ^ b) & (result ^ b) & sign) != 0)
+                {
+                    _sr |= FlagV;
+                }
+
+                carry = b < a;
+                break;
+        }
+
+        if (carry)
+        {
+            _sr |= (ushort)(extend ? FlagC | FlagX : FlagC);
+        }
+    }
 
     /// <summary>
     /// <c>alu_ext</c> — a word sign-extended to the ALU's width. It is the brief extension word's
     /// displacement, which the indexed scripts compute before they address anything.
     /// </summary>
     void AluExt(ushort word) => _aluo = (uint)(int)(short)word & SizeMask(_aluWidth);
-
-    /// <summary>
-    /// <c>sr_nzvc</c> — N, Z, V and C off the ALU's output at its width; X untouched, V and C cleared.
-    /// </summary>
-    void SetNzvc() => SetLogicFlags(_aluo, _aluWidth);
-
-    /// <summary>
-    /// <c>sr_nzvc_u</c> — the same four, with Z <em>only ever cleared</em>: the second word of a long
-    /// operation may add a set flag but never takes one away, so a chain reports the whole result.
-    /// </summary>
-    void SetNzvcU()
-    {
-        uint result = _aluo & SizeMask(_aluWidth);
-        _sr = (ushort)(_sr & ~(FlagN | FlagZ | FlagV | FlagC));
-        if (result != 0)
-        {
-            _sr = (ushort)(_sr & ~FlagZ);
-        }
-
-        if ((result & (uint)SignBit(_aluWidth)) != 0)
-        {
-            _sr |= FlagN;
-        }
-    }
 
     /// <summary><c>set_16l</c> — the low word of a data register, the high one untouched.</summary>
     void Set16L(int dataRegister, uint value) =>
@@ -104,6 +169,9 @@ public sealed partial class M68000
 
     /// <summary><c>high16</c> — the high half of a long operand, in the low half of the value.</summary>
     static uint High16(uint value) => (value >> 16) & 0xFFFF;
+
+    /// <summary><c>low16</c> — the low half of a long value, which is what <c>set_16l</c> takes.</summary>
+    static uint Low16(uint value) => value & 0xFFFF;
 
     /// <summary><c>merge_16_32</c> — an address assembled from its high and low words.</summary>
     static uint Merge16_32(uint high, ushort low) => (high << 16) | low;

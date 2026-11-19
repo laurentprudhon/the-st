@@ -1373,7 +1373,7 @@ public sealed partial class M68000
             {
                 // the long forms are scripted (M68000.Scripts.cs): the shape's read block and the
                 // RMW tail, in the microcode's order, charging their own clocks
-                await OrLongAsync(op);
+                await AluLongAsync(op);
                 return;
             }
 
@@ -1397,7 +1397,7 @@ public sealed partial class M68000
 
         if (size == 2)
         {
-            await OrLongAsync(op);                 // or.l <ea>, Dn — scripted
+            await AluLongAsync(op);                // or.l <ea>, Dn — scripted
             return;
         }
 
@@ -1482,6 +1482,12 @@ public sealed partial class M68000
 
         if (((op >> 6) & 0x4) != 0 && size != 3)   // SUB Dn,<ea>
         {
+            if (size == 2)
+            {
+                await AluLongAsync(op);            // sub.l Dn,<ea> — scripted
+                return;
+            }
+
             uint value = _d[(op >> 9) & 0x7] & SizeMask(size);
             uint address = await EaAddressAsync(mode, reg, size);
             if (_busFaulted) return;
@@ -1496,8 +1502,20 @@ public sealed partial class M68000
 
         if (size == 3)   // SUBA
         {
+            if (((op >> 6) & 0x7) == 7)
+            {
+                await AluLongAsync(op);            // suba.l <ea>,An — scripted
+                return;
+            }
+
             uint value = (op & 0x0100) != 0 ? await ReadEaAsync(mode, reg, 2) : (uint)(short)(await ReadEaAsync(mode, reg, 1) & 0xFFFF);
             SetA((op >> 9) & 0x7, GetA((op >> 9) & 0x7) - value);
+            return;
+        }
+
+        if (size == 2)
+        {
+            await AluLongAsync(op);                // sub.l <ea>,Dn — scripted
             return;
         }
 
@@ -1621,6 +1639,12 @@ public sealed partial class M68000
 
         if ((op & 0x0100) != 0 && size != 3)   // EOR Dn,<ea>
         {
+            if (size == 2)
+            {
+                await AluLongAsync(op);        // eor.l Dn,<ea> — scripted
+                return;
+            }
+
             uint value = _d[(op >> 9) & 0x7] & SizeMask(size);
 
             // EOR Dn,Dm — mode 000 is a *register* destination, not an address. Without this case the
@@ -1649,10 +1673,22 @@ public sealed partial class M68000
 
         if (size == 3)   // CMPA
         {
+            if (((op >> 6) & 0x7) == 7)
+            {
+                await AluLongAsync(op);        // cmpa.l <ea>,An — scripted
+                return;
+            }
+
             uint value = (op & 0x0100) != 0 ? await ReadEaAsync(mode, reg, 2) : (uint)(short)(await ReadEaAsync(mode, reg, 1) & 0xFFFF);
             if (_busFaulted) return;
             uint destination = GetA((op >> 9) & 0x7);
             SetCompareFlags(value, destination, destination - value, 2);
+            return;
+        }
+
+        if (size == 2)
+        {
+            await AluLongAsync(op);            // cmp.l <ea>,Dn — scripted
             return;
         }
 
@@ -1694,6 +1730,12 @@ public sealed partial class M68000
 
         if (((op >> 6) & 0x4) != 0 && size != 3)   // AND Dn,<ea>
         {
+            if (size == 2)
+            {
+                await AluLongAsync(op);            // and.l Dn,<ea> — scripted
+                return;
+            }
+
             uint value = _d[(op >> 9) & 0x7] & SizeMask(size);
             uint address = await EaAddressAsync(mode, reg, size);
             if (_busFaulted) return;
@@ -1723,6 +1765,12 @@ public sealed partial class M68000
             _own = 34 + 2 * System.Numerics.BitOperations.PopCount(magnitude);
 
             SetLogicFlags(_d[(op >> 9) & 0x7], 2);
+            return;
+        }
+
+        if (size == 2)
+        {
+            await AluLongAsync(op);                // and.l <ea>,Dn — scripted
             return;
         }
 
@@ -1848,6 +1896,12 @@ public sealed partial class M68000
 
         if (((op >> 6) & 0x4) != 0 && size != 3)   // ADD Dn,<ea>
         {
+            if (size == 2)
+            {
+                await AluLongAsync(op);            // add.l Dn,<ea> — scripted
+                return;
+            }
+
             uint value = _d[(op >> 9) & 0x7] & SizeMask(size);
             uint address = await EaAddressAsync(mode, reg, size);
             if (_busFaulted) return;
@@ -1862,8 +1916,20 @@ public sealed partial class M68000
 
         if (size == 3)   // ADDA
         {
+            if (((op >> 6) & 0x7) == 7)
+            {
+                await AluLongAsync(op);            // adda.l <ea>,An — scripted
+                return;
+            }
+
             uint value = (op & 0x0100) != 0 ? await ReadEaAsync(mode, reg, 2) : (uint)(short)(await ReadEaAsync(mode, reg, 1) & 0xFFFF);
             SetA((op >> 9) & 0x7, GetA((op >> 9) & 0x7) + value);
+            return;
+        }
+
+        if (size == 2)
+        {
+            await AluLongAsync(op);                // add.l <ea>,Dn — scripted
             return;
         }
 
