@@ -78,6 +78,7 @@ public sealed partial class M68000
         _faultIsFetch = false;
         _addressError = false;
         _faultAddress = 0;
+        _faultProgram = false;
     }
 
     /// <summary>The state after a step, copied out so the corpus can compare it field by field.</summary>
@@ -140,6 +141,7 @@ public sealed partial class M68000
         _trailingFetched = false;
         _own = 0;
         _eaCharged = false;
+        _faultProgram = false;
 
         if (_busFaulted)
         {

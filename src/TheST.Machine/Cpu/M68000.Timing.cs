@@ -181,6 +181,13 @@ public sealed partial class M68000
     /// <summary>The two-operand ALU families: the long operations pay 2, a register/immediate source 2 more.</summary>
     int AluOwnClocks(ushort op, int line, int size, int mode)
     {
+        // OR.l is scripted (M68000.Scripts.cs): the script's own states are its clocks, so the
+        // measure-by-shape table must not charge this family at all
+        if (IsScriptedOrLong(op))
+        {
+            return 0;
+        }
+
         // EXG: 2 clocks on every form
         if ((op & 0xF1F8) == 0xC140 || (op & 0xF1F8) == 0xC148 || (op & 0xF1F8) == 0xC188)
         {

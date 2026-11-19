@@ -392,6 +392,15 @@ public sealed partial class M68000 : Chip
     bool _busFaulted;
     long _answerSeq = long.MinValue;
 
+    /// <summary>
+    /// The bus status of the last cycle the instruction attempted (<c>m_base_ssw</c>): program space
+    /// for a fetch and for the operand read a PC-relative shape takes out of the instruction stream,
+    /// data space for every other operand cycle. The group-0 frame records it, and it is <em>not</em>
+    /// the same fact as <see cref="_faultIsFetch"/> — a faulted program-space operand read keeps the
+    /// instruction's own saved counter (#78: the `(d16,PC)`/`(d8,PC,Xn)` class).
+    /// </summary>
+    bool _faultProgram;
+
     // ---- a post-increment lands with the access, not with the address ---------------------------
     // `(An)+` computes its address, performs the access, and only then moves the register. The core
     // still increments eagerly (one assignment), but remembers where it started, so an access that
@@ -435,6 +444,7 @@ public sealed partial class M68000 : Chip
     /// </summary>
     async ValueTask<BusResult> Cycle(uint address, int size, bool isWrite, ushort writeData, bool isCpuSpace = false, bool isProgram = false)
     {
+
         // an address error is not a bus cycle: a word access at an odd address never reaches the
         // wire, and the group-0 frame records what it was trying to reach (ADR 0009 §7)
         if (!isCpuSpace && size == 1 && (address & 1) != 0)
@@ -444,6 +454,7 @@ public sealed partial class M68000 : Chip
             _faultIsFetch = false;
             _addressError = true;
             _busFaulted = true;
+            _faultProgram = isProgram;
             SettlePostIncrement(isWrite);
             return new BusResult(0, true, false);
         }
@@ -489,6 +500,7 @@ public sealed partial class M68000 : Chip
         {
             _busFaulted = true;
             _faultAddress = address;
+            _faultProgram = isProgram;
         }
 
         // the register goes back only for a faulted *write*: a read that faults has already moved it
@@ -937,6 +949,7 @@ public sealed partial class M68000 : Chip
             _queueShort = false;
             _own = 0;
             _eaCharged = false;
+            _faultProgram = false;
 
             if (_busFaulted)
             {
@@ -1175,7 +1188,7 @@ public sealed partial class M68000 : Chip
     {
         ushort status = (ushort)(_opcode & ~0x1Fu);
 
-        if (_faultIsFetch)
+        if (_faultIsFetch || _faultProgram)
         {
             // a read, in program space — and *not* 0x08: that bit is MAME's nested-fault marker
             // (`SSW_N`), set only on the frame's own writes, never on a fetch (microcode `bser1`
