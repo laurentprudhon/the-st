@@ -47,6 +47,15 @@ public sealed partial class M68000 : Chip
     uint _fetchPointer;
 
     /// <summary>
+    /// The address of the last read issued in a <em>fetch state</em> — the words that fill the queue
+    /// (`FetchAsync`'s refill, the trailing fetch, the absolute-long pair's read, `PrefetchAsync`,
+    /// `RefillAsync`). MAME's microcode sets `m_pc` only there (`roml1`), so this is the depth a
+    /// group-0 data fault's frame saves; an extension-word read (`ReadProgramAsync`) leaves it alone
+    /// (#76: the +2 class, 19 791 records).
+    /// </summary>
+    uint _fetchStateAddress;
+
+    /// <summary>
     /// The fetch pointer when the current instruction began: `_fetchPointer` still being this value says
     /// the instruction has fetched no word of its own yet. It is #76's instrument, not a rule — the frame
     /// columns of <c>cpu-tests --clocks</c> report it beside the frame's saved program counter, because
@@ -570,6 +579,7 @@ public sealed partial class M68000 : Chip
         }
 
         uint address = _fetchPointer;
+        _fetchStateAddress = address;
         BusResult result = await Cycle(address, 1, false, 0, isProgram: true);
         if (result.Faulted)
         {
@@ -760,6 +770,7 @@ public sealed partial class M68000 : Chip
 
         uint address = _fetchPointer;
         _irAddress = address - 2;
+        _fetchStateAddress = address;
 
         BusResult result = await Cycle(address, 1, false, 0, isProgram: true);
         if (result.Faulted)
@@ -792,6 +803,7 @@ public sealed partial class M68000 : Chip
         }
 
         _ir = await ReadProgramAsync(target + 2);
+        _fetchStateAddress = target + 2;
         _ircValid = false;
 
         // the boundary convention: `_pc` is the address of the opcode the queue has fetched, and the
@@ -887,6 +899,7 @@ public sealed partial class M68000 : Chip
 
         _ircValid = false;
         _fetchPointer = _pc + 4;
+        _fetchStateAddress = _pc + 2;
         _busFaulted = false;
     }
 
@@ -1068,10 +1081,9 @@ public sealed partial class M68000 : Chip
 
         // a data fault saves the address of the word in IR; a fetch's own fault saves the word before
         // the one that failed (the fetch never completed, so the queue did not reach it)
-        // a group-0 data fault saves the address of the last word the pipeline fetched — MAME's depth
-        // (#76); a fetch's own fault keeps the queue's rule, which the control-transfer records pin
+        // a group-0 data fault saves the depth of the pipeline — MAME's `m_pc` (#76)
         uint returnPc = group0
-            ? _fetchPointer - 2
+            ? (_faultIsFetch ? _fetchPointer - 2 : _fetchStateAddress)
             : SavesInstructionAddress(vector) ? _opcodeAddress : _pc;
 
 #if DEBUG
@@ -1165,7 +1177,11 @@ public sealed partial class M68000 : Chip
 
         if (_faultIsFetch)
         {
-            status |= 0x10 | 0x08 | 0x02;   // a read, in program space
+            // a read, in program space — and *not* 0x08: that bit is MAME's nested-fault marker
+            // (`SSW_N`), set only on the frame's own writes, never on a fetch (microcode `bser1`
+            // composes the word from `m_base_ssw`). Measured: RTS record 002, corpus 0x4E72 vs
+            // 0x4E7A (research/mame-microcode-core.md §2).
+            status |= 0x10 | 0x02;
         }
         else
         {

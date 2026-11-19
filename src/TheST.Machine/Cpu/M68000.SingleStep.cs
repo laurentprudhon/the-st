@@ -64,6 +64,7 @@ public sealed partial class M68000
         _ircValid = false;
         _irAddress = state.Pc;
         _fetchPointer = state.Pc + 4;
+        _fetchStateAddress = state.Pc + 2;
         _streamStart = _fetchPointer;
         _flowTransferred = false;
         _trailingFetched = false;
