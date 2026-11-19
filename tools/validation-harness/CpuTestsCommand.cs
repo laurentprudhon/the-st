@@ -44,11 +44,17 @@ internal static class CpuTestsCommand
         string? failurePath = null;
         int traceIndex = -1;
         string? readPath = null;
+        string? clocksPath = null;
 
         for (int index = 0; index < args.Length; index++)
         {
             switch (args[index])
             {
+                case "--clocks":
+                    if (++index >= args.Length) return Program.Unknown(args[index - 1]);
+                    clocksPath = args[index];
+                    break;
+
                 case "--dir":
                     if (++index >= args.Length) return Program.Unknown(args[index - 1]);
                     directory = args[index];
@@ -148,22 +154,28 @@ internal static class CpuTestsCommand
         long total = 0;
         long passed = 0;
         long failed = 0;
+        ClockDump = clocksPath is null ? null : new StreamWriter(clocksPath);
+        ClockDump?.WriteLine("file\tname\tlength\tour_bus\tour_internal\tour_total");
         long busCycles = 0;
+        long internalClocks = 0;
         long expectedCycles = 0;
         long exactCycles = 0;
+        long exactClocks = 0;
 
         foreach (string file in files)
         {
             string name = OpcodeName(file);
-            var (fileTotal, filePassed, fileFailures, fileBusCycles, fileExpectedCycles, fileExactCycles) =
-                RunFile(file, limit, show, byKind);
+            var (fileTotal, filePassed, fileFailures, fileBusCycles, fileInternalClocks, fileExpectedCycles,
+                fileExactCycles, fileExactClocks) = RunFile(file, limit, show, byKind);
 
             total += fileTotal;
             passed += filePassed;
             failed += fileTotal - filePassed;
             busCycles += fileBusCycles;
+            internalClocks += fileInternalClocks;
             expectedCycles += fileExpectedCycles;
             exactCycles += fileExactCycles;
+            exactClocks += fileExactClocks;
             failures.AddRange(fileFailures);
 
             foreach (string failure in fileFailures)
@@ -190,8 +202,11 @@ internal static class CpuTestsCommand
         Console.WriteLine($"  corpus directory        {directory}");
         Console.WriteLine($"  opcode files            {files.Count}");
         Console.WriteLine($"  bus cycles              {Program.Number(busCycles)} over {Program.Number(total)} instructions");
+        Console.WriteLine($"  internal clocks         {Program.Number(internalClocks)} (the work the core charges between bus cycles)");
         Console.WriteLine($"  corpus length (clocks)  {Program.Number(expectedCycles)}");
-        Console.WriteLine($"  exact-cycle tests       {Program.Number(exactCycles)} (reported, never gated: the core models the bus's cycles only)");
+        Console.WriteLine($"  exact-cycle tests       {Program.Number(exactCycles)} (bus cycles alone; reported, never gated)");
+        Console.WriteLine($"  exact-clock tests       {Program.Number(exactClocks)} (4 x bus + internal == length: " +
+            $"{100.0 * exactClocks / Math.Max(1, total):f1} %)");
 
         if (byKind.Count > 0)
         {
@@ -229,8 +244,16 @@ internal static class CpuTestsCommand
             Console.WriteLine($"wrote {outPath}");
         }
 
+        ClockDump?.Dispose();
+        ClockDump = null;
+
         return failed == 0 ? 0 : 1;
     }
+
+    /// <summary>The per-record clock dump <c>--clocks</c> writes: one line per record, for the
+    /// calibration the timing table needs (name, the corpus's length, our bus cycles and internal
+    /// clocks, and the total the two add up to).</summary>
+    static StreamWriter? ClockDump;
 
     /// <summary>
     /// A corpus directory may also carry the decode map (<c>68000.official.json</c>), which is an object:
@@ -258,7 +281,8 @@ internal static class CpuTestsCommand
         return name;
     }
 
-    static (long Total, long Passed, List<string> Failures, long BusCycles, long ExpectedCycles, long ExactCycles) RunFile(
+    static (long Total, long Passed, List<string> Failures, long BusCycles, long InternalClocks, long ExpectedCycles,
+        long ExactCycles, long ExactClocks) RunFile(
         string path,
         int limit,
         int show,
@@ -278,8 +302,10 @@ internal static class CpuTestsCommand
         long total = 0;
         long passed = 0;
         long busCycles = 0;
+        long internalClocks = 0;
         long expectedCycles = 0;
         long exactCycles = 0;
+        long exactClocks = 0;
         var failures = new List<string>();
         var failureLines = new List<string>();
 
@@ -322,6 +348,7 @@ internal static class CpuTestsCommand
             cpu.Load(state);
 
             long cyclesBefore = cpu.BusCycles;
+            long internalBefore = cpu.InternalClocks;
             string? mismatch;
             try
             {
@@ -332,11 +359,19 @@ internal static class CpuTestsCommand
                 mismatch = $"harness: {failure.GetType().Name}: {failure.Message}";
             }
 
-            busCycles += cpu.BusCycles - cyclesBefore;
+            long ourBus = cpu.BusCycles - cyclesBefore;
+            long ourInternal = cpu.InternalClocks - internalBefore;
+            ClockDump?.WriteLine($"{OpcodeName(path)}\t{name}\t{length}\t{ourBus}\t{ourInternal}\t{ourBus * 4 + ourInternal}");
+            busCycles += ourBus;
+            internalClocks += ourInternal;
             expectedCycles += length;
-            if ((cpu.BusCycles - cyclesBefore) == length)
+            if (ourBus == length)
             {
                 exactCycles++;
+            }
+            if (ourBus * 4 + ourInternal == length)
+            {
+                exactClocks++;
             }
 
             if (mismatch is null)
@@ -356,7 +391,7 @@ internal static class CpuTestsCommand
             bus.Clear();
         }
 
-        return (total, passed, failures, busCycles, expectedCycles, exactCycles);
+        return (total, passed, failures, busCycles, internalClocks, expectedCycles, exactCycles, exactClocks);
     }
 
     /// <summary>

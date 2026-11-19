@@ -67,6 +67,8 @@ public sealed partial class M68000
         _flowTransferred = false;
         _trailingFetched = false;
         _queueShort = false;
+        _own = 0;
+        _eaCharged = false;
 
         _halted = false;
         _stopped = false;
@@ -107,6 +109,8 @@ public sealed partial class M68000
         _pc += 2;
         _flowTransferred = false;
         _trailingFetched = false;
+        _own = 0;
+        _eaCharged = false;
 
         if (_busFaulted)
         {

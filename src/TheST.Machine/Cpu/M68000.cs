@@ -69,6 +69,17 @@ public sealed partial class M68000 : Chip
     // executed, whether the access was a write, and whether the fault was the fetch of an odd
     // program counter rather than a data access
     ushort _opcode;
+
+    // ---- the internal clock (ADR 0009 §3, choice 3 of LENGTH.md §7) -------------------------
+    /// <summary>The instruction's own clocks, charged before its closing fetch. Set from the opcode by
+    /// <see cref="InstructionOwnClocks"/> and overridden by the data-dependent families once they have
+    /// read their operand.</summary>
+    int _own;
+
+    /// <summary>True once the effective address has charged its 2 clocks: an instruction charges them
+    /// once however many of its operands predecrement or index.</summary>
+    bool _eaCharged;
+
     bool _faultWrite;
     bool _faultIsFetch;
     bool _addressError;
@@ -90,6 +101,13 @@ public sealed partial class M68000 : Chip
     /// printed beside a record's reference trace (ADR 0009 §4's revision: that trace is the bar).
     /// </summary>
     public Action<bool, int, uint, ushort>? CycleObserver { get; set; }
+
+    /// <summary>
+    /// A debug instrument: every internal clock the core charges, in order with its bus cycles. The
+    /// corpus states the same thing as its <c>["n", cycles]</c> transactions, so this is what makes the
+    /// *placement* of the internal work comparable, not only its total.
+    /// </summary>
+    public Action<int>? ClockObserver { get; set; }
 #endif
 
     public M68000(Engine engine, int id)
@@ -155,11 +173,29 @@ public sealed partial class M68000 : Chip
         }
     }
 
-    /// <summary>Internal work between bus cycles — the only way the core moves its own clock.</summary>
-    void Clocks(int cpuClocks)
+    /// <summary>
+    /// Internal work between bus cycles — the only way the core moves its own clock.
+    ///
+    /// <para>
+    /// It is a <b>wait</b>, not an <c>Advance</c>: the machine has one timeline, so a CPU that runs its
+    /// own clock forward without suspending takes it past machine time, the beam and the timers fall
+    /// behind, and the boot loses its counts (measured: 300 frames never reached the desktop). The
+    /// delay is therefore armed as a date on the answer wire, which has nothing pending at that moment,
+    /// so the machine advances in step and the CPU resumes at exactly <c>Clock + n × 4</c> ticks.
+    /// </para>
+    /// </summary>
+    async ValueTask ClocksAsync(int cpuClocks)
     {
+        if (cpuClocks <= 0)
+        {
+            return;
+        }
+
         InternalClocks += cpuClocks;
-        Advance(cpuClocks * TicksPerCpuClock);
+#if DEBUG
+        ClockObserver?.Invoke(cpuClocks);
+#endif
+        await WaitFor(Clock + cpuClocks * TicksPerCpuClock, Wires.Answer, _answerSeq);
     }
 
     // ---- flags ---------------------------------------------------------------------------
@@ -579,6 +615,8 @@ public sealed partial class M68000 : Chip
 
         if (!_busFaulted)
         {
+            await ClocksAsync(_own);           // the instruction's own work, before its closing fetch
+            _own = 0;
             await TrailingFetchAsync();
         }
 
@@ -824,6 +862,8 @@ public sealed partial class M68000 : Chip
             _flowTransferred = false;
             _trailingFetched = false;
             _queueShort = false;
+            _own = 0;
+            _eaCharged = false;
 
             if (_busFaulted)
             {
@@ -948,6 +988,11 @@ public sealed partial class M68000 : Chip
     async ValueTask EnterExceptionAsync(int vector, int level)
     {
         Exceptions++;
+
+        // the entry's own clocks, before the frame is written: every entry in the corpus's traces is an
+        // `n 4` there, then the frame, the vector, `n 2`, the handler's two fetches (M68000.Timing.cs)
+        await ClocksAsync(4);
+
         ushort oldSr = _sr;
         _sr = (ushort)((_sr | 0x2000) & ~0x8000);
         if (level != 0)
@@ -1008,7 +1053,9 @@ public sealed partial class M68000 : Chip
             return;
         }
 
-        // the handler's first two words: every entry in the corpus's traces is two program fetches
+        // the handler's first two words: every entry in the corpus's traces is two program fetches,
+        // with its own 2 clocks between them
+        await ClocksAsync(2);
         await RefillAsync(newPc);
         _busFaulted = false;
     }

@@ -9,8 +9,23 @@ public sealed partial class M68000
 {
     static int SizeBytes(int size) => size == 0 ? 1 : size == 1 ? 2 : 4;
 
+    /// <summary>The number of significant bits of a quotient — a divide's own clock counts them.</summary>
+    static int BitLength(uint value) => value == 0 ? 0 : 32 - System.Numerics.BitOperations.LeadingZeroCount(value);
+
     async ValueTask ExecuteAsync(ushort op)
     {
+        // the internal clock (M68000.Timing.cs): the family's own work, charged before the closing
+        // fetch — or before the instruction's first access, for the families whose clocks lead
+        int own = InstructionOwnClocks(op);
+        if (LeadsOwnClocks(op))
+        {
+            await ClocksAsync(own);
+        }
+        else
+        {
+            _own = own;
+        }
+
         switch (op >> 12)
         {
             case 0x0: await Line0Async(op); break;
@@ -36,6 +51,14 @@ public sealed partial class M68000
 
     async ValueTask<uint> EaAddressAsync(int mode, int reg, int size)
     {
+        // the effective address's own clocks (M68000.Timing.cs): a predecrement or an indexed address
+        // costs 2, charged once per instruction because two predecrements share one (ADDX -(An),-(An))
+        if (!_eaCharged && (mode == 4 || mode == 6 || (mode == 7 && reg == 3)))
+        {
+            _eaCharged = true;
+            await ClocksAsync(2);
+        }
+
         switch (mode)
         {
             case 2:
@@ -255,7 +278,6 @@ public sealed partial class M68000
         await WriteEaAsync(destinationMode, destinationReg, size, value);
         if (_busFaulted) return;
 
-        Clocks(1);
     }
 
     async ValueTask MoveQAsync(ushort op)
@@ -264,7 +286,6 @@ public sealed partial class M68000
         if (data >= 0x80) data -= 0x100;
         _d[(op >> 9) & 0x7] = (uint)data;
         SetLogicFlags((uint)data, 2);
-        Clocks(1);
     }
 
     // ---- line 0: immediate and bit operations ---------------------------------------------
@@ -330,7 +351,6 @@ public sealed partial class M68000
             else if (operation == 2) SetSubFlags(immediate, old, result, size);
             else SetLogicFlags(result, size);
 
-            Clocks(1);
             return;
         }
 
@@ -362,7 +382,6 @@ public sealed partial class M68000
         else if (operation == 2) SetSubFlags(immediate, current, computed, size);
         else SetLogicFlags(computed, size);
 
-        Clocks(2);
     }
 
     uint AddValue(uint left, uint right, int size) => (left + right) & SizeMask(size);
@@ -411,7 +430,6 @@ public sealed partial class M68000
         };
 
         _sr = (ushort)(_sr & DefinedSr);
-        Clocks(2);
     }
 
     async ValueTask BitOperationAsync(ushort op, int size, int mode, int reg)
@@ -439,7 +457,6 @@ public sealed partial class M68000
             }
 
             _sr = (ushort)(set ? _sr & ~FlagZ : _sr | FlagZ);
-            Clocks(2);
             return;
         }
 
@@ -455,7 +472,6 @@ public sealed partial class M68000
             // 0–7 are reachable, whatever a matching word might hold
             bool immediateSet = (((immediate & 0xFF) >> (int)(bitNumber & 7)) & 1) != 0;
             _sr = (ushort)(immediateSet ? _sr & ~FlagZ : _sr | FlagZ);
-            Clocks(2);
             return;
         }
 
@@ -481,7 +497,6 @@ public sealed partial class M68000
         }
 
         _sr = (ushort)(wasSet ? _sr & ~FlagZ : _sr | FlagZ);
-        Clocks(2);
     }
 
     /// <summary>
@@ -543,7 +558,6 @@ public sealed partial class M68000
             _d[dataReg] = isLong ? value : (_d[dataReg] & 0xFFFF0000) | value;
         }
 
-        Clocks(2);
     }
 
     // ---- line 4 ----------------------------------------------------------------------------
@@ -567,7 +581,6 @@ public sealed partial class M68000
             uint status = await ReadEaAsync(mode, reg, 1);
             if (_busFaulted) return;
             _sr = (ushort)status;
-            Clocks(1);
             return;
         }
 
@@ -576,7 +589,6 @@ public sealed partial class M68000
             uint condition = await ReadEaAsync(mode, reg, 1);
             if (_busFaulted) return;
             _sr = (ushort)((_sr & 0xFF00) | (int)(condition & 0xFF));
-            Clocks(1);
             return;
         }
 
@@ -599,7 +611,6 @@ public sealed partial class M68000
         {
             uint address = await EaAddressAsync(mode, reg, 2);
             SetA((op >> 9) & 0x7, address);
-            Clocks(1);
             return;
         }
 
@@ -625,7 +636,6 @@ public sealed partial class M68000
                 await EnterExceptionAsync(6, 0);
             }
 
-            Clocks(6);
             return;
         }
 
@@ -663,7 +673,6 @@ public sealed partial class M68000
                     // NEGX carries ADDX/SUBX's zero rule: Z is only ever cleared, so a chain of
                     // borrows reports the whole result (0 − operand − X is a subtract from zero)
                     SetExchangeFlags(true, negxValue, 0, negxResult, sz);
-                    Clocks(1);
                     return;
                 }
 
@@ -671,7 +680,6 @@ public sealed partial class M68000
                 {
                     await WriteEaAsync(destinationMode, destinationReg, 1, (uint)(_sr & 0xA71F));
                     if (_busFaulted) return;
-                    Clocks(1);
                     return;
                 }
 
@@ -684,7 +692,6 @@ public sealed partial class M68000
                 await WriteEaAsync(mode, reg, size, 0);
                 if (_busFaulted) return;
                 _sr = (ushort)((_sr & ~(FlagN | FlagV | FlagC)) | FlagZ);
-                Clocks(1);
                 return;
             }
 
@@ -710,7 +717,6 @@ public sealed partial class M68000
                 }
 
                 SetSubFlags(value, 0, result, size);
-                Clocks(1);
                 return;
             }
 
@@ -734,7 +740,6 @@ public sealed partial class M68000
                 }
 
                 SetLogicFlags(result, size);
-                Clocks(1);
                 return;
             }
 
@@ -744,7 +749,6 @@ public sealed partial class M68000
                 {
                     _d[reg] = (_d[reg] >> 16) | (_d[reg] << 16);
                     SetLogicFlags(_d[reg], 2);
-                    Clocks(1);
                     return;
                 }
 
@@ -752,7 +756,6 @@ public sealed partial class M68000
                 {
                     _d[reg] = (_d[reg] & 0xFFFF0000) | (uint)(ushort)(short)(sbyte)(_d[reg] & 0xFF);
                     SetLogicFlags(_d[reg] & 0xFFFF, 1);
-                    Clocks(1);
                     return;
                 }
 
@@ -760,7 +763,6 @@ public sealed partial class M68000
                 {
                     _d[reg] = (uint)(int)(short)(_d[reg] & 0xFFFF);
                     SetLogicFlags(_d[reg], 2);
-                    Clocks(1);
                     return;
                 }
 
@@ -781,7 +783,6 @@ public sealed partial class M68000
                     uint stack = A7 - 4;
                     A7 = stack;
                     await WriteLongAsync(stack, effective);
-                    Clocks(1);
                     return;
                 }
 
@@ -806,7 +807,6 @@ public sealed partial class M68000
                         if (_busFaulted) return;
                     }
 
-                    Clocks(1);
                     return;
                 }
             }
@@ -831,14 +831,12 @@ public sealed partial class M68000
                         await WriteByteAsync(tasAddress, (byte)(tasValue | 0x80));
                     }
 
-                    Clocks(1);
                     return;
                 }
 
                 uint current = await ReadEaAsync(mode, reg, size);
                 if (_busFaulted) return;
                 SetLogicFlags(current, size);
-                Clocks(1);
                 return;
             }
 
@@ -902,7 +900,6 @@ public sealed partial class M68000
         }
 
         if (mode == 3) SetA(reg, address);
-        Clocks(3);
     }
 
     /// <summary>
@@ -984,7 +981,6 @@ public sealed partial class M68000
             if (mode == 3) SetA(reg, address);
         }
 
-        Clocks(3);
     }
 
     async ValueTask StoreMovemAsync(uint address, int bit, int size)
@@ -1002,7 +998,6 @@ public sealed partial class M68000
         switch (op)
         {
             case 0x4E71:   // NOP
-                Clocks(1);
                 return;
 
             case 0x4E70:   // RESET
@@ -1012,7 +1007,6 @@ public sealed partial class M68000
                     return;
                 }
 
-                Clocks(32);
                 return;
 
             case 0x4E73:   // RTE
@@ -1025,7 +1019,6 @@ public sealed partial class M68000
                 if (_busFaulted) return;
                 A7 += 4;
                 await RefillAsync(_pc);
-                Clocks(1);
                 return;
             }
 
@@ -1043,7 +1036,6 @@ public sealed partial class M68000
                 if (_busFaulted) return;
                 A7 += 4;
                 await RefillAsync(_pc);
-                Clocks(1);
                 return;
             }
 
@@ -1075,7 +1067,6 @@ public sealed partial class M68000
             await WriteLongAsync(stack, GetA(reg));
             SetA(reg, stack);
             A7 += immediate;
-            Clocks(2);
             return;
         }
 
@@ -1086,7 +1077,6 @@ public sealed partial class M68000
             if (_busFaulted) return;
             A7 += 4;
             SetA(reg, value);
-            Clocks(2);
             return;
         }
 
@@ -1107,7 +1097,6 @@ public sealed partial class M68000
                 _usp = GetA(op & 0x7);
             }
 
-            Clocks(1);
             return;
         }
 
@@ -1131,7 +1120,6 @@ public sealed partial class M68000
             A7 = stack;
             await WriteLongAsync(stack, _pc);
             await RefillAsync(target);
-            Clocks(2);
             return;
         }
 
@@ -1148,7 +1136,6 @@ public sealed partial class M68000
             }
 
             await RefillAsync(target);
-            Clocks(1);
             return;
         }
 
@@ -1185,7 +1172,6 @@ public sealed partial class M68000
 
         _pc = pc;
         await RefillAsync(_pc);
-        Clocks(2);
     }
 
     // ---- line 5: ADDQ/SUBQ, Scc, DBcc ------------------------------------------------------
@@ -1211,22 +1197,27 @@ public sealed partial class M68000
                     _d[reg] = (_d[reg] & 0xFFFF0000) | counter;
                     if (counter != 0xFFFF)
                     {
+                        await ClocksAsync(2);                       // a taken DBcc (M68000.Timing.cs)
                         short displacement = (short)await FetchAsync();
                         uint target = _pc - 2 + (uint)displacement;
                         await RefillAsync(target);
-                        Clocks(2);
                         return;
                     }
                 }
 
+                await ClocksAsync(4);                               // a falling-through DBcc
                 await FetchAsync();   // the displacement is consumed either way
-                Clocks(1);
                 return;
             }
 
-            await WriteEaAsync(mode, reg, 0, Condition(condition) ? 0xFFu : 0x00u);
+            bool set = Condition(condition);
+            if (set && mode == 0)
+            {
+                _own = 2;                                // Scc Dn: 4 false, 6 true (M68000.Timing.cs)
+            }
+
+            await WriteEaAsync(mode, reg, 0, set ? 0xFFu : 0x00u);
             if (_busFaulted) return;
-            Clocks(1);
             return;
         }
 
@@ -1235,7 +1226,6 @@ public sealed partial class M68000
             // an address register is never affected by flags, and the whole 32-bit register takes part
             // whatever the size field says (UM: byte and word are the same as long here)
             SetA(reg, GetA(reg) + (uint)((op & 0x0100) != 0 ? -data : data));
-            Clocks(1);
             return;
         }
 
@@ -1255,7 +1245,6 @@ public sealed partial class M68000
             }
 
             _d[reg] = (_d[reg] & ~SizeMask(size)) | registerResult;
-            Clocks(1);
             return;
         }
 
@@ -1285,7 +1274,6 @@ public sealed partial class M68000
             SetAddFlags((uint)data, current, result, size);
         }
 
-        Clocks(1);
     }
 
     // ---- line 6: branches ------------------------------------------------------------------
@@ -1314,20 +1302,24 @@ public sealed partial class M68000
 
         if (condition == 1)   // BSR
         {
+            await ClocksAsync(2);                                   // a control transfer's clocks lead its refill
             uint stack = A7 - 4;
             A7 = stack;
             await WriteLongAsync(stack, _pc);
             await RefillAsync((uint)target);
-            Clocks(2);
             return;
         }
 
         if (Condition(condition))
         {
+            await ClocksAsync(2);                                   // taken: 10 clocks, 2 of them its own
             await RefillAsync((uint)target);
         }
+        else
+        {
+            await ClocksAsync(4);                                   // not taken: 8 clocks, 4 of them its own
+        }
 
-        Clocks(1);
     }
 
     // ---- lines 8 … D: the two-operand families ---------------------------------------------
@@ -1355,7 +1347,6 @@ public sealed partial class M68000
             await WriteAtAsync(address, size, result);
             if (_busFaulted) return;
             SetLogicFlags(result, size);
-            Clocks(1);
             return;
         }
 
@@ -1371,7 +1362,6 @@ public sealed partial class M68000
         uint combined = destination | source;
         _d[(op >> 9) & 0x7] = (_d[(op >> 9) & 0x7] & ~SizeMask(size)) | (combined & SizeMask(size));
         SetLogicFlags(combined, size);
-        Clocks(1);
     }
 
     async ValueTask DivideAsync(ushort op)
@@ -1401,9 +1391,11 @@ public sealed partial class M68000
                 // an overflow leaves the register alone and touches V and C only: N, Z and X are the
                 // instruction's own undefined case and the corpus keeps whatever they were
                 _sr = (ushort)((_sr | FlagV) & ~FlagC);
+                _own = 12;                        // the short exit (LENGTH.md §5)
                 return;
             }
 
+            _own = 122 + 2 * BitLength((uint)Math.Abs(quotient));
             _d[(op >> 9) & 0x7] = (((uint)(ushort)remainder) << 16) | (uint)(ushort)quotient;
         }
         else
@@ -1420,14 +1412,15 @@ public sealed partial class M68000
             if (quotient > 0xFFFF)
             {
                 _sr = (ushort)((_sr | FlagV) & ~FlagC);
+                _own = 6;                         // the short exit (LENGTH.md §5)
                 return;
             }
 
+            _own = 76 + 2 * BitLength(quotient);
             _d[(op >> 9) & 0x7] = (remainder << 16) | quotient;
         }
 
         SetLogicFlags(_d[(op >> 9) & 0x7] & 0xFFFF, 1);
-        Clocks(70);
     }
 
     async ValueTask Line9Async(ushort op)   // SUB / SUBX / SUBA
@@ -1453,7 +1446,6 @@ public sealed partial class M68000
             await WriteAtAsync(address, size, result);
             if (_busFaulted) return;
             SetSubFlags(value, current, result, size);
-            Clocks(1);
             return;
         }
 
@@ -1461,7 +1453,6 @@ public sealed partial class M68000
         {
             uint value = (op & 0x0100) != 0 ? await ReadEaAsync(mode, reg, 2) : (uint)(short)(await ReadEaAsync(mode, reg, 1) & 0xFFFF);
             SetA((op >> 9) & 0x7, GetA((op >> 9) & 0x7) - value);
-            Clocks(1);
             return;
         }
 
@@ -1471,7 +1462,6 @@ public sealed partial class M68000
         uint difference = (destination - source) & SizeMask(size);
         _d[(op >> 9) & 0x7] = (_d[(op >> 9) & 0x7] & ~SizeMask(size)) | difference;
         SetSubFlags(source, destination, difference, size);
-        Clocks(1);
     }
 
     async ValueTask ExchangeArithmeticAsync(ushort op, bool subtract)
@@ -1522,7 +1512,6 @@ public sealed partial class M68000
             _d[destinationReg] = (_d[destinationReg] & ~SizeMask(size)) | result;
         }
 
-        Clocks(2);
     }
 
     /// <summary>
@@ -1577,7 +1566,6 @@ public sealed partial class M68000
             uint destination = await ReadAtAsync(destinationAddress, size);
             if (_busFaulted) return;
             SetCompareFlags(source, destination, (destination - source) & SizeMask(size), size);
-            Clocks(2);
             return;
         }
 
@@ -1595,7 +1583,6 @@ public sealed partial class M68000
                 uint registerResult = (_d[reg] ^ value) & SizeMask(size);
                 _d[reg] = (_d[reg] & ~SizeMask(size)) | registerResult;
                 SetLogicFlags(registerResult, size);
-                Clocks(1);
                 return;
             }
 
@@ -1607,7 +1594,6 @@ public sealed partial class M68000
             await WriteAtAsync(address, size, result);
             if (_busFaulted) return;
             SetLogicFlags(result, size);
-            Clocks(1);
             return;
         }
 
@@ -1617,7 +1603,6 @@ public sealed partial class M68000
             if (_busFaulted) return;
             uint destination = GetA((op >> 9) & 0x7);
             SetCompareFlags(value, destination, destination - value, 2);
-            Clocks(1);
             return;
         }
 
@@ -1625,7 +1610,6 @@ public sealed partial class M68000
         if (_busFaulted) return;
         uint current2 = _d[(op >> 9) & 0x7] & SizeMask(size);
         SetCompareFlags(operand, current2, (current2 - operand) & SizeMask(size), size);
-        Clocks(1);
     }
 
     async ValueTask LineCAsync(ushort op)   // AND / MULU / MULS / ABCD / EXG
@@ -1644,7 +1628,6 @@ public sealed partial class M68000
         {
             int other = (op >> 9) & 0x7;
             (_d[reg], _d[other]) = (_d[other], _d[reg]);
-            Clocks(1);
             return;
         }
 
@@ -1656,7 +1639,6 @@ public sealed partial class M68000
             SetA(reg, right);
             if ((op & 0x00F8) == 0x88) _d[other] = left;
             else SetA(other, left);
-            Clocks(1);
             return;
         }
 
@@ -1671,7 +1653,6 @@ public sealed partial class M68000
             await WriteAtAsync(address, size, result);
             if (_busFaulted) return;
             SetLogicFlags(result, size);
-            Clocks(1);
             return;
         }
 
@@ -1686,8 +1667,12 @@ public sealed partial class M68000
                 ? (uint)((short)destination * (short)source)
                 : destination * source;
 
+            // MULU/MULS: 34 clocks plus 2 for every 1 bit in the operand's magnitude — the corpus's own
+            // trailing run is 34, 36, … 62/64 for MULU and MULS (LENGTH.md §5)
+            uint magnitude = signed ? (uint)Math.Abs((short)source) : source;
+            _own = 34 + 2 * System.Numerics.BitOperations.PopCount(magnitude);
+
             SetLogicFlags(_d[(op >> 9) & 0x7], 2);
-            Clocks(35);
             return;
         }
 
@@ -1697,7 +1682,6 @@ public sealed partial class M68000
         uint combined = destination2 & operand;
         _d[(op >> 9) & 0x7] = (_d[(op >> 9) & 0x7] & ~SizeMask(size)) | combined;
         SetLogicFlags(combined, size);
-        Clocks(1);
     }
 
     /// <summary>
@@ -1798,7 +1782,6 @@ public sealed partial class M68000
             _d[destinationReg] = (_d[destinationReg] & 0xFFFFFF00) | result;
         }
 
-        Clocks(2);
     }
 
     async ValueTask LineDAsync(ushort op)   // ADD / ADDX / ADDA
@@ -1824,7 +1807,6 @@ public sealed partial class M68000
             await WriteAtAsync(address, size, result);
             if (_busFaulted) return;
             SetAddFlags(value, current, result, size);
-            Clocks(1);
             return;
         }
 
@@ -1832,7 +1814,6 @@ public sealed partial class M68000
         {
             uint value = (op & 0x0100) != 0 ? await ReadEaAsync(mode, reg, 2) : (uint)(short)(await ReadEaAsync(mode, reg, 1) & 0xFFFF);
             SetA((op >> 9) & 0x7, GetA((op >> 9) & 0x7) + value);
-            Clocks(1);
             return;
         }
 
@@ -1842,7 +1823,6 @@ public sealed partial class M68000
         uint sum = (destination + source) & SizeMask(size);
         _d[(op >> 9) & 0x7] = (_d[(op >> 9) & 0x7] & ~SizeMask(size)) | sum;
         SetAddFlags(source, destination, sum, size);
-        Clocks(1);
     }
 
     // ---- line E: shifts and rotates --------------------------------------------------------
@@ -2014,7 +1994,6 @@ public sealed partial class M68000
         _sr = (ushort)((result & sign) != 0 ? _sr | FlagN : _sr & ~FlagN);
         _sr = (ushort)(overflow ? _sr | FlagV : _sr & ~FlagV);
 
-        Clocks(2 + Math.Min(count, 8));
         return result & mask;
     }
 
