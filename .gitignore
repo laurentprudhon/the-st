@@ -85,3 +85,6 @@ tests/680x0/full/
 ## MAME's microcoded corpus (#76) is the gate: 127 files, 138 MB of .json.bin plus the decoded
 ## JSON, fetched on demand by scripts/fetch-m68000-tests.sh and never committed.
 tests/680x0/mame/
+## MAME's micro/nanocode (the transcribed ROM + the generator that carries it), fetched at a pin by
+## scripts/fetch-m68000-microcode.sh: read as a specification, never built. research/mame-microcode-core.md
+research/vendor/m68000/

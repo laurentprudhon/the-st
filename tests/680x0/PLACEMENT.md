@@ -220,3 +220,20 @@ fetches them, so three bus cycles are missing — `#70`/`#74`'s ground), `MOVEto
 `SUBA.w` −4, and the faulting records' **missing aborted cycle** (`re`/`we` is 4 clocks of `length` and no
 bus cycle). `TAS` stays outside any 100 % claim, as the ruling says (MAME disowns its own RMW timing).
 
+### Reading the microcode itself (three rules it states, and the tool to read them)
+
+MAME's micro/nanocode is carried as data in `m68000gen.py` — 1024 locations, 518 control words — and
+`scripts/fetch-m68000-microcode.sh` vendors it at a pin; `scripts/microcode-walk.py --op <word>` (or
+`--state address_error`) prints one instruction's script, in order, as the C++ the generator would emit.
+`research/mame-microcode-core.md` holds the reading and the three adoption levels (L0 instrument, L1 rules,
+L2 engine). Three of the classes above are a line of the core each once the script is read:
+
+- **the frame's status word** (`5 211` of the class above): `bser1` builds it from `m_base_ssw`, which is
+  `SSW_PROGRAM|SSW_R` for a fetch; `SSW_N` (`0x08`) is MAME's *nested-fault* marker, set only on the frame's
+  own writes (`SSW_DATA|SSW_N|SSW_CRITICAL`). `BusStatusWord` sets it for a fetch fault — one bit.
+- **the post-increment's commit state**: `pinl3` (`ADD.l (An)+,Dn`) writes `m_da[ry] = m_au` after the first
+  word's bus cycle, so an odd first word leaves `An` untouched; the `ADDX` word-at-a-time script commits 2 an
+  access. Our `EaAddressAsync` commits before the access, which is the `+4`/`−2` split of that row.
+- **the saved `pc`'s depth**: the `.l` destination-fault scripts read the operand, prefetch, then write; a
+  table of per-family depths cannot express that, which is why the remaining 19 791 are the argument for L2.
+
