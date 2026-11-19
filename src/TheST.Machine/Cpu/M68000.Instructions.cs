@@ -1058,6 +1058,11 @@ public sealed partial class M68000
 
                 _sr = await FetchAsync();
                 _stopped = true;
+                // the machine stops *inside* the instruction: MAME's `aaa01` cancels the closing
+                // prefetch (`m_au = m_au - 2`, twice), so a stopped CPU's counter is left on the STOP
+                // *opcode's* address (1 230 records). The single-step seam reports that (#76); the
+                // machine's own loop keeps the successor, which is where an `RTE` must resume.
+                _flowTransferred = true;
                 return;
             }
         }
@@ -1071,9 +1076,10 @@ public sealed partial class M68000
         if ((op & 0xFFF8) == 0x4E50)   // LINK
         {
             uint immediate = (uint)(short)await FetchAsync();
+            uint previous = GetA(reg);      // latched before A7 moves: `LINK A7,#` is the same register
             uint stack = A7 - 4;
             A7 = stack;
-            await WriteLongAsync(stack, GetA(reg));
+            await WriteLongAsync(stack, previous);
             SetA(reg, stack);
             A7 += immediate;
             return;
@@ -1081,10 +1087,14 @@ public sealed partial class M68000
 
         if ((op & 0xFFF8) == 0x4E58)   // UNLK
         {
-            A7 = GetA(reg);
-            uint value = await ReadLongAsync(A7);
+            // the stack pointer moves *after* the pop: MAME's `unlk1` only latches `m_at = m_da[ry]`
+            // and reads, and `unlk3` sets `m_da[m_sp] = m_au` once the two words are in. An odd An
+            // therefore enters the address error with the stack pointer untouched (1 115 records of
+            // the UNLINK file, whose first differing field was `ssp`/`usp`)
+            uint address = GetA(reg);
+            uint value = await ReadLongAsync(address);
             if (_busFaulted) return;
-            A7 += 4;
+            A7 = address + 4;
             SetA(reg, value);
             return;
         }
@@ -1203,19 +1213,31 @@ public sealed partial class M68000
                 if (!Condition(condition))
                 {
                     uint counter = (uint)((short)(_d[reg] & 0xFFFF) - 1) & 0xFFFF;
-                    _d[reg] = (_d[reg] & 0xFFFF0000) | counter;
+                    // the counter is written *after* the instruction's last fetch: the microcode's
+                    // `dbcc3` adds −1 into the ALU and only `dbcc4`/`dbcc5` write it back, so a branch
+                    // whose target is odd enters the address error with the register untouched (632
+                    // records of the DBcc file)
                     if (counter != 0xFFFF)
                     {
                         await ClocksAsync(2);                       // a taken DBcc (M68000.Timing.cs)
                         short displacement = (short)await FetchAsync();
                         uint target = _pc - 2 + (uint)displacement;
                         await RefillAsync(target);
+                        if (_busFaulted) return;
+                        _d[reg] = (_d[reg] & 0xFFFF0000) | counter;
                         return;
                     }
+
+                    await ClocksAsync(4);                           // a falling-through DBcc
+                    await FetchAsync();   // the displacement is consumed either way
+                    if (_busFaulted) return;
+                    _d[reg] = (_d[reg] & 0xFFFF0000) | counter;
+                    return;
                 }
 
-                await ClocksAsync(4);                               // a falling-through DBcc
-                await FetchAsync();   // the displacement is consumed either way
+                // the condition is true: no decrement at all, and the counter is left as it was
+                await ClocksAsync(4);
+                await FetchAsync();
                 return;
             }
 

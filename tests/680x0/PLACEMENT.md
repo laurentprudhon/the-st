@@ -237,3 +237,37 @@ L2 engine). Three of the classes above are a line of the core each once the scri
 - **the saved `pc`'s depth**: the `.l` destination-fault scripts read the operand, prefetch, then write; a
   table of per-family depths cannot express that, which is why the remaining 19 791 are the argument for L2.
 
+### What landed from them (2026-11-19, `#76` continued), and how to re-derive the table
+
+`scripts/mame-failure-classes.py --failures FILE [--clocks FILE]` prints the class table below from a
+`--failures` dump joined against the records' own `transactions` and `final.ssp`; re-run it before touching
+a class, because the families move. The two frames' layouts are **measured from the stack pointer's own
+movement** (`initial.ssp − final.ssp`, 6 or 14 bytes), and they are not the layouts a manual reader expects:
+
+| 14-byte frame (group 0) | 6-byte frame (group 1/2) |
+|---|---|
+| `+0…+5` undefined (MAME writes its own residue) | `+0` SR |
+| `+6` the faulting instruction's word | `+2` saved PC high |
+| `+8` SR | `+4` saved PC low |
+| `+10`/`+12` saved PC high/low | |
+
+The corpus's `ram` is byte-addressed, so "the saved PC's **low byte**" is the odd address of that word —
+`ssp+13` in a 14-byte frame, `ssp+5` in a 6-byte one. Three classes came from one measurement each:
+
+- **`SSW_N` off the fetch path** — 5 211 records. `BusStatusWord` no longer sets `0x08` for a fetch;
+  RTS/JSR/RTR/RTE went green on the whole file, `Bcc` to 2 499/2 500.
+- **the frame's saved pc is a fetch-state depth** — MAME's microcode sets `m_pc` only in a fetch state
+  (`roml1`), so `_fetchStateAddress` is written by the trailing fetch, `PrefetchAsync`, `RefillAsync` and the
+  instruction boundary, and **not** by an extension-word read. The +2 class fell 19 791 → 11 570, with 2 752
+  records crossing to −2 and 1 200 to −4: that split is per-script placement inside the same opcode shape,
+  not an expression, so it is what remains as the argument for L2.
+- **the counter moves last** — `DBcc`'s decrement, `LINK`'s old `An`, `UNLNK`'s stack pointer and `STOP`'s
+  pc are all written *after* the instruction's last fetch (a fault keeps the register untouched); `STOP`
+  reports a *stopped* CPU's counter (the STOP opcode's own address) through the single-step seam only,
+  because the machine's loop must resume at its successor. 2 017 records, four files green.
+
+Where the gate stands after them: **291 934 / 317 500 (91.9 %), 69 of 127 files green, exact-clock
+213 891 (67.4 %)**, and the boot reaches the desktop at frame 612. The clock column's `CCR` class is
+exact now (its charge was 0, not 8 — the old predicate matched only the `0x7C` forms); `MOVEtoCCR` (−8 on
+2 341, −4 on 159) still needs the discriminator that splits it.
+

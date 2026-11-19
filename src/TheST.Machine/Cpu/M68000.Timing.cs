@@ -59,10 +59,20 @@ public sealed partial class M68000
         switch (line)
         {
             case 0x0:
-                // ORI/ANDI/EORI to CCR or SR: the status register write is its own work
-                if ((op & 0xFF00) is 0x0000 or 0x0200 or 0x0A00 && (op & 0x00C0) == 0x00C0)
+                // ORI/ANDI/EORI to SR: the status register write is its own work
+                if ((op & 0xFF00) is 0x0000 or 0x0200 or 0x0A00 && (op & 0x00FF) == 0x7C)
                 {
                     return 8;
+                }
+
+                // to *CCR* is 12 clocks, and uniformly so (7 500 records: every one of the three files
+                // sat at exactly −12 when the charge was 0): MAME's `andi_imm8_ccr` fetches the
+                // immediate word with a bus state of its own (`o#w1`, 4), rolls the counter back
+                // (`stiw1`, 2) and then runs the two status states (`stiw2`, `stiw3`, 2 each) before
+                // its closing prefetch — where this core pops both words out of the queue
+                if ((op & 0xFF00) is 0x0000 or 0x0200 or 0x0A00 && (op & 0x00FF) == 0x3C)
+                {
+                    return 12;
                 }
 
                 // BTST/BCHG/BCLR/BSET with a data-register destination: BTST 2, BCHG/BSET 2, BCLR 4.

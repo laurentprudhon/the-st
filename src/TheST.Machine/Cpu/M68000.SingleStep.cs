@@ -165,6 +165,14 @@ public sealed partial class M68000
             return;
         }
 
+        // a stopped CPU's counter is the STOP opcode's own address (MAME's `aaa01` rolls `m_au`
+        // back twice); the machine's loop keeps the successor instead, because that is where its
+        // `RTE` has to resume
+        if (_stopped)
+        {
+            _pc = _opcodeAddress;
+        }
+
         // the prefetch's own address error, exactly as the machine's loop takes it
         if ((_pc & 1) != 0)
         {
