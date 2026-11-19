@@ -14,10 +14,13 @@ namespace TheST.Machine.Cpu;
 /// </para>
 ///
 /// <para>
-/// The families are ported one at a time and the table beside the old handlers is the port's own
-/// ledger: a family is scripted when it has a method here and its entry in <c>M68000.Timing.cs</c> is
-/// gone, because a script carries its own clocks. <b>OR.l is the first</b> — 18 shapes, 2 500 records,
-/// the whole of the commit-order and saved-<c>pc</c> residue for that file.
+/// The families are ported one at a time and the predicate beside them is the port's own ledger: a
+/// family is scripted when the decode routes it here and its entry in <c>M68000.Timing.cs</c> is
+/// gone, because a script carries its own clocks. <b>OR.l was the first</b>; the two-operand longs
+/// followed (AND, EOR, ADD, SUB, CMP) and their address-register forms (ADDA, SUBA, CMPA). All of
+/// them are the <em>same</em> state blocks: the operand's two words, three destination tails, and the
+/// shape's closing idle run — so a family is a dispatch (<see cref="AluLongShapeAsync"/>) and an
+/// <see cref="AluLong"/> value, not a copy.
 /// </para>
 /// </summary>
 public sealed partial class M68000
@@ -27,32 +30,140 @@ public sealed partial class M68000
     /// This predicate is the ledger: a family is added here when its script lands, and its row in the
     /// table is deleted — one place to read what is ported and what is still measured by shape.
     /// </summary>
-    static bool IsScriptedOrLong(ushort op) =>
-        (op >> 12) == 0x8 && ((op >> 6) & 0x3) == 2 && (((op >> 6) & 0x7) == 2 || ((op >> 6) & 0x7) == 6);
+    /// <remarks>
+    /// The encoding, not a list of mnemonics: the two-operand longs are opmode 2 (<c>&lt;ea&gt;,Dn</c>)
+    /// and opmode 6 (<c>Dn,&lt;ea&gt;</c>) on lines 8, 9, B, C and D, and the address-register forms are
+    /// opmode 7 on lines 9, B and D. Opmode 7 on line 8 is <c>DIVS</c> and on line C is <c>MULS</c>,
+    /// which are not ALU scripts; <c>EXG Dn,An</c> shares line C's opmode 6, and <c>CMPM.l</c> shares
+    /// line B's (<c>CMPM</c>'s size field is two bits wide, so its long form lands on the opmode
+    /// <c>EOR</c> uses).
+    /// </remarks>
+    static bool IsScriptedAluLong(ushort op)
+    {
+        int line = op >> 12;
+        int opmode = (op >> 6) & 0x7;
+
+        if (line is not (0x8 or 0x9 or 0xB or 0xC or 0xD)
+            || (op & 0xF1F8) == 0xC188                          // EXG Dn,An
+            || (op & 0xF138) == 0xB108)                         // CMPM
+        {
+            return false;
+        }
+
+        return opmode is 2 or 6 || (opmode == 7 && line is 0x9 or 0xB or 0xD);
+    }
 
     // =========================================================================================
-    // OR.l — `or.l <ea>, Dn` (opmode 2) and `or.l Dn, <ea>` (opmode 6)
+    // The two-operand longs — `or/and/eor/add/sub .l` in both directions, and ADDA/SUBA/CMPA
     // =========================================================================================
 
     /// <summary>
-    /// OR.l, all 18 shapes. The opmode picks the direction; the mode/reg pair picks the script, and the
-    /// scripts differ only in how the operand's address is built and read.
+    /// The dispatch of one line's family: the line picks the ALU's operation, the opmode picks where
+    /// the result goes — a data register (<c>&lt;ea&gt;,Dn</c>), memory (<c>Dn,&lt;ea&gt;</c>) or an
+    /// address register (<c>ADDA</c>/<c>SUBA</c>). Line B carries three scripts and is the one line
+    /// whose opmode is not enough: CMP reads and sets flags, CMPA does the same against <c>An</c>, and
+    /// EOR writes.
     /// </summary>
-    async ValueTask OrLongAsync(ushort op)
+    async ValueTask AluLongAsync(ushort op)
     {
+        switch (op >> 12)
+        {
+            case 0x8:
+                await AluLongShapeAsync(op, AluLong.Or);
+                return;
+
+            case 0x9:
+                await AluLongShapeAsync(op, AluLong.Sub);
+                return;
+
+            case 0xC:
+                await AluLongShapeAsync(op, AluLong.And);
+                return;
+
+            case 0xD:
+                await AluLongShapeAsync(op, AluLong.Add);
+                return;
+
+            case 0xB:
+                if (((op >> 6) & 0x7) == 6)
+                {
+                    await AluLongShapeAsync(op, AluLong.Eor);     // eor_l_dd_<shape>
+                }
+                else
+                {
+                    await CompareLongAsync(op);                   // cmp_l_<shape>_dd / cmpa_l_<shape>_ad
+                }
+
+                return;
+        }
+    }
+
+    /// <summary>
+    /// One family in its three directions. The operand's read block is shared by all of them; only the
+    /// tail differs, and `ADD.l An,Dn` (mode 1) is the shape OR.l does not have.
+    /// </summary>
+    async ValueTask AluLongShapeAsync(ushort op, AluLong kind)
+    {
+        int opmode = (op >> 6) & 0x7;
         int rx = (op >> 9) & 0x7;
         int mode = (op >> 3) & 0x7;
         int reg = op & 0x7;
 
-        if (((op >> 6) & 0x7) == 2)
+        if (opmode == 2)                                   // <ea>, Dn — the destination is a data register
         {
-            await OrLongFromEaAsync(mode, reg, rx);       // or_l_<shape>_dd
+            uint? source = await ReadLongSourceAsync(mode, reg);
+            if (source is null)
+            {
+                return;
+            }
+
+            await AluIntoDataRegisterAsync(rx, kind, source.Value, clocks: ClosingIdleClocks(mode, reg));
+            return;
         }
-        else
+
+        if (opmode == 6)                                   // Dn, <ea>
         {
-            await OrLongIntoEaAsync(mode, reg, rx);       // or_l_dd_<shape>
+            if (mode == 0)                                 // eor_l_dd_ds — the destination is a *register*
+            {
+                if (kind != AluLong.Eor)
+                {
+                    return;                                // OR/AND/ADD/SUB have no Dn,Dn form here
+                }
+
+                await AluIntoDataRegisterAsync(reg, kind, _d[rx], clocks: 4);   // roal1..roal4
+                return;
+            }
+
+            if (mode == 1 || (mode == 7 && reg > 1))
+            {
+                return;                                    // nothing alterable in memory here
+            }
+
+            uint? address = await ReadLongEaAsync(mode, reg);
+            if (address is null)
+            {
+                return;
+            }
+
+            await AluIntoMemoryLongAsync(rx, address.Value, kind);
+            return;
         }
+
+        // opmode 7 — ADDA.l / SUBA.l: the destination is an address register and the flags do not move
+        uint? operand = await ReadLongSourceAsync(mode, reg);
+        if (operand is null)
+        {
+            return;
+        }
+
+        await AluIntoAddressRegisterAsync(rx, kind, operand.Value, clocks: ClosingIdleClocks(mode, reg));
     }
+
+    /// <summary>
+    /// The shape's closing idle run: two micro-states (4 clocks) for a source that misses the bus —
+    /// a data or address register direct, an immediate — and one (2 clocks) for a memory operand.
+    /// </summary>
+    static int ClosingIdleClocks(int mode, int reg) => mode <= 1 || (mode == 7 && reg == 4) ? 4 : 2;
 
     // ---- the operand's two words, one block per EA shape ------------------------------------
 
@@ -83,315 +194,243 @@ public sealed partial class M68000
     }
 
     /// <summary>
-    /// The source operand of `or.l <ea>, Dn`: the EA's own states (the script's prefix), which differ
-    /// per shape in their reads and in where the idle run sits.
+    /// The source operand of a script, its two halves left in <c>m_alub</c>/<c>m_dbin</c>: a register
+    /// direct (no bus cycle at all), an immediate or a PC-relative shape (both out of the queue), or
+    /// anything with an address. <c>null</c> when a bus cycle faulted, which ends the instruction.
     /// </summary>
-    async ValueTask OrLongFromEaAsync(int mode, int reg, int rx)
+    async ValueTask<uint?> ReadLongSourceAsync(int mode, int reg)
     {
         switch (mode)
         {
-            case 0:
-                // or_l_ds_dd — rorl1/rorl2/25e/25d: no bus at all before the closing prefetch
+            case 0:                                        // ds — rorl1's operand is the register
                 _alub = High16(_d[reg]);
-                _dbin = (ushort)_d[reg];
-                await OrIntoDataRegisterAsync(rx, clocks: 4);
-                return;
+                _dbin = (ushort)Low16(_d[reg]);
+                return _d[reg];
 
-            case 2:
-                // or_l_ais_dd — adrl1, adrl2, roml1/roml2, 25e, 25d
-                await ReadLongOperandAsync(GetA(reg));
-                if (_busFaulted) return;
-                await OrIntoDataRegisterAsync(rx, clocks: 2);
-                return;
+            case 1:                                        // as — ADD.l An,Dn / SUB.l An,Dn
+                _alub = High16(GetA(reg));
+                _dbin = (ushort)Low16(GetA(reg));
+                return GetA(reg);
 
-            case 3:
-                // or_l_aips_dd — pinl1, pinl2, pinl3 (the commit), roml1/roml2, 25e, 25d. The
-                // increment commits *after* the second word's read: a word pair that faults leaves
-                // the register where it was (pinl3 is never reached)
-                await ReadLongOperandAsync(GetA(reg));
-                if (_busFaulted) return;
-                SetA(reg, GetA(reg) + 4);                  // pinl3 — m_da[ry] = m_au
-                await OrIntoDataRegisterAsync(rx, clocks: 2);
-                return;
+            case 7 when reg >= 2:
+                return await ReadLongStreamOrImmediateAsync(reg) ? Merge16_32(_alub, _dbin) : null;
 
-            case 4:
-            {
-                // or_l_pais_dd — pdcl1 (2 clocks), pdcl2 (the decrement commits), adrl2
-                uint address = GetA(reg) - 4;              // pdcl1 — m_au = m_da[ry] - 4
-                await IdleAsync();                         // pdcl1's own 2 clocks
-                SetA(reg, address);                        // pdcl2 — m_da[ry] = m_au
-                await ReadLongOperandAsync(address);
-                if (_busFaulted) return;
-                await OrIntoDataRegisterAsync(rx, clocks: 2);
-                return;
-            }
-
-            case 5:
-            {
-                // or_l_das_dd — adsl1 (the displacement out of the queue), adsl2, adsl3
-                ushort displacement = await FetchAsync();
-                if (_busFaulted) return;
-                await ReadLongOperandAsync(GetA(reg) + Ext32(displacement));
-                if (_busFaulted) return;
-                await OrIntoDataRegisterAsync(rx, clocks: 2);
-                return;
-            }
-
-            case 6:
-            {
-                // or_l_dais_dd — aixw0 (2 clocks), aixw1/aixw2 (the refill), adsl2, adsl3
-                await IdleAsync();                         // aixw0 — alu_ext, its own 2 clocks
-                ushort extension = await FetchAsync();
-                if (_busFaulted) return;
-                uint address = GetA(reg) + (uint)ExtensionDisplacement(extension) + IndexValue(extension);
-                await ReadLongOperandAsync(address);
-                if (_busFaulted) return;
-                await OrIntoDataRegisterAsync(rx, clocks: 2);
-                return;
-            }
-
-            case 7:
-                switch (reg)
-                {
-                    case 0:
-                    {
-                        // or_l_adr16_dd — abww1 (the address out of the queue, m_pc = m_au), ablw3, adrl2
-                        BeginFetchState();
-                        ushort absolute = await FetchAsync();
-                        if (_busFaulted) return;
-                        await ReadLongOperandAsync(Ext32(absolute));
-                        if (_busFaulted) return;
-                        await OrIntoDataRegisterAsync(rx, clocks: 2);
-                        return;
-                    }
-
-                    case 1:
-                    {
-                        // or_l_adr32_dd — ablw1, ablw2 (two words of address, m_pc = m_au in the
-                        // second), ablw3, adrl2
-                        ushort high = await FetchAsync();
-                        if (_busFaulted) return;
-                        BeginFetchState();
-                        ushort low = await FetchAsync();
-                        if (_busFaulted) return;
-                        uint address = Merge16_32(high, low);
-                        await ReadLongOperandAsync(address);
-                        if (_busFaulted) return;
-                        await OrIntoDataRegisterAsync(rx, clocks: 2);
-                        return;
-                    }
-
-                    case 2:
-                    {
-                        // or_l_dpc_dd — adsl1, adsl2 (program-space read), adsl3, with the
-                        // displacement based on the extension word's own address
-                        ushort displacement = await FetchAsync();
-                        if (_busFaulted) return;
-                        await ReadLongOperandFromStreamAsync(_pc - 2 + Ext32(displacement));
-                        if (_busFaulted) return;
-                        await OrIntoDataRegisterAsync(rx, clocks: 2);
-                        return;
-                    }
-
-                    case 3:
-                    {
-                        // or_l_dpci_dd — aixw0 (2 clocks), the refill, adsl2, adsl3
-                        await IdleAsync();                 // aixw0
-                        ushort extension = await FetchAsync();
-                        if (_busFaulted) return;
-                        uint address = _pc - 2 + (uint)ExtensionDisplacement(extension) + IndexValue(extension);
-                        await ReadLongOperandFromStreamAsync(address);
-                        if (_busFaulted) return;
-                        await OrIntoDataRegisterAsync(rx, clocks: 2);
-                        return;
-                    }
-
-                    case 4:
-                    {
-                        // or_l_imm32_dd — e#l1, e#w1 (the immediate's two words), rorl1/rorl2, 25e, 25d
-                        _alub = await FetchAsync();
-                        if (_busFaulted) return;
-                        _dbin = await FetchAsync();
-                        if (_busFaulted) return;
-                        await OrIntoDataRegisterAsync(rx, clocks: 4);
-                        return;
-                    }
-                }
-
-                return;
+            default:
+                return await ReadLongEaAsync(mode, reg) is null ? null : Merge16_32(_alub, _dbin);
         }
     }
 
     /// <summary>
-    /// roml1, roml2, 25e, 25d — OR the operand read into <c>m_alub</c>/<c>m_dbin</c> into Dn, word by
-    /// word: the low half first, the instruction's own prefetch between the halves, then the high half
-    /// with Z only ever cleared. <paramref name="clocks"/> is the shape's closing idle run — 4 for a
-    /// register or immediate source (25e and 25d both miss the bus), 2 otherwise.
+    /// The two shapes whose operand is not at an address the EA machine builds: <c>(d16,PC)</c>,
+    /// <c>(d8,PC,Xn)</c> — read out of the instruction stream, and their first word carries the
+    /// stream's bus status — and an immediate, whose two words are the queue's own.
     /// </summary>
-    async ValueTask OrIntoDataRegisterAsync(int rx, int clocks)
+    async ValueTask<bool> ReadLongStreamOrImmediateAsync(int reg)
     {
-        _aluWidth = 1;
-        AluOr(_d[rx], _dbin);                              // roml1 — alu_or(Dn, m_dbin)
-        SetNzvc();                                         //        sr_nzvc
-        Set16L(rx, _aluo);                                 // 25c — set_16l
-
-        await TrailingFetchAsync();                        // roml2 — the one read of the instruction
-        if (_busFaulted) return;
-
-        AluOr(High16(_d[rx]), _alub);                      // 25e — alu_or(high16(Dn), m_alub)
-        SetNzvcU();                                        //        sr_nzvc_u
-        Set16H(rx, _aluo);                                 // 25d — set_16h
-
-        await IdleAsync(clocks);                           // the shape's closing idle clocks
-    }
-
-    /// <summary>
-    /// The memory-destination scripts of `or.l Dn, <ea>`: the operand's read block, then the shared
-    /// tail (morl1, morl2, morw2).
-    /// </summary>
-    async ValueTask OrLongIntoEaAsync(int mode, int reg, int rx)
-    {
-        switch (mode)
+        if (reg == 4)                                      // imm32 — e#l1, e#w1
         {
-            case 2:
-                // or_l_dd_ais — adrl1, adrl2, morl1, morl2, morw2
-                await OrIntoMemoryAsync(mode, reg, rx);
-                return;
-
-            case 3:
-                // or_l_dd_aips — pinl1, pinl2, pinl3, morl1, morl2, morw2
-                await OrIntoMemoryAsync(mode, reg, rx);
-                return;
-
-            case 4:
-                // or_l_dd_pais — pdcl1 (2 clocks), pdcl2, adrl2, morl1, morl2, morw2
-                await IdleAsync();                         // pdcl1's own 2 clocks
-                await OrIntoMemoryAsync(mode, reg, rx);
-                return;
-
-            case 5:
-                // or_l_dd_das — adsl1, adsl2, adsl3, morl1, morl2, morw2
-                await OrIntoMemoryAsync(mode, reg, rx);
-                return;
-
-            case 6:
-                // or_l_dd_dais — aixw0 (2 clocks), the refill, adsl2, adsl3, morl1, morl2, morw2
-                await IdleAsync();                         // aixw0's own 2 clocks
-                await OrIntoMemoryAsync(mode, reg, rx);
-                return;
-
-            case 7:
-                // or_l_dd_adr16 / or_l_dd_adr32 — abww1 or ablw1+ablw2, ablw3, adrl2, then the tail
-                await OrIntoMemoryAsync(mode, reg, rx);
-                return;
+            _alub = await FetchAsync();
+            if (_busFaulted) return false;
+            _dbin = await FetchAsync();
+            return !_busFaulted;
         }
+
+        if (reg == 2)                                      // dpc — adsl1
+        {
+            ushort displacement = await FetchAsync();
+            if (_busFaulted) return false;
+            await ReadLongOperandFromStreamAsync(_pc - 2 + Ext32(displacement));
+            return !_busFaulted;
+        }
+
+        // dpci — aixw0 (2 clocks), then the refill, adsl2, adsl3
+        await IdleAsync();
+        ushort extension = await FetchAsync();
+        if (_busFaulted) return false;
+        await ReadLongOperandFromStreamAsync(
+            _pc - 2 + (uint)ExtensionDisplacement(extension) + IndexValue(extension));
+        return !_busFaulted;
     }
 
     /// <summary>
-    /// The destination's address and its two words, then the RMW tail. The address is built by the
-    /// same state blocks the source side uses; the predecrement's decrement and the incremented
-    /// register's commit are the only shape-specific writes, and they stay where the script puts them.
+    /// The operand's address for the shapes that have one — the same states the source side uses —
+    /// the two words read, and the post-increment's commit. <c>null</c> when a bus cycle faulted.
     /// </summary>
-    async ValueTask OrIntoMemoryAsync(int mode, int reg, int rx)
+    /// <remarks>
+    /// The increment commits <em>after</em> both words (<c>pinl3</c>), so a word pair that faults
+    /// leaves the register where it was; the predecrement's own decrement commits before the read
+    /// (<c>pdcl2</c>), because the CPU has already moved the register when the cycle is issued.
+    /// </remarks>
+    async ValueTask<uint?> ReadLongEaAsync(int mode, int reg)
     {
         uint address;
 
         switch (mode)
         {
-            case 2:
-                address = GetA(reg);                       // adrl1 — m_aob = m_da[ry]
+            case 2:                                        // ais — adrl1's address
+                address = GetA(reg);
                 break;
 
-            case 3:
-                address = GetA(reg);                       // pinl1
+            case 3:                                        // aips — pinl1's address
+                address = GetA(reg);
                 break;
 
-            case 4:
-                address = GetA(reg) - 4;                   // pdcl1 — m_au = m_da[ry] - 4
+            case 4:                                        // pais — pdcl1 (2 clocks), pdcl2 (the decimal)
+                address = GetA(reg) - 4;
+                await IdleAsync();
+                SetA(reg, address);
                 break;
 
-            case 5:
+            case 5:                                        // das — adsl1, out of the queue
             {
-                ushort displacement = await FetchAsync();  // adsl1
-                if (_busFaulted) return;
+                ushort displacement = await FetchAsync();
+                if (_busFaulted) return null;
                 address = GetA(reg) + Ext32(displacement);
                 break;
             }
 
-            case 6:
-            {
-                ushort extension = await FetchAsync();     // aixw1/aixw2
-                if (_busFaulted) return;
-                address = GetA(reg) + (uint)ExtensionDisplacement(extension) + IndexValue(extension);
-                break;
-            }
+            case 6:                                        // dais — aixw0 (2 clocks), then the refill
+                await IdleAsync();
+                {
+                    ushort extension = await FetchAsync();
+                    if (_busFaulted) return null;
+                    address = GetA(reg) + (uint)ExtensionDisplacement(extension) + IndexValue(extension);
+                }
 
-            case 7:
-            {
+                break;
+
+            default:                                       // mode 7 — the absolute shapes only
                 if (reg == 0)
                 {
                     BeginFetchState();                     // abww1 — m_pc = m_au
                     ushort absolute = await FetchAsync();
-                    if (_busFaulted) return;
+                    if (_busFaulted) return null;
                     address = Ext32(absolute);
                 }
                 else
                 {
                     ushort high = await FetchAsync();      // ablw1 — no m_pc of its own
-                    if (_busFaulted) return;
+                    if (_busFaulted) return null;
                     BeginFetchState();                     // ablw2 — m_pc = m_au
                     ushort low = await FetchAsync();
-                    if (_busFaulted) return;
+                    if (_busFaulted) return null;
                     address = Merge16_32(high, low);
                 }
 
                 break;
-            }
-
-            default:
-                return;
         }
 
-        if (mode == 4)
-        {
-            SetA(reg, address);                            // pdcl2 — m_da[ry] = m_au
-        }
-
-        _alub = await ReadWordAsync(address);              // adrl1 / pinl1 — the high word
-        if (_busFaulted) return;
-        _dbin = await ReadWordAsync(address + 2);          // adrl2 / pinl2 — the low word
-        if (_busFaulted) return;
+        await ReadLongOperandAsync(address);
+        if (_busFaulted) return null;
 
         if (mode == 3)
         {
             SetA(reg, address + 4);                        // pinl3 — the increment commits, after the words
         }
 
-        await OrIntoMemoryLongAsync(rx, address);
+        return address;
+    }
+
+    // ---- the destination tails, one per place a result goes --------------------------------
+
+    /// <summary>
+    /// roml1, roml2, 25e, 25d (rorl/roal/cprl for the other families) — the operand ALUed into Dn,
+    /// word by word: the low half and the instruction's own prefetch between the halves, then the high
+    /// half. <paramref name="clocks"/> is the shape's closing idle run (see
+    /// <see cref="ClosingIdleClocks"/>).
+    /// </summary>
+    async ValueTask AluIntoDataRegisterAsync(int rx, AluLong kind, uint source, int clocks)
+    {
+        uint destination = _d[rx];
+
+        AluLongOp(source, destination, kind);              // roml1 — alu_or/alu_and/…(source, Dn)
+        SetLongFlags(kind, source, destination, _aluo, extend: kind is AluLong.Add or AluLong.Sub);
+        uint result = _aluo;
+
+        Set16L(rx, Low16(result));                         // 25c — set_16l
+
+        await TrailingFetchAsync();                        // roml2 — the one read of the instruction
+        if (_busFaulted) return;
+
+        Set16H(rx, High16(result));                        // 25d — set_16h
+
+        await IdleAsync(clocks);                           // the shape's closing idle clocks
     }
 
     /// <summary>
-    /// morl1, morl2, morw2 — the destination's words ORed with Dn and written back. The prefetch is
+    /// The same word-by-word ALU into an <b>address</b> register (ADDA/SUBA): the two
+    /// <c>set_16l</c>/<c>set_16h</c> writes are the destination's, and the flags do not move at all —
+    /// MAME's nanocode says <c>i=.......</c> on every state of these shapes.
+    /// </summary>
+    async ValueTask AluIntoAddressRegisterAsync(int rx, AluLong kind, uint source, int clocks)
+    {
+        uint destination = GetA(rx);
+
+        AluLongOp(source, destination, kind);              // roml1 — alu_add(m_dbin, m_da[rx])
+        uint result = _aluo;
+
+        SetA(rx, (destination & 0xFFFF0000) | Low16(result));    // 25c — set_16l on An
+
+        await TrailingFetchAsync();                        // roml2
+        if (_busFaulted) return;
+
+        SetA(rx, (GetA(rx) & 0xFFFF) | (High16(result) << 16));  // 25d — set_16h on An
+
+        await IdleAsync(clocks);
+    }
+
+    /// <summary>
+    /// morl1, morl2, morw2 — the destination's words ALUed with Dn and written back. The prefetch is
     /// <b>before</b> the writes (that is what a faulting or an interrupted instruction's frame saves),
     /// and the low word goes out first: the chip's ALU is sixteen bits wide, so a long write is two
     /// word cycles, `m_au - 2` in between.
     /// </summary>
-    async ValueTask OrIntoMemoryLongAsync(int rx, uint address)
+    async ValueTask AluIntoMemoryLongAsync(int rx, uint address, AluLong kind)
     {
         await TrailingFetchAsync();                        // morl1 — m_aob = m_au, the one read
         if (_busFaulted) return;
 
-        _aluWidth = 1;
-        AluOr(_d[rx], _dbin);                              // morl1 — the low half
-        SetNzvc();
-        ushort low = (ushort)_aluo;
+        uint source = _d[rx];
+        uint destination = Merge16_32(_alub, _dbin);
 
-        AluOr(High16(_d[rx]), _alub);                      // morl2 — the high half
-        SetNzvcU();
-        ushort high = (ushort)_aluo;
+        AluLongOp(source, destination, kind);              // morl1/morl2 — the low half, then the carry
+        SetLongFlags(kind, source, destination, _aluo, extend: kind is AluLong.Add or AluLong.Sub);
+        uint result = _aluo;
 
-        await WriteWordAsync(address + 2, low);            // morl2 — m_aob = m_au (= m_at + 2)
+        await WriteWordAsync(address + 2, (ushort)Low16(result));   // morl2 — m_aob = m_at + 2
         if (_busFaulted) return;
-        await WriteWordAsync(address, high);               // morw2 — m_au -= 2, the high word
+        await WriteWordAsync(address, (ushort)High16(result));      // morw2 — m_au -= 2, the high word
+    }
+
+    /// <summary>
+    /// CMP.l / CMPA.l — cpml1, cpml2, rcal3. Nothing is written back, so both halves are subtracted
+    /// <em>before</em> the closing prefetch (the destination's words in the OR tail are what put a
+    /// fetch between the halves there), and the flags are all the instruction leaves. X is untouched:
+    /// a comparison is not an arithmetic operation.
+    /// </summary>
+    async ValueTask CompareLongAsync(ushort op)
+    {
+        int rx = (op >> 9) & 0x7;
+        int mode = (op >> 3) & 0x7;
+        int reg = op & 0x7;
+
+        // CMPA.l compares against an address register: its opmode 7 is the operation, not a mode
+        bool toAddressRegister = ((op >> 6) & 0x7) == 7;
+
+        uint? source = await ReadLongSourceAsync(mode, reg);
+        if (source is null)
+        {
+            return;
+        }
+
+        uint destination = toAddressRegister ? GetA(rx) : _d[rx];
+
+        AluLongOp(source.Value, destination, AluLong.Sub); // cpml1/cpml2 — alu_sub + alu_subc
+        SetLongFlags(AluLong.Sub, source.Value, destination, _aluo, extend: false);
+
+        await TrailingFetchAsync();                        // cpml2's read
+        if (_busFaulted) return;
+
+        await IdleAsync();                                 // 08d rcal3
     }
 }
