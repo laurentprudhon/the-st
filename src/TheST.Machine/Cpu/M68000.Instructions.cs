@@ -1369,6 +1369,14 @@ public sealed partial class M68000
 
         if (((op >> 6) & 0x4) != 0 && size != 3)   // OR Dn,<ea> (opmode 100)
         {
+            if (size == 2)
+            {
+                // the long forms are scripted (M68000.Scripts.cs): the shape's read block and the
+                // RMW tail, in the microcode's order, charging their own clocks
+                await OrLongAsync(op);
+                return;
+            }
+
             uint value = _d[(op >> 9) & 0x7] & SizeMask(size);
             uint address = await EaAddressAsync(mode, reg, size);
             if (_busFaulted) return;
@@ -1384,6 +1392,12 @@ public sealed partial class M68000
         if (size == 3)   // DIVU / DIVS
         {
             await DivideAsync(op);
+            return;
+        }
+
+        if (size == 2)
+        {
+            await OrLongAsync(op);                 // or.l <ea>, Dn — scripted
             return;
         }
 
