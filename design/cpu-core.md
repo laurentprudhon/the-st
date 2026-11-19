@@ -298,3 +298,15 @@ What each dependent ticket inherits:
 - **#20 (memory)** — the answering-instant contract: the System Control Unit chooses `t_answer` from its slot schedule, and
   the CPU's wait state is that choice. The 4-clock cycle is a minimum, not a constant (slot phase,
   overscan, bus grant).
+
+## The instruction bodies — expanded from the microcode (2026-11-19)
+
+The three machines above decide the *seam* (decode, EA, bus leaf). What an instruction then does
+between its bus cycles is no longer a family-shaped handler with clauses: it is the microcode's own
+state list, expanded as C#. `M68000.Micro.cs` holds the elementary operations (an ALU op, a flag
+mask, a half-register write, an idle state, `m_pc = m_au`, a read with the instruction stream's bus
+status) and `M68000.Scripts.cs` the scripts, one per opcode shape, with MAME's state names in the
+comments. The tables are the specification and are never interpreted at run time — the project's
+readability rule (owner's ruling, ticket #78). The vocabulary table, the recipe for the next family,
+the ledger of what is ported and the two things still open are in
+[`cpu-scripts.md`](cpu-scripts.md).
