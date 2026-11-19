@@ -242,6 +242,17 @@ because 2 is a build with no behavioural payoff and 3 is the one that has one. W
 that the table is finite (1 231 shapes, five counters, one datum to read from the source), so 2 or 3 is a
 build order rather than a research question — which is what ADR 0009 §3 needed.
 
+**Update 2026-11-19 — shape 3 is where the core already is, and the corpus now grades it.** Since `#76`
+the residue is charged to the CPU's clock on the bus timeline (`M68000.Timing.cs`, one table and four
+charge points), and `cpu-tests`' `exact-clock` column is the verdict on it: **MAME 213 891 / 317 500
+(67.4 %), CLK 794 009 / 1 000 060 (79.4 %)** on the blessed tree, with `TAS`/`TRAPV` excluded and every
+faulting record still short the aborted cycle's 4. Two corrections that were a *predicate*, not a number:
+the to-`CCR` forms are `0x3C`, so a table keyed on `(op & 0x00C0) == 0x00C0` (which matches only the
+`0x7C` to-`SR` forms) charged them **zero** — their measured residue is **12**, 7 500 records. Where a
+family's clock sits is read off `scripts/microcode-walk.py` now, not inferred from a table: every
+micro-state is 2 clocks and every bus state 4, so an instruction's internal clock is its script's length
+minus its accesses (`research/mame-microcode-core.md` §1).
+
 ## 8. Reproduce
 
 ```
