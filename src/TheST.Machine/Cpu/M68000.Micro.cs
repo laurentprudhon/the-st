@@ -283,4 +283,247 @@ public sealed partial class M68000
             await ClocksAsync(4);
         }
     }
+
+    // ---- the sixteen-bit ALU of the variable-time families --------------------------------------
+    // MULU/MULS and DIVU/DIVS are loops: every micro-state is one ALU operation and one flag update,
+    // and the loop's *length* is a counter, so the clocks are a function of the value the core holds.
+    // Those states need the chip's own operations rather than the ALU-as-expression the other scripts
+    // use — MAME keeps three registers alive across states and so does this block:
+    //   m_isr   the flags of the operation just run (SrNzvc writes them into SR, SrNzvcU clears Z only)
+    //   m_alue  the second operand: the multiplier's shift register (MUL) and the quotient's (DIV)
+    //   m_au    the loop's counter, which the script decrements one bit at a time
+    // The values are transcribed from research/vendor/m68000/m68000.h, where they are sixteen bits
+    // wide: every operand is masked to 0xFFFF before the operation, exactly as the C++ is.
+
+    /// <summary>The flags of the last operation (<c>m_isr</c>).</summary>
+    ushort _isr;
+
+    /// <summary>The ALU's second operand register (<c>m_alue</c>, sixteen bits).</summary>
+    uint _alue;
+
+    /// <summary><c>alu_and</c> — a bitwise and; V and C fall to the state's flag update, not here.</summary>
+    void AluAnd16(uint a, uint b)
+    {
+        uint r = (b & a) & 0xFFFF;
+        _isr = (ushort)(_sr & FlagX);
+        if (r == 0)
+        {
+            _isr |= FlagZ;
+        }
+
+        if ((r & 0x8000) != 0)
+        {
+            _isr |= FlagN;
+        }
+
+        _aluo = r;
+    }
+
+    /// <summary><c>alu_add</c> — <c>b + a</c>, sixteen bits, with the carry out and the signed overflow.</summary>
+    void AluAdd16(uint a, uint b)
+    {
+        a &= 0xFFFF;
+        b &= 0xFFFF;
+        uint r = b + a;
+        _isr = 0;
+        if ((r & 0xFFFF) == 0)
+        {
+            _isr |= FlagZ;
+        }
+
+        if ((r & 0x8000) != 0)
+        {
+            _isr |= FlagN;
+        }
+
+        if ((r & 0x10000) != 0)
+        {
+            _isr |= (ushort)(FlagX | FlagC);
+        }
+
+        if ((((b & a & ~r) | (~b & ~a & r)) & 0x8000) != 0)
+        {
+            _isr |= FlagV;
+        }
+
+        _aluo = r & 0xFFFF;
+    }
+
+    /// <summary><c>alu_sub</c> — <c>b − a</c>: the microcode's argument order for every subtract here.</summary>
+    void AluSub16(uint a, uint b)
+    {
+        a &= 0xFFFF;
+        b &= 0xFFFF;
+        uint r = b - a;
+        _isr = 0;
+        if ((r & 0xFFFF) == 0)
+        {
+            _isr |= FlagZ;
+        }
+
+        if ((r & 0x8000) != 0)
+        {
+            _isr |= FlagN;
+        }
+
+        if ((r & 0x10000) != 0)
+        {
+            _isr |= (ushort)(FlagX | FlagC);
+        }
+
+        if ((((b & ~a & ~r) | (~b & a & r)) & 0x8000) != 0)
+        {
+            _isr |= FlagV;
+        }
+
+        _aluo = r & 0xFFFF;
+    }
+
+    /// <summary><c>alu_subc</c> — the same, with the latch's own carry as a borrow in.</summary>
+    void AluSubC16(uint a, uint b)
+    {
+        a &= 0xFFFF;
+        b &= 0xFFFF;
+        uint r = b - a - (uint)((_isr & FlagC) != 0 ? 1 : 0);
+        _isr = 0;
+        if ((r & 0xFFFF) == 0)
+        {
+            _isr |= FlagZ;
+        }
+
+        if ((r & 0x8000) != 0)
+        {
+            _isr |= FlagN;
+        }
+
+        if ((r & 0x10000) != 0)
+        {
+            _isr |= (ushort)(FlagX | FlagC);
+        }
+
+        if ((((b & ~a & ~r) | (~b & a & r)) & 0x8000) != 0)
+        {
+            _isr |= FlagV;
+        }
+
+        _aluo = r & 0xFFFF;
+    }
+
+    /// <summary>
+    /// <c>alu_over</c> — a divide's overflow exit: <b>N and V set</b>, and Z and C cleared by the
+    /// state's flag update. The manuals say V; the corpus's records for both divides carry `0x0A`
+    /// (`aN` and `aV`) on all 1 459 overflow records.
+    /// </summary>
+    void AluOver()
+    {
+        _isr = (ushort)(FlagV | FlagN);
+        _aluo = 0;
+    }
+
+    /// <summary>
+    /// <c>alu_sla0</c> / <c>alu_sla1</c> — the divide's shift of the <c>(m_aluo:m_alue)</c> pair one
+    /// bit left, with <paramref name="bit"/> shifted into the bottom. X is carried through and the
+    /// bit shifted out of the top becomes C.
+    /// </summary>
+    void AluSla(uint bit)
+    {
+        uint a = _aluo & 0xFFFF;
+        uint r = ((a << 17) | ((_alue & 0xFFFF) << 1) | (bit & 1));
+        _isr = (ushort)(_sr & FlagX);
+        if (r == 0)
+        {
+            _isr |= FlagZ;
+        }
+
+        if ((r & 0x80000000) != 0)
+        {
+            _isr |= FlagN;
+        }
+
+        if ((a & 0x8000) != 0)
+        {
+            _isr |= FlagC;
+        }
+
+        _alue = r & 0xFFFF;
+        _aluo = (r >> 16) & 0xFFFF;
+    }
+
+    /// <summary>
+    /// <c>alu_roxr32mu</c> — MULU's rotate: the <c>(m_aluo:m_alue)</c> pair right one bit, the carry in
+    /// at the top. This is the shift register the unsigned multiply accumulates in: the multiplier
+    /// leaves through the bottom while the partial product comes in at the top, which is why the
+    /// product's low half ends up in <c>m_alue</c> and its high half in <c>m_aluo</c>.
+    /// </summary>
+    void AluRoxr32mu()
+    {
+        uint a = _aluo & 0xFFFF;
+        uint r = ((a << 15) | ((_alue & 0xFFFF) >> 1) | ((_sr & FlagC) != 0 ? 0x80000000u : 0u));
+        _isr = 0;
+        if ((a & 1) != 0)
+        {
+            _isr |= FlagX;
+        }
+
+        if ((r & 0x80000000) != 0)
+        {
+            _isr |= FlagN;
+        }
+
+        if ((r & 0xFFFF0000) == 0)
+        {
+            _isr |= FlagZ;
+        }
+
+        _aluo = (r >> 16) & 0xFFFF;
+        _alue = r & 0xFFFF;
+    }
+
+    /// <summary>
+    /// <c>alu_roxr32ms</c> — MULS's rotate: the same shift register, but the bit shifted in is a copy of
+    /// the product's sign (Booth's recoding), read off N and V as the C++ does.
+    /// </summary>
+    void AluRoxr32ms()
+    {
+        uint a = _aluo & 0xFFFF;
+        uint nv = (uint)(_isr & (FlagN | FlagV));
+        uint r = ((a << 15)
+                  | ((_alue & 0xFFFF) >> 1)
+                  | (nv == FlagN || nv == FlagV ? 0x80000000u : 0u));
+        _isr = 0;
+        if ((a & 1) != 0)
+        {
+            _isr |= FlagX;
+        }
+
+        if ((r & 0x80000000) != 0)
+        {
+            _isr |= FlagN;
+        }
+
+        if ((r & 0xFFFF0000) == 0)
+        {
+            _isr |= FlagZ;
+        }
+
+        _aluo = (r >> 16) & 0xFFFF;
+        _alue = r & 0xFFFF;
+    }
+
+    /// <summary>
+    /// <c>sr_nzvc</c> — N, Z, V and C from the latch; X untouched. MULU/MULS and DIVU/DIVS set the
+    /// flags once per state this way, so a reader can follow the listing's <c>sr_*</c> calls.
+    /// </summary>
+    void SrNzvc() =>
+        _sr = (ushort)((_sr & ~(FlagN | FlagZ | FlagV | FlagC)) | (_isr & (FlagN | FlagZ | FlagV | FlagC)));
+
+    /// <summary>
+    /// <c>sr_nzvc_u</c> — the same, except that **Z can only be cleared**: the multiply's loop starts
+    /// with Z set and clears it as soon as a partial product is non-zero, and the divide's mantissa
+    /// shifts keep the Z of the whole computation. `~FlagZ` has the Z bit *clear*, which is what makes
+    /// the C++ expression below a clear-only update (it is easy to read as a no-op — it is not).
+    /// </summary>
+    void SrNzvcU() =>
+        _sr = (ushort)(((_sr & ~(FlagN | FlagV | FlagC) & (_isr | unchecked((ushort)~FlagZ)))
+                        | (_isr & (FlagN | FlagV | FlagC))) & 0xFFFF);
 }

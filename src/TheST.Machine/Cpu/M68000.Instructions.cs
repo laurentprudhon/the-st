@@ -650,25 +650,10 @@ public sealed partial class M68000
         // CHK
         if ((op & 0x01C0) == 0x0180)   // CHK (bits 8-6 = 110)
         {
-            // The flags are the corpus's, and they are not the PRM's "undefined": Z, V and C are always
-            // cleared, N is *set* when the trap is Dn < 0, *cleared* when it is Dn > bound, and left
-            // alone when there is no trap at all; X is untouched. The comparison is signed.
-            int bound = (short)(await ReadEaAsync(mode, reg, 1) & 0xFFFF);
-            if (_busFaulted) return;
-            int value = (short)(_d[(op >> 9) & 0x7] & 0xFFFF);
-
-            _sr = (ushort)(_sr & ~(FlagZ | FlagV | FlagC));
-            if (value < 0)
-            {
-                _sr = (ushort)(_sr | FlagN);
-                await EnterExceptionAsync(6, 0);
-            }
-            else if (value > bound)
-            {
-                _sr = (ushort)(_sr & ~FlagN);
-                await EnterExceptionAsync(6, 0);
-            }
-
+            // scripted (M68000.Scripts.cs): chkm1/chkr1, chkr2 and chkr3 are the instruction's six
+            // clocks, and the flags are the *second* comparison's — N and Z from the value, V and C
+            // cleared. Its three shapes' frames were two bytes high on all 410 failing records.
+            await CheckAsync(op);
             return;
         }
 
@@ -1440,7 +1425,17 @@ public sealed partial class M68000
 
         if (size == 3)   // DIVU / DIVS
         {
-            await DivideAsync(op);
+            // scripted (M68000.Scripts.cs): the restoring division's sixteen iterations are its clocks,
+            // and its overflow exit sets N *and* V (MAME's alu_over) where the old handler set V alone
+            if ((op & 0x0100) != 0)
+            {
+                await DivideSignedAsync(op);
+            }
+            else
+            {
+                await DivideUnsignedAsync(op);
+            }
+
             return;
         }
 
@@ -1456,65 +1451,6 @@ public sealed partial class M68000
         uint combined = destination | source;
         _d[(op >> 9) & 0x7] = (_d[(op >> 9) & 0x7] & ~SizeMask(size)) | (combined & SizeMask(size));
         SetLogicFlags(combined, size);
-    }
-
-    async ValueTask DivideAsync(ushort op)
-    {
-        bool signed = (op & 0x0100) != 0;
-        int reg = op & 0x7;
-        uint divisorValue = await ReadEaAsync((op >> 3) & 0x7, reg, 1);
-        if (_busFaulted) return;
-
-        uint dividend = _d[(op >> 9) & 0x7];
-
-        if (signed)
-        {
-            int divisor = (short)divisorValue;
-            int value = (int)dividend;
-            if (divisor == 0)
-            {
-                await EnterExceptionAsync(5, 0);   // divide by zero
-                return;
-            }
-
-            int quotient = value / divisor;
-            int remainder = value % divisor;
-
-            if (quotient > 32767 || quotient < -32768)
-            {
-                // an overflow leaves the register alone and touches V and C only: N, Z and X are the
-                // instruction's own undefined case and the corpus keeps whatever they were
-                _sr = (ushort)((_sr | FlagV) & ~FlagC);
-                _own = 12;                        // the short exit (LENGTH.md §5)
-                return;
-            }
-
-            _own = 122 + 2 * BitLength((uint)Math.Abs(quotient));
-            _d[(op >> 9) & 0x7] = (((uint)(ushort)remainder) << 16) | (uint)(ushort)quotient;
-        }
-        else
-        {
-            if (divisorValue == 0)
-            {
-                await EnterExceptionAsync(5, 0);
-                return;
-            }
-
-            uint quotient = dividend / divisorValue;
-            uint remainder = dividend % divisorValue;
-
-            if (quotient > 0xFFFF)
-            {
-                _sr = (ushort)((_sr | FlagV) & ~FlagC);
-                _own = 6;                         // the short exit (LENGTH.md §5)
-                return;
-            }
-
-            _own = 76 + 2 * BitLength(quotient);
-            _d[(op >> 9) & 0x7] = (remainder << 16) | quotient;
-        }
-
-        SetLogicFlags(_d[(op >> 9) & 0x7] & 0xFFFF, 1);
     }
 
     async ValueTask Line9Async(ushort op)   // SUB / SUBX / SUBA
@@ -1819,21 +1755,9 @@ public sealed partial class M68000
 
         if (size == 3)   // MULU / MULS
         {
-            bool signed = (op & 0x0100) != 0;
-            uint source = await ReadEaAsync(mode, reg, 1);
-            if (_busFaulted) return;
-            uint destination = _d[(op >> 9) & 0x7] & 0xFFFF;
-
-            _d[(op >> 9) & 0x7] = signed
-                ? (uint)((short)destination * (short)source)
-                : destination * source;
-
-            // MULU/MULS: 34 clocks plus 2 for every 1 bit in the operand's magnitude — the corpus's own
-            // trailing run is 34, 36, … 62/64 for MULU and MULS (LENGTH.md §5)
-            uint magnitude = signed ? (uint)Math.Abs((short)source) : source;
-            _own = 34 + 2 * System.Numerics.BitOperations.PopCount(magnitude);
-
-            SetLogicFlags(_d[(op >> 9) & 0x7], 2);
+            // scripted (M68000.Scripts.cs): the loop's shift register is the multiply, so its clock is
+            // the loop's own length (MULS's Booth recoding is why `34 + 2 x popcount` was wrong)
+            await MultiplyAsync(op);
             return;
         }
 

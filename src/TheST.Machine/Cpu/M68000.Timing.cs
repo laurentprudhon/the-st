@@ -135,7 +135,10 @@ public sealed partial class M68000
 
                 if ((op & 0xFFF8) == 0x4180 || (op & 0xFFF8) == 0x4100)
                 {
-                    return 6;                                       // CHK
+                    // CHK is scripted (M68000.Scripts.cs): chkm1/chkr1, chkr2 and chkr3 are its own
+                    // six clocks — the row below was the measured shape, and it charged the trap path
+                    // its success path's state
+                    return IsScriptedChk(op) ? 0 : 6;
                 }
 
                 if (op == 0x4E70)
@@ -211,6 +214,16 @@ public sealed partial class M68000
     /// </summary>
     int AluOwnClocks(ushort op, int line, int size, int mode)
     {
+        // MULU/MULS/DIVU/DIVS are scripts (M68000.Scripts.cs): their loops carry both the value and its
+        // clocks, so the table must not charge them at all — and the test has to come *first*, because
+        // two masked rows below claim them by accident: `(op & 0xF130) == 0x8100` is TESTED as ADDX/SUBX
+        // and matches `DIVS Dn,<any>` (0x81C5, 0x87C5 …), which charged 2 and left every register form
+        // 2 clocks long. A masked row is a claim on a *neighbour* until the port proves otherwise.
+        if (IsScriptedMultiply(op) || IsScriptedDivide(op))
+        {
+            return 0;
+        }
+
         // ADDX.l/SUBX.l are their own block (`asxl`/`rorl`), not the ALU tails — and they are the
         // reason the row below needed a predicate of its own: their size field at 2 lands them on the
         // ALU opmodes 2 and 6, so IsScriptedAluLong answered 0 for them by accident, and their clock
@@ -256,12 +269,6 @@ public sealed partial class M68000
             }
 
             return size == 2 ? (mode <= 1 ? 4 : 2) : 4;          // ADDA/SUBA: 4 on .w, 2/4 on .l
-        }
-
-        // MULU/MULS/DIVU/DIVS: data-dependent, filled in by the family once the operand is read
-        if ((op & 0x01C0) == 0x01C0)
-        {
-            return 0;
         }
 
         // the plain two-operand families: 0 for .b/.w, 2 for a long memory source and 4 for a long

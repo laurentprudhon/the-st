@@ -1411,4 +1411,754 @@ public sealed partial class M68000
 
         await WriteWordAsync(GetA(rx), (ushort)High16(result));    // morw2 — the high word, at m_at
     }
+
+    // =========================================================================================
+    // The variable-time families — MULU/MULS, DIVU/DIVS, CHK
+    // =========================================================================================
+    // Their clocks are a counter on a value the core holds: a multiply's loop shifts the multiplier one
+    // bit (MULU) or one Booth digit (MULS) at a time, a divide restores its remainder sixteen times, and
+    // CHK is the six clocks of its three comparison states. So a wrong value is a wrong clock, and the
+    // only transcription that can be right is the microcode's own loop, state for state. The states are
+    // M68000.Micro.cs's sixteen-bit ALU: `AluAdd16`/`AluSub16`/`AluAnd16` write the flag latch and each
+    // loop state ends with `SrNzvc`/`SrNzvcU`, exactly as the listing's `sr_nzvc` calls do.
+    //
+    // **The operand read is one block for all five**, because the microcode's word-EA states (`adrw1`,
+    // `adsw1`, `aixl0`, `abwl1` …) are the word block the single-operand families already use — with one
+    // difference the corpus measures: a PC-relative shape reads its operand through the *instruction
+    // stream* (`SSW_PROGRAM`), so a fault there records a program access in the frame's status word.
+    //
+    // The counter is MAME's `m_au`, loaded from the instruction's own timing constant (`m_ftu`): **15**
+    // for all five (the loop tests `au & 0x3f` and the MUL loops run sixteen bit-positions, the divide
+    // sixteen bits of quotient). Measured, not chosen: with 15 every non-faulting record of the four
+    // loops reproduces the corpus's own internal clocks, its destination register and its flags.
+
+    /// <summary>MULU (bit 8 clear) and MULS — line C, opmode 3.</summary>
+    static bool IsScriptedMultiply(ushort op) => (op & 0xF1C0) is 0xC0C0 or 0xC1C0;
+
+    /// <summary>DIVU (bit 8 clear) and DIVS — line 8, opmode 3.</summary>
+    static bool IsScriptedDivide(ushort op) => (op & 0xF1C0) is 0x80C0 or 0x81C0;
+
+    /// <summary>CHK — line 4, bits 8-6 = 110 (LEA's 111 is a different family).</summary>
+    static bool IsScriptedChk(ushort op) => (op & 0xF1C0) == 0x4180;
+
+    /// <summary>
+    /// MAME's <c>m_pc</c> while one of these families reads its operand: the boundary leaves it at the
+    /// instruction's <b>first extension word</b> (`opcode + 2`), and only an absolute address's fetch
+    /// state moves it (<see cref="BeginFetchState"/>). Measured on the group-0 frames of all five
+    /// families: `opcode + 2` when the extension words are a displacement or an index, `opcode + 4` for
+    /// `(xxx).w`, `opcode + 6` for `(xxx).l` — the same +2 the old handlers were high by on all 1 459
+    /// faulting records.
+    /// </summary>
+    void FrameSavesFirstExtensionWord() => _fetchStateAddress = _opcodeAddress + 2;
+
+    /// <summary>
+    /// The source operand of MULU/MULS/DIVU/DIVS/CHK: MAME's word-EA blocks, in the states' own order,
+    /// with their own idles. <c>null</c> when a bus cycle faulted, which ends the instruction.
+    /// </summary>
+    /// <remarks>
+    /// The two shapes with their own 2-clock state are `-(An)` (`pdcw1`, before the read) and the indexed
+    /// one (`aixl0`); everything else is the read alone. A PC-relative shape's read carries the
+    /// instruction stream's bus status (<see cref="ReadOperandProgramAsync"/>) — that is what makes its
+    /// fault frame a *program* access, and it is the one field the old handlers had wrong on every
+    /// PC-relative record.
+    /// </remarks>
+    async ValueTask<uint?> ReadWordSourceAsync(int mode, int reg)
+    {
+        uint value;
+
+        switch (mode)
+        {
+            case 0:                                            // ds — the register itself
+                return _d[reg] & 0xFFFF;
+
+            case 1:                                            // as
+                return GetA(reg) & 0xFFFF;
+
+            case 2:                                            // ais — adrw1, adrw2
+                value = await ReadWordAsync(GetA(reg));
+                break;
+
+            case 3:                                            // aips — pinw1, pinw2
+            {
+                uint address = GetA(reg);
+                SetA(reg, address + 2);                        // pinw2 commits *before* its read
+                value = await ReadWordAsync(address);
+                break;
+            }
+
+            case 4:                                            // pais — pdcw1 (2 clocks), pdcw2
+            {
+                uint address = GetA(reg) - 2;
+                BeginFetchState();                             // pdcw1 moves m_pc, unlike pinw1
+                await IdleAsync();
+                SetA(reg, address);
+                value = await ReadWordAsync(address);
+                break;
+            }
+
+            case 5:                                            // das — adsw1, adsw2, adrw2
+            {
+                ushort displacement = await FetchAsync();
+                if (_busFaulted) return null;
+                value = await ReadWordAsync(GetA(reg) + Ext32(displacement));
+                break;
+            }
+
+            case 6:                                            // dais — aixl0, aixl1, adrw2
+            {
+                await IdleAsync();
+                ushort extension = await FetchAsync();
+                if (_busFaulted) return null;
+                value = await ReadWordAsync(
+                    GetA(reg) + (uint)ExtensionDisplacement(extension) + IndexValue(extension));
+                break;
+            }
+
+            default:                                           // mode 7
+                switch (reg)
+                {
+                    case 0:                                    // adr16 — abwl1 (a fetch state), abwl2
+                        BeginFetchState();
+                        {
+                            ushort absolute = await FetchAsync();
+                            if (_busFaulted) return null;
+                            value = await ReadWordAsync(Ext32(absolute));
+                        }
+
+                        break;
+
+                    case 1:                                    // adr32 — abll1, abll2 (a fetch state), abll3
+                    {
+                        ushort high = await FetchAsync();
+                        if (_busFaulted) return null;
+                        BeginFetchState();
+                        ushort low = await FetchAsync();
+                        if (_busFaulted) return null;
+                        value = await ReadWordAsync(Merge16_32(high, low));
+                        break;
+                    }
+
+                    case 2:                                    // dpc — adsw1, adsw2, adrw2
+                    {
+                        ushort displacement = await FetchAsync();
+                        if (_busFaulted) return null;
+                        value = await ReadOperandProgramAsync(_pc - 2 + Ext32(displacement));
+                        break;
+                    }
+
+                    case 3:                                    // dpci — aixl0, aixl1, adrw2
+                    {
+                        await IdleAsync();
+                        ushort extension = await FetchAsync();
+                        if (_busFaulted) return null;
+                        value = await ReadOperandProgramAsync(
+                            _pc - 2 + (uint)ExtensionDisplacement(extension) + IndexValue(extension));
+                        break;
+                    }
+
+                    default:                                   // imm16 — e#w1, one read in the stream
+                        value = await FetchAsync();
+                        break;
+                }
+
+                break;
+        }
+
+        if (_busFaulted)
+        {
+            await ChargeAbortedReadAsync();
+            return null;
+        }
+
+        return value;
+    }
+
+    /// <summary>
+    /// MULU/MULS — <c>mulm1</c>/<c>mulr1</c>, <c>mulm2</c>, then the loop, then <c>mulm6</c>.
+    /// </summary>
+    /// <remarks>
+    /// The loop is a **shift register**, not a product: the multiplier sits in <c>m_alue</c>, its low bit
+    /// is tested, the multiplicand is added to <c>m_aluo</c> when it is set, and the 32-bit pair rotates
+    /// right — so after sixteen bits the product's low half is in <c>m_alue</c> and its high half in
+    /// <c>m_aluo</c>, which is what <c>mulm6</c> stores. MULS is the same register with Booth recoding:
+    /// two bits at a time, one state that adds, one that subtracts and one that does neither, which is
+    /// why its clock is not a function of the source's popcount (the old table's `34 + 2 × popcount` was
+    /// that guess, and it is wrong on 60 % of the records).
+    /// </remarks>
+    async ValueTask MultiplyAsync(ushort op)
+    {
+        bool signed = (op & 0x0100) != 0;
+        int rx = (op >> 9) & 0x7;
+        int mode = (op >> 3) & 0x7;
+        int reg = op & 0x7;
+
+        FrameSavesFirstExtensionWord();
+
+        uint? operand = await ReadWordSourceAsync(mode, reg);
+        if (operand is null)
+        {
+            return;
+        }
+
+        // mulr1 / mulm1 — m_alub is the multiplicand (the destination register), m_alue the multiplier;
+        // the flags start at Z set (alu_and(Dn, 0)) so the loop's clear-only Z reports the whole product
+        uint multiplicand = _d[rx] & 0xFFFF;
+        _alue = operand.Value & 0xFFFF;
+        AluAnd16(_d[rx], 0x0000);
+        SrNzvc();
+
+        // mulm2 — the first bit, the partial product's low word into Dn, and the instruction's one read
+        bool bit = (_alue & 1) != 0;
+        Set16L(rx, _aluo);
+        await TrailingFetchAsync();
+        if (_busFaulted)
+        {
+            return;
+        }
+
+        if (bit)
+        {
+            // mulm2's branch: MULU adds the multiplicand, MULS *subtracts* it (Booth's first digit)
+            if (signed)
+            {
+                AluSub16(multiplicand, _aluo);                 // mulm5
+            }
+            else
+            {
+                AluAdd16(multiplicand, _aluo);                 // mulm3
+            }
+
+            SrNzvcU();
+            await IdleAsync();
+        }
+
+        uint counter = 15;                                    // m_au = ext32(m_ftu)
+        while (true)
+        {
+            // mulm4 — the branch is decided *before* the rotate, on the bits the register holds now
+            int branch;
+            if ((counter & 0x3F) == 0)
+            {
+                branch = 0;
+            }
+            else if (signed)
+            {
+                branch = (_alue & 3) switch { 1 => 1, 2 => 2, _ => 3 };
+            }
+            else
+            {
+                branch = (_alue & 2) != 0 ? 1 : 2;
+            }
+
+            counter--;
+            if (signed)
+            {
+                AluRoxr32ms();
+            }
+            else
+            {
+                AluRoxr32mu();
+            }
+
+            SrNzvcU();
+            await IdleAsync();
+
+            if (branch == 0)
+            {
+                break;
+            }
+
+            if (branch == 1)
+            {
+                AluAdd16(multiplicand, _aluo);                  // mulm3
+                SrNzvcU();
+                await IdleAsync();
+            }
+            else if (branch == 2 && signed)
+            {
+                AluSub16(multiplicand, _aluo);                  // mulm5 — MULS's subtract
+                SrNzvcU();
+                await IdleAsync();
+            }
+        }
+
+        // mulm6 — the product from the pair, then the flags of its high half
+        _d[rx] = ((_aluo & 0xFFFF) << 16) | (_alue & 0xFFFF);
+        AluAnd16(_aluo, 0xFFFF);
+        SrNzvcU();
+        await IdleAsync();
+    }
+
+    /// <summary>
+    /// DIVU — <c>dvur1</c>, <c>dvum2</c>, <c>dvum3</c>, the sixteen times <c>dvum5</c>…<c>dvumc</c>, then
+    /// <c>dvum0</c>. A zero divisor is the group-1/2 exception (vector 5) and the instruction ends there.
+    /// </summary>
+    /// <remarks>
+    /// `<c>m_at</c>` is the working register: its high word holds the divisor and its low word the
+    /// remainder, and each bit subtracts the divisor from the shifted remainder — the restoring division
+    /// the manual describes. The **overflow** exit is <c>dvum4</c>: MAME's <c>alu_over</c> sets N *and* V
+    /// and the state's <c>sr_nzvc</c> clears Z and C, so the corpus's 585 DIVU / 874 DIVS records want
+    /// `N|V` where the old handler set V alone (and left Z standing).
+    /// </remarks>
+    async ValueTask DivideUnsignedAsync(ushort op)
+    {
+        int rx = (op >> 9) & 0x7;
+        int mode = (op >> 3) & 0x7;
+        int reg = op & 0x7;
+
+        FrameSavesFirstExtensionWord();
+
+        uint? operand = await ReadWordSourceAsync(mode, reg);
+        if (operand is null)
+        {
+            return;
+        }
+
+        uint dividend = _d[rx];
+        _alub = operand.Value & 0xFFFF;
+
+        // dvur1 — the divisor into the working register's high word, and its own flags
+        _alue = dividend & 0xFFFF;
+        uint at = _alub << 16;
+        AluAnd16(_alub, 0xFFFF);
+        SrNzvc();
+        await IdleAsync();
+
+        // dvum2 — a zero divisor is the exception; otherwise the high half of the dividend is compared
+        bool zero = (_isr & FlagZ) != 0;
+        AluSub16(_alub, High16(dividend));
+        SrNzvc();
+        await IdleAsync();
+        if (zero)
+        {
+            await EnterExceptionAsync(5, 0);
+            return;
+        }
+
+        // dvum3 — the borrow says whether a quotient fits in sixteen bits
+        bool borrow = (_isr & FlagC) != 0;
+        at = (at & 0xFFFF0000) | High16(dividend);
+        uint counter = 16;                                    // au = ftu + 1
+        AluAnd16(High16(dividend), 0xFFFF);
+        SrNzvc();
+        await IdleAsync();
+
+        if (!borrow)
+        {
+            // dvum4 — the quotient does not fit: N and V, the register untouched, one closing read
+            AluOver();
+            SrNzvc();
+            await TrailingFetchAsync();
+            return;
+        }
+
+        bool shiftOne = false;                                // dvum3 falls into dvum5's sla0
+        while (true)
+        {
+            // dvum5 / dvum6 — the shift, and the branch the *previous* subtraction's sign decides
+            bool negative = (_isr & FlagN) != 0;
+            counter--;
+            AluSla(shiftOne ? 1u : 0u);
+            SrNzvcU();
+            await IdleAsync();
+
+            // dvum8 / dvum7 — the subtract, and the last bit's exit
+            bool last = (counter & 0x3F) == 0;
+            at = (at & 0xFFFF0000) | _aluo;
+            AluSub16(_alub, _aluo);
+            SrNzvc();
+            await IdleAsync();
+
+            if (last)
+            {
+                // dvumc (the borrow test) or dvum9 — the remainder into Dn's high word
+                bool carry = (_isr & FlagC) != 0;
+                _d[rx] = (_d[rx] & 0xFFFF) | (_aluo << 16);
+                AluAnd16(_aluo, 0);
+                await IdleAsync();
+                if (!negative && carry)
+                {
+                    _alub = _aluo;                            // dvumf
+                    _d[rx] = (_d[rx] & 0xFFFF) | (at << 16);
+                    AluSla(0);
+                }
+                else
+                {
+                    _alub = _aluo;                            // dvumd
+                    AluSla(1);
+                }
+
+                break;
+            }
+
+            if (negative)
+            {
+                shiftOne = true;                              // dvum7 falls into dvum6's sla1
+                continue;
+            }
+
+            // dvumb — no borrow: the next bit shifts in a 1; a borrow restores and shifts in a 0
+            bool restore = (_isr & FlagC) != 0;
+            await IdleAsync();
+            if (!restore)
+            {
+                shiftOne = true;
+                continue;
+            }
+
+            AluAnd16(at, 0xFFFF);                             // dvume — the flags of the remainder
+            SrNzvc();
+            await IdleAsync();
+            shiftOne = false;
+        }
+
+        // dvum0 — the quotient's low word and the flags of the remainder
+        _d[rx] = (_d[rx] & 0xFFFF0000) | (_alue & 0xFFFF);
+        AluSub16(_alub, _alue);
+        SrNzvc();
+        await TrailingFetchAsync();
+    }
+
+    /// <summary>
+    /// DIVS — the signed division: the same sixteen-bit restoring loop inside a sign-fixing prologue and
+    /// epilogue. Written as MAME's states with their own labels, because the flow doubles back on itself
+    /// (the quotient's sign decides where the remainder's is fixed) in a way a structured loop cannot
+    /// state without a state variable that is harder to check against the listing.
+    /// </summary>
+    async ValueTask DivideSignedAsync(ushort op)
+    {
+        int rx = (op >> 9) & 0x7;
+        int mode = (op >> 3) & 0x7;
+        int reg = op & 0x7;
+
+        FrameSavesFirstExtensionWord();
+
+        uint? operand = await ReadWordSourceAsync(mode, reg);
+        if (operand is null)
+        {
+            return;
+        }
+
+        uint dividend = _d[rx];
+        uint at = 0;
+        uint counter = 0;
+        bool flag;
+
+        // dvs02 — the divisor's flags, and the working register's high word
+        _alub = operand.Value & 0xFFFF;
+        _alue = dividend & 0xFFFF;
+        at = _alub << 16;
+        AluAnd16(_alub, 0xFFFF);
+        SrNzvc();
+        await IdleAsync();
+
+        // dvs03 — zero divisor (the exception), a negative one (the dividend is complemented first) or
+        // a positive one; `alu_sub(m_alub, 0)` is the sign of the divisor itself
+        int sign = (_isr & FlagZ) != 0 ? 2 : (_isr & FlagN) != 0 ? 1 : 0;
+        AluSub16(_alub, 0);
+        SrNzvc();
+        await IdleAsync();
+
+        if (sign == 2)
+        {
+            await EnterExceptionAsync(5, 0);
+            return;
+        }
+
+        if (sign == 1)
+        {
+            _alub = _aluo;                                    // dvs05 — the complement stays in the ALU
+        }
+
+        goto dvs04;
+
+    dvs04:
+        // dvs04 / dvs05 — the dividend's high word into the working register
+        at = (at & 0xFFFF0000) | High16(dividend);
+        counter = 16;
+        AluAnd16(High16(dividend), 0xFFFF);
+        SrNzvc();
+        await IdleAsync();
+        goto dvs06;
+
+    dvs06:
+        // dvs06 — the dividend's sign decides whether the first subtraction is complemented
+        flag = (_isr & FlagN) != 0;
+        AluSub16(dividend, 0);
+        await IdleAsync();
+        if (flag)
+        {
+            goto dvs10;
+        }
+
+        AluSub16(_alub, at);                                  // dvs07
+        SrNzvc();
+        await IdleAsync();
+        goto dvs08;
+
+    dvs10:
+        _alue = _aluo;
+        AluSubC16(High16(dividend), 0);
+        await IdleAsync();
+
+        // dvs11
+        at = (at & 0xFFFF0000) | _aluo;
+        AluSub16(_alub, _aluo);
+        SrNzvc();
+        await IdleAsync();
+
+    dvs08:
+        // dvs08 — the quotient would not fit: to the overflow exit
+        flag = (_isr & FlagC) != 0;
+        AluAnd16(at, 0xFFFF);
+        SrNzvc();
+        await IdleAsync();
+        if (!flag)
+        {
+            goto dvuma;
+        }
+
+    dvs09:
+        counter--;
+        AluSla(0);
+        await IdleAsync();
+
+    dvs0c:
+        // dvs0c — the subtract, and the last bit's exit
+        flag = (counter & 0x3F) == 0;
+        at = (at & 0xFFFF0000) | _aluo;
+        AluSub16(_alub, _aluo);
+        SrNzvc();
+        await IdleAsync();
+        if (flag)
+        {
+            goto dvs0e;
+        }
+
+        goto dvs0d;
+
+    dvs0d:
+        flag = (_isr & FlagC) != 0;
+        await IdleAsync();
+        if (flag)
+        {
+            goto dvs0f;
+        }
+
+        goto dvs0a;
+
+    dvs0a:
+        counter--;
+        AluSla(1);
+        await IdleAsync();
+        goto dvs0c;
+
+    dvs0f:
+        AluAnd16(at, 0xFFFF);
+        SrNzvc();
+        await IdleAsync();
+        goto dvs09;
+
+    dvs0e:
+        flag = (_isr & FlagC) != 0;
+        await IdleAsync();
+        if (flag)
+        {
+            goto dvs12;
+        }
+
+        goto dvs13;
+
+    dvs13:
+        at = (at & 0xFFFF0000) | _aluo;
+        AluSla(1);
+        await IdleAsync();
+        goto dvs14;
+
+    dvs12:
+        counter--;
+        AluSla(0);
+        await IdleAsync();
+        goto dvs14;
+
+    dvs14:
+        // dvs14 — the remainder's sign, then the quotient's
+        AluAnd16(at >> 16, 0xFFFF);
+        SrNzvc();
+        await IdleAsync();
+
+        // dvs15
+        flag = (_isr & FlagN) != 0;
+        _alub = _alue;
+        AluAnd16(High16(dividend), 0xFFFF);
+        SrNzvc();
+        await IdleAsync();
+        if (flag)
+        {
+            goto dvs1d;
+        }
+
+        goto dvs16;
+
+    dvs16:
+        flag = (_isr & FlagN) != 0;
+        at = (at & 0xFFFF) | ((at & 0xFFFF) << 16);            // set_16h(m_at, m_at)
+        AluAnd16(_alub, 0xFFFF);
+        SrNzvc();
+        await IdleAsync();
+        if (flag)
+        {
+            goto dvs1a;
+        }
+
+        goto dvs17;
+
+    dvs1d:
+        flag = (_isr & FlagN) != 0;
+        at = (at & 0xFFFF) | ((at & 0xFFFF) << 16);
+        AluAnd16(_alub, 0xFFFF);
+        SrNzvc();
+        await IdleAsync();
+        if (flag)
+        {
+            goto dvs1e;
+        }
+
+        goto dvs1f;
+
+    dvs17:
+        flag = (_isr & FlagN) != 0;
+        at = (at & 0xFFFF0000) | _aluo;
+        AluAnd16(_aluo, 0xFFFF);
+        SrNzvc();
+        if (flag)
+        {
+            goto dvuma;
+        }
+
+        goto leaa2;
+
+    dvs1a:
+        AluSub16(_alub, 0);
+        SrNzvc();
+        await IdleAsync();
+
+        // dvs1b
+        flag = (_isr & (FlagZ | FlagN)) != 0;
+        _alub = _aluo;
+        at = (at & 0xFFFF0000) | _aluo;
+        AluSub16(High16(at), 0);
+        await IdleAsync();
+        if (flag)
+        {
+            goto dvs1c;
+        }
+
+        goto dvum4;
+
+    dvs1f:
+        AluSub16(_alub, 0);
+        SrNzvc();
+        await IdleAsync();
+
+        // dvs20
+        flag = (_isr & (FlagZ | FlagN)) != 0;
+        at = (at & 0xFFFF0000) | _aluo;
+        AluAnd16(_aluo, 0xFFFF);
+        SrNzvc();
+        if (flag)
+        {
+            goto leaa2;
+        }
+
+        goto dvuma;
+
+    dvs1e:
+        flag = (_isr & FlagN) != 0;
+        _alub = _aluo;
+        at = (at & 0xFFFF0000) | _aluo;
+        AluSub16(High16(at), 0);
+        await IdleAsync();
+        if (flag)
+        {
+            goto dvum4;
+        }
+
+        goto dvs1c;
+
+    dvs1c:
+        at = (at & 0x0000FFFF) | (_aluo << 16);
+        AluAnd16(_alub, 0xFFFF);
+        SrNzvc();
+        goto leaa2;
+
+    dvum4:
+    dvuma:
+        // dvum4 / dvuma — the overflow exit: N and V, the register untouched, then the closing read
+        AluOver();
+        SrNzvc();
+        await TrailingFetchAsync();
+        return;
+
+    leaa2:
+        // leaa2 — the quotient in the whole register, then the closing read
+        _d[rx] = at;
+        await TrailingFetchAsync();
+    }
+
+    /// <summary>
+    /// CHK — <c>chkm1</c>/<c>chkr1</c>, <c>chkr2</c>, then <c>chkr3</c> or the trap (vector 6), then
+    /// <c>chkr4</c>'s closing read.
+    /// </summary>
+    /// <remarks>
+    /// The two comparisons are the whole instruction: <c>bound − value</c> (V or N means the value is out
+    /// of range) and then the value's own sign (N means it is negative). The flags the corpus keeps are
+    /// the second comparison's — **N and Z from the value, V and C cleared**, X untouched — which is why
+    /// the six clocks are three states and the trap path is two.
+    /// </remarks>
+    async ValueTask CheckAsync(ushort op)
+    {
+        int rx = (op >> 9) & 0x7;
+        int mode = (op >> 3) & 0x7;
+        int reg = op & 0x7;
+
+        FrameSavesFirstExtensionWord();
+
+        uint? operand = await ReadWordSourceAsync(mode, reg);
+        if (operand is null)
+        {
+            return;
+        }
+
+        uint value = _d[rx] & 0xFFFF;
+
+        // chkr1 — the chip latches the value, and compares bound - value for the range test
+        _alub = value;
+        AluSub16(value, operand.Value & 0xFFFF);
+        SrNzvc();
+        await IdleAsync();
+
+        // chkr2 — the value's own flags, and the branch the range test decided
+        bool outOfRange = (_isr & (FlagV | FlagN)) != 0;
+        AluAnd16(_alub, 0xFFFF);
+        SrNzvc();
+        await IdleAsync();
+
+        if (outOfRange)
+        {
+            await EnterExceptionAsync(6, 0);                  // chkr2 branches straight to the trap
+            return;
+        }
+
+        // chkr3 — the value's own sign is the second test, and only this path runs the state
+        bool negative = (_isr & FlagN) != 0;
+        await IdleAsync();
+        if (negative)
+        {
+            await EnterExceptionAsync(6, 0);
+            return;
+        }
+
+        await TrailingFetchAsync();                           // chkr4
+    }
 }
