@@ -625,6 +625,173 @@ public sealed partial class M68000
     }
 
     // =========================================================================================
+    // The single-operand families — NOT, NEG, NEGX, CLR, TST, and their one read-modify-write block
+    // =========================================================================================
+    //
+    // Five mnemonics, one script shape: the operand's two words (`adrl1`/`adrl2`, `pinl1`..`pinl3`,
+    // `pdcl1`/`pdcl2`, `adsl1`..`adsl3`, `aixw*`, `abww1`/`ablw3`), then `nnml1`/`nnml2`/`morw2` for the
+    // four that write back and `tsml1`/`tsml2` for the one that does not. `nnml1` is the state that both
+    // runs the ALU's low half and issues the instruction's closing prefetch (`m_pc = m_au`); `nnml2`
+    // writes the low word at `address + 2`; `morw2` writes the high one at `address`.
+    //
+    // `CLR` reads the operand it is about to zero (the corpus's frames record the read) — so it is the
+    // same block, with `alu_and(word, 0)`, and not a store.
+
+    /// <summary>
+    /// The five single-operand members, keyed by the line-4 operation field (<c>op &gt;&gt; 9</c> is 0, 1, 2,
+    /// 3 and 5 — the field, read as three bits, so `TST`'s 5 is its own value).
+    /// </summary>
+    enum SingleOperand
+    {
+        Negx,
+        Clr,
+        Neg,
+        Not,
+        Tst
+    }
+
+    /// <summary>
+    /// The long forms of <b>NOT</b>, <b>CLR</b>, <b>NEG</b>, <b>NEGX</b> and <b>TST</b> — one RMW block, so
+    /// one predicate. Everything the size field excludes from these five operation fields is another
+    /// instruction and stays where it is: `MOVE from SR` (<c>0x40C0</c>), `MOVE from CCR` (<c>0x42C0</c>),
+    /// `MOVE to CCR` (<c>0x44C0</c>), `MOVE to SR` (<c>0x46C0</c>), `TAS` (<c>0x4AC0</c>) — all size 3 — and
+    /// `MOVEM`/`LEA`/`CHK`, which are size 3 as well. `An` direct is not an alterable EA, and the corpus
+    /// carries no PC-relative or immediate shape for these five (`0x4AFC` is `ILLEGAL`).
+    /// </summary>
+    static bool IsScriptedSingleOperandLong(ushort op)
+    {
+        if ((op >> 12) != 0x4 || ((op >> 6) & 0x3) != 2)
+        {
+            return false;
+        }
+
+        int operation = (op >> 8) & 0xF;
+        int mode = (op >> 3) & 0x7;
+        int reg = op & 0x7;
+
+        if (mode == 1 || (mode == 7 && reg > 1))
+        {
+            return false;
+        }
+
+        // the operation field is bits 11-8 (four bits: the five families are 0x0 NEGX, 0x2 CLR, 0x4 NEG,
+        // 0x6 NOT, 0xA TST). Reading it as bits 11-9 makes 0x4180 — `CHK` — look like NEGX.l, and that
+        // costs CHK 896 records: 0x4180 is 0100 0001 10 mmm rrr, so its "size" field really is 10
+        return operation is 0x0 or 0x2 or 0x4 or 0x6 or 0xA;
+    }
+
+    /// <summary>
+    /// One long single-operand instruction: the operand block, the ALU, and either the two writes
+    /// (`nnml2`, `morw2`) or none (`tsml2`).
+    ///
+    /// <para>
+    /// The register form is the same block with no bus cycle of its own: `nnrl1` latches the prefetch's
+    /// start and runs the ALU on the low half, `nnrl2` writes it back (`set_16l`) and finishes the flags,
+    /// and `roal4` — the shape's closing 2 clocks — writes the high half after the prefetch read. That is
+    /// why a fault at the prefetch leaves the destination half-updated, and why the idle state is `TST`'s
+    /// to omit (`tsrl2` ends the script).
+    /// </para>
+    /// </summary>
+    async ValueTask SingleOperandLongAsync(ushort op)
+    {
+        SingleOperand kind = ((op >> 8) & 0xF) switch
+        {
+            0x0 => SingleOperand.Negx,
+            0x2 => SingleOperand.Clr,
+            0x4 => SingleOperand.Neg,
+            0x6 => SingleOperand.Not,
+            _ => SingleOperand.Tst                              // 0xA
+        };
+
+        int mode = (op >> 3) & 0x7;
+        int reg = op & 0x7;
+
+        if (mode == 0)                                     // nnrl1, nnrl2, roal4 / tsrl1, tsrl2
+        {
+            uint register = _d[reg];
+            uint result = SingleOperandResult(kind, register);
+            SetSingleOperandFlags(kind, register, result);
+
+            if (kind == SingleOperand.Tst)
+            {
+                await TrailingFetchAsync();                // tsrl2 — the instruction's one read
+                return;
+            }
+
+            Set16L(reg, Low16(result));                    // nnrl2 — set_16l, before the fetch
+            await TrailingFetchAsync();                    // nnrl2 — the instruction's one read
+            if (_busFaulted) return;
+
+            Set16H(reg, High16(result));                   // roal4 — set_16h
+            await IdleAsync();                             // roal4 — the shape's closing 2 clocks
+            return;
+        }
+
+        uint? address = await ReadLongEaAsync(mode, reg);
+        if (address is null)
+        {
+            return;
+        }
+
+        await TrailingFetchAsync();                        // nnml1/tsml1 — m_pc = m_au, the one read
+        if (_busFaulted) return;
+
+        uint operand = Merge16_32(_alub, _dbin);
+        uint outcome = SingleOperandResult(kind, operand);
+        SetSingleOperandFlags(kind, operand, outcome);
+
+        if (kind == SingleOperand.Tst)
+        {
+            return;                                        // tsml2 — nothing is written back
+        }
+
+        await WriteWordAsync(address.Value + 2, (ushort)Low16(outcome));   // nnml2 — m_aob = m_at
+        if (_busFaulted) return;
+        await WriteWordAsync(address.Value, (ushort)High16(outcome));      // morw2 — m_au = m_at - 2
+    }
+
+    /// <summary>
+    /// <c>alu_not</c>, <c>alu_and(word, 0)</c> (CLR), <c>alu_sub(word, 0)</c> (NEG), <c>alu_subx</c> (NEGX)
+    /// and <c>alu_and(word, 0xFFFF)</c> (TST) — thirty-two bits wide, once, as the two-operand longs do:
+    /// the low word's carry out is the high word's carry in, so one 32-bit operation gives the same final
+    /// result and the same final flags. NEGX's extend is the current <c>X</c>.
+    /// </summary>
+    uint SingleOperandResult(SingleOperand kind, uint operand) => kind switch
+    {
+        SingleOperand.Clr => 0,
+        SingleOperand.Not => ~operand,
+        SingleOperand.Neg => 0 - operand,
+        SingleOperand.Negx => 0 - operand - (uint)((_sr & FlagX) != 0 ? 1 : 0),
+        _ => operand                                      // TST
+    };
+
+    /// <summary>
+    /// The five flag rules, each its own: `NOT`/`CLR`/`TST` are logic operations (`m=.nzvc`, `X` untouched,
+    /// `V` and `C` cleared), `NEG` is a subtract from zero (`X` follows `C`, which is set for every non-zero
+    /// operand), and `NEGX` is the exchange form — a subtract from zero with the extend bit, whose `Z` is
+    /// only ever <em>cleared</em> so a chain reports the whole result.
+    /// </summary>
+    void SetSingleOperandFlags(SingleOperand kind, uint operand, uint result)
+    {
+        switch (kind)
+        {
+            case SingleOperand.Neg:
+                SetSubFlags(operand, 0, result, 2);        // sr_xnzvc + sr_xnzvc_u
+                return;
+
+            case SingleOperand.Negx:
+                SetExchangeFlags(true, operand, 0, result, 2);
+                return;
+
+            default:                                       // NOT, CLR, TST — sr_nzvc + sr_nzvc_u
+                _sr = (ushort)(_sr & ~(FlagN | FlagZ | FlagV | FlagC));
+                if (result == 0) _sr |= FlagZ;
+                if ((result & 0x8000_0000) != 0) _sr |= FlagN;
+                return;
+        }
+    }
+
+    // =========================================================================================
     // The control transfers — BSR, JMP, UNLK
     // =========================================================================================
     //

@@ -103,6 +103,13 @@ public sealed partial class M68000
                     return 0;
                 }
 
+                // NOT/CLR/NEG/NEGX/TST .l are scripted (M68000.Scripts.cs): their RMW block's states are
+                // their clocks, and the row below never charged the memory shapes any
+                if (IsScriptedSingleOperandLong(op))
+                {
+                    return 0;
+                }
+
                 if ((op & 0xFFF8) == 0x4840 || (op & 0xFFF8) == 0x4880 || (op & 0xFFF8) == 0x48C0)
                 {
                     return 0;                                       // SWAP, EXT.W, EXT.L

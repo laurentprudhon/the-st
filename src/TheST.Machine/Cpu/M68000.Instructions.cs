@@ -613,6 +613,15 @@ public sealed partial class M68000
             return;
         }
 
+        if (IsScriptedSingleOperandLong(op))
+        {
+            // scripted (M68000.Scripts.cs): NOT/CLR/NEG/NEGX/TST .l — one RMW block (nnml1 -> nnml2 ->
+            // morw2, or tsml1/tsml2 for TST), which is where the table had nothing to charge: CLR.l's
+            // clock column was 8 short on 1 580 records because the microcode charges two states there
+            await SingleOperandLongAsync(op);
+            return;
+        }
+
         // LEA
         if ((op & 0x01C0) == 0x01C0)
         {
