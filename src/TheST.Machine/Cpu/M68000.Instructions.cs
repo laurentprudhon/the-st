@@ -622,6 +622,14 @@ public sealed partial class M68000
             return;
         }
 
+        if (IsScriptedSingleOperandWord(op))
+        {
+            // and the same five in .w, over the word block: adrw1/adrw2, pinw1/pinw2, pdcw1/pdcw2,
+            // adsw1/adsw2, aixw*, abwl1/abll3, then nnmw1 + morw2 (TST: tsmw1 + mmrw3)
+            await SingleOperandWordAsync(op);
+            return;
+        }
+
         // LEA
         if ((op & 0x01C0) == 0x01C0)
         {

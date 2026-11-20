@@ -110,6 +110,12 @@ public sealed partial class M68000
                     return 0;
                 }
 
+                // …and so are the .w forms: the word block (adrw1/adrw2 … nnmw1 + morw2) is its clocks
+                if (IsScriptedSingleOperandWord(op))
+                {
+                    return 0;
+                }
+
                 if ((op & 0xFFF8) == 0x4840 || (op & 0xFFF8) == 0x4880 || (op & 0xFFF8) == 0x48C0)
                 {
                     return 0;                                       // SWAP, EXT.W, EXT.L

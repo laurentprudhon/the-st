@@ -638,8 +638,8 @@ public sealed partial class M68000
     // same block, with `alu_and(word, 0)`, and not a store.
 
     /// <summary>
-    /// The five single-operand members, keyed by the line-4 operation field (<c>op &gt;&gt; 9</c> is 0, 1, 2,
-    /// 3 and 5 — the field, read as three bits, so `TST`'s 5 is its own value).
+    /// The five single-operand members, keyed by the line-4 operation field (<c>op &gt;&gt; 8</c> is 0, 2, 4,
+    /// 6 and 10 — the field read as four bits, so `TST`'s 10 is its own value).
     /// </summary>
     enum SingleOperand
     {
@@ -651,16 +651,17 @@ public sealed partial class M68000
     }
 
     /// <summary>
-    /// The long forms of <b>NOT</b>, <b>CLR</b>, <b>NEG</b>, <b>NEGX</b> and <b>TST</b> — one RMW block, so
-    /// one predicate. Everything the size field excludes from these five operation fields is another
-    /// instruction and stays where it is: `MOVE from SR` (<c>0x40C0</c>), `MOVE from CCR` (<c>0x42C0</c>),
-    /// `MOVE to CCR` (<c>0x44C0</c>), `MOVE to SR` (<c>0x46C0</c>), `TAS` (<c>0x4AC0</c>) — all size 3 — and
-    /// `MOVEM`/`LEA`/`CHK`, which are size 3 as well. `An` direct is not an alterable EA, and the corpus
-    /// carries no PC-relative or immediate shape for these five (`0x4AFC` is `ILLEGAL`).
+    /// The five families over one size field: <b>NOT</b>, <b>CLR</b>, <b>NEG</b>, <b>NEGX</b> and
+    /// <b>TST</b> — one RMW block per size, so one predicate per size. Everything the size field excludes
+    /// from these five operation fields is another instruction and stays where it is: `MOVE from SR`
+    /// (<c>0x40C0</c>), `MOVE from CCR` (<c>0x42C0</c>), `MOVE to CCR` (<c>0x44C0</c>), `MOVE to SR`
+    /// (<c>0x46C0</c>), `TAS` (<c>0x4AC0</c>) — all size 3 — and `MOVEM`/`LEA`/`CHK`, which are size 3 as
+    /// well. `An` direct is not an alterable EA, and the corpus carries no PC-relative or immediate shape
+    /// for these five (`0x4AFC` is `ILLEGAL`).
     /// </summary>
-    static bool IsScriptedSingleOperandLong(ushort op)
+    static bool IsScriptedSingleOperand(ushort op, int size)
     {
-        if ((op >> 12) != 0x4 || ((op >> 6) & 0x3) != 2)
+        if ((op >> 12) != 0x4 || ((op >> 6) & 0x3) != size)
         {
             return false;
         }
@@ -680,6 +681,19 @@ public sealed partial class M68000
         return operation is 0x0 or 0x2 or 0x4 or 0x6 or 0xA;
     }
 
+    static bool IsScriptedSingleOperandLong(ushort op) => IsScriptedSingleOperand(op, 2);
+
+    static bool IsScriptedSingleOperandWord(ushort op) => IsScriptedSingleOperand(op, 1);
+
+    static SingleOperand SingleOperandKindOf(ushort op) => ((op >> 8) & 0xF) switch
+    {
+        0x0 => SingleOperand.Negx,
+        0x2 => SingleOperand.Clr,
+        0x4 => SingleOperand.Neg,
+        0x6 => SingleOperand.Not,
+        _ => SingleOperand.Tst                                  // 0xA
+    };
+
     /// <summary>
     /// One long single-operand instruction: the operand block, the ALU, and either the two writes
     /// (`nnml2`, `morw2`) or none (`tsml2`).
@@ -694,14 +708,7 @@ public sealed partial class M68000
     /// </summary>
     async ValueTask SingleOperandLongAsync(ushort op)
     {
-        SingleOperand kind = ((op >> 8) & 0xF) switch
-        {
-            0x0 => SingleOperand.Negx,
-            0x2 => SingleOperand.Clr,
-            0x4 => SingleOperand.Neg,
-            0x6 => SingleOperand.Not,
-            _ => SingleOperand.Tst                              // 0xA
-        };
+        SingleOperand kind = SingleOperandKindOf(op);
 
         int mode = (op >> 3) & 0x7;
         int reg = op & 0x7;
@@ -710,7 +717,7 @@ public sealed partial class M68000
         {
             uint register = _d[reg];
             uint result = SingleOperandResult(kind, register);
-            SetSingleOperandFlags(kind, register, result);
+            SetSingleOperandFlags(kind, register, result, 2);
 
             if (kind == SingleOperand.Tst)
             {
@@ -738,7 +745,7 @@ public sealed partial class M68000
 
         uint operand = Merge16_32(_alub, _dbin);
         uint outcome = SingleOperandResult(kind, operand);
-        SetSingleOperandFlags(kind, operand, outcome);
+        SetSingleOperandFlags(kind, operand, outcome, 2);
 
         if (kind == SingleOperand.Tst)
         {
@@ -748,6 +755,145 @@ public sealed partial class M68000
         await WriteWordAsync(address.Value + 2, (ushort)Low16(outcome));   // nnml2 — m_aob = m_at
         if (_busFaulted) return;
         await WriteWordAsync(address.Value, (ushort)High16(outcome));      // morw2 — m_au = m_at - 2
+    }
+
+    /// <summary>
+    /// One <b>word</b> single-operand instruction — the same five families, the same ALU and flags, a
+    /// different block: `adrw1`/`adrw2`, `pinw1`/`pinw2`, `pdcw1`/`pdcw2`, `adsw1`/`adsw2`, `aixw*`,
+    /// `abwl1`/`abll3`, then `nnmw1` + `morw2` (`TST`: `tsmw1` + `mmrw3`, and no write).
+    ///
+    /// <para>
+    /// Three ways the word block is not the long one shrunk. (1) The register form is `nnrw1` + `roaw2`
+    /// with <b>no closing idle</b>: `NOT.w Dn` is 4 clocks (`NOT.l Dn` is 6, `roal4`'s 2 being the
+    /// difference). (2) `pdcw1` is a state that writes `m_pc = m_au` before it steps `An` down — the
+    /// long form's `pdcl1` does not — so a `-(An)` word operand's fault saves the counter from there.
+    /// (3) `pinw2` commits the post-increment <em>before</em> its read (the long form's `pinl3` commits
+    /// after both words), so a faulting `(An)+` word read leaves `An` incremented.
+    /// </para>
+    /// </summary>
+    async ValueTask SingleOperandWordAsync(ushort op)
+    {
+        SingleOperand kind = SingleOperandKindOf(op);
+
+        int mode = (op >> 3) & 0x7;
+        int reg = op & 0x7;
+
+        if (mode == 0)                                     // nnrw1, roaw2 / tsrw1, mmrw3
+        {
+            uint register = _d[reg] & 0xFFFF;
+            uint result = SingleOperandResult(kind, register);
+            SetSingleOperandFlags(kind, register, result, 1);
+
+            if (kind == SingleOperand.Tst)
+            {
+                await TrailingFetchAsync();                // mmrw3 — the instruction's one read
+                return;
+            }
+
+            Set16L(reg, result);                           // roaw2 — set_16l, before the fetch
+            await TrailingFetchAsync();                    // roaw2 — the instruction's one read
+            return;                                        // no closing idle: the word form ends here
+        }
+
+        uint? address = await ReadWordEaAsync(mode, reg);
+        if (address is null)
+        {
+            return;
+        }
+
+        uint operand = _dbin;
+        uint outcome = SingleOperandResult(kind, operand);
+        SetSingleOperandFlags(kind, operand, outcome, 1);  // nnmw1/tsmw1 — the ALU and its flags
+
+        await TrailingFetchAsync();                        // nnmw1/tsmw1 — m_pc = m_au, the one read
+        if (_busFaulted) return;
+
+        if (kind == SingleOperand.Tst)
+        {
+            return;                                        // mmrw3 closes; nothing is written back
+        }
+
+        await WriteWordAsync(address.Value, (ushort)outcome);   // morw2 — the word at m_at
+    }
+
+    /// <summary>
+    /// The word operand's address and its read — the same EA states the long script uses, with the
+    /// word block's own three differences: `adrw1` is an address latch with no bus cycle, `pdcw1`
+    /// begins a fetch state, and `pinw2` commits the increment before the read.
+    /// </summary>
+    async ValueTask<uint?> ReadWordEaAsync(int mode, int reg)
+    {
+        uint address;
+
+        switch (mode)
+        {
+            case 2:                                        // ais — adrw1, the address and nothing else
+                address = GetA(reg);
+                break;
+
+            case 3:                                        // aips — pinw1
+                address = GetA(reg);
+                break;
+
+            case 4:                                        // pais — pdcw1 (2 clocks), pdcw2 (the commit)
+                BeginFetchState();                         // pdcw1 — m_pc = m_au
+                address = GetA(reg) - 2;
+                await IdleAsync();
+                SetA(reg, address);
+                break;
+
+            case 5:                                        // das — adsw1, out of the queue
+            {
+                ushort displacement = await FetchAsync();
+                if (_busFaulted) return null;
+                address = GetA(reg) + Ext32(displacement);
+                break;
+            }
+
+            case 6:                                        // dais — aixw0 (2 clocks), then the refill
+                await IdleAsync();
+                {
+                    ushort extension = await FetchAsync();
+                    if (_busFaulted) return null;
+                    address = GetA(reg) + (uint)ExtensionDisplacement(extension) + IndexValue(extension);
+                }
+
+                break;
+
+            default:                                       // mode 7 — the absolute shapes only
+                if (reg == 0)
+                {
+                    BeginFetchState();                     // abwl1 — m_pc = m_au
+                    ushort absolute = await FetchAsync();
+                    if (_busFaulted) return null;
+                    address = Ext32(absolute);
+                }
+                else
+                {
+                    ushort high = await FetchAsync();      // abll1 — no m_pc of its own
+                    if (_busFaulted) return null;
+                    BeginFetchState();                     // abll2 — m_pc = m_au
+                    ushort low = await FetchAsync();
+                    if (_busFaulted) return null;
+                    address = Merge16_32(high, low);
+                }
+
+                break;
+        }
+
+        if (mode == 3)
+        {
+            SetA(reg, address + 2);                        // pinw2 — the increment, before the read
+        }
+
+        _dbin = await ReadWordAsync(address);              // adrw2 / abll3 — SSW_DATA | SSW_R
+        if (_busFaulted)
+        {
+            await ChargeAbortedReadAsync();
+            return null;
+        }
+
+        return address;
     }
 
     /// <summary>
@@ -769,25 +915,29 @@ public sealed partial class M68000
     /// The five flag rules, each its own: `NOT`/`CLR`/`TST` are logic operations (`m=.nzvc`, `X` untouched,
     /// `V` and `C` cleared), `NEG` is a subtract from zero (`X` follows `C`, which is set for every non-zero
     /// operand), and `NEGX` is the exchange form — a subtract from zero with the extend bit, whose `Z` is
-    /// only ever <em>cleared</em> so a chain reports the whole result.
+    /// only ever <em>cleared</em> so a chain reports the whole result. <paramref name="size"/> is the
+    /// core's own size code (1 = word, 2 = long), which is all the width the rules need.
     /// </summary>
-    void SetSingleOperandFlags(SingleOperand kind, uint operand, uint result)
+    void SetSingleOperandFlags(SingleOperand kind, uint operand, uint result, int size)
     {
         switch (kind)
         {
             case SingleOperand.Neg:
-                SetSubFlags(operand, 0, result, 2);        // sr_xnzvc + sr_xnzvc_u
+                SetSubFlags(operand, 0, result, size);     // sr_xnzvc + sr_xnzvc_u
                 return;
 
             case SingleOperand.Negx:
-                SetExchangeFlags(true, operand, 0, result, 2);
+                SetExchangeFlags(true, operand, 0, result, size);
                 return;
 
             default:                                       // NOT, CLR, TST — sr_nzvc + sr_nzvc_u
+            {
+                uint masked = result & SizeMask(size);
                 _sr = (ushort)(_sr & ~(FlagN | FlagZ | FlagV | FlagC));
-                if (result == 0) _sr |= FlagZ;
-                if ((result & 0x8000_0000) != 0) _sr |= FlagN;
+                if (masked == 0) _sr |= FlagZ;
+                if ((masked & (uint)SignBit(size)) != 0) _sr |= FlagN;
                 return;
+            }
         }
     }
 
