@@ -94,7 +94,7 @@ not move, and the boot still reaches the desktop (§5).
 
 `IsScriptedAluLong` in `M68000.Scripts.cs` is the ledger of ported families; the single-operand
 families are the exception — their ledger is `IsScriptedSingleOperand(op, size)` with one predicate per
-size (`IsScriptedSingleOperandLong`, `IsScriptedSingleOperandWord`).
+size (`IsScriptedSingleOperandLong`, `IsScriptedSingleOperandWord` and `IsScriptedSingleOperandByte`).
 
 | family | shapes | lines | MAME records | result |
 |---|---|---|---|---|
@@ -114,6 +114,7 @@ size (`IsScriptedSingleOperandLong`, `IsScriptedSingleOperandWord`).
 | `RTS` / `RTR` / `RTE` | 1 each | 3 lines each (`ChargeAbortedReadAsync`) | 2 500 each | **2 500 / 2 500** each, 1 263 / 1 285 / 1 886 → **2 500** exact-clock |
 | `NOT` / `NEG` / `NEGX` / `CLR` / `TST` `.l` | 8 each, **one** method | ~150 (the RMW block + two helpers) | 2 500 a file | **2 500 / 2 500** each (was 1 867 / 1 918 / 1 891 / 1 921 / 1 886), **every record exact-clock** |
 | the same five `.w` | 8 each, **one** method | ~140 (the word block, `ReadWordEaAsync`) | 2 500 a file | **2 500 / 2 500** each (was 2 251 / 2 262 / 2 244 / 2 248 / 2 254), **every record exact-clock** |
+| the same five `.b` | 8 each, **the same** method | + `size` 0 in the block and the step (`ReadSmallEaAsync`) | 2 500 a file | **2 500 / 2 500** each, and 12 500 exact-clock — `CLR.b` was the only one short (401 → 2 500) |
 
 The control transfers are the first family whose **frame's saved counter** the script decides, and they
 are also where the queue's lookahead shows: a transfer never refills the slot behind the word it took, so
@@ -155,6 +156,19 @@ fetch state before it steps `An` down, `pinw2` commits the post-increment **befo
 faulting `(An)+` word read leaves `An` stepped, where the long form's `pinl3` leaves it alone), and the
 register form ends on `roaw2` with no closing idle. `ReadWordEaAsync` is that block; the ALU, the flags and
 `SingleOperandResult` are shared, which is why the second size cost ~140 lines and not a second family.
+
+Size 0 is the *same* block and it cost two conditionals, which is the port's one clean demonstration that
+these tables are per-shape and not per-size: `adrw1`/`adrw2` … `nnmw1` + `morw2` are one script for the
+byte and the word, and only two facts depend on the width — the access (`ReadByteAsync`/`WriteByteAsync`,
+i.e. the lane the reference's `m_edb >>= 8` yields) and the EA's **unit step**, one byte except on `A7`
+where the byte forms step by two (`pinw1`/`pdcw1`: `m_au = m_da[ry] + (ry < 15 ? 1 : 2)`). So
+`SingleOperandWordAsync` became `SingleOperandWordOrByteAsync(op, size)` over
+`ReadSmallEaAsync(mode, reg, size)`, and the register form writes `set_8` where the word writes
+`set_16l`. The batch was a **clock** batch, not a state one: four of the five byte files were already
+2 500 / 2 500 and exact-clock, and the single gap was `CLR` — its old handler only wrote, and the
+reference reads the operand it zeroes, so every memory record was one access (4 clocks) short. The
+lesson generalises: **an instruction that the microcode's ALU reads `m_dbin` in is a read on the bus**,
+and a handler that computes from a constant is invisible until someone counts the cycles.
 
 The 18 OR.l shapes are 18 short methods over **five** shared blocks (the operand pair, the
 register-destination tail, the memory-destination tail, the program-status read, and the two idle
@@ -303,4 +317,31 @@ exactly the five files'. Boot: desktop **611**, pops 34 217.6 → 34 245.0 a fra
 (G8 8.77 ms at n 760). **Both folds moved** and are the owner's blessing of 2026-11-20: `run.digest`
 `a649d65961ba6c10efda5602c9d203f921f66236115f611dc708d071792b6ae7`, `run.stream`
 `8785ea1da0fc797432da8fd2595fa8ceff09d9755f5798405d8ace46e7478126` — row 71's `8506aeb6…` / `bf9808c4…`
+is the pair they replace.
+
+The single-operand **bytes**, and the width that is the whole of the third batch (row 73, 2026-11-20):
+
+| measure | `main` (after row 72) | the single-operand bytes scripted |
+|---|---|---|
+| MAME gate, whole corpus | 304 721 / 317 500 (96.0 %) | **304 721 / 317 500 — unchanged, the failure set identical record for record** |
+| files green | 90 of 127 | **90 of 127** (no file was red in the batch) |
+| `NOT.b` / `TST.b` / `NEGX.b` / `NEG.b` / `CLR.b` | 2 500 each on state | **2 500 each**, all exact-clock |
+| their exact-clock column | 2 500 / 2 500 / 2 500 / 2 500 / **401** | **2 500 each** |
+| exact-clock, whole corpus | 253 228 (79.8 %) | **255 327 (80.4 %)** (+2 099, exactly `CLR.b`'s memory records) |
+| CLK beside it | 862 212 / 1 000 060 | **862 212 — zero record moves** |
+| sample (`--dir tests/680x0/v1`) | 2 540 / 2 976 | **2 540 / 2 976** |
+
+Size 0 is the **same** block as size 1, not a third one: `adrw1`/`adrw2` … `nnmw1` + `morw2` are one
+script for both widths, and only the access (a byte's lane, the reference's `m_edb >>= 8` on an even
+address) and the EA's unit step differ — one byte, except on `A7`, whose byte forms step by two
+(`pinw1`/`pdcw1`: `m_au = m_da[ry] + (ry < 15 ? 1 : 2)`). So this batch's cost was `size` 0 in the block
+and in the step, and the two places a register write differs (`set_8` in place of `set_16l`). The state
+column did not move at all, which is the point worth keeping: **a clock-only gap lives in an access the
+instruction does not make**, and here it was `CLR` — the microcode's `clr_bw_*` read the operand they
+zero (`nnmw1` runs `alu_and8` on `m_dbin`, never on a constant), while the old handler only wrote, so
+every memory record was one read (4 clocks) short. Boot: desktop **611**, pops 34 245.0 → 34 246.7 a
+frame, `validate.sh` **PASS** (G8 8.94 ms at n 760). **Both folds moved** and are the owner's blessing of
+2026-11-20: `run.digest`
+`00a727cf80c237eb00757f3afc61f95601d5bbe9cf7d6a1e5e3c79b5541d02b3`, `run.stream`
+`a7209d81575a3620a2bc4dbd19d5e7c707df8d89d6c826d599db48203fd88582` — row 72's `a649d659…` / `8785ea1d…`
 is the pair they replace.
