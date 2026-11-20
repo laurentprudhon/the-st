@@ -1574,16 +1574,33 @@ public sealed partial class M68000
     }
 
     /// <summary>
-    /// MULU/MULS — <c>mulm1</c>/<c>mulr1</c>, <c>mulm2</c>, then the loop, then <c>mulm6</c>.
+    /// MULU / MULS — <c>mulr1</c>/<c>mulm1</c>, <c>mulm2</c>, the loop (<c>mulm3</c>/<c>mulm4</c>/<c>mulm5</c>),
+    /// then <c>mulm6</c>. The product is M x sum(b_i · 2^i) over the multiplier's sixteen bits — a
+    /// shift-and-add, run as sixteen states because the ALU is sixteen bits wide and the chip has no
+    /// multiplier to call.
     /// </summary>
     /// <remarks>
-    /// The loop is a **shift register**, not a product: the multiplier sits in <c>m_alue</c>, its low bit
-    /// is tested, the multiplicand is added to <c>m_aluo</c> when it is set, and the 32-bit pair rotates
-    /// right — so after sixteen bits the product's low half is in <c>m_alue</c> and its high half in
-    /// <c>m_aluo</c>, which is what <c>mulm6</c> stores. MULS is the same register with Booth recoding:
-    /// two bits at a time, one state that adds, one that subtracts and one that does neither, which is
-    /// why its clock is not a function of the source's popcount (the old table's `34 + 2 × popcount` was
-    /// that guess, and it is wrong on 60 % of the records).
+    /// <para>M = <c>m_alub</c> = the destination's low word, Q = <c>m_alue</c> = the source word. The pair
+    /// (<c>m_aluo</c> : <c>m_alue</c>) is the whole state — the accumulator in the high half, the
+    /// multiplier in the low half — and each rotate is the recurrence
+    /// <c>P = floor((P + b·M·2^16) / 2)</c> with <c>P0 = Q</c>. Each step halves the register, so the
+    /// weight of the add shrinks to the bit's own place, and after sixteen rotates the accumulator has
+    /// absorbed exactly <c>sum(b_i·M·2^i) = M·Q</c>. The multiplier's bits leave through the bottom, one
+    /// per rotate — which is why the branch tests bit 1 and not bit 0: bit 0 was consumed by the previous
+    /// rotate — while the partial product arrives at the top through the add's carry. The pair then *is*
+    /// the product, and <c>mulm6</c> stores it whole.</para>
+    /// <para>MULS is the same register with Booth's recoding. A negative multiplier is a two's-complement
+    /// bit string, so its raw bits do not sum to the right thing; the digits are the bit *differences*
+    /// (<c>d_i = b_i − b_(i−1)</c>, so -1, 0 or +1), which is why one state adds (<c>mulm3</c>), one
+    /// subtracts (<c>mulm5</c>) and one does neither, and why the rotate shifts in the accumulator's sign
+    /// instead of the carry: the multiplier is sign-extended into the register, so a negative
+    /// multiplier's run of leading 1s is digit 0 and costs nothing. Its clock is therefore 38 + 2k with k
+    /// the number of signed digits — *not* the source's popcount, which is what the old timing table
+    /// guessed (<c>34 + 2 × popcount</c>) and got wrong on 60 % of the records.</para>
+    /// <para>Flags: N from bit 31 of the product, Z from "the whole product is zero" (Z is *set* before
+    /// the loop and the loop's flag update can only clear it), V and C cleared by <c>mulm6</c>, X
+    /// untouched. Clocks: 4 for the read + 2 × 16 for the rotates + 2n for the adds + 2 for the closing
+    /// state = 38 + 2n, the manual's own formula, emerging from the loop instead of from a table.</para>
     /// </remarks>
     async ValueTask MultiplyAsync(ushort op)
     {
@@ -1600,14 +1617,21 @@ public sealed partial class M68000
             return;
         }
 
-        // mulr1 / mulm1 — m_alub is the multiplicand (the destination register), m_alue the multiplier;
-        // the flags start at Z set (alu_and(Dn, 0)) so the loop's clear-only Z reports the whole product
+        // mulr1 / mulm1 — the chip's operands: m_alub takes the multiplicand (the destination register's
+        // low word) and m_alue the multiplier (the source word), which makes the pair
+        // (accumulator : multiplier) the multiply's entire state. The flags start at *Z set* —
+        // alu_and(Dn, 0) — because the loop updates them with sr_nzvc_u, which can only clear Z: a Z left
+        // standing after sixteen states therefore means every partial product was zero, i.e. the product
+        // is zero. That is how a clear-only flag ends up carrying the instruction's Z.
         uint multiplicand = _d[rx] & 0xFFFF;
         _alue = operand.Value & 0xFFFF;
         AluAnd16(_d[rx], 0x0000);
         SrNzvc();
 
-        // mulm2 — the first bit, the partial product's low word into Dn, and the instruction's one read
+        // mulm2 — the first multiplier bit (bit 0, tested here because the loop's test reads bit 1: the
+        // register shifts between the two tests), the latch — still the zero mulm1 left — into Dn's low
+        // word, and the instruction's one bus read. The read sits *inside* the instruction, after the
+        // operands are already latched, which is why a fault here saves the pc the later states leave.
         bool bit = (_alue & 1) != 0;
         Set16L(rx, _aluo);
         await TrailingFetchAsync();
@@ -1618,7 +1642,10 @@ public sealed partial class M68000
 
         if (bit)
         {
-            // mulm2's branch: MULU adds the multiplicand, MULS *subtracts* it (Booth's first digit)
+            // mulm2's branch — the first digit. MULU adds the multiplicand for a 1 bit; MULS *subtracts*
+            // it, because Booth's first digit looks at bit 0 against an implied bit -1 of zero, so a 1 at
+            // bit 0 is the digit -1. Getting this one branch the wrong way round still multiplies, but by
+            // the complement — it was the first bug this port had.
             if (signed)
             {
                 AluSub16(multiplicand, _aluo);                 // mulm5
@@ -1632,10 +1659,18 @@ public sealed partial class M68000
             await IdleAsync();
         }
 
-        uint counter = 15;                                    // m_au = ext32(m_ftu)
+        // m_au = ext32(m_ftu) — the loop's trip count is the instruction's timing constant, not a literal
+        // in the microcode: it is 15 for all five variable-time families, and the sixteen rotates it
+        // gives are the multiply's sixteen bits. (Found by brute force against the corpus's clocks: no
+        // vendored file sets it, and 15 is the value that reproduces every non-faulting record.)
+        uint counter = 15;
         while (true)
         {
-            // mulm4 — the branch is decided *before* the rotate, on the bits the register holds now
+            // mulm4 — the branch is decided *before* the rotate, on the bits the register holds now. For
+            // MULU it is the next multiplier bit (bit 1). For MULS it is a Booth digit read off the low
+            // two bits — 01 adds, 10 subtracts, 00 and 11 do neither — which is the whole difference
+            // between the two instructions' clock columns. The counter's zero test comes first, so the
+            // sixteenth rotate is the one that ends the loop.
             int branch;
             if ((counter & 0x3F) == 0)
             {
@@ -1651,6 +1686,10 @@ public sealed partial class M68000
             }
 
             counter--;
+
+            // the half-step of the recurrence: the pair shifts right one bit, with the previous add's
+            // carry (MULU) or the accumulator's sign (MULS) entering at bit 31. The counter has already
+            // been decremented, so the rotate's own clock is charged before the exit is taken.
             if (signed)
             {
                 AluRoxr32ms();
@@ -1670,19 +1709,29 @@ public sealed partial class M68000
 
             if (branch == 1)
             {
+                // mulm3 — add the multiplicand to the accumulator's high half. The carry out of this
+                // sixteen-bit add is the bit the next rotate shifts back in at bit 31: the accumulator is
+                // only half of a thirty-two-bit register, so the bit that falls off its top is caught in
+                // C and put back. That round trip is the multiply's column arithmetic.
                 AluAdd16(multiplicand, _aluo);                  // mulm3
                 SrNzvcU();
                 await IdleAsync();
             }
             else if (branch == 2 && signed)
             {
-                AluSub16(multiplicand, _aluo);                  // mulm5 — MULS's subtract
+                // mulm5 — MULS's digit is -1: subtract the multiplicand instead. A borrow here means the
+                // accumulator went negative, and the next rotate's sign-in bit is what keeps that from
+                // corrupting the multiplier's remaining digits.
+                AluSub16(multiplicand, _aluo);                  // mulm5
                 SrNzvcU();
                 await IdleAsync();
             }
         }
 
-        // mulm6 — the product from the pair, then the flags of its high half
+        // mulm6 — the pair read whole is the product: the high half is the accumulator, the low half what
+        // is left of the multiplier (which is why the product's low sixteen bits were never a separate
+        // value). The flags come from the high half: N is bit 31, and Z — set before the loop and only
+        // ever cleared — is "the whole product is zero". V and C are cleared by this same and, X survives.
         _d[rx] = ((_aluo & 0xFFFF) << 16) | (_alue & 0xFFFF);
         AluAnd16(_aluo, 0xFFFF);
         SrNzvcU();
@@ -1691,14 +1740,28 @@ public sealed partial class M68000
 
     /// <summary>
     /// DIVU — <c>dvur1</c>, <c>dvum2</c>, <c>dvum3</c>, the sixteen times <c>dvum5</c>…<c>dvumc</c>, then
-    /// <c>dvum0</c>. A zero divisor is the group-1/2 exception (vector 5) and the instruction ends there.
+    /// <c>dvum0</c>. Restoring long division in base 2: N = Q·D + R with 0 ≤ R &lt; D, one bit per
+    /// iteration, sixteen iterations because the quotient is sixteen bits wide.
     /// </summary>
     /// <remarks>
-    /// `<c>m_at</c>` is the working register: its high word holds the divisor and its low word the
-    /// remainder, and each bit subtracts the divisor from the shifted remainder — the restoring division
-    /// the manual describes. The **overflow** exit is <c>dvum4</c>: MAME's <c>alu_over</c> sets N *and* V
-    /// and the state's <c>sr_nzvc</c> clears Z and C, so the corpus's 585 DIVU / 874 DIVS records want
-    /// `N|V` where the old handler set V alone (and left Z standing).
+    /// <para>The schoolbook step, per bit: <c>R = 2R + n_i</c>, then "if R is at least D, R = R − D and
+    /// the quotient bit is 1, else the quotient bit is 0" — with <c>Q = sum(q_i · 2^(15−i))</c>. What
+    /// makes the microcode cheap is that both halves of one register do the work: (<c>m_aluo</c> :
+    /// <c>m_alue</c>) holds the remainder in its high half and the dividend's *remaining bits* in its low
+    /// half, so one left shift is the doubling *and* the bring-down of the next bit — free, because the
+    /// dividend is already in the register — and the bit the shift pushes in at the bottom is the
+    /// quotient bit being assembled in the low half's tail. After sixteen shifts the dividend's bits have
+    /// all been consumed into comparisons and the low half holds the quotient, which <c>dvum0</c> stores;
+    /// the remainder is left in the high half, which <c>dvumc</c>/<c>dvum9</c> store.</para>
+    /// <para><c>m_at</c> is the safety net: its low word keeps the remainder as it stood *before* each
+    /// subtract, so the restore path (<c>dvume</c>) puts it back by moving a word (and its flags) rather
+    /// than adding the divisor again, and its high word keeps the divisor.</para>
+    /// <para>The two exits. A zero divisor is the group-1/2 exception (vector 5), taken at <c>dvum2</c>
+    /// before anything is written. And <c>dvum3</c> subtracts the divisor from the dividend's high half:
+    /// a borrow means the high half is smaller than the divisor, i.e. the quotient fits — no borrow means
+    /// it does not, and <c>dvum4</c> sets <b>N and V</b> (<c>alu_over</c>) with Z and C cleared and Dn
+    /// untouched. The manual says V; the corpus's 585 DIVU and 874 DIVS overflow records all want
+    /// <c>N|V</c>, and that difference is 1 459 records of the gate.</para>
     /// </remarks>
     async ValueTask DivideUnsignedAsync(ushort op)
     {
@@ -1717,14 +1780,18 @@ public sealed partial class M68000
         uint dividend = _d[rx];
         _alub = operand.Value & 0xFFFF;
 
-        // dvur1 — the divisor into the working register's high word, and its own flags
+        // dvur1 — the divisor into the working register's high word (where the states that need it read
+        // it), the dividend's low word into the shift register's low half (its bits are the ones the loop
+        // will compare, one per shift), and the divisor's own flags.
         _alue = dividend & 0xFFFF;
         uint at = _alub << 16;
         AluAnd16(_alub, 0xFFFF);
         SrNzvc();
         await IdleAsync();
 
-        // dvum2 — a zero divisor is the exception; otherwise the high half of the dividend is compared
+        // dvum2 — the divide-by-zero test is "is the divisor zero" read off the flags just set, and the
+        // same state measures the dividend's high half against the divisor: subtracting the divisor from
+        // it leaves a borrow in C exactly when the high half is smaller, i.e. when the quotient fits.
         bool zero = (_isr & FlagZ) != 0;
         AluSub16(_alub, High16(dividend));
         SrNzvc();
@@ -1735,7 +1802,9 @@ public sealed partial class M68000
             return;
         }
 
-        // dvum3 — the borrow says whether a quotient fits in sixteen bits
+        // dvum3 — latch the borrow (the overflow verdict), put the dividend's high half into the working
+        // register's low word (it is the loop's starting remainder), and load the counter with ftu + 1:
+        // sixteen iterations, because sixteen quotient bits are what has to be produced.
         bool borrow = (_isr & FlagC) != 0;
         at = (at & 0xFFFF0000) | High16(dividend);
         uint counter = 16;                                    // au = ftu + 1
@@ -1745,24 +1814,33 @@ public sealed partial class M68000
 
         if (!borrow)
         {
-            // dvum4 — the quotient does not fit: N and V, the register untouched, one closing read
+            // dvum4 — the quotient does not fit in sixteen bits: N and V (alu_over), Z and C cleared, Dn
+            // untouched, and the one closing read. Ten clocks in total: this exit is why the corpus's
+            // shortest DIVU records are ten long.
             AluOver();
             SrNzvc();
             await TrailingFetchAsync();
             return;
         }
 
-        bool shiftOne = false;                                // dvum3 falls into dvum5's sla0
+        // dvum3 falls into dvum5's shift with a 0, which is the first "bring down a bit" of the divide.
+        bool shiftOne = false;
         while (true)
         {
-            // dvum5 / dvum6 — the shift, and the branch the *previous* subtraction's sign decides
+            // dvum5 / dvum6 — the shift: the pair moves left one bit, doubling the remainder and pulling
+            // the next dividend bit up into it, with the *previous* comparison's quotient bit entering at
+            // the bottom (1 for "the subtraction stood", 0 for "it was restored"). The sign the previous
+            // subtract left is what chooses between the two, so a reader should follow N, not a variable.
             bool negative = (_isr & FlagN) != 0;
             counter--;
             AluSla(shiftOne ? 1u : 0u);
             SrNzvcU();
             await IdleAsync();
 
-            // dvum8 / dvum7 — the subtract, and the last bit's exit
+            // dvum8 / dvum7 — the comparison, which is one sixteen-bit subtract of the remainder's high
+            // half minus the divisor, and at the same time the copy of the pre-subtract remainder into
+            // the working register (the value the restore path will want). The counter's zero test is the
+            // last bit's exit, taken after the subtract so the final quotient bit is decided.
             bool last = (counter & 0x3F) == 0;
             at = (at & 0xFFFF0000) | _aluo;
             AluSub16(_alub, _aluo);
@@ -1771,20 +1849,23 @@ public sealed partial class M68000
 
             if (last)
             {
-                // dvumc (the borrow test) or dvum9 — the remainder into Dn's high word
+                // dvumc (the borrow test) or dvum9 — the remainder, which is the pair's high half, into
+                // Dn's high word; then the last quotient bit into the low half. There are two states
+                // because the very last bit still has to be shifted in, and which of them runs is what
+                // costs the divide its final two clocks.
                 bool carry = (_isr & FlagC) != 0;
                 _d[rx] = (_d[rx] & 0xFFFF) | (_aluo << 16);
                 AluAnd16(_aluo, 0);
                 await IdleAsync();
                 if (!negative && carry)
                 {
-                    _alub = _aluo;                            // dvumf
+                    _alub = _aluo;                            // dvumf — the remainder's high half stands
                     _d[rx] = (_d[rx] & 0xFFFF) | (at << 16);
                     AluSla(0);
                 }
                 else
                 {
-                    _alub = _aluo;                            // dvumd
+                    _alub = _aluo;                            // dvumd — the restored remainder
                     AluSla(1);
                 }
 
@@ -1793,11 +1874,16 @@ public sealed partial class M68000
 
             if (negative)
             {
-                shiftOne = true;                              // dvum7 falls into dvum6's sla1
+                // dvum7 falls into dvum6's shift with a 1: the previous subtract's value stands as the new
+                // remainder, and this bit's quotient bit is a 1. This path is one state shorter than the
+                // restore path, which is the other half of why a divide's clock follows its quotient.
+                shiftOne = true;
                 continue;
             }
 
-            // dvumb — no borrow: the next bit shifts in a 1; a borrow restores and shifts in a 0
+            // dvumb — the borrow test: no borrow means the subtraction stood, so the next shift brings in
+            // a 1; a borrow means the remainder went negative and must be restored — the flags (and the
+            // latch) are reloaded from the working register's low word, and the next shift brings in a 0.
             bool restore = (_isr & FlagC) != 0;
             await IdleAsync();
             if (!restore)
@@ -1806,13 +1892,18 @@ public sealed partial class M68000
                 continue;
             }
 
+            // dvume — the restore: reload the pre-subtract remainder and its flags. Note this is the only
+            // place a divide adds a state for a *zero* quotient bit, so more 0s in the quotient means more
+            // restores, i.e. a slower instruction — the data-dependent clock in its plainest form.
             AluAnd16(at, 0xFFFF);                             // dvume — the flags of the remainder
             SrNzvc();
             await IdleAsync();
             shiftOne = false;
         }
 
-        // dvum0 — the quotient's low word and the flags of the remainder
+        // dvum0 — the quotient into Dn's low word (the pair's low half after sixteen shifts *is* the
+        // quotient), and the flags from a subtract of zero: so N and Z are the quotient's, V and C are
+        // clear, and X survives. The closing read is the instruction's second bus cycle.
         _d[rx] = (_d[rx] & 0xFFFF0000) | (_alue & 0xFFFF);
         AluSub16(_alub, _alue);
         SrNzvc();
@@ -1825,6 +1916,20 @@ public sealed partial class M68000
     /// (the quotient's sign decides where the remainder's is fixed) in a way a structured loop cannot
     /// state without a state variable that is harder to check against the listing.
     /// </summary>
+    /// <remarks>
+    /// <para>The algorithm is <c>|N| / |D|</c> with the signs put back afterwards. Both operands are
+    /// two's-complement, so the loop can only divide magnitudes: the prologue complements the divisor
+    /// when it is negative (<c>dvs05</c>) and the dividend's high word — with <c>alu_subc</c>, whose
+    /// borrow chain is what makes a sixteen-bit complement of a thirty-two-bit value come out right
+    /// (<c>dvs10</c>/<c>dvs11</c>) — so that what the loop sees is positive. The overflow test is the
+    /// same borrow as DIVU's, taken on the sign-adjusted high half.</para>
+    /// <para>The epilogue then fixes two signs, independently, which is the part people get wrong: the
+    /// quotient's is the exclusive or of the operands' (<c>dvs16</c>/<c>dvs17</c> against
+    /// <c>dvs1d</c>/<c>dvs1e</c>), and the **remainder takes the dividend's sign** — the 68000's rule,
+    /// and the reason a signed remainder here is not C's <c>N % D</c>. <c>leaa2</c> then stores the whole
+    /// working register: quotient in the low word, remainder in the high, which is also why this
+    /// instruction's destination is written once rather than half at a time.</para>
+    /// </remarks>
     async ValueTask DivideSignedAsync(ushort op)
     {
         int rx = (op >> 9) & 0x7;
@@ -1844,7 +1949,9 @@ public sealed partial class M68000
         uint counter = 0;
         bool flag;
 
-        // dvs02 — the divisor's flags, and the working register's high word
+        // dvs02 — the divisor into m_alub and into the working register's high word, the dividend's low
+        // word into the shift register, and the divisor's flags (which is how the next state reads its
+        // sign without touching it again).
         _alub = operand.Value & 0xFFFF;
         _alue = dividend & 0xFFFF;
         at = _alub << 16;
@@ -1852,8 +1959,10 @@ public sealed partial class M68000
         SrNzvc();
         await IdleAsync();
 
-        // dvs03 — zero divisor (the exception), a negative one (the dividend is complemented first) or
-        // a positive one; `alu_sub(m_alub, 0)` is the sign of the divisor itself
+        // dvs03 — three cases in one branch: zero divisor (the exception), negative divisor (the dividend
+        // is complemented first, so the loop still divides magnitudes while the dividend keeps its own
+        // sign for the epilogue), positive divisor. `alu_sub(m_alub, 0)` is the divisor's own sign read
+        // back out of the ALU, N being bit 15 of the word.
         int sign = (_isr & FlagZ) != 0 ? 2 : (_isr & FlagN) != 0 ? 1 : 0;
         AluSub16(_alub, 0);
         SrNzvc();
@@ -1867,13 +1976,16 @@ public sealed partial class M68000
 
         if (sign == 1)
         {
-            _alub = _aluo;                                    // dvs05 — the complement stays in the ALU
+            // dvs05 — the divisor is negative: its complement stays in the ALU latch (the subtract's
+            // result) and becomes m_alub, so the loop divides by |D|.
+            _alub = _aluo;
         }
 
         goto dvs04;
 
     dvs04:
-        // dvs04 / dvs05 — the dividend's high word into the working register
+        // dvs04 / dvs05 — the dividend's high word into the working register's low word (the loop's
+        // starting remainder) and the sixteen-bit counter.
         at = (at & 0xFFFF0000) | High16(dividend);
         counter = 16;
         AluAnd16(High16(dividend), 0xFFFF);
@@ -1882,7 +1994,9 @@ public sealed partial class M68000
         goto dvs06;
 
     dvs06:
-        // dvs06 — the dividend's sign decides whether the first subtraction is complemented
+        // dvs06 — the dividend's own sign decides whether the first subtraction is a plain one or a
+        // complemented one: a negative dividend is complemented here (its high word, through the borrow
+        // chain), which is the "divide the magnitudes" step for the other operand.
         flag = (_isr & FlagN) != 0;
         AluSub16(dividend, 0);
         await IdleAsync();
@@ -1891,12 +2005,16 @@ public sealed partial class M68000
             goto dvs10;
         }
 
-        AluSub16(_alub, at);                                  // dvs07
+        // dvs07 — positive dividend: the ordinary overflow test, high half minus divisor.
+        AluSub16(_alub, at);
         SrNzvc();
         await IdleAsync();
         goto dvs08;
 
     dvs10:
+        // dvs10 / dvs11 — the negative dividend: complement the high word with the borrow chain
+        // (alu_subc, whose borrow-in is the previous subtract's C — that is what carries through the
+        // thirty-two bits), then the overflow test against the complemented value.
         _alue = _aluo;
         AluSubC16(High16(dividend), 0);
         await IdleAsync();
@@ -1908,7 +2026,8 @@ public sealed partial class M68000
         await IdleAsync();
 
     dvs08:
-        // dvs08 — the quotient would not fit: to the overflow exit
+        // dvs08 — the borrow is the overflow verdict, exactly as in DIVU: no borrow means the quotient
+        // will not fit, and the exit is dvuma's (N and V, register untouched).
         flag = (_isr & FlagC) != 0;
         AluAnd16(at, 0xFFFF);
         SrNzvc();
@@ -1919,12 +2038,15 @@ public sealed partial class M68000
         }
 
     dvs09:
+        // dvs09 — the loop's shift, 0 in at the bottom: entered from dvs08 with the first bit, and from
+        // dvs0f after a restore, so it is the same "bring down a bit" state DIVU calls dvum5.
         counter--;
         AluSla(0);
         await IdleAsync();
 
     dvs0c:
-        // dvs0c — the subtract, and the last bit's exit
+        // dvs0c — the comparison: remainder's high half minus divisor, the pre-subtract remainder copied
+        // into the working register, and the counter's zero test as the last bit's exit.
         flag = (counter & 0x3F) == 0;
         at = (at & 0xFFFF0000) | _aluo;
         AluSub16(_alub, _aluo);
@@ -1938,6 +2060,8 @@ public sealed partial class M68000
         goto dvs0d;
 
     dvs0d:
+        // dvs0d — the borrow test that DIVU calls dvumb: a borrow sends the loop to the restore state
+        // (dvs0f), no borrow to the shift that brings in a 1 (dvs0a).
         flag = (_isr & FlagC) != 0;
         await IdleAsync();
         if (flag)
@@ -1948,18 +2072,23 @@ public sealed partial class M68000
         goto dvs0a;
 
     dvs0a:
+        // dvs0a — the shift with a 1 at the bottom: the subtraction stood, so this quotient bit is a 1.
         counter--;
         AluSla(1);
         await IdleAsync();
         goto dvs0c;
 
     dvs0f:
+        // dvs0f — the restore: the pre-subtract remainder's flags back from the working register, then
+        // the 0-in shift at dvs09.
         AluAnd16(at, 0xFFFF);
         SrNzvc();
         await IdleAsync();
         goto dvs09;
 
     dvs0e:
+        // dvs0e — the division loop is done; the last quotient bit is still to be shifted in, and which
+        // way depends on the last comparison's borrow, so the epilogue starts with that branch.
         flag = (_isr & FlagC) != 0;
         await IdleAsync();
         if (flag)
@@ -1970,24 +2099,29 @@ public sealed partial class M68000
         goto dvs13;
 
     dvs13:
+        // dvs13 — the last bit was a 1: the subtraction stands, and its quotient bit is shifted in.
         at = (at & 0xFFFF0000) | _aluo;
         AluSla(1);
         await IdleAsync();
         goto dvs14;
 
     dvs12:
+        // dvs12 — the last bit was a 0: restore, and shift in a 0.
         counter--;
         AluSla(0);
         await IdleAsync();
         goto dvs14;
 
     dvs14:
-        // dvs14 — the remainder's sign, then the quotient's
+        // dvs14 — the remainder's sign, read off the working register's high word; then the quotient's,
+        // read off the dividend's own sign. Those two bits are the whole of the epilogue's decision.
         AluAnd16(at >> 16, 0xFFFF);
         SrNzvc();
         await IdleAsync();
 
-        // dvs15
+        // dvs15 — `m_alub = m_alue` keeps the quotient in reach (m_alue is where the low half's tail
+        // holds it) while the dividend's sign is latched: the remainder must follow the dividend, not the
+        // quotient.
         flag = (_isr & FlagN) != 0;
         _alub = _alue;
         AluAnd16(High16(dividend), 0xFFFF);
@@ -2001,6 +2135,9 @@ public sealed partial class M68000
         goto dvs16;
 
     dvs16:
+        // dvs16 — positive quotient: copy the remainder's high word down (set_16h(m_at, m_at) is
+        // at_hi = at_lo, the value the epilogue works on), re-read the dividend's sign for the
+        // remainder's, and branch on it.
         flag = (_isr & FlagN) != 0;
         at = (at & 0xFFFF) | ((at & 0xFFFF) << 16);            // set_16h(m_at, m_at)
         AluAnd16(_alub, 0xFFFF);
@@ -2014,6 +2151,7 @@ public sealed partial class M68000
         goto dvs17;
 
     dvs1d:
+        // dvs1d — negative quotient: the same two fetches, then the other pair of exits.
         flag = (_isr & FlagN) != 0;
         at = (at & 0xFFFF) | ((at & 0xFFFF) << 16);
         AluAnd16(_alub, 0xFFFF);
@@ -2027,6 +2165,8 @@ public sealed partial class M68000
         goto dvs1f;
 
     dvs17:
+        // dvs17 — positive quotient, positive dividend: no complement, the result is final. The `if` is
+        // on the *remainder's* sign because a zero remainder or a zero quotient takes the other door.
         flag = (_isr & FlagN) != 0;
         at = (at & 0xFFFF0000) | _aluo;
         AluAnd16(_aluo, 0xFFFF);
@@ -2039,6 +2179,8 @@ public sealed partial class M68000
         goto leaa2;
 
     dvs1a:
+        // dvs1a / dvs1b — positive quotient, negative dividend: the remainder must be complemented, and
+        // a zero remainder is left alone (Z or N sends it to the overflow-checked exit instead).
         AluSub16(_alub, 0);
         SrNzvc();
         await IdleAsync();
@@ -2057,6 +2199,8 @@ public sealed partial class M68000
         goto dvum4;
 
     dvs1f:
+        // dvs1f / dvs20 — negative quotient, positive dividend: the quotient's magnitude is final, only
+        // the remainder's sign is still to be decided.
         AluSub16(_alub, 0);
         SrNzvc();
         await IdleAsync();
@@ -2074,6 +2218,8 @@ public sealed partial class M68000
         goto dvuma;
 
     dvs1e:
+        // dvs1e — negative quotient, negative dividend: both complement, so the quotient is the
+        // magnitude and the remainder keeps the dividend's (negative) sign.
         flag = (_isr & FlagN) != 0;
         _alub = _aluo;
         at = (at & 0xFFFF0000) | _aluo;
@@ -2087,6 +2233,8 @@ public sealed partial class M68000
         goto dvs1c;
 
     dvs1c:
+        // dvs1c — the remainder's complement into the high word (the low word already holds the
+        // quotient), then leaa2.
         at = (at & 0x0000FFFF) | (_aluo << 16);
         AluAnd16(_alub, 0xFFFF);
         SrNzvc();
@@ -2094,27 +2242,39 @@ public sealed partial class M68000
 
     dvum4:
     dvuma:
-        // dvum4 / dvuma — the overflow exit: N and V, the register untouched, then the closing read
+        // dvum4 / dvuma — the overflow exit, shared with DIVU: N and V (alu_over), Z and C cleared, the
+        // register untouched, then the closing read. Every path to it costs the same two clocks, which is
+        // why the corpus's shortest DIVS records sit just above their shortest DIVU ones.
         AluOver();
         SrNzvc();
         await TrailingFetchAsync();
         return;
 
     leaa2:
-        // leaa2 — the quotient in the whole register, then the closing read
+        // leaa2 — the working register read whole is the result: quotient in the low word, remainder in
+        // the high, written in one go (which is why DIVS's destination is never half-written the way
+        // DIVU's is), then the closing read.
         _d[rx] = at;
         await TrailingFetchAsync();
     }
 
     /// <summary>
     /// CHK — <c>chkm1</c>/<c>chkr1</c>, <c>chkr2</c>, then <c>chkr3</c> or the trap (vector 6), then
-    /// <c>chkr4</c>'s closing read.
+    /// <c>chkr4</c>'s closing read. `CHK <ea>,Dn` traps when the signed value in Dn is outside
+    /// 0 … bound — and the two tests that decide it are the whole instruction.
     /// </summary>
     /// <remarks>
-    /// The two comparisons are the whole instruction: <c>bound − value</c> (V or N means the value is out
-    /// of range) and then the value's own sign (N means it is negative). The flags the corpus keeps are
-    /// the second comparison's — **N and Z from the value, V and C cleared**, X untouched — which is why
-    /// the six clocks are three states and the trap path is two.
+    /// <para>The first test is one signed subtract, <c>bound − value</c>: N or V means the value is out of
+    /// range — N because the result went negative (the value is above the bound), V because the true
+    /// difference did not fit in sixteen bits (a value far below zero against a large bound). Those two
+    /// flags do not catch every negative value (a slightly negative one against a small bound subtracts
+    /// cleanly to a positive result), and that is exactly why there is a second test: <c>chkr2</c> reads
+    /// the value's own sign, and a negative value traps there. So the two comparisons partition the
+    /// range, and the flags the instruction *leaves* are the second one's — <b>N and Z from the value,
+    /// V and C cleared</b>, X untouched.</para>
+    /// <para>Six clocks clean and four on the trap path: <c>chkr2</c> branches straight to <c>trap1</c>,
+    /// so the trap never runs <c>chkr3</c>. Charging three states on both paths made 924 records two
+    /// clocks long, and the old table's flat six was the same error from the other side.</para>
     /// </remarks>
     async ValueTask CheckAsync(ushort op)
     {
@@ -2132,13 +2292,17 @@ public sealed partial class M68000
 
         uint value = _d[rx] & 0xFFFF;
 
-        // chkr1 — the chip latches the value, and compares bound - value for the range test
+        // chkr1 — the chip latches the value into m_alub and compares bound − value: this subtraction's
+        // N and V are the range test, and nothing else is written.
         _alub = value;
         AluSub16(value, operand.Value & 0xFFFF);
         SrNzvc();
         await IdleAsync();
 
-        // chkr2 — the value's own flags, and the branch the range test decided
+        // chkr2 — the value's own flags go into SR (an and with 0xFFFF is a move that sets them, and this
+        // is the comparison whose flags the instruction *leaves*), and the branch the range test decided
+        // is taken on the *old* flags: out of range goes straight to the trap, which is why the trap path
+        // is two states and not three.
         bool outOfRange = (_isr & (FlagV | FlagN)) != 0;
         AluAnd16(_alub, 0xFFFF);
         SrNzvc();
@@ -2150,7 +2314,8 @@ public sealed partial class M68000
             return;
         }
 
-        // chkr3 — the value's own sign is the second test, and only this path runs the state
+        // chkr3 — the second test: the value's own sign, which is what the flags in SR now say. Only the
+        // clean path runs this state, which is the two clocks that separate the paths.
         bool negative = (_isr & FlagN) != 0;
         await IdleAsync();
         if (negative)
@@ -2159,6 +2324,6 @@ public sealed partial class M68000
             return;
         }
 
-        await TrailingFetchAsync();                           // chkr4
+        await TrailingFetchAsync();                           // chkr4 — the closing read
     }
 }

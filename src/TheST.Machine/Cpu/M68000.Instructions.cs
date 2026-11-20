@@ -650,9 +650,12 @@ public sealed partial class M68000
         // CHK
         if ((op & 0x01C0) == 0x0180)   // CHK (bits 8-6 = 110)
         {
-            // scripted (M68000.Scripts.cs): chkm1/chkr1, chkr2 and chkr3 are the instruction's six
-            // clocks, and the flags are the *second* comparison's — N and Z from the value, V and C
-            // cleared. Its three shapes' frames were two bytes high on all 410 failing records.
+            // scripted (M68000.Scripts.cs): `CHK <ea>,Dn` traps when a *signed* Dn is outside 0 … bound,
+            // and the two subtraction states that decide it are the whole instruction — chkm1/chkr1,
+            // chkr2 and chkr3 are its six clocks, chkr2 branching straight to the trap is why the trap
+            // path is four. The flags left behind are the *second* comparison's — N and Z from the value,
+            // V and C cleared — and its three shapes' frames were two bytes high on all 410 failing
+            // records until the predecrement write path began a fetch state.
             await CheckAsync(op);
             return;
         }
@@ -1425,8 +1428,10 @@ public sealed partial class M68000
 
         if (size == 3)   // DIVU / DIVS
         {
-            // scripted (M68000.Scripts.cs): the restoring division's sixteen iterations are its clocks,
-            // and its overflow exit sets N *and* V (MAME's alu_over) where the old handler set V alone
+            // scripted (M68000.Scripts.cs): N = Q·D + R with 0 <= R < D, one bit per iteration, sixteen
+            // iterations because the quotient is sixteen bits — and those iterations *are* the clocks
+            // (84 to 130 of them, following the quotient). Its overflow exit sets N *and* V (MAME's
+            // alu_over) where the old handler set V alone
             if ((op & 0x0100) != 0)
             {
                 await DivideSignedAsync(op);
@@ -1755,8 +1760,9 @@ public sealed partial class M68000
 
         if (size == 3)   // MULU / MULS
         {
-            // scripted (M68000.Scripts.cs): the loop's shift register is the multiply, so its clock is
-            // the loop's own length (MULS's Booth recoding is why `34 + 2 x popcount` was wrong)
+            // scripted (M68000.Scripts.cs): M x sum(b_i · 2^i) as sixteen shift-add states, so the clock
+            // is the loop's own length — 38 + 2n on set bits for MULU, 38 + 2k on Booth digits for MULS
+            // (which is why the old table's `34 + 2 x popcount` was wrong on 60 % of the records)
             await MultiplyAsync(op);
             return;
         }

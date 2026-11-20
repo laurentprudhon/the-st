@@ -285,15 +285,33 @@ public sealed partial class M68000
     }
 
     // ---- the sixteen-bit ALU of the variable-time families --------------------------------------
-    // MULU/MULS and DIVU/DIVS are loops: every micro-state is one ALU operation and one flag update,
-    // and the loop's *length* is a counter, so the clocks are a function of the value the core holds.
-    // Those states need the chip's own operations rather than the ALU-as-expression the other scripts
-    // use — MAME keeps three registers alive across states and so does this block:
-    //   m_isr   the flags of the operation just run (SrNzvc writes them into SR, SrNzvcU clears Z only)
-    //   m_alue  the second operand: the multiplier's shift register (MUL) and the quotient's (DIV)
-    //   m_au    the loop's counter, which the script decrements one bit at a time
-    // The values are transcribed from research/vendor/m68000/m68000.h, where they are sixteen bits
-    // wide: every operand is masked to 0xFFFF before the operation, exactly as the C++ is.
+    //
+    // MULU, MULS, DIVU and DIVS are not operations, they are *algorithms the sequencer iterates*. The
+    // 68000 has no multiplier and no divider — a 16x16->32 array multiplier and a 32/16 divider would
+    // have been a large, slow block on a chip that already had no cache and 68 000 transistors — so
+    // Motorola spent microcode instead, and the instruction's own timing table became a formula for the
+    // loop's length (38 + 2n for a multiply, a range for a divide) rather than a number. Every
+    // micro-state costs two clocks, four when it touches the bus, so the clocks here are the states
+    // actually executed: that is why these four families are scripted as loops (MultiplyAsync,
+    // DivideUnsignedAsync, DivideSignedAsync) and why their ledger in M68000.Timing.cs is zero. A wrong
+    // value in this block would necessarily be a wrong clock, and a wrong clock a wrong value.
+    //
+    // The loops need the chip's own registers, kept alive across states the way MAME keeps them
+    // (research/vendor/m68000/m68000.h), so they are fields and not locals:
+    //   m_aluo   the ALU's output latch — where sr_nzvc reads its flags, and the high half of the pair
+    //   m_alub   the second operand: the multiplicand (MUL) and the divisor (DIV)
+    //   m_alue   the ALU's other persistent operand: the multiplier's shift register, then the
+    //            quotient's — the low half of the pair, in both directions
+    //   m_isr    the flags of the operation just run; SrNzvc copies them into SR, and SrNzvcU only ever
+    //            clears Z — which is how a clear-only flag carries "the result is zero" across a whole
+    //            loop
+    //   (in the scripts) m_at, a thirty-two-bit scratch with settable halves, and m_au, the loop's
+    //            counter, loaded from the instruction's timing constant
+    //
+    // Every operation below is transcribed from the C++, where the operands are sixteen bits wide, and
+    // the masks are semantics rather than hygiene: `a << 17` on a sixteen-bit operand is how the
+    // divide's pair shifts left, and a transcription that widened m_alue to thirty-two bits produced
+    // garbage on every record.
 
     /// <summary>The flags of the last operation (<c>m_isr</c>).</summary>
     ushort _isr;
@@ -302,6 +320,13 @@ public sealed partial class M68000
     uint _alue;
 
     /// <summary><c>alu_and</c> — a bitwise and; V and C fall to the state's flag update, not here.</summary>
+    /// <remarks>
+    /// The loops use it for two things that are not ands at all. <c>alu_and(Dn, 0)</c> is how a multiply
+    /// says "the accumulator starts at zero" before its first add — which is what lets the loop's
+    /// clear-only Z end up meaning "the whole product is zero". And <c>alu_and(x, 0xFFFF)</c> is "put x
+    /// in the latch and give me its N and Z": a move that sets flags, which the divide uses every time it
+    /// has to restore a value's flags without arithmetising it.
+    /// </remarks>
     void AluAnd16(uint a, uint b)
     {
         uint r = (b & a) & 0xFFFF;
@@ -320,6 +345,12 @@ public sealed partial class M68000
     }
 
     /// <summary><c>alu_add</c> — <c>b + a</c>, sixteen bits, with the carry out and the signed overflow.</summary>
+    /// <remarks>
+    /// The carry out of bit 15 lands in C and in X, and in the multiply it is load-bearing: the
+    /// accumulator is only the high half of a thirty-two-bit register, so the bit that falls off its top
+    /// is caught in C and put straight back by the following rotate (AluRoxr32mu reads C and shifts it in
+    /// at bit 31). That round trip, once per multiplier bit, is the multiply's whole column arithmetic.
+    /// </remarks>
     void AluAdd16(uint a, uint b)
     {
         a &= 0xFFFF;
@@ -350,6 +381,12 @@ public sealed partial class M68000
     }
 
     /// <summary><c>alu_sub</c> — <c>b − a</c>: the microcode's argument order for every subtract here.</summary>
+    /// <remarks>
+    /// Read the order carefully: the listing's <c>alu_sub(m_alub, m_aluo)</c> means
+    /// <c>m_aluo − m_alub</c> — remainder minus divisor, not the other way round — and the borrow it
+    /// leaves in C is the divide's per-bit decision (borrow means restore, quotient bit 0) as well as,
+    /// in the prologue, the overflow test (no borrow means the quotient will not fit).
+    /// </remarks>
     void AluSub16(uint a, uint b)
     {
         a &= 0xFFFF;
@@ -380,6 +417,11 @@ public sealed partial class M68000
     }
 
     /// <summary><c>alu_subc</c> — the same, with the latch's own carry as a borrow in.</summary>
+    /// <remarks>
+    /// The borrow chain is what the signed divide's prologue needs: complementing a thirty-two-bit
+    /// dividend means complementing its low word (setting the carry) and then its high word *with that
+    /// carry*, which is one borrow-carrying subtract rather than an add of one.
+    /// </remarks>
     void AluSubC16(uint a, uint b)
     {
         a &= 0xFFFF;
@@ -425,6 +467,15 @@ public sealed partial class M68000
     /// bit left, with <paramref name="bit"/> shifted into the bottom. X is carried through and the
     /// bit shifted out of the top becomes C.
     /// </summary>
+    /// <remarks>
+    /// This one state is the "bring down the next bit, and double the remainder" step of long division.
+    /// The pair holds the remainder in its high half and the dividend's remaining bits in its low half,
+    /// so a left shift doubles the remainder in place *and* slides the next dividend bit up into it —
+    /// free, because the dividend is already in the register. The bit the shift pushes in at the bottom
+    /// is the previous comparison's quotient bit, so the same shift also assembles the quotient in the
+    /// low half's tail. <c>a &lt;&lt; 17</c> is the pair's shift (the high half is worth 2^16, so its bits
+    /// move up one place), the bit out of the top becomes C, and Z is the pair read whole.
+    /// </remarks>
     void AluSla(uint bit)
     {
         uint a = _aluo & 0xFFFF;
@@ -455,6 +506,15 @@ public sealed partial class M68000
     /// leaves through the bottom while the partial product comes in at the top, which is why the
     /// product's low half ends up in <c>m_alue</c> and its high half in <c>m_aluo</c>.
     /// </summary>
+    /// <remarks>
+    /// The pair P = (accumulator : remaining multiplier) is the multiply's entire state, and the loop is
+    /// the recurrence <c>P = floor((P + b·M·2^16) / 2)</c> from <c>P0 = Q</c>: each rotate halves the
+    /// register, so the add's weight shrinks to the bit's own place and after sixteen of them the
+    /// accumulator has absorbed exactly <c>sum(b_i·M·2^i) = M·Q</c>. The multiplier's bits are consumed
+    /// one per rotate — which is why the caller's branch tests bit 1 and not bit 0, bit 0 having gone by
+    /// in the previous rotate — and the low half is left holding what remains of the multiplier, i.e. the
+    /// product's low sixteen bits. That is why mulm6 can store the pair whole.
+    /// </remarks>
     void AluRoxr32mu()
     {
         uint a = _aluo & 0xFFFF;
@@ -483,6 +543,14 @@ public sealed partial class M68000
     /// <c>alu_roxr32ms</c> — MULS's rotate: the same shift register, but the bit shifted in is a copy of
     /// the product's sign (Booth's recoding), read off N and V as the C++ does.
     /// </summary>
+    /// <remarks>
+    /// The sign shifted in is <c>N xor V</c> — the accumulator's true sign even when the sixteen-bit add
+    /// just overflowed, which is why the C++ tests for exactly one of the two. That single change is what
+    /// makes the multiplier a *signed* bit string: a negative multiplier's infinite run of leading 1s is
+    /// sign-extended into the register instead of being truncated at sixteen bits, so Booth's digits
+    /// (<c>d_i = b_i − b_(i−1)</c>) terminate instead of accumulating forever — and it is the only reason
+    /// MULS needs a subtract state at all.
+    /// </remarks>
     void AluRoxr32ms()
     {
         uint a = _aluo & 0xFFFF;

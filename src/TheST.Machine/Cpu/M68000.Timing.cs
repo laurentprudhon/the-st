@@ -215,10 +215,14 @@ public sealed partial class M68000
     int AluOwnClocks(ushort op, int line, int size, int mode)
     {
         // MULU/MULS/DIVU/DIVS are scripts (M68000.Scripts.cs): their loops carry both the value and its
-        // clocks, so the table must not charge them at all — and the test has to come *first*, because
-        // two masked rows below claim them by accident: `(op & 0xF130) == 0x8100` is TESTED as ADDX/SUBX
-        // and matches `DIVS Dn,<any>` (0x81C5, 0x87C5 …), which charged 2 and left every register form
-        // 2 clocks long. A masked row is a claim on a *neighbour* until the port proves otherwise.
+        // clocks, so the table must not charge them at all — 2 x 16 rotates plus one add per Booth digit
+        // or set bit is the multiply, one subtract per quotient bit plus a restore is the divide, and no
+        // shape can state either. The test has to come *first*, because two masked rows below claim these
+        // families by accident: `(op & 0xF130) == 0x8100` is meant for ADDX/SUBX and matches
+        // `DIVS Dn,<any>` (0x81C5, 0x87C5 …), and `(op & 0x00C0) == 0x00C0` is meant for ADDA/SUBA/CMPA
+        // and matches the word forms of the whole ALU block. Charged through them, every register form
+        // came out 2 clocks long. A masked row is a claim on a *neighbour* until the port proves
+        // otherwise, so a scripted family's own-clocks test belongs above all of them.
         if (IsScriptedMultiply(op) || IsScriptedDivide(op))
         {
             return 0;
