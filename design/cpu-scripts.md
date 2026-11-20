@@ -193,7 +193,7 @@ No record that passed on `main` fails, in either corpus, and no record that was 
 desktop **611** unchanged, pops 34 292.8 → 34 247.2 a frame, `validate.sh` **PASS** (G8 9.20 ms at n 760 on
 that run; an interleaved A/B against `main` — 3 pairs, same tree built at both commits — reads 8.28 vs
 8.39 ms, so the frame budget is at parity and validate's own number carried the host's spread). **Both
-folds moved** and the owner's re-bless is the open item: `run.digest`
+folds moved** and the owner **blessed the new pair on 2026-11-20**, so it is `main`'s: `run.digest`
 `7331f4182da425ff85cfe0e56c8faeda923183e7c6ed29cf5218b54ad71a88a5`, `run.stream`
 `4b7cf3ac5d7bdc24141f980b9f47bdfc12e169d214ca2b507effac1b34240795` (Debug `boot --frames 800`) — row
 68's `9e1b0202…` / `0d972633…` is the pair they replace.
