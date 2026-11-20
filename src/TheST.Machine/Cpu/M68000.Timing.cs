@@ -65,6 +65,12 @@ public sealed partial class M68000
                     return 0;
                 }
 
+                // …and so are the word forms: o#w1 and the word tails are their clocks
+                if (IsScriptedImmediateWord(op))
+                {
+                    return 0;
+                }
+
                 // ORI/ANDI/EORI to SR: the status register write is its own work
                 if ((op & 0xFF00) is 0x0000 or 0x0200 or 0x0A00 && (op & 0x00FF) == 0x7C)
                 {
@@ -171,6 +177,12 @@ public sealed partial class M68000
                     return 0;
                 }
 
+                // …and the word quicks: raqw1/maqw1 and roaw2/morw2 are theirs
+                if (IsScriptedQuickWord(op))
+                {
+                    return 0;
+                }
+
                 if ((op & 0x00C0) != 0x00C0)
                 {
                     // ADDQ/SUBQ: an address register is 4 clocks; long to memory 2, long to a register 4
@@ -241,6 +253,13 @@ public sealed partial class M68000
         // the ported long families are scripted (M68000.Scripts.cs): the script's own states are
         // their clocks, so the measure-by-shape table must not charge them at all
         if (IsScriptedAluLong(op))
+        {
+            return 0;
+        }
+
+        // …and so are their word forms, including ADDA.w/SUBA.w/CMPA.w — the rows below charge them 4
+        // and 2, which is the register form's number and not the shape's
+        if (IsScriptedAluWord(op))
         {
             return 0;
         }

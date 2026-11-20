@@ -87,6 +87,79 @@ public sealed partial class M68000
         (op >> 12) == 0x5 && ((op >> 6) & 0x3) == 2;
 
     /// <summary>
+    /// The two-operand families in <b>size 1</b> — `or/and/eor/add/sub .w` in both directions plus
+    /// `ADDA`/`SUBA`/`CMPA` — and the two line-level families that share their tails, line 0's word
+    /// immediates and line 5's word quicks (see <see cref="IsScriptedImmediateWord"/> and
+    /// <see cref="IsScriptedQuickWord"/>).
+    /// </summary>
+    /// <remarks>
+    /// The opmode field is <b>not</b> the long forms' one: it carries the size bits, so the word forms
+    /// are opmode 1 (`&lt;ea&gt;,Dn`), 3 (`&lt;ea&gt;,An`) and 5 (`Dn,&lt;ea&gt;`), and opmode 7 is the
+    /// long address-register form. Three neighbours hide inside those opmodes and each is another
+    /// instruction: <c>DIVU</c> (line 8 opmode 3), <c>MULU</c> (line C opmode 3), <c>DIVS</c>/
+    /// <c>MULS</c> (opmode 7) and <c>CMPM.w</c> (line B opmode 5 with mode 1, because <c>CMPM</c>'s size
+    /// field is two bits wide). `An` direct is a source only for ADD/SUB/CMP.
+    /// </remarks>
+    static bool IsScriptedAluWord(ushort op)
+    {
+        int line = op >> 12;
+        int opmode = (op >> 6) & 0x7;
+        int mode = (op >> 3) & 0x7;
+
+        if (line is not (0x8 or 0x9 or 0xB or 0xC or 0xD))
+        {
+            return false;
+        }
+
+        // Three more neighbours, all of them in opmode 5 with mode 0 and all of them already green:
+        // `EXG Dn,Dn` shares line C's, `ADDX.w`/`SUBX.w` share lines D's and 9's, and `CMPM.w` (whose
+        // size field is two bits wide) shares line B's
+        if ((op & 0xF1F8) is 0xC140 or 0xC148 or 0xC188 || (op & 0xF130) is 0xD100 or 0x9100)
+        {
+            return false;
+        }
+
+        if (opmode == 3 || opmode == 7)
+        {
+            return opmode == 3 && line is 0x9 or 0xB or 0xD;    // ADDA.w/SUBA.w/CMPA.w; 8 and C are DIVU/MULU
+        }
+
+        if (opmode == 5)
+        {
+            return (op & 0xF138) != 0xB108 && mode != 1;        // CMPM.w shares EOR's opmode
+        }
+
+        return opmode == 1 && (mode != 1 || line is 0x9 or 0xB or 0xD);
+    }
+
+    /// <summary>
+    /// Line 0's <b>word immediates</b> — `ori`/`andi`/`eori`/`addi`/`subi`/`cmpi` in size 1: `o#w1`
+    /// then the destination's word tail. Same exclusions as the long forms (the bit operations, and the
+    /// to-CCR/to-SR block, which is `mode 7, reg 4` and its own script).
+    /// </summary>
+    static bool IsScriptedImmediateWord(ushort op)
+    {
+        if ((op >> 12) != 0x0 || ((op >> 6) & 0x3) != 1 || (op & 0x0100) != 0)
+        {
+            return false;
+        }
+
+        if (((op >> 9) & 0x7) is 4 or 7 || ((op >> 3) & 0x7) == 1)
+        {
+            return false;                                        // the bit operations, and `An` direct
+        }
+
+        return (op & 0x00FF) is not (0x3C or 0x7C);              // to CCR / to SR
+    }
+
+    /// <summary>
+    /// Line 5's <b>word quicks</b> — `addq.w`/`subq.w`, the value in the opcode and no extension word.
+    /// Size 3 on line 5 is `Scc`/`DBcc`, which is another family with a leading charge.
+    /// </summary>
+    static bool IsScriptedQuickWord(ushort op) =>
+        (op >> 12) == 0x5 && ((op >> 6) & 0x3) == 1;
+
+    /// <summary>
     /// The <b>control transfers</b> — `BSR` (line 6's condition field 1, not the conditional branches),
     /// `JMP` and `JSR` (line 4's two opcode ranges) and `UNLK`. Their scripts are in this file;
     /// `M68000.Timing.cs` charges nothing for them.
@@ -977,6 +1050,304 @@ public sealed partial class M68000
                 if ((masked & (uint)SignBit(size)) != 0) _sr |= FlagN;
                 return;
             }
+        }
+    }
+
+    // =========================================================================================
+    // The two-operand families in size 1 — the word block and three tails
+    // =========================================================================================
+    //
+    // The word forms are **not** the long ones with a mask: the microcode gives them their own state
+    // list, and three facts separate it (each one read off the generated handlers and then measured on
+    // the corpus's own cycle lists).
+    //
+    //  (1) The destination's tail is `roaw1`/`roaw2` (`rorw1`/`rrgw2` for `<ea>,Dn`): the ALU and its
+    //      flags in a state that has no bus cycle and no idle charge, then `set_16l` and the
+    //      instruction's one prefetch read — and **no closing idle**, because `roaw2` ends the script.
+    //      So `OR.w Dn,Dn` is 4 clocks where `OR.l Dn,Dn` is 6 (the long form's `roal4`).
+    //  (2) The memory tail is `morw1` + `morw2`, and the ALU runs **before** the closing prefetch —
+    //      where the long form's `morl1` fetches first and ALUs after. The one write follows the read.
+    //  (3) `ADDA`/`SUBA`/`CMPA` in size 1 are the **long** tails. A word source is sign-extended
+    //      (`m_at = ext32(m_dbin)` in `romm1`/`cpmm1`) and the ALU runs twice — `alu_add`/`alu_sub` on
+    //      the low half, `alu_addc`/`alu_subc` on the high — which is exactly what
+    //      `AluIntoAddressRegisterAsync` and the long compare tail already expand. That reuse is where
+    //      the timing table's flat 4 was measured short: `ADDA.w` was 144 exact of 2 500.
+    //
+    // The register-destination and memory-destination word tails are shared by three families that are
+    // not ALU families at all — line 0's word immediates (`o#w1` first) and line 5's word quicks (no
+    // source read at all) — which is why they are one block and not three.
+
+    /// <summary>
+    /// One word instruction of the two-operand families: `<ea>,Dn` (opmode 1), `<ea>,An` (opmode 3 —
+    /// ADDA/SUBA/CMPA, which are the long tails) or `Dn,<ea>` (opmode 5, where mode 0 is `EOR.w Dn,Dn`
+    /// and the only one of these shapes that writes a register).
+    /// </summary>
+    async ValueTask AluWordAsync(ushort op)
+    {
+        int line = op >> 12;
+        int opmode = (op >> 6) & 0x7;
+        int rx = (op >> 9) & 0x7;
+        int mode = (op >> 3) & 0x7;
+        int reg = op & 0x7;
+
+        bool comparison = line == 0xB;
+        AluLong kind = line switch
+        {
+            0x8 => AluLong.Or,
+            0x9 => AluLong.Sub,
+            0xC => AluLong.And,
+            0xD => AluLong.Add,
+            _ => opmode == 5 ? AluLong.Eor : AluLong.Sub,          // line B: EOR writes, CMP does not
+        };
+
+        if (opmode == 1)                                          // <ea>,Dn — rorw1/rrgw2, cpmw1/rcaw2
+        {
+            uint? source = await ReadWordSourceAsync(mode, reg);
+            if (source is null)
+            {
+                return;
+            }
+
+            if (comparison)
+            {
+                await CompareWordTailAsync(source.Value, _d[rx] & 0xFFFF);
+                return;
+            }
+
+            await AluWordIntoDataRegisterAsync(rx, kind, source.Value);
+            return;
+        }
+
+        if (opmode == 3)                                          // <ea>,An — the long tails
+        {
+            uint? operand = await ReadWordSourceAsync(mode, reg);
+            if (operand is null)
+            {
+                return;
+            }
+
+            uint extended = Ext32((ushort)operand.Value);          // romm1/cpmm1 — a word, sign-extended
+
+            if (comparison)
+            {
+                await CompareLongTailAsync(extended, GetA(rx), clocks: 2);    // cpmm1, cprm2, rcal3
+                return;
+            }
+
+            await AluIntoAddressRegisterAsync(rx, kind, extended, clocks: 4); // romm1, rorm2, rorm3, roml3
+            return;
+        }
+
+        if (mode == 0)                                            // eor_w_dd_ds_df — a register destination
+        {
+            await AluWordIntoDataRegisterAsync(reg, kind, _d[rx] & 0xFFFF);
+            return;
+        }
+
+        if (mode == 1)
+        {
+            return;                                                // nothing alterable in memory here
+        }
+
+        uint? address = await ReadSmallEaAsync(mode, reg, 1);
+        if (address is null)
+        {
+            return;
+        }
+
+        await AluWordIntoMemoryAsync(_d[rx] & 0xFFFF, address.Value, kind);
+    }
+
+    /// <summary>
+    /// Line 0's word immediates — `ori/andi/eori/addi/subi/cmpi .w`: `o#w1` (one program read, and the
+    /// state that moves the frame's counter) and then the destination's word tail. The immediate comes
+    /// out of the stream <b>before</b> the destination's extension word, which is the whole reason the
+    /// old handlers read them the other way round on every indexed and absolute destination.
+    /// </summary>
+    async ValueTask ImmediateWordAsync(ushort op)
+    {
+        int operation = (op >> 9) & 0x7;
+        int mode = (op >> 3) & 0x7;
+        int reg = op & 0x7;
+
+        BeginFetchState();                                         // o#w1 — m_pc = m_au
+        ushort immediate = await FetchAsync();                     // o#w1 — the one read
+        if (_busFaulted)
+        {
+            return;
+        }
+
+        AluLong kind = operation switch
+        {
+            0 => AluLong.Or,
+            1 => AluLong.And,
+            2 => AluLong.Sub,
+            3 => AluLong.Add,
+            _ => AluLong.Eor,
+        };
+
+        if (mode == 0)                                             // roaw1/roaw2, rcaw1/rcaw2
+        {
+            if (operation == 6)
+            {
+                await CompareWordTailAsync(immediate, _d[reg] & 0xFFFF);
+                return;
+            }
+
+            await AluWordIntoDataRegisterAsync(reg, kind, immediate);
+            return;
+        }
+
+        uint? address = await ReadSmallEaAsync(mode, reg, 1);
+        if (address is null)
+        {
+            return;
+        }
+
+        if (operation == 6)                                        // cpdw1 + mmrw3 — nothing is written
+        {
+            await CompareWordTailAsync(immediate, _dbin);
+            return;
+        }
+
+        await AluWordIntoMemoryAsync(immediate, address.Value, kind);
+    }
+
+    /// <summary>
+    /// Line 5's word quicks — `addq.w`/`subq.w`: no extension word (the value is the opcode's own
+    /// field, a zero meaning 8), so the script starts at the destination and runs the same three tails.
+    /// An address register takes the whole 32 bits and moves no flags (`raql1`'s `m=.....`).
+    /// </summary>
+    async ValueTask QuickWordAsync(ushort op)
+    {
+        int data = (op >> 9) & 0x7;
+        if (data == 0)
+        {
+            data = 8;
+        }
+
+        int mode = (op >> 3) & 0x7;
+        int reg = op & 0x7;
+        AluLong kind = (op & 0x0100) != 0 ? AluLong.Sub : AluLong.Add;
+
+        if (mode == 1)                                             // raql1, roal2, roal3, roal4
+        {
+            await AluIntoAddressRegisterAsync(reg, kind, (uint)data, clocks: 4);
+            return;
+        }
+
+        if (mode == 0)                                             // raqw1/roaw1 + roaw2
+        {
+            await AluWordIntoDataRegisterAsync(reg, kind, (uint)data);
+            return;
+        }
+
+        uint? address = await ReadSmallEaAsync(mode, reg, 1);
+        if (address is null)
+        {
+            return;
+        }
+
+        await AluWordIntoMemoryAsync((uint)data, address.Value, kind);   // maqw1 + morw2
+    }
+
+    // ---- the three word tails ----------------------------------------------------------------
+
+    /// <summary>
+    /// rorw1/roaw1 + rrgw2/roaw2 — the word result into a data register: the ALU and its flags (a state
+    /// with no bus cycle and no idle), `set_16l` <em>before</em> the instruction's one read, and no
+    /// closing idle. `X` follows `C` for ADD/SUB and stays put for OR/AND/EOR.
+    /// </summary>
+    async ValueTask AluWordIntoDataRegisterAsync(int rx, AluLong kind, uint source)
+    {
+        uint destination = _d[rx] & 0xFFFF;
+        uint result = WordAlu(kind, source, destination);
+        SetWordFlags(kind, source, destination, result, extend: kind is AluLong.Add or AluLong.Sub);
+
+        Set16L(rx, result);                                        // roaw2 — set_16l, before the read
+        await TrailingFetchAsync();                                // roaw2 — the instruction's one read
+    }
+
+    /// <summary>
+    /// cpmw1 + rcaw2 (`cmpi`'s rcaw1/rcaw2, `cpdw1`/`mmrw3` for a memory destination) — a word
+    /// comparison: the subtract and its flags, the one read, nothing written and no closing idle. The
+    /// long compare's `rcal3` is a long-shape state and the word form does not have it.
+    /// </summary>
+    async ValueTask CompareWordTailAsync(uint source, uint destination)
+    {
+        uint result = WordAlu(AluLong.Sub, source, destination);
+        SetWordFlags(AluLong.Sub, source, destination, result, extend: false);   // cpmw1 — X untouched
+
+        await TrailingFetchAsync();                                // rcaw2
+    }
+
+    /// <summary>
+    /// morw1 + morw2 — the word written back to memory. The ALU and its flags run <b>before</b> the
+    /// closing prefetch (the long tail fetches first), and the store follows it, so an odd destination
+    /// still leaves the flags of the operation that was made.
+    /// </summary>
+    async ValueTask AluWordIntoMemoryAsync(uint source, uint address, AluLong kind)
+    {
+        uint destination = _dbin;
+        uint result = WordAlu(kind, source, destination);
+        SetWordFlags(kind, source, destination, result, extend: kind is AluLong.Add or AluLong.Sub);
+
+        await TrailingFetchAsync();                                // morw1 — m_pc = m_au, the one read
+        if (_busFaulted)
+        {
+            return;
+        }
+
+        await WriteWordAsync(address, (ushort)result);              // morw2
+    }
+
+    /// <summary>
+    /// <c>alu_or</c>/<c>alu_and</c>/<c>alu_eor</c>/<c>alu_add</c>/<c>alu_sub</c> at the word width —
+    /// the chip's ALU is sixteen bits, so these are one operation and not half of a long one.
+    /// </summary>
+    uint WordAlu(AluLong kind, uint source, uint destination)
+    {
+        uint a = source & 0xFFFF;
+        uint b = destination & 0xFFFF;
+        _aluWidth = 1;
+        _aluo = kind switch
+        {
+            AluLong.Or => b | a,
+            AluLong.And => b & a,
+            AluLong.Eor => b ^ a,
+            AluLong.Sub => (b - a) & 0xFFFF,
+            _ => (b + a) & 0xFFFF,
+        };
+
+        return _aluo;
+    }
+
+    /// <summary>
+    /// The word forms' flag update: `sr_nzvc` for OR/AND/EOR, `sr_xnzvc` for ADD/SUB, and
+    /// "<paramref name="extend"/> false" for a comparison, whose `X` is not the operation's.
+    /// </summary>
+    void SetWordFlags(AluLong kind, uint source, uint destination, uint result, bool extend)
+    {
+        ushort x = (ushort)(_sr & FlagX);
+
+        switch (kind)
+        {
+            case AluLong.Or or AluLong.And or AluLong.Eor:
+                SetLogicFlags(result, 1);
+                break;
+
+            case AluLong.Add:
+                SetAddFlags(source, destination, result, 1);
+                break;
+
+            default:
+                SetSubFlags(source, destination, result, 1);
+                break;
+        }
+
+        if (!extend)
+        {
+            _sr = (ushort)((_sr & ~FlagX) | x);                     // a comparison leaves X alone
         }
     }
 

@@ -26,6 +26,29 @@ public sealed partial class M68000
             _own = own;
         }
 
+        // The *word* forms of the two-operand ALU families — with line 0's word immediates and line 5's
+        // word quicks, which share their tails — are one script block (M68000.Scripts.cs), and they are
+        // dispatched here rather than in the line handlers: a word form's opmode field carries the size
+        // bits, so `IsScriptedAluWord` is a test every one of the five line handlers would repeat, and
+        // each of them is full of neighbours (DIVU, MULU, CMPM, SBCD) that share an opmode with it.
+        if (IsScriptedAluWord(op))
+        {
+            await AluWordAsync(op);
+            return;
+        }
+
+        if (IsScriptedImmediateWord(op))
+        {
+            await ImmediateWordAsync(op);
+            return;
+        }
+
+        if (IsScriptedQuickWord(op))
+        {
+            await QuickWordAsync(op);
+            return;
+        }
+
         switch (op >> 12)
         {
             case 0x0: await Line0Async(op); break;
