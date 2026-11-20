@@ -123,6 +123,7 @@ size (`IsScriptedSingleOperandLong`, `IsScriptedSingleOperandWord` and `IsScript
 | the two-operand families' `.w` forms (`or/and/eor/add/sub`, `ADDA`, `SUBA`, `CMPA`) | opmodes 1/3/5, 18 each | ~200 (three tails, two of them shared) | 2 500 a file, nine files | **2 500 / 2 500** each (were 2 186 … 2 241), **every record exact-clock** (20 000; `ADDA.w` was 144) — `CMP.w` 2 338, its 162 left `CMPM.w`'s |
 | line 0's word immediates and line 5's word quicks (they live in those nine files) | 8 × 6 and 9 × 2 | + `ImmediateWordAsync`/`QuickWordAsync` over the same tails | ~2 200 records | every one green and **exact-clock** |
 | the `.b`/`.w` `ADDX`/`SUBX` memory forms | — | 2 lines (`asxw1`'s idle, in `ExchangeArithmeticAsync`) | 5 004 records | every one exact-clock (was 2 clocks short on all of them) |
+| `MOVE` / `MOVEA`, `.w` and `.l` (nine destination classes, four `MoveLongFlags` placements) | 2 × 9 blocks, **one** method | ~430 (`MoveScriptAsync`, `MoveStoreAsync`, `WriteMoveAsync`) | 2 500 a file, four files | **2 500 / 2 500** each (were 1 767 / 1 468 / 2 247 / 1 984), **every record exact-clock** (10 000) |
 
 The control transfers are the first family whose **frame's saved counter** the script decides, and they
 are also where the queue's lookahead shows: a transfer never refills the slot behind the word it took, so
@@ -225,6 +226,49 @@ and `chkr3`. Six things a reader will not get from the manual:
 - **a clock row can claim a neighbour**: `(op & 0x00C0) == 0x00C0` charged these families 2 as `CMPA.w`,
   and `(op & 0xF130) == 0x8100` matched `DIVS Dn,<any>` as `ADDX`/`SUBX`. In `AluOwnClocks` a scripted
   family's `_own` must be tested **before** every masked row.
+
+`MOVE` is the one family whose **destination** tail is not the ALU families' tail for the same
+effective address, and the difference is where the instruction's one closing read sits: a `MOVE` stores
+and *then* fetches, where `morw1`/`morl1` fetch first. The corpus's transactions give the whole table
+(`R` a program read, `W` the store, `n2` an idle state), and it is the class row 58 guessed at from one
+edge case:
+
+| destination | register / immediate source | memory source |
+|---|---|---|
+| `Dn`, `An` (MOVEA) | `R` | (the source reads) `R` |
+| `(An)`, `(An)+` | `W R` | … `W R` |
+| `-(An)` | `R W` | … `R W` |
+| `(d16,An)`, `(xxx).w` | `R W R` | … `R W R` |
+| `(d8,An,Xn)` | `n2 R W R` | … `n2 R W R` |
+| `(xxx).l` | `R R W R` | … `R W R R` |
+
+(`(xxx).l`'s rows are `FetchMoveAbsoluteLongAsync` + the prefetch-first half + `CloseAfterLongDestination`
+— #74's class, which turned out to be MAME's own `_queueShort` shape and not a CLK quirk.) The registers
+commit where the microcode says: `(An)+` steps **after** the store (`mmiw2`/`rmil3`) and `-(An)` **with**
+it (`mmmw2` writes the low word at A − 2, then sets `m_da[rx] = A − 4` and writes the high one), so a
+faulting store leaves `An` where it stood — which is what "a plain MOVE is not like the other
+instructions" (row 74) really means, stated per class. A long value goes out **high word first**, with
+`-(An)` the exception. `MOVEA` calls **no flag update at all** (`i=......f` on every one of its states)
+and takes the whole 32-bit value, sign-extending a word source (`m_at = ext32(...)`).
+
+Three facts a reader will not get from the manual, and each one has a measurement:
+
+- **the long form's two flag updates are per class, and only a fault between them shows it.** The pair is
+  `sr_nzvc` on the low word and `sr_nz_u` on the high one — and `sr_nz_u` is *not* `sr_nzvc_u`: it sets N
+  and Z and leaves **V and C standing** (`M68000.Micro.cs` needed the extra operation). On success the
+  pair is a thirty-two-bit logic flag update; on a fault it is a partial one, and where it sits differs
+  by class (`rmrl1`…`rmrl3` between the two words, `rmml1`/`rmml2` before both, `rmdl2`/`rmdl3`
+  high-then-low, `mall2`/`mall3` low-then-high) — `MoveLongFlags`, four values, 252 records.
+- **a `MOVE`'s group-0 frame does not always record the opcode.** The word `-(An)` store state `mmmw2`
+  begins `m_ird = m_ir` (`rmmw1` having done `m_ir = m_irc`), so its frame's "instruction" word is the
+  **queue head** — the instruction's next word — where every other class keeps the opcode; the long
+  form's first write (`rmml2`) reassigns nothing, so *its* frame keeps the opcode. `MOVE.b` never faults
+  there at all, because a byte store at an odd address is legal (which is why the family's byte file was
+  green and its word file was not). That is `FrameSavesInstructionWord`, 115 records.
+- **an odd write is 8 clocks, like an odd read.** `Cycle` charges the abandoned cycle's 4 and the
+  aborting state charges its own 4 (`WriteMoveWordAsync`); reading the instruction's `length` as "the
+  write's state replaces the abort" is 4 short on 1 042 records. The same shape as row 68's read rule,
+  from the other side.
 
 ## 5. The two things that stay open, and why
 
