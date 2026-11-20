@@ -178,7 +178,12 @@ public sealed partial class M68000
     async ValueTask ReadLongOperandAsync(uint address)
     {
         _alub = await ReadWordAsync(address);              // adrl1 — m_dbin -> m_alub, m_alue
-        if (_busFaulted) return;
+        if (_busFaulted)
+        {
+            await ChargeAbortedReadAsync();
+            return;
+        }
+
         _dbin = await ReadWordAsync(address + 2);          // adrl2 — m_dbin
     }
 
@@ -189,7 +194,12 @@ public sealed partial class M68000
     async ValueTask ReadLongOperandFromStreamAsync(uint address)
     {
         _alub = await ReadOperandProgramAsync(address);    // adsl2 — SSW_PROGRAM | SSW_R
-        if (_busFaulted) return;
+        if (_busFaulted)
+        {
+            await ChargeAbortedReadAsync();
+            return;
+        }
+
         _dbin = await ReadWordAsync(address + 2);          // adsl3 — SSW_DATA | SSW_R
     }
 

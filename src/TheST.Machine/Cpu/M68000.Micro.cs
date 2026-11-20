@@ -209,4 +209,23 @@ public sealed partial class M68000
     /// it in the clock column.
     /// </summary>
     ValueTask IdleAsync(int clocks = 2) => ClocksAsync(clocks);
+
+    /// <summary>
+    /// The extra 4 clocks an aborted <b>read</b> costs. The microcode's faulting state charges its own
+    /// 4 and then 4 more for the cycle it abandons (MAME's <c>if(m_aob &amp; 1) { m_icount -= 4; }</c>
+    /// after the state's own charge), so an odd-address read is 8 clocks in total, while an odd-address
+    /// write is 4: the abort replaces the write's state. <see cref="Cycle"/> charges the abort and its
+    /// record for every family, and the state's 4 is the shape's own business — a scripted family pays
+    /// it here, the shape table (<c>M68000.Timing.cs</c>) already carries it in its rows because it was
+    /// measured on records that include it. Measured: 7 377 scripted records of the two-operand longs
+    /// were exactly 4 short without it, and 6 922 table-charged ones were exactly 4 short <em>with</em>
+    /// it, which is the same fact from the other side.
+    /// </summary>
+    async ValueTask ChargeAbortedReadAsync()
+    {
+        if (_addressError)
+        {
+            await ClocksAsync(4);
+        }
+    }
 }

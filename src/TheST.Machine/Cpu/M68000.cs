@@ -458,9 +458,14 @@ public sealed partial class M68000 : Chip
             SettlePostIncrement(isWrite);
 
             // the abandoned cycle: the hardware asserts nothing, but an address error's length carries
-            // the 4 clocks of the cycle it started and threw away — MAME's `re` transaction (AS never
-            // asserted) is that cycle, and every faulting record of every scripted family was exactly
-            // 4 clocks short without it. Internal work, so an idle wait: no record, no prefetch.
+            // the microcode's charge for it — MAME's `re`/`we` transaction (AS never asserted) is that
+            // cycle, and every faulting record of every scripted family was short without it. The 4
+            // here is the abort alone. The microcode also charges the aborting <em>state</em> its own 4,
+            // so an aborted <b>read</b> costs 8 in total and an aborted write 4 — but the shape table
+            // (`M68000.Timing.cs`) was measured on records that include that 4, so an unported family
+            // already carries it in its row and would be double-charged. The extra 4 therefore lives in
+            // the scripts (`ChargeAbortedReadAsync`, called by the operand blocks), i.e. in the families
+            // whose clocks are the microcode's own; it is paid by the port, family by family.
             await ClocksAsync(4);
 
             return new BusResult(0, true, false);
