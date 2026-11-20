@@ -88,13 +88,14 @@ public sealed partial class M68000
 
     /// <summary>
     /// The <b>control transfers</b> — `BSR` (line 6's condition field 1, not the conditional branches),
-    /// `JMP` (line 4's two opmodes, not `JSR`) and `UNLK`. Their scripts are in this file; `M68000.Timing.cs`
-    /// charges nothing for them. `JSR` is deliberately still measured by shape: its state is green and its
-    /// clock column is the next ticket's (the same free extension word and leading run apply to it).
+    /// `JMP` and `JSR` (line 4's two opcode ranges) and `UNLK`. Their scripts are in this file;
+    /// `M68000.Timing.cs` charges nothing for them.
     /// </summary>
     static bool IsScriptedBranch(ushort op) => (op >> 12) == 0x6 && ((op >> 8) & 0xF) == 1;
 
     static bool IsScriptedJump(ushort op) => (op & 0xFFC0) is 0x4EC0 or 0x4ED0;
+
+    static bool IsScriptedJsr(ushort op) => (op & 0xFFC0) == 0x4E80;
 
     static bool IsScriptedUnlink(ushort op) => (op & 0xFFF8) == 0x4E58;
 
@@ -773,6 +774,118 @@ public sealed partial class M68000
         }
 
         // b + mmrw3 — `m_pc = m_au`, then the one fetch that lands the queue at the target
+        _flowTransferred = true;
+        _ird = first;
+        _fetchStateAddress = address + 2;
+        _ir = await ReadProgramAsync(address + 2);
+        if (_busFaulted) return;
+        _ircValid = false;
+        _pc = address;
+    }
+
+    /// <summary>
+    /// `JSR &lt;ea&gt;` — `jsra1`/`jsrd2`+`jsrd3` (the target's read, which comes <b>before</b> the push),
+    /// `jsaw2`/`jsaw3` (the return address, high word first), then `b`/`mmrw3` at the target.
+    ///
+    /// <para>
+    /// The same two facts as `JMP` (the address states' idle run is the shape's own, the extension word is
+    /// free), plus the one that makes the pushes land where the corpus puts them: <c>m_pc</c> is advanced
+    /// past each extension word <em>as it is consumed</em> (`m_au = m_pc + 2; m_pc = m_au`), so the return
+    /// address is the counter past the last one — `opcode + 2` for `(An)`, `+4` for one extension word,
+    /// `+6` for `(xxx).l` — and an odd <em>target</em> faults on that read with the same counter saved
+    /// (`FrameSavesOnFetch(_pc)`), the stack untouched and nothing pushed (FINDINGS row 43). The pushes
+    /// are the stacked copy of that counter, so both are `_pc` at one instant.
+    /// </para>
+    /// </summary>
+    async ValueTask JumpSubroutineAsync(ushort op)
+    {
+        int mode = (op >> 3) & 0x7;
+        int reg = op & 0x7;
+        long target;
+
+        switch (mode)
+        {
+            case 2:                                            // jsr_ais — jsra1, no idle run
+                target = GetA(reg);
+                break;
+
+            case 5:                                            // jsr_das — jsrd1
+                await IdleAsync();
+                target = GetA(reg) + (uint)(short)await JumpWordAsync(0);
+                if (_busFaulted) return;
+                break;
+
+            case 6:                                            // jsr_dais — jsrx0, jsrx1, jsrx2/jsrx3
+            {
+                await IdleAsync(2);                            // jsrx0 — `alu_ext` of the brief extension word
+                ushort extension = await JumpWordAsync(0);
+                await IdleAsync(4);                            // jsrx1 and the index state
+                target = GetA(reg) + (uint)ExtensionDisplacement(extension) + IndexValue(extension);
+                break;
+            }
+
+            case 7 when reg == 0:                              // jsr_adr16 — one idle state
+                await IdleAsync();
+                target = (uint)(short)await JumpWordAsync(0);
+                break;
+
+            case 7 when reg == 1:                              // jsr_adr32 — jsal1, jsal2, no idle run
+            {
+                uint high = await JumpWordAsync(0);            // jsal1 — the word the queue holds
+                uint low = await JumpWordAsync(1);             // jsal2 — one read at the fetch pointer
+                if (_busFaulted) return;
+
+                // jsal2 also commits `m_pc = m_au`, and that read moved `m_au` by 2 — so this shape's
+                // counter is the only one that a queue read *does* advance (or the return address and
+                // the frame are both a word low: 90 records)
+                _pc += 2;
+                target = (high << 16) | low;
+                break;
+            }
+
+            case 7 when reg == 2:                              // jsr_dpc — jsrd1, then jsrd2
+                await IdleAsync();
+                target = (long)_opcodeAddress + 2 + (short)await JumpWordAsync(0);
+                break;
+
+            case 7 when reg == 3:                              // jsr_dpci — jsrx0..jsrx3 off the counter
+            {
+                await IdleAsync(2);
+                ushort extension = await JumpWordAsync(0);
+                await IdleAsync(4);
+                target = (long)_opcodeAddress + 2
+                         + ExtensionDisplacement(extension) + IndexValue(extension);
+                break;
+            }
+
+            default:                                           // Dn, (An)+, -(An), #imm : not a JSR encoding
+                await EnterExceptionAsync(4, 0);
+                return;
+        }
+
+        uint address = (uint)target;
+
+        // jsra1/jsrd3 — the target's read, before the push, and the state that advanced `m_pc` past the
+        // last extension word is also the one an odd target's frame saves
+        FrameSavesOnFetch(_pc);
+        ushort first = await ReadTargetAsync(address);
+        if (_busFaulted)
+        {
+            await ChargeAbortedReadAsync();
+            return;
+        }
+
+        // jsaw2, jsaw3 — the return address's two words, high first, the stack pointer committed with
+        // the first one (as `m_da[m_sp] = m_au` does)
+        uint returnAddress = _pc;
+        uint stack = A7 - 4;
+        A7 = stack;
+        await WriteWordAsync(stack, (ushort)High16(returnAddress));
+        if (_busFaulted) return;
+        await WriteWordAsync(stack + 2, (ushort)Low16(returnAddress));
+        if (_busFaulted) return;
+
+        // b + mmrw3 — `m_pc = m_au` at the target's successor, `m_ird = m_ir` (the target's own word)
         _flowTransferred = true;
         _ird = first;
         _fetchStateAddress = address + 2;

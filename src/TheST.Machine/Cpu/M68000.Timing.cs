@@ -96,22 +96,11 @@ public sealed partial class M68000
                 return 0;
 
             case 0x4:
-                // JMP is scripted (M68000.Scripts.cs): its own clocks lead inside `JumpAsync`, because a jump
-                // never runs the closing fetch that spends `_own`. JSR still measures by shape here.
-                if (IsScriptedJump(op))
+                // JMP and JSR are scripted (M68000.Scripts.cs): their own clocks lead inside the script,
+                // because a transfer never runs the closing fetch that spends `_own`
+                if (IsScriptedJump(op) || IsScriptedJsr(op))
                 {
                     return 0;
-                }
-
-                // JSR: the control transfer's clocks lead (see LeadsOwnClocks)
-                if ((op & 0xFFC0) == 0x4E90)
-                {
-                    return mode switch
-                    {
-                        6 => 4,                                     // indexed: 2 of it is the EA's
-                        5 or 7 => 2,                                // (d16,An), (xxx).w/.l, (d16,PC)
-                        _ => 0,                                     // (An)
-                    };
                 }
 
                 if ((op & 0xFFF8) == 0x4840 || (op & 0xFFF8) == 0x4880 || (op & 0xFFF8) == 0x48C0)
@@ -279,7 +268,9 @@ public sealed partial class M68000
 
         if (line == 0x4)
         {
-            return (op & 0xFFC0) == 0x4E80 || (op & 0xFFC0) == 0x4E90;   // JMP, JSR
+            // JMP/JSR are scripted: their leading run is the script's own (and `_own` is 0), so this
+            // answers true only to keep the meaning of the predicate — a transfer's clocks lead
+            return IsScriptedJsr(op) || IsScriptedJump(op);
         }
 
         return false;

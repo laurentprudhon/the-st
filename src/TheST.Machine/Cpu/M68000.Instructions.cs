@@ -1032,9 +1032,18 @@ public sealed partial class M68000
             case 0x4E75:   // RTS
             {
                 _pc = await ReadLongAsync(A7);
-                if (_busFaulted) return;
+                if (_busFaulted)
+                {
+                    await ChargeAbortedReadAsync();
+                    return;
+                }
+
                 A7 += 4;
                 await RefillAsync(_pc);
+
+                // an odd return address aborts the refill's first read: the state's own 4 is the
+                // return's to charge (1 237 records of the file were exactly 4 short)
+                await ChargeAbortedReadAsync();
                 return;
             }
 
@@ -1045,13 +1054,24 @@ public sealed partial class M68000
             case 0x4E77:   // RTR
             {
                 ushort status = await ReadWordAsync(A7);
-                if (_busFaulted) return;
+                if (_busFaulted)
+                {
+                    await ChargeAbortedReadAsync();
+                    return;
+                }
+
                 A7 += 2;
                 _sr = (ushort)((_sr & 0xFF00) | (status & 0xFF));
                 _pc = await ReadLongAsync(A7);
-                if (_busFaulted) return;
+                if (_busFaulted)
+                {
+                    await ChargeAbortedReadAsync();
+                    return;
+                }
+
                 A7 += 4;
                 await RefillAsync(_pc);
+                await ChargeAbortedReadAsync();
                 return;
             }
 
@@ -1122,26 +1142,12 @@ public sealed partial class M68000
             return;
         }
 
-        if ((op & 0xFFC0) == 0x4E80)   // JSR
+        if (IsScriptedJsr(op))   // JSR
         {
-            uint target = await EaAddressAsync(mode, reg, 2);
-            if (_busFaulted) return;
-
-            // an odd target faults on the fetch that follows the jump, so nothing is pushed: the
-            // corpus measures the stack untouched and the group-0 frame where the return address
-            // would have gone (FINDINGS row 43). The refill is skipped for an odd target too — the
-            // fault belongs to the prefetch, so the loop's own odd-PC check raises it.
-            if ((target & 1) != 0)
-            {
-                _pc = target;
-                _flowTransferred = true;
-                return;
-            }
-
-            uint stack = A7 - 4;
-            A7 = stack;
-            await WriteLongAsync(stack, _pc);
-            await RefillAsync(target);
+            // scripted (M68000.Scripts.cs): the seven `jsr_*` scripts — the target's read before the push,
+            // the shape's own leading idle run, the free extension word, and a frame that saves the counter
+            // past the last extension word
+            await JumpSubroutineAsync(op);
             return;
         }
 
@@ -1169,10 +1175,20 @@ public sealed partial class M68000
         }
 
         ushort status = await ReadWordAsync(A7);
-        if (_busFaulted) return;
+        if (_busFaulted)
+        {
+            await ChargeAbortedReadAsync();
+            return;
+        }
+
         A7 += 2;
         uint pc = await ReadLongAsync(A7);
-        if (_busFaulted) return;
+        if (_busFaulted)
+        {
+            await ChargeAbortedReadAsync();
+            return;
+        }
+
         A7 += 4;
 
         bool wasSupervisor = (_sr & 0x2000) != 0;
@@ -1188,6 +1204,9 @@ public sealed partial class M68000
 
         _pc = pc;
         await RefillAsync(_pc);
+
+        // an odd target aborts the refill's first read, and the aborting state's own 4 is the return's
+        await ChargeAbortedReadAsync();
     }
 
     // ---- line 5: ADDQ/SUBQ, Scc, DBcc ------------------------------------------------------
