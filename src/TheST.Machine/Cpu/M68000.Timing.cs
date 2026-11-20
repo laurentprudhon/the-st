@@ -59,6 +59,12 @@ public sealed partial class M68000
         switch (line)
         {
             case 0x0:
+                // the long immediates are scripts (M68000.Scripts.cs): o#l1/o#w1 and the family's tail
+                if (IsScriptedImmediateLong(op))
+                {
+                    return 0;
+                }
+
                 // ORI/ANDI/EORI to SR: the status register write is its own work
                 if ((op & 0xFF00) is 0x0000 or 0x0200 or 0x0A00 && (op & 0x00FF) == 0x7C)
                 {
@@ -140,6 +146,12 @@ public sealed partial class M68000
                 return 0;                                           // MOVEM, LINK, UNLK, RTS, RTR, RTE
 
             case 0x5:
+                // the long quicks are scripts (M68000.Scripts.cs): raql1 and the family's tail
+                if (IsScriptedQuickLong(op))
+                {
+                    return 0;
+                }
+
                 if ((op & 0x00C0) != 0x00C0)
                 {
                     // ADDQ/SUBQ: an address register is 4 clocks; long to memory 2, long to a register 4

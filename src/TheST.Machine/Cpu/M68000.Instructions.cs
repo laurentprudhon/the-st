@@ -303,6 +303,13 @@ public sealed partial class M68000
             return;
         }
 
+        // the long immediates are scripts (M68000.Scripts.cs): o#l1/o#w1 and #79's tails
+        if (IsScriptedImmediateLong(op))
+        {
+            await ImmediateLongAsync(op);
+            return;
+        }
+
         // MOVEP sits in the bit-operation block's space: mode 001 (address-register direct, which no bit
         // operation can use) with bit 8 set. Its own bits 7-6 are the form, so a word form has size 0 —
         // testing size here sent every MOVEP.w memory → register into the bit-operation path instead,
@@ -1249,6 +1256,13 @@ public sealed partial class M68000
 
             await WriteEaAsync(mode, reg, 0, set ? 0xFFu : 0x00u);
             if (_busFaulted) return;
+            return;
+        }
+
+        // the long quicks are scripts (M68000.Scripts.cs): raql1/maql1 and #79's tails
+        if (IsScriptedQuickLong(op))
+        {
+            await QuickLongAsync(op);
             return;
         }
 

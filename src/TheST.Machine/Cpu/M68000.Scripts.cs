@@ -53,6 +53,39 @@ public sealed partial class M68000
         return opmode is 2 or 6 || (opmode == 7 && line is 0x9 or 0xB or 0xD);
     }
 
+    /// <summary>
+    /// Line 0's <b>long immediates</b> — `ori`/`andi`/`eori`/`addi`/`subi`/`cmpi` in size 2, whose
+    /// operand block is the two program reads `o#l1`/`o#w1` and whose destination is the `mode.reg`
+    /// field. Not the bit operations (`0x08xx` static, `0x01xx` with a register bit number), not
+    /// `MOVEP`, and not the to-CCR/to-SR forms (`mode 7, reg 4`), which are their own block — and not
+    /// the byte and word sizes, which still measure by shape.
+    /// </summary>
+    static bool IsScriptedImmediateLong(ushort op)
+    {
+        int line = op >> 12;
+        int size = (op >> 6) & 0x3;
+        int operation = (op >> 9) & 0x7;
+        int mode = (op >> 3) & 0x7;
+        int reg = op & 0x7;
+
+        // line 0, long, and bit 8 clear: 0x01xx is the register bit-operation block, 0x08xx the static
+        // one (whose mnemonic field reads 4), and MOVEP lives in 0x0108-0x010F
+        if (line != 0x0 || size != 2 || (op & 0x0100) != 0 || operation is 4 or 7)
+        {
+            return false;
+        }
+
+        return mode != 7 || reg != 4;                      // (mode 7, reg 4) is to-CCR / to-SR
+    }
+
+    /// <summary>
+    /// Line 5's <b>long quicks</b> — `addq.l`/`subq.l`, a value in the opcode's own field and no
+    /// extension word. Size 3 on line 5 is `Scc`/`DBcc`, which is a different family with its own
+    /// leading charge.
+    /// </summary>
+    static bool IsScriptedQuickLong(ushort op) =>
+        (op >> 12) == 0x5 && ((op >> 6) & 0x3) == 2;
+
     // =========================================================================================
     // The two-operand longs — `or/and/eor/add/sub .l` in both directions, and ADDA/SUBA/CMPA
     // =========================================================================================
@@ -145,7 +178,7 @@ public sealed partial class M68000
                 return;
             }
 
-            await AluIntoMemoryLongAsync(rx, address.Value, kind);
+            await AluIntoMemoryLongAsync(_d[rx], address.Value, kind);
             return;
         }
 
@@ -395,12 +428,11 @@ public sealed partial class M68000
     /// and the low word goes out first: the chip's ALU is sixteen bits wide, so a long write is two
     /// word cycles, `m_au - 2` in between.
     /// </summary>
-    async ValueTask AluIntoMemoryLongAsync(int rx, uint address, AluLong kind)
+    async ValueTask AluIntoMemoryLongAsync(uint source, uint address, AluLong kind)
     {
         await TrailingFetchAsync();                        // morl1 — m_aob = m_au, the one read
         if (_busFaulted) return;
 
-        uint source = _d[rx];
         uint destination = Merge16_32(_alub, _dbin);
 
         AluLongOp(source, destination, kind);              // morl1/morl2 — the low half, then the carry
@@ -434,13 +466,148 @@ public sealed partial class M68000
         }
 
         uint destination = toAddressRegister ? GetA(rx) : _d[rx];
+        await CompareLongTailAsync(source.Value, destination, clocks: 2);
+    }
 
-        AluLongOp(source.Value, destination, AluLong.Sub); // cpml1/cpml2 — alu_sub + alu_subc
-        SetLongFlags(AluLong.Sub, source.Value, destination, _aluo, extend: false);
+    /// <summary>
+    /// The comparison's tail, shared by CMP.l, CMPA.l and CMPI.l: cpml1, cpml2 (rcal1, rcal2 for the
+    /// CMPI shapes), the closing prefetch, then rcal3's idle. Both ALU halves run <em>before</em> the
+    /// fetch — a comparison writes nothing, so nothing else puts a read between them. X is untouched:
+    /// a comparison is not an arithmetic operation.
+    /// </summary>
+    /// <param name="clocks">
+    /// rcal3's run: 2 for a shape whose script ends on it (`cmp.l <ea>,Dn`, `cmpi.l #,Dn`), 0 for one
+    /// that ends on the prefetch (`cpdl2` — the CMPI shapes with a memory destination).
+    /// </param>
+    async ValueTask CompareLongTailAsync(uint source, uint destination, int clocks)
+    {
+        AluLongOp(source, destination, AluLong.Sub);       // cpml1/rcal1 — alu_sub
+        SetLongFlags(AluLong.Sub, source, destination, _aluo, extend: false);
 
-        await TrailingFetchAsync();                        // cpml2's read
+        await TrailingFetchAsync();                        // cpml2/rcal2 — the one read
         if (_busFaulted) return;
 
-        await IdleAsync();                                 // 08d rcal3
+        await IdleAsync(clocks);                           // 08d rcal3
+    }
+
+    // =========================================================================================
+    // Line 0's immediates and line 5's quicks — the same tails, a different operand block
+    // =========================================================================================
+
+    /// <summary>
+    /// o#l1, o#w1 — a line-0 immediate's two words. They are the instruction's first two reads, in
+    /// program space, and the second is the state that begins a prefetch (`m_pc = m_au`), so the
+    /// frame's counter moves at it. `m_dt` is the immediate in MAME's own register; here it is the
+    /// returned value, because nothing else in a long immediate shape reads it.
+    /// </summary>
+    async ValueTask<uint?> ReadLongImmediateAsync()
+    {
+        ushort high = await FetchAsync();                  // 3e0 o#l1 — set_16h(m_dt, m_dbin)
+        if (_busFaulted) return null;
+
+        BeginFetchState();                                 // 2b9 o#w1 — m_pc = m_au
+        ushort low = await FetchAsync();                   // 2b9 o#w1 — set_16l(m_dt, m_dbin)
+        return _busFaulted ? null : Merge16_32(high, low);
+    }
+
+    /// <summary>
+    /// Line 0's long immediates — `ori/andi/eori/addi/subi/cmpi .l`, destination in a register or in
+    /// memory. The script is the immediate's two reads and then #79's tail for the same destination;
+    /// what the table could not say is <em>where</em> those two reads sit and that the register tail
+    /// ends on two idle states (roal3, roal4) rather than the closing fetch.
+    /// </summary>
+    async ValueTask ImmediateLongAsync(ushort op)
+    {
+        int operation = (op >> 9) & 0x7;
+        int mode = (op >> 3) & 0x7;
+        int reg = op & 0x7;
+
+        uint? immediate = await ReadLongImmediateAsync();
+        if (immediate is null)
+        {
+            return;
+        }
+
+        uint value = immediate.Value;
+
+        if (operation == 6)                                // CMPI — a comparison, nothing is written
+        {
+            if (mode == 0)
+            {
+                await CompareLongTailAsync(value, _d[reg], clocks: 2);    // rcal1, rcal2, rcal3
+                return;
+            }
+
+            uint? address = await ReadLongEaAsync(mode, reg);
+            if (address is null)
+            {
+                return;
+            }
+
+            await CompareLongTailAsync(value, Merge16_32(_alub, _dbin), clocks: 0);   // cpdl1, cpdl2
+            return;
+        }
+
+        AluLong kind = operation switch
+        {
+            0 => AluLong.Or,
+            1 => AluLong.And,
+            2 => AluLong.Sub,
+            3 => AluLong.Add,
+            _ => AluLong.Eor,
+        };
+
+        if (mode == 0)                                     // roal1 (free), roal2, roal3, roal4
+        {
+            await AluIntoDataRegisterAsync(reg, kind, value, clocks: 4);
+            return;
+        }
+
+        uint? destination = await ReadLongEaAsync(mode, reg);
+        if (destination is null)
+        {
+            return;
+        }
+
+        await AluIntoMemoryLongAsync(value, destination.Value, kind);   // morl1, morl2, morw2
+    }
+
+    /// <summary>
+    /// Line 5's long quicks — `addq.l`/`subq.l`. There is no extension word: the value is the opcode's
+    /// own field (`m_ftu`, bits 11–9, a zero meaning 8), so the script starts at the destination and
+    /// runs the same tails as the immediates. An address register takes the whole 32 bits and moves no
+    /// flags (MAME's raql1 says `m=.....`, the empty flag mask).
+    /// </summary>
+    async ValueTask QuickLongAsync(ushort op)
+    {
+        int data = (op >> 9) & 0x7;
+        if (data == 0)
+        {
+            data = 8;
+        }
+
+        int mode = (op >> 3) & 0x7;
+        int reg = op & 0x7;
+        AluLong kind = (op & 0x0100) != 0 ? AluLong.Sub : AluLong.Add;
+
+        if (mode == 1)                                     // raql1 — An, no flags, two set_16 writes
+        {
+            await AluIntoAddressRegisterAsync(reg, kind, (uint)data, clocks: 4);
+            return;
+        }
+
+        if (mode == 0)                                     // raql1 (free), roal2, roal3, roal4
+        {
+            await AluIntoDataRegisterAsync(reg, kind, (uint)data, clocks: 4);
+            return;
+        }
+
+        uint? address = await ReadLongEaAsync(mode, reg);  // adrl1, adrl2
+        if (address is null)
+        {
+            return;
+        }
+
+        await AluIntoMemoryLongAsync((uint)data, address.Value, kind);  // maql1, morl2, morw2
     }
 }

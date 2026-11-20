@@ -103,6 +103,8 @@ not move, and the boot still reaches the desktop (§5).
 | SUB.l (`sub.l`, incl. `SUB.l An,Dn`) | 19 | + a dispatch | 1 527 in `SUB.l` | **1 527 / 1 527** (was 1 150) |
 | CMP.l (`cmp.l`, no write) | 12 | + a compare tail | 2 063 in `CMP.l` | **2 063 / 2 063** (was 1 631) |
 | ADDA.l / SUBA.l / CMPA.l | 12 each | + a dispatch | 2 500 each | **2 500 / 2 500** each (was 1 982 / 1 975 / 1 955) |
+| line 0's long immediates (`ori`/`andi`/`eori`/`addi`/`subi`/`cmpi .l`) | 8 × 6, one method | + `o#l1`/`o#w1` | 90–262 a file | **every record exact-clock**, and the six files 2 500 / 2 500 (except `CMP.l`'s 165) |
+| line 5's long quicks (`addq.l`/`subq.l`) | 9 × 2, one method | + `raql1`/`maql1` | 872 (`ADD.l`), 858 (`SUB.l`) | **every record exact-clock** |
 
 The 18 OR.l shapes are 18 short methods over **five** shared blocks (the operand pair, the
 register-destination tail, the memory-destination tail, the program-status read, and the two idle
@@ -113,17 +115,17 @@ and the address-register forms one more tail (the same block, without the flag c
 
 ## 5. The two things that stay open, and why
 
-- **The aborted cycle.** An address error's `length` includes the 4 clocks of the cycle the hardware
-  abandons (`re` in the corpus's `transactions`); this core raises the fault *instead of* the cycle, so
-  a faulting record is 4 clocks short. It is one row's worth of work and it is not in a script — it is
-  in `Cycle`'s odd-address path. (Pre-existing: it fails identically on `main`.) It is now the
-  **highest-value single change left**: every family ported so far greens its *completing* records
-  and leaves its faulting ones red for this one reason.
-- **The immediate and quick families not yet ported** — `ORI`/`ANDI`/`EORI`/`ADDI`/`SUBI` (line 0,
-  `e#l1`/`e#w1`) and `ADDQ`/`SUBQ` (line 5, `q#…`). They share their files with the families above
-  and are what is still red in them (129 in `AND.l`, 262 in `EOR.l`, 90 + 872 in `ADD.l`, 115 + 858 in
-  `SUB.l`, 190 in `CMP.l`), untouched and red on `main` too. They are *not* variants of the line-8
-  scripts: they reach the ALU from a different state block.
+- **The aborted cycle — closed** (`#79b`, `#79c`). An address error's `length` includes the microcode's
+  charge for the cycle the hardware abandons (`re` in MAME's `transactions`, AS never asserted). The core
+  now charges it in `Cycle`'s odd-address path, and a *scripted* family pays the aborted read's own state
+  as well (`ChargeAbortedReadAsync`, 4 more — `#79c`): the microcode charges the aborting state its 4 and
+  then 4 more on the odd address, so an odd read is 8 clocks and an odd write 4. The shape table's rows
+  already contain that 4 because they were measured on records that include it, which is why the extra 4
+  lives in the scripts and dies with the table.
+- **The immediate and quick families — the long forms closed**: `ORI`/`ANDI`/`EORI`/`ADDI`/`SUBI`/`CMPI`
+  (line 0, `o#l1`/`o#w1`) and `ADDQ`/`SUBQ` (line 5, `raql1`/`maql1`), one method each
+  (`ImmediateLongAsync`, `QuickLongAsync`), every one of their records exact-clock. The `.b`/`.w` sizes of
+  both blocks are still measured by shape.
 
 ## 6. Verification
 
