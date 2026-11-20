@@ -226,6 +226,14 @@ public sealed partial class M68000
     /// </summary>
     int AluOwnClocks(ushort op, int line, int size, int mode)
     {
+        // MOVE/MOVEA in size 1 and 2 are scripts (M68000.Scripts.cs): the source block and the
+        // destination class's tail are their clocks, and the shape rows below never charged the
+        // `(An)+` destinations correctly (they read size 3 off the opcode and answered 4)
+        if (IsScriptedMove(op))
+        {
+            return 0;
+        }
+
         // MULU/MULS/DIVU/DIVS are scripts (M68000.Scripts.cs): their loops carry both the value and its
         // clocks, so the table must not charge them at all — 2 x 16 rotates plus one add per Booth digit
         // or set bit is the multiply, one subtract per quotient bit plus a restore is the divide, and no

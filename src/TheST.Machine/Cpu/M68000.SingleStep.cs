@@ -72,6 +72,7 @@ public sealed partial class M68000
         _own = 0;
         _eaCharged = false;
         _frameFetchPcDeclared = false;
+        _frameInstructionWordDeclared = false;
 
         _halted = false;
         _stopped = false;
@@ -144,6 +145,7 @@ public sealed partial class M68000
         _eaCharged = false;
         _faultProgram = false;
         _frameFetchPcDeclared = false;
+        _frameInstructionWordDeclared = false;
 
         if (_busFaulted)
         {

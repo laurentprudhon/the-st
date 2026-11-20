@@ -286,6 +286,15 @@ public sealed partial class M68000
         int destinationMode = (op >> 6) & 0x7;
         int destinationReg = (op >> 9) & 0x7;
 
+        // the word and long forms are scripts (M68000.Scripts.cs): the source block the ALU families
+        // use, then the destination class's own tail — the one family whose store comes *before* its
+        // closing read, and therefore whose read placement is per class and not a clause
+        if (IsScriptedMove(op))
+        {
+            await MoveScriptAsync(op, size);
+            return;
+        }
+
         uint value = await ReadEaAsync(sourceMode, sourceReg, size);
         if (_busFaulted) return;
 

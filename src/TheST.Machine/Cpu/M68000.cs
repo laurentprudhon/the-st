@@ -121,6 +121,17 @@ public sealed partial class M68000 : Chip
 
     bool _frameFetchPcDeclared;
 
+    /// <summary>
+    /// The word a group-0 frame records as "the instruction" (MAME's <c>m_ird</c>). It is the opcode,
+    /// except where the store state reloads <c>m_ird</c> from the queue: the word and long
+    /// <c>MOVE</c> into <c>-(An)</c> (<c>rmmw1</c> does <c>m_ir = m_irc</c>, then <c>mmmw2</c> does
+    /// <c>m_ird = m_ir</c>), so that frame saves the <b>queue head</b> — the word at the instruction's
+    /// next address — where every other class saves the opcode (measured: 115 MOVE.w records).
+    /// </summary>
+    ushort _frameInstructionWord;
+
+    bool _frameInstructionWordDeclared;
+
     // ---- reported, never gated -----------------------------------------------------------
     public long Instructions { get; private set; }
     public long BusCycles { get; private set; }
@@ -972,6 +983,7 @@ public sealed partial class M68000 : Chip
             _flowTransferred = false;
             _trailingFetched = false;
             _queueShort = false;
+            _frameInstructionWordDeclared = false;
             _own = 0;
             _eaCharged = false;
             _faultProgram = false;
@@ -1154,7 +1166,7 @@ public sealed partial class M68000 : Chip
             // (7–5) read back as zero, and the corpus compares the frame's bytes (FINDINGS row 45)
             await WriteWordAsync(frame + 8, (ushort)(oldSr & DefinedSr));
             await WriteWordAsync(frame + 10, (ushort)(returnPc >> 16));
-            await WriteWordAsync(frame + 6, _opcode);
+            await WriteWordAsync(frame + 6, _frameInstructionWordDeclared ? _frameInstructionWord : _opcode);
             await WriteWordAsync(frame + 4, (ushort)(_faultAddress & 0xFFFF));
             await WriteWordAsync(frame, status);
             await WriteWordAsync(frame + 2, (ushort)(_faultAddress >> 16));
@@ -1214,7 +1226,7 @@ public sealed partial class M68000 : Chip
     /// </summary>
     ushort BusStatusWord(ushort statusBefore)
     {
-        ushort status = (ushort)(_opcode & ~0x1Fu);
+        ushort status = (ushort)((_frameInstructionWordDeclared ? _frameInstructionWord : _opcode) & ~0x1Fu);
 
         if (_faultIsFetch || _faultProgram)
         {

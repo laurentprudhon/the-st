@@ -215,6 +215,17 @@ public sealed partial class M68000
     }
 
     /// <summary>
+    /// The group-0 frame records <paramref name="word"/> as "the instruction" instead of the opcode —
+    /// MAME's <c>m_ird = m_ir</c> in the word and long <c>MOVE</c>'s <c>-(An)</c> store state
+    /// (<c>mmmw2</c>), where the queue head has already moved to the instruction's next word.
+    /// </summary>
+    void FrameSavesInstructionWord(ushort word)
+    {
+        _frameInstructionWord = word;
+        _frameInstructionWordDeclared = true;
+    }
+
+    /// <summary>
     /// One word of a <b>control transfer</b>'s effective address, out of the decoder's queue. The first is
     /// free: the queue already holds it (the corpus's <c>prefetch[1]</c>), and a branch or a jump does not
     /// refill the slot behind it — the fetch that refill would issue is the one the transfer abandons. That
@@ -594,4 +605,13 @@ public sealed partial class M68000
     void SrNzvcU() =>
         _sr = (ushort)(((_sr & ~(FlagN | FlagV | FlagC) & (_isr | unchecked((ushort)~FlagZ)))
                         | (_isr & (FlagN | FlagV | FlagC))) & 0xFFFF);
+
+    /// <summary>
+    /// <c>sr_nz_u</c> — N and Z from the latch and <b>V and C left exactly as they were</b>; Z can only
+    /// be cleared. It is the half of a long <c>MOVE</c>'s flag update that the high word owns, and it is
+    /// not <see cref="SrNzvcU"/>: that one clears V and C, which a fault between a long store's two
+    /// words makes visible (it is the difference between `0x10` and `0x12` on 252 records).
+    /// </summary>
+    void SrNzU() =>
+        _sr = (ushort)(((_sr & ~FlagN & (_isr | unchecked((ushort)~FlagZ))) | (_isr & FlagN)) & 0xFFFF);
 }

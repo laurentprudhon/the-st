@@ -172,6 +172,20 @@ public sealed partial class M68000
 
     static bool IsScriptedUnlink(ushort op) => (op & 0xFFF8) == 0x4E58;
 
+    /// <summary>
+    /// <b>MOVE</b> in size 1 and 2, and <b>MOVEA</b> (which is the same instruction with destination
+    /// mode 1). Lines 3 and 2 carry nothing else, so the test is the line; size 0 (line 1) stays
+    /// measured by shape.
+    /// </summary>
+    /// <remarks>
+    /// The family's whole difficulty is that its destination tail is <em>not</em> the ALU families'
+    /// tail for the same effective address: a MOVE writes and then issues its closing read, where
+    /// `morw1`/`morl1` fetch first, so the read's position inside the instruction is per destination
+    /// class and set by the script. The source block is the ALU families' own, unchanged
+    /// (<see cref="ReadWordSourceAsync"/>, <see cref="ReadLongSourceAsync"/>).
+    /// </remarks>
+    static bool IsScriptedMove(ushort op) => (op >> 12) is 0x2 or 0x3;
+
     // =========================================================================================
     // The two-operand longs — `or/and/eor/add/sub .l` in both directions, and ADDA/SUBA/CMPA
     // =========================================================================================
@@ -1348,6 +1362,421 @@ public sealed partial class M68000
         if (!extend)
         {
             _sr = (ushort)((_sr & ~FlagX) | x);                     // a comparison leaves X alone
+        }
+    }
+
+    // =========================================================================================
+    // MOVE — lines 3 (word) and 2 (long), and MOVEA
+    // =========================================================================================
+    //
+    // `MOVE` is the family whose *destination* tail is not the ALU families' tail for the same
+    // effective address, and the difference is where the instruction's one closing read sits. The
+    // microcode's own handlers say it per class, and the corpus's transactions confirm every one
+    // (`R` a program read, `W` the store, `n2` an idle state):
+    //
+    //   dest         register/immediate source        memory source
+    //   Dn           R                                (source reads) R
+    //   An (MOVEA)   R                                R
+    //   (An)         W R
+    //   (An)+        W R                              (source reads) W R
+    //   -(An)        R W
+    //   (d16,An)     R W R                            R W R
+    //   (d8,An,Xn)   n2 R W R
+    //   (xxx).w      R W R
+    //   (xxx).l      R R W R                          R W R R
+    //
+    // Two of those are the classes #74 and row 74 already pinned, and they are why this family was
+    // left for last: a plain `MOVE` into `-(An)` issues its closing read **before** the store (an
+    // odd destination keeps the read and loses the write), where every other instruction stores
+    // first; and an `(xxx).l` destination takes the address's low word **out of the queue** rather
+    // than reading it, which is `FetchMoveAbsoluteLongAsync`/`_queueShort` and the two closing reads
+    // `CloseAfterLongDestinationAsync` already performs. With a source that cost no bus cycle the
+    // class prefetches the word after the address *before* the store — the R R W R row above.
+    //
+    // The register commits are the other half: `(An)+` steps its register **after** the store
+    // (`mmiw2`/`rmil3`) and `-(An)` steps it **with** the store (`mmmw2`), so a faulting store
+    // leaves `An` where it stood in both — where the old handlers committed the step while they
+    // addressed the operand. MOVEA takes the whole 32-bit value and calls **no flag update at all**
+    // (`i=......f` on every one of its states).
+
+    /// <summary>
+    /// One <c>MOVE</c>/<c>MOVEA</c>: the source block the ALU families use, the flags the move sets
+    /// (not the store), then the destination class's own tail.
+    /// </summary>
+    async ValueTask MoveScriptAsync(ushort op, int size)
+    {
+        int sourceMode = (op >> 3) & 0x7;
+        int sourceReg = op & 0x7;
+        int destinationMode = (op >> 6) & 0x7;
+        int destinationReg = (op >> 9) & 0x7;
+
+        uint? source = size == 2
+            ? await ReadLongSourceAsync(sourceMode, sourceReg)
+            : await ReadWordSourceAsync(sourceMode, sourceReg);
+        if (source is null)
+        {
+            return;
+        }
+
+        uint value = size == 2 ? source.Value : source.Value & 0xFFFF;
+        bool noBusCycle = MoveSourceTakesNoBusCycle(sourceMode, sourceReg);
+
+        // the flags are the *move's*, and where inside the store they land is per class (they are
+        // `sr_nzvc` on the low word and `sr_nz_u` on the high one, in the state the class puts them).
+        // A word destination latches the whole value in one state, so its flags are always up before
+        // the store and this sets them once; a long memory store's two updates are the block's own
+        // business (see <see cref="WriteMoveLongAsync"/>), because a fault can fall between them.
+        if (destinationMode != 1 && (size == 1 || destinationMode == 0))
+        {
+            SetLogicFlags(value, size);
+        }
+
+        await MoveStoreAsync(destinationMode, destinationReg, size, value, noBusCycle);
+    }
+
+    /// <summary>
+    /// Whether the <c>MOVE</c>'s source cost a bus cycle of its own — a data or address register
+    /// direct, or an immediate. Only the absolute-long destination reads it (the reference's
+    /// `MOVE_bw_AbsoluteLong_prefetch_first` class), and it is the source field of the *opcode*, not
+    /// a property of the tail.
+    /// </summary>
+    static bool MoveSourceTakesNoBusCycle(int mode, int reg) =>
+        mode is 0 or 1 || (mode == 7 && reg == 4);
+
+    /// <summary>
+    /// The destination class's tail — one block per row of the table above, the states in the
+    /// microcode's order.
+    /// </summary>
+    async ValueTask MoveStoreAsync(int mode, int reg, int size, uint value, bool sourceTakesNoBusCycle)
+    {
+        switch (mode)
+        {
+            case 0:                                            // mrgw1 + mmrw3 / mrgl1 + mrgl2
+                if (size == 2)
+                {
+                    _d[reg] = value;
+                }
+                else
+                {
+                    Set16L(reg, value);
+                }
+
+                BeginFetchState();                             // mrgw1 — m_pc = m_au
+                await TrailingFetchAsync();                    // mmrw3
+                return;
+
+            case 1:                                            // MOVEA — rrgm1/rrgl2, no flag call at all
+                SetA(reg, size == 2 ? value : Ext32((ushort)value));
+                BeginFetchState();
+                await TrailingFetchAsync();
+                return;
+
+            case 2:                                            // (An) — mmrw1/mmrw2/mmrw3, rmrl1..rmrl3
+            {
+                uint address = GetA(reg);
+                BeginFetchState();                             // mmrw1 — m_pc = m_au
+                await WriteMoveAsync(address, size, value,
+                    sourceTakesNoBusCycle ? MoveLongFlags.AfterFirstWord : MoveLongFlags.BetweenWords);
+                if (_busFaulted)
+                {
+                    return;                                    // a faulted store cancels the closing read
+                }
+
+                await TrailingFetchAsync();                    // mmrw3 — after the store
+                return;
+            }
+
+            case 3:                                            // (An)+ — mmiw1/mm iw2, rmil1..rmil3
+            {
+                uint address = GetA(reg);
+                BeginFetchState();                             // mmiw1 — m_pc = m_au
+                await WriteMoveAsync(address, size, value,
+                    sourceTakesNoBusCycle ? MoveLongFlags.AfterFirstWord : MoveLongFlags.BetweenWords);
+                if (_busFaulted)
+                {
+                    return;
+                }
+
+                SetA(reg, address + (uint)SizeBytes(size));    // mmiw2 — the step lands with the store
+                await TrailingFetchAsync();                    // mmiw2 — the closing read
+                return;
+            }
+
+            case 4:                                            // -(An) — rmmw1/mmmw2, rmml1..mmmw2
+            {
+                BeginFetchState();                             // rmmw1 — m_pc = m_au
+                await TrailingFetchAsync();                    // rmmw1 — the read comes *before* the store
+                if (_busFaulted)
+                {
+                    return;
+                }
+
+                uint start = GetA(reg);
+                if (size == 1)
+                {
+                    // rmmw1 does `m_ir = m_irc` and mmmw2 `m_ird = m_ir`, so a group-0 frame taken by
+                    // this store records the queue head — the instruction's next word — and not the
+                    // opcode. The long form's first write is rmml2, which reassigns nothing, so its
+                    // frame still records the opcode: the difference is measured (115 records).
+                    FrameSavesInstructionWord(_ir);
+                    SetA(reg, start - 2);                      // mmmw2 — the step lands with the store
+                    await WriteMoveWordAsync(start - 2, (ushort)value);
+                    return;
+                }
+
+                // rmml2 writes the **low** word at A − 2 (m_aluo is rmml1's `alu_and(src)`), then
+                // mmmw2 steps the register to A − 4 and writes the high word there — so the step is
+                // committed after the first word and an odd register keeps it
+                MoveLongLowFlags(value);                     // rmml1 — sr_nzvc on the low word
+                MoveLongHighFlags(value);                    // rmml2 — sr_nz_u on the high one
+                await WriteMoveWordAsync(start - 2, (ushort)Low16(value));
+                if (_busFaulted)
+                {
+                    return;
+                }
+
+                SetA(reg, start - 4);
+                await WriteMoveWordAsync(start - 4, (ushort)High16(value));
+                return;
+            }
+
+            case 5:                                            // (d16,An) — rmdw1/rmdw2/b/mmrw3
+            {
+                BeginFetchState();                             // rmdw1 — m_pc = m_au
+                ushort displacement = await FetchAsync();
+                if (_busFaulted)
+                {
+                    return;
+                }
+
+                uint address = GetA(reg) + Ext32(displacement);
+                await WriteMoveAsync(address, size, value,
+                    sourceTakesNoBusCycle ? MoveLongFlags.HighBeforeFirstWord : MoveLongFlags.BeforeBoth);
+                if (_busFaulted)
+                {
+                    return;
+                }
+
+                BeginFetchState();                             // b — m_pc = m_au
+                await TrailingFetchAsync();                    // mmrw3
+                return;
+            }
+
+            case 6:                                            // (d8,An,Xn) — rmxw0..rmxw3/rmdw2/b/mmrw3
+            {
+                await IdleAsync();                             // rmxw0 — the index's own state
+                BeginFetchState();                             // rmxw1 — m_pc = m_au, the read's address
+                ushort extension = await FetchAsync();
+                if (_busFaulted)
+                {
+                    return;
+                }
+
+                uint address = GetA(reg) + (uint)ExtensionDisplacement(extension) + IndexValue(extension);
+                await WriteMoveAsync(address, size, value,
+                    sourceTakesNoBusCycle ? MoveLongFlags.HighBeforeFirstWord : MoveLongFlags.BeforeBoth);
+                if (_busFaulted)
+                {
+                    return;
+                }
+
+                BeginFetchState();                             // b
+                await TrailingFetchAsync();                    // mmrw3
+                return;
+            }
+
+            default:
+                switch (reg)
+                {
+                    case 0:                                    // (xxx).w — raww1/maww2/b/mmrw3
+                    {
+                        BeginFetchState();                     // raww1 — m_pc = m_au
+                        ushort absolute = await FetchAsync();
+                        if (_busFaulted)
+                        {
+                            return;
+                        }
+
+                        await WriteMoveAsync(Ext32(absolute), size, value, MoveLongFlags.BeforeBoth);
+                        if (_busFaulted)
+                        {
+                            return;
+                        }
+
+                        BeginFetchState();                     // b
+                        await TrailingFetchAsync();            // mmrw3
+                        return;
+                    }
+
+                    case 1:                                    // (xxx).l — the queue-short class
+                    {
+                        // mall1 sets `m_pc = m_au` for the pair's one read when the source took a bus
+                        // cycle; when it did not, the class's second read (rall2) is the one that sets
+                        // it, which is the prefetch-first `TrailingFetchAsync` below
+                        if (!sourceTakesNoBusCycle)
+                        {
+                            BeginFetchState();
+                        }
+
+                        uint address = await FetchMoveAbsoluteLongAsync();   // mall1/mall2, or ralw1/ralw2
+                        if (_busFaulted)
+                        {
+                            return;
+                        }
+
+                        // the prefetch-first half: with the queue a word short, a source that took no
+                        // bus cycle leaves the bus free, so the word after the address is read before
+                        // the store (records `33fc` keep that read on a fault, `33ea` lose it)
+                        if (sourceTakesNoBusCycle)
+                        {
+                            await TrailingFetchAsync();
+                            if (_busFaulted)
+                            {
+                                return;
+                            }
+                        }
+
+                        await WriteMoveAsync(address, size, value,             // malw2/maww2
+                            sourceTakesNoBusCycle ? MoveLongFlags.BeforeBoth : MoveLongFlags.BetweenWords);
+                        return;                                             // the close pays the two reads
+                    }
+                }
+
+                return;
+        }
+    }
+
+    /// <summary>
+    /// Where a long <c>MOVE</c>'s two flag updates sit relative to its two writes. The microcode gives
+    /// the family two, `sr_nzvc` on the low word and `sr_nz_u` on the high one, and the *state* each
+    /// runs in differs by destination class — which is visible only when a store faults between them.
+    /// </summary>
+    enum MoveLongFlags
+    {
+        /// <summary>`rmml1`/`rmml2`, `raw l1`/`rall3`, `mmdl1`/`mawl2`: both updates before either word.</summary>
+        BeforeBoth,
+
+        /// <summary>`rmrl1`…`rmrl3`, `rmil1`…`rmil3`: the high word, then `sr_nzvc`, then the low word, then `sr_nz_u`.</summary>
+        AfterFirstWord,
+
+        /// <summary>`mmrl1`/`mmrl2`, `mall2`/`mall3`: `sr_nzvc`, the high word, `sr_nz_u`, the low word.</summary>
+        BetweenWords,
+
+        /// <summary>
+        /// `rmdl2`/`rmdl3` (a displacement or indexed destination with a source that took no bus cycle):
+        /// `sr_nz_u`, the high word, `sr_nzvc`, the low word, `sr_nz_u` — so a fault on the first word
+        /// leaves N and Z from the high half and V and C exactly as the instruction found them.
+        /// </summary>
+        HighBeforeFirstWord,
+    }
+
+    /// <summary><c>alu_and(m_dbin, 0xffff)</c> + <c>sr_nzvc</c> — the low word's N, Z, V, C; X untouched.</summary>
+    void MoveLongLowFlags(uint value)
+    {
+        AluAnd16(Low16(value), 0xFFFF);
+        SrNzvc();
+    }
+
+    /// <summary>
+    /// <c>alu_and(high16(...), 0xffff)</c> + <c>sr_nz_u</c> — the high word's N, its Z (which can only
+    /// be <em>cleared</em>), and V and C left as they were. That pair, run in this order, is exactly a
+    /// thirty-two-bit logic flag update; run separately they are what a fault in between leaves behind.
+    /// </summary>
+    void MoveLongHighFlags(uint value)
+    {
+        AluAnd16(High16(value), 0xFFFF);
+        SrNzU();
+    }
+
+    /// <summary>
+    /// A word store of the <c>MOVE</c> block, plus the aborting state's own 4 clocks when the address is
+    /// odd. A word store at an odd address never reaches the wire, but the microcode still charges the
+    /// state that issued it and then 4 more for the abandoned cycle — the corpus's record shows both
+    /// (`we` for 4, then the entry's `n 8`), so an aborted store is 8 clocks and every faulting record of
+    /// the family was exactly 4 short without the second half (1 042 records).
+    /// </summary>
+    async ValueTask WriteMoveWordAsync(uint address, ushort data)
+    {
+        await WriteWordAsync(address, data);
+        if (_busFaulted && _addressError)
+        {
+            await ClocksAsync(4);
+        }
+    }
+
+    /// <summary>
+    /// The store itself: <c>maww2</c>/<c>malw2</c> and their siblings. A long value goes out **high word
+    /// first**, then the low one at <c>address + 2</c> (the <c>-(An)</c> form is the exception and writes
+    /// it in the block above), with the class's two flag updates where the microcode puts them.
+    /// </summary>
+    async ValueTask WriteMoveAsync(uint address, int size, uint value, MoveLongFlags flags)
+    {
+        if (size == 1)
+        {
+            await WriteMoveWordAsync(address, (ushort)value);
+            return;
+        }
+
+        switch (flags)
+        {
+            case MoveLongFlags.BeforeBoth:
+                MoveLongLowFlags(value);                       // rawl1 / mmdl1
+                MoveLongHighFlags(value);                      // rall3 / mawl2
+                await WriteMoveWordAsync(address, (ushort)High16(value));
+                if (_busFaulted)
+                {
+                    return;
+                }
+
+                await WriteMoveWordAsync(address + 2, (ushort)Low16(value));
+                return;
+
+            case MoveLongFlags.AfterFirstWord:
+                await WriteMoveWordAsync(address, (ushort)High16(value));   // rmrl1 / rmil1
+                if (_busFaulted)
+                {
+                    return;
+                }
+
+                MoveLongLowFlags(value);                       // rmrl2 / rmil2
+                await WriteMoveWordAsync(address + 2, (ushort)Low16(value));
+                if (_busFaulted)
+                {
+                    return;
+                }
+
+                MoveLongHighFlags(value);                      // rmrl3 / rmil3
+                return;
+
+            case MoveLongFlags.HighBeforeFirstWord:
+                MoveLongHighFlags(value);                      // rmdl2
+                await WriteMoveWordAsync(address, (ushort)High16(value));
+                if (_busFaulted)
+                {
+                    return;
+                }
+
+                MoveLongLowFlags(value);                       // rmdl3
+                await WriteMoveWordAsync(address + 2, (ushort)Low16(value));
+                if (_busFaulted)
+                {
+                    return;
+                }
+
+                MoveLongHighFlags(value);                      // rmrl3
+                return;
+
+            default:                                           // BetweenWords
+                MoveLongLowFlags(value);                       // mmrl1 / mall2
+                await WriteMoveWordAsync(address, (ushort)High16(value));
+                if (_busFaulted)
+                {
+                    return;
+                }
+
+                MoveLongHighFlags(value);                      // mmrl2 / mall3
+                await WriteMoveWordAsync(address + 2, (ushort)Low16(value));
+                return;
         }
     }
 
