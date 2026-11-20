@@ -108,6 +108,19 @@ public sealed partial class M68000 : Chip
     bool _faultIsFetch;
     bool _addressError;
 
+    /// <summary>
+    /// The saved program counter a <b>fetch</b> fault puts in the group-0 frame, when the script has decided
+    /// it. MAME's <c>m_pc</c> at that instant is the script's own business: the <c>b</c>/<c>malw3</c> states
+    /// put the jump's target there (<c>BSR</c> — 1 271 records, <c>saved − opcode</c> = the displacement), the
+    /// <c>bbci3</c> state leaves the boundary's word (<c>JMP</c> — 911 records, +2 on every shape, whatever
+    /// the shape read to build its target). #76's rule (<c>_fetchPointer − 2</c>) stays the default because
+    /// that is what a fault inside an instruction's own trailing fetch measures, where <c>m_pc</c> has not
+    /// moved yet; a script that needs another number says so with <see cref="FrameSavesOnFetch"/>.
+    /// </summary>
+    uint _frameFetchPc;
+
+    bool _frameFetchPcDeclared;
+
     // ---- reported, never gated -----------------------------------------------------------
     public long Instructions { get; private set; }
     public long BusCycles { get; private set; }
@@ -962,6 +975,7 @@ public sealed partial class M68000 : Chip
             _own = 0;
             _eaCharged = false;
             _faultProgram = false;
+            _frameFetchPcDeclared = false;
 
             if (_busFaulted)
             {
@@ -1104,11 +1118,13 @@ public sealed partial class M68000 : Chip
         // the next instruction for every other frame
         bool group0 = vector == 2 || vector == 3;
 
-        // a data fault saves the address of the word in IR; a fetch's own fault saves the word before
-        // the one that failed (the fetch never completed, so the queue did not reach it)
-        // a group-0 data fault saves the depth of the pipeline — MAME's `m_pc` (#76)
+        // a data fault saves the depth of the pipeline — MAME's `m_pc` (#76) — and a fetch fault the word
+        // before the one that failed, unless the script says where `m_pc` stood at that instant
+        // (`FrameSavesOnFetch`: a jump's target, or the boundary's word)
         uint returnPc = group0
-            ? (_faultIsFetch ? _fetchPointer - 2 : _fetchStateAddress)
+            ? _faultIsFetch
+                ? _frameFetchPcDeclared ? _frameFetchPc : _fetchPointer - 2
+                : _fetchStateAddress
             : SavesInstructionAddress(vector) ? _opcodeAddress : _pc;
 
 #if DEBUG

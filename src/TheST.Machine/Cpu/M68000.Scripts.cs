@@ -86,6 +86,18 @@ public sealed partial class M68000
     static bool IsScriptedQuickLong(ushort op) =>
         (op >> 12) == 0x5 && ((op >> 6) & 0x3) == 2;
 
+    /// <summary>
+    /// The <b>control transfers</b> — `BSR` (line 6's condition field 1, not the conditional branches),
+    /// `JMP` (line 4's two opmodes, not `JSR`) and `UNLK`. Their scripts are in this file; `M68000.Timing.cs`
+    /// charges nothing for them. `JSR` is deliberately still measured by shape: its state is green and its
+    /// clock column is the next ticket's (the same free extension word and leading run apply to it).
+    /// </summary>
+    static bool IsScriptedBranch(ushort op) => (op >> 12) == 0x6 && ((op >> 8) & 0xF) == 1;
+
+    static bool IsScriptedJump(ushort op) => (op & 0xFFC0) is 0x4EC0 or 0x4ED0;
+
+    static bool IsScriptedUnlink(ushort op) => (op & 0xFFF8) == 0x4E58;
+
     // =========================================================================================
     // The two-operand longs — `or/and/eor/add/sub .l` in both directions, and ADDA/SUBA/CMPA
     // =========================================================================================
@@ -609,5 +621,189 @@ public sealed partial class M68000
         }
 
         await AluIntoMemoryLongAsync((uint)data, address.Value, kind);  // maql1, morl2, morw2
+    }
+
+    // =========================================================================================
+    // The control transfers — BSR, JMP, UNLK
+    // =========================================================================================
+    //
+    // Three measured facts separate these from the families above. (1) A transfer **abandons the stream**
+    // it would refill, so its extension word comes out of the queue free — `JumpWordAsync(0)` — and the
+    // reads it costs are the target's (`n2 r r` for `JMP (d16,An)`, 18 clocks for `BSR` in both sizes).
+    // (2) Its own clocks **lead** (a branch's 2, a jump's shape-dependent 0/2/6), because a transfer never
+    // runs the closing fetch that spends `_own`. (3) The frame's saved counter is the script's: `BSR`
+    // puts the target in `m_pc` before its fetch, `JMP` never does, and `UNLK` takes the boundary's word.
+
+    /// <summary>
+    /// `BSR` — bsrw1, bsrw2, bsrw3, then `malw3`, `b`, `mmrw3` at the target.
+    ///
+    /// <para>
+    /// The return address is the word past the opcode, and it is latched at bsrw1 — after the word form's
+    /// displacement has been taken out of the queue, which is why it is `opcode + 2` on `BSR.b` and
+    /// `opcode + 4` on `BSR.w` (the corpus's push says both). The high word goes out first (`bsrw2` at
+    /// `sp − 4`, then `bsrw3` at `sp − 2`, where the low word is `m_aluo` — the latched address, not a
+    /// re-read of `m_au`). And the fetch at the target <em>is</em> a fetch state (`malw3`: `m_pc = m_au`),
+    /// so an odd target's frame saves the target itself and not the word before it, which is what #76's
+    /// default rule would give: 1 271 records of the file, `saved − opcode` = the displacement.
+    /// </para>
+    /// </summary>
+    async ValueTask BranchSubroutineAsync(ushort op)
+    {
+        int displacement = op & 0xFF;
+
+        if (displacement == 0)
+        {
+            // the word form: the displacement is the queue's own word, and a branch does not refill the slot
+            // behind it — the fetch that would is the one the branch abandons (`BSR.w` is 18 clocks, like
+            // `BSR.b`; pop it with `FetchAsync` and the six word-form records are 4 clocks long)
+            displacement = (short)await JumpWordAsync(0);
+            if (_busFaulted) return;
+        }
+        else if (displacement >= 0x80)
+        {
+            displacement -= 0x100;      // the byte form's displacement is signed (0xEC is −20, not 236)
+        }
+
+        await IdleAsync();                                 // bsrw1 — `alu r=0 c=1`, the transfer's own 2
+
+        uint returnAddress = _pc;                          // the latch: bsrw1's `m_at = m_au`
+        uint stack = A7 - 4;
+        A7 = stack;
+
+        await WriteWordAsync(stack, (ushort)High16(returnAddress));      // bsrw2 — high word first
+        if (_busFaulted) return;
+        await WriteWordAsync(stack + 2, (ushort)Low16(returnAddress));   // bsrw3
+        if (_busFaulted) return;
+
+        long target = (long)_opcodeAddress + 2 + displacement;
+        FrameSavesOnFetch((uint)target);                   // `b`: `m_pc = m_au` = the target
+        await RefillAsync((uint)target);                   // malw3 then `b`/`mmrw3`: the target's pair
+
+        // an odd target aborts on that fetch, and this family is scripted: the aborting state's own 4 is the
+        // port's to charge (the shape table carried it in BSR's row, and that row is gone)
+        await ChargeAbortedReadAsync();
+    }
+
+    /// <summary>
+    /// `JMP &lt;ea&gt;` — MAME's seven scripts, one per addressing mode: their address states' idle run
+    /// (`jmpd1` 2, `jmaw1` 2, `jmaw1`+`jmal2` for the long word, `jmpx0`/`jmpx1`/`jmpx2|3` 6), then
+    /// `bbci3`'s read at the target, then `b`/`mmrw3`'s fetch at its successor.
+    ///
+    /// <para>
+    /// The target read is <b>not</b> a fetch state: `m_pc` keeps the boundary's word until `b` sets it, so
+    /// a `JMP` frame saves `opcode + 2` on <em>every</em> shape — whatever its address cost (911 records,
+    /// the same number for `(An)`, `(d16,An)`, `(d8,An,Xn)` and the absolutes). The idle runs are charged
+    /// here for the same reason the saved counter is: `_own` is only spent at the closing fetch, and a jump
+    /// never runs it — which is why the jump's clock column sat at −2/−4/+6/−8 per shape before this port.
+    /// </para>
+    /// </summary>
+    async ValueTask JumpAsync(ushort op)
+    {
+        int mode = (op >> 3) & 0x7;
+        int reg = op & 0x7;
+        long target;
+
+        switch (mode)
+        {
+            case 2:                                            // jmp_an — jmpa1: a read at the register
+                target = GetA(reg);
+                break;
+
+            case 5:                                            // jmp_das — jmpd1
+                await IdleAsync();
+                target = GetA(reg) + (uint)(short)await JumpWordAsync(0);
+                if (_busFaulted) return;
+                break;
+
+            case 6:                                            // jmp_dais — jmpx0, jmpx1, jmpx2/jmpx3
+            {
+                await IdleAsync(2);                            // jmpx0 — `alu_ext` of the brief extension word
+                ushort extension = await JumpWordAsync(0);
+                await IdleAsync(4);                            // jmpx1 and the index state
+                target = GetA(reg) + (uint)ExtensionDisplacement(extension) + IndexValue(extension);
+                break;
+            }
+
+            case 7 when reg == 0:                              // jmp_adr16 — jmaw1
+                await IdleAsync();
+                target = (uint)(short)await JumpWordAsync(0);
+                break;
+
+            case 7 when reg == 1:                              // jmp_adr32 — jmal1, jmal2
+            {
+                // no idle run at all: `jmal1` merges the queue's word with the one read at the fetch pointer,
+                // and `jmal2` reads at the address it built (12 clocks, three reads, nothing between them)
+                uint high = await JumpWordAsync(0);             // jmal1 — the word the queue holds
+                uint low = await JumpWordAsync(1);              // jmal2 — one read at the fetch pointer
+                if (_busFaulted) return;
+                target = (high << 16) | low;
+                break;
+            }
+
+            case 7 when reg == 2:                              // jmp_dpc — jmpd1, then the same bbci3
+                await IdleAsync();
+                target = (long)_opcodeAddress + 2 + (short)await JumpWordAsync(0);
+                break;
+
+            case 7 when reg == 3:                              // jmp_dpci — jmpx0..jmpx3 off the counter
+            {
+                await IdleAsync(2);
+                ushort extension = await JumpWordAsync(0);
+                await IdleAsync(4);
+                target = (long)_opcodeAddress + 2
+                         + ExtensionDisplacement(extension) + IndexValue(extension);
+                break;
+            }
+
+            default:                                           // (An)+, -(An), Dn… : not a JMP encoding
+                await EnterExceptionAsync(4, 0);
+                return;
+        }
+
+        uint address = (uint)target;
+
+        // bbci3 — the target's read, in program space and outside any fetch state. An odd target aborts
+        // here: the frame saves the word the boundary left, and the state's own 4 is the port's to charge
+        FrameSavesOnFetch(_opcodeAddress + 2);
+        ushort first = await ReadTargetAsync(address);
+        if (_busFaulted)
+        {
+            await ChargeAbortedReadAsync();
+            return;
+        }
+
+        // b + mmrw3 — `m_pc = m_au`, then the one fetch that lands the queue at the target
+        _flowTransferred = true;
+        _ird = first;
+        _fetchStateAddress = address + 2;
+        _ir = await ReadProgramAsync(address + 2);
+        if (_busFaulted) return;
+        _ircValid = false;
+        _pc = address;
+    }
+
+    /// <summary>
+    /// `UNLK An` — unlk1, unlk2, unlk3, unlk4. The two words are read at the stack pointer the register
+    /// names, the new stack pointer is committed to `m_da[m_sp]` **after** both are in (an odd `An`
+    /// therefore enters the address error with the stack pointer untouched — 1 115 records, whose first
+    /// differing field was `ssp`/`usp`), and the instruction's one trailing fetch is `unlk4`'s read at
+    /// `m_pc`. That `m_pc = m_au` of unlk1 is also the frame's saved counter for an odd `An`:
+    /// `opcode + 4`, the boundary's word, not the word before it.
+    /// </summary>
+    async ValueTask UnlinkAsync(ushort op)
+    {
+        int reg = op & 0x7;
+
+        BeginFetchState();                                 // unlk1 — `m_pc = m_au`
+        uint address = GetA(reg);                          // m_at = m_da[ry]; m_aob = m_da[ry]
+        uint value = await ReadLongAsync(address);         // unlk1 then unlk2, at An and An + 2
+        if (_busFaulted)
+        {
+            await ChargeAbortedReadAsync();
+            return;
+        }
+
+        A7 = address + 4;                                  // unlk3 — m_da[m_sp] = m_au
+        SetA(reg, value);                                  // unlk4 — merge_16_32 of the two words
     }
 }

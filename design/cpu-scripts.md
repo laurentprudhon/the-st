@@ -105,6 +105,18 @@ not move, and the boot still reaches the desktop (§5).
 | ADDA.l / SUBA.l / CMPA.l | 12 each | + a dispatch | 2 500 each | **2 500 / 2 500** each (was 1 982 / 1 975 / 1 955) |
 | line 0's long immediates (`ori`/`andi`/`eori`/`addi`/`subi`/`cmpi .l`) | 8 × 6, one method | + `o#l1`/`o#w1` | 90–262 a file | **every record exact-clock**, and the six files 2 500 / 2 500 (except `CMP.l`'s 165) |
 | line 5's long quicks (`addq.l`/`subq.l`) | 9 × 2, one method | + `raql1`/`maql1` | 872 (`ADD.l`), 858 (`SUB.l`) | **every record exact-clock** |
+| `BSR` (both sizes) | 2 | ~40, one method | 2 500 in `BSR` | **2 500 / 2 500** (was 1 229), all exact-clock |
+| `JMP` (seven addressing modes) | 7 | ~90, one method | 2 500 in `JMP` | **2 500 / 2 500** (was 1 589), all exact-clock |
+| `UNLK` | 1 | ~20, one method | 2 500 in `UNLINK` | **2 500 / 2 500** (was 1 385), all exact-clock |
+
+The control transfers are the first family whose **frame's saved counter** the script decides, and they
+are also where the queue's lookahead shows: a transfer never refills the slot behind the word it took, so
+its extension word costs no read (`JumpWordAsync(0)`), its own clocks lead (`_own` is only spent at the
+closing fetch a transfer never runs), and the target's read is either a fetch state (`bsrw1`/`malw3`:
+`m_pc` = the target, so an odd target's frame saves the target) or not (`bbci3`: `m_pc` keeps the
+boundary's word, so `JMP` saves `opcode + 2` on every shape). That last distinction is
+`FrameSavesOnFetch` — a script-declared override, because `_fetchPointer − 2` (the default, #76) is right
+only for a fault inside an instruction's own trailing fetch.
 
 The 18 OR.l shapes are 18 short methods over **five** shared blocks (the operand pair, the
 register-destination tail, the memory-destination tail, the program-status read, and the two idle
@@ -164,3 +176,24 @@ Both folds moved and the owner **blessed the new pair on 2026-11-19**:
 counters moved by ~0.04 % (pops 34 291 → 34 279 a frame, instructions 4 100 721 → 4 099 631, exceptions
 7 654 → 7 644): a script fetches the queue's word inside the idle run instead of at the closing, so a few
 refills coalesce.
+
+The control transfers (row 69, 2026-11-20):
+
+| measure | `main` | control transfers scripted |
+|---|---|---|
+| MAME gate, whole corpus | 297 166 / 317 500 (93.6 %) | **300 463 / 317 500 (94.6 %)** |
+| files green | 77 of 127 | **80 of 127** |
+| `BSR` / `UNLINK` / `JMP` | 1 229 / 1 385 / 1 589 | **2 500 / 2 500 / 2 500** |
+| their exact-clock column | 1 227 / 1 385 / 774 | **2 500 / 2 500 / 2 500** |
+| exact-clock, whole corpus | 233 293 (73.5 %) | **237 839 (74.9 %)** |
+| CLK beside it | 856 572 / 1 000 060 | **856 572** (unmoved — no file falls) |
+| sample (`--dir tests/680x0/v1`) | 2 522 / 2 976 | **2 522 / 2 976** (unmoved) |
+
+No record that passed on `main` fails, in either corpus, and no record that was exact-clock breaks. Boot:
+desktop **611** unchanged, pops 34 292.8 → 34 247.2 a frame, `validate.sh` **PASS** (G8 9.20 ms at n 760 on
+that run; an interleaved A/B against `main` — 3 pairs, same tree built at both commits — reads 8.28 vs
+8.39 ms, so the frame budget is at parity and validate's own number carried the host's spread). **Both
+folds moved** and the owner's re-bless is the open item: `run.digest`
+`7331f4182da425ff85cfe0e56c8faeda923183e7c6ed29cf5218b54ad71a88a5`, `run.stream`
+`4b7cf3ac5d7bdc24141f980b9f47bdfc12e169d214ca2b507effac1b34240795` (Debug `boot --frames 800`) — row
+68's `9e1b0202…` / `0d972633…` is the pair they replace.

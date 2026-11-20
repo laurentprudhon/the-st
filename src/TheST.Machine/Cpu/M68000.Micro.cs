@@ -203,6 +203,61 @@ public sealed partial class M68000
     void BeginFetchState() => _fetchStateAddress = _fetchPointer;
 
     /// <summary>
+    /// Where MAME's <c>m_pc</c> stands when the fetch that is about to happen faults, for the group-0 frame
+    /// (<see cref="_frameFetchPc"/>). The <c>b</c>/<c>malw3</c> states put the jump's own target there and
+    /// the <c>bbci3</c> state leaves the boundary's word, so the same odd address saves two different
+    /// counters depending on which script read it — that is the corpus's measurement, not a rule to infer.
+    /// </summary>
+    void FrameSavesOnFetch(uint address)
+    {
+        _frameFetchPc = address;
+        _frameFetchPcDeclared = true;
+    }
+
+    /// <summary>
+    /// One word of a <b>control transfer</b>'s effective address, out of the decoder's queue. The first is
+    /// free: the queue already holds it (the corpus's <c>prefetch[1]</c>), and a branch or a jump does not
+    /// refill the slot behind it — the fetch that refill would issue is the one the transfer abandons. That
+    /// is why <c>JMP (d16,An)</c> is <c>n2 r r</c> in the corpus's traces (two reads, at the target) where a
+    /// fall-through instruction of the same shape reads a third, and why `BSR.w` is 18 clocks like `BSR.b`.
+    /// Each word past the first is one read at the fetch pointer (<c>jmal1</c>, <c>jmal2</c>).
+    /// </summary>
+    async ValueTask<ushort> JumpWordAsync(int index)
+    {
+        if (index > 0)
+        {
+            return await ReadQueueWordAsync();
+        }
+
+        ushort word = _ir;
+        _ir = _irc;
+        _ircValid = false;
+        _pc += 2;
+        return word;
+    }
+
+    /// <summary>
+    /// MAME's <c>bbci3</c>: a jump's target read, in program space and <b>not</b> in a fetch state — the
+    /// address is not committed to the queue's counter until the <c>b</c> state follows. An odd target
+    /// therefore faults with the boundary's word still in <c>m_pc</c> (see <see cref="FrameSavesOnFetch"/>)
+    /// and costs the aborted read's own 4 (<see cref="ChargeAbortedReadAsync"/>).
+    /// </summary>
+    async ValueTask<ushort> ReadTargetAsync(uint address)
+    {
+        BusResult result = await Cycle(address, 1, false, 0, isProgram: true);
+        if (result.Faulted)
+        {
+            _busFaulted = true;
+            _faultAddress = address;
+            _faultIsFetch = true;
+            return 0;
+        }
+
+        _fetchPointer = address + 2;
+        return result.Data;
+    }
+
+    /// <summary>
     /// An idle micro-state: 2 clocks with nothing on the bus. Consecutive idle states would be the
     /// same machine as one longer wait, but the scripts keep them apart — the fold is a measurement
     /// (ticket #78's second number), not a convention, so a script that changes its shape has to show

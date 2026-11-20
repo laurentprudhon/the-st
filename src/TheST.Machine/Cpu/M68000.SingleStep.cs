@@ -71,6 +71,7 @@ public sealed partial class M68000
         _queueShort = false;
         _own = 0;
         _eaCharged = false;
+        _frameFetchPcDeclared = false;
 
         _halted = false;
         _stopped = false;
@@ -142,6 +143,7 @@ public sealed partial class M68000
         _own = 0;
         _eaCharged = false;
         _faultProgram = false;
+        _frameFetchPcDeclared = false;
 
         if (_busFaulted)
         {

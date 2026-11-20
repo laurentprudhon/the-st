@@ -1092,17 +1092,13 @@ public sealed partial class M68000
             return;
         }
 
-        if ((op & 0xFFF8) == 0x4E58)   // UNLK
+        if (IsScriptedUnlink(op))   // UNLINK
         {
-            // the stack pointer moves *after* the pop: MAME's `unlk1` only latches `m_at = m_da[ry]`
-            // and reads, and `unlk3` sets `m_da[m_sp] = m_au` once the two words are in. An odd An
-            // therefore enters the address error with the stack pointer untouched (1 115 records of
-            // the UNLINK file, whose first differing field was `ssp`/`usp`)
-            uint address = GetA(reg);
-            uint value = await ReadLongAsync(address);
-            if (_busFaulted) return;
-            A7 = address + 4;
-            SetA(reg, value);
+            // scripted (M68000.Scripts.cs): unlk1..unlk4, with the frame's saved counter taken from the
+            // boundary's word and the stack pointer committed after both reads. An odd An therefore enters
+            // the address error with the stack pointer untouched and saves `opcode + 4` — which is the
+            // 1 115 records the file was red on, in both columns
+            await UnlinkAsync(op);
             return;
         }
 
@@ -1149,19 +1145,13 @@ public sealed partial class M68000
             return;
         }
 
-        if ((op & 0xFFC0) == 0x4EC0)   // JMP
+        if (IsScriptedJump(op))   // JMP
         {
-            uint target = await EaAddressAsync(mode, reg, 2);
-            if (_busFaulted) return;
-
-            if ((target & 1) != 0)
-            {
-                _pc = target;
-                _flowTransferred = true;
-                return;
-            }
-
-            await RefillAsync(target);
+            // scripted (M68000.Scripts.cs): the seven `jmp_*` scripts. The target's read is `bbci3` — not a
+            // fetch state — so an odd target's frame saves `opcode + 2` on every shape (911 records), and
+            // the shape's idle run is charged here because a jump never runs the closing fetch that spends
+            // `_own` (which is why the clock column was short by 2/4/6/8 per shape before the port)
+            await JumpAsync(op);
             return;
         }
 
@@ -1326,6 +1316,16 @@ public sealed partial class M68000
     async ValueTask Line6Async(ushort op)
     {
         int condition = (op >> 8) & 0xF;
+
+        if (IsScriptedBranch(op))   // BSR
+        {
+            // scripted (M68000.Scripts.cs): bsrw1..bsrw3 take the displacement out of the queue itself, so
+            // the word form costs no read and the return address is latched after the pop (1 271 records
+            // wanted the target in the frame, and the six `BSR.w` records wanted the free extension word)
+            await BranchSubroutineAsync(op);
+            return;
+        }
+
         int displacement = op & 0xFF;
         long opcodeAddress = _pc - 2;
 
@@ -1344,16 +1344,6 @@ public sealed partial class M68000
 
         // the target is relative to the address after the opcode word (UM §2.2's branch rule)
         long target = opcodeAddress + 2 + displacement;
-
-        if (condition == 1)   // BSR
-        {
-            await ClocksAsync(2);                                   // a control transfer's clocks lead its refill
-            uint stack = A7 - 4;
-            A7 = stack;
-            await WriteLongAsync(stack, _pc);
-            await RefillAsync((uint)target);
-            return;
-        }
 
         if (Condition(condition))
         {
