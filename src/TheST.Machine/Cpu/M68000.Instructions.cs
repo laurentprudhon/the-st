@@ -930,9 +930,10 @@ public sealed partial class M68000
 
         // (An)+ is the one form whose base register moves, and it moves by the transfer's total, which
         // the helper would get wrong (it advances by a single operand's width), so it is kept here.
-        // The corpus pins the granularity: a word transfer advances An by two bytes even when its access
-        // faults, a long transfer only once its four bytes have been read (a fault on the first word of
-        // a long transfer leaves An where it was). That is two 2-byte bus cycles, not one 4-byte access.
+        // **The increment lands once, after the whole transfer** — MAME's `popm6` is
+        // `m_da[ry] = m_at` and it is reached only when the mask is exhausted, so *any* fault (the
+        // first access or the fifth) leaves An exactly where it stood. Pre-committing the step per
+        // register, as this handler did, put An two bytes past an odd faulting read on 249 records.
         uint address = mode == 3 ? GetA(reg) : await EaAddressAsync(mode, reg, size);
         if (_busFaulted) return;
 
@@ -941,14 +942,39 @@ public sealed partial class M68000
         await PrefetchAsync();
         if (_busFaulted) return;
 
+        // MAME's two PC-relative classes (`movem_l_dpc_list`, `movem_l_axpc_list`) set
+        // `m_base_ssw = SSW_PROGRAM | SSW_R` for the address's states and never reset it, so the
+        // transfer's own reads carry the instruction stream's status — a fault there records a
+        // *program* access in the frame's status word (corpus 0x4CF2, not the data 0x4CF1), which is
+        // 73 records. It is not a fetch: the saved counter does not move.
+        bool programBus = mode == 7 && reg is 2 or 3;
+
         for (int bit = 0; bit < 16; bit++)
         {
             if ((mask & (1 << bit)) == 0) continue;
-            if (mode == 3) SetA(reg, address + 2);
 
-            uint value = size == 2 ? await ReadLongAsync(address) : await ReadWordAsync(address);
+            uint value;
+            if (programBus)
+            {
+                ushort highWord = await ReadOperandProgramAsync(address);
+                if (_busFaulted) return;
+                if (size == 2)
+                {
+                    ushort lowWord = await ReadOperandProgramAsync(address + 2);
+                    if (_busFaulted) return;
+                    value = ((uint)highWord << 16) | lowWord;
+                }
+                else
+                {
+                    value = highWord;
+                }
+            }
+            else
+            {
+                value = size == 2 ? await ReadLongAsync(address) : await ReadWordAsync(address);
+            }
+
             if (_busFaulted) return;
-            if (mode == 3 && size == 2) SetA(reg, address + 4);
 
             uint loaded = size == 2 ? value : (uint)(short)(value & 0xFFFF);
             if (bit < 8) _d[bit] = loaded;
@@ -956,6 +982,23 @@ public sealed partial class M68000
 
             address += (uint)bytes;
         }
+
+        // **The load direction reads one word ahead of the list.** MAME's loop state `popm5` sets
+        // `m_aob = m_au` and `m_at = m_au` while it fills the register it just read, so a clean
+        // transfer issues one discarded word read *past* the last register — `fc 5`, on the record,
+        // one 4-clock cycle — and `m_at` (the value `popm6` gives An) is that read's own address,
+        // which is why An still ends one width past the last register. 1 331 clean records of the two
+        // files were exactly 4 short without it; a fault returns above and issues none.
+        if (programBus)
+        {
+            await ReadOperandProgramAsync(address);
+        }
+        else
+        {
+            await ReadWordAsync(address);
+        }
+
+        if (_busFaulted) return;
 
         if (mode == 3) SetA(reg, address);
     }
