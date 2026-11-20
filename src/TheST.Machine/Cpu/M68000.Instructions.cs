@@ -626,7 +626,16 @@ public sealed partial class M68000
         {
             // and the same five in .w, over the word block: adrw1/adrw2, pinw1/pinw2, pdcw1/pdcw2,
             // adsw1/adsw2, aixw*, abwl1/abll3, then nnmw1 + morw2 (TST: tsmw1 + mmrw3)
-            await SingleOperandWordAsync(op);
+            await SingleOperandWordOrByteAsync(op, 1);
+            return;
+        }
+
+        if (IsScriptedSingleOperandByte(op))
+        {
+            // and in .b over the *same* block — the byte forms are the word ones with a lane and a
+            // one-byte unit step (A7's step stays two). CLR reads the byte it zeroes, which is the
+            // whole of the byte clock column: 4 clocks on every memory record
+            await SingleOperandWordOrByteAsync(op, 0);
             return;
         }
 

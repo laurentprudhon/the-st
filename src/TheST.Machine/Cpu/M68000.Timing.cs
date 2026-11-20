@@ -116,6 +116,13 @@ public sealed partial class M68000
                     return 0;
                 }
 
+                // …and the .b forms, over the same block (this row never charged a byte anything —
+                // the byte clock column was the scripts' all along; the CLR read was the one gap)
+                if (IsScriptedSingleOperandByte(op))
+                {
+                    return 0;
+                }
+
                 if ((op & 0xFFF8) == 0x4840 || (op & 0xFFF8) == 0x4880 || (op & 0xFFF8) == 0x48C0)
                 {
                     return 0;                                       // SWAP, EXT.W, EXT.L

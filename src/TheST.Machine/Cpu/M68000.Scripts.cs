@@ -685,6 +685,8 @@ public sealed partial class M68000
 
     static bool IsScriptedSingleOperandWord(ushort op) => IsScriptedSingleOperand(op, 1);
 
+    static bool IsScriptedSingleOperandByte(ushort op) => IsScriptedSingleOperand(op, 0);
+
     static SingleOperand SingleOperandKindOf(ushort op) => ((op >> 8) & 0xF) switch
     {
         0x0 => SingleOperand.Negx,
@@ -758,9 +760,18 @@ public sealed partial class M68000
     }
 
     /// <summary>
-    /// One <b>word</b> single-operand instruction — the same five families, the same ALU and flags, a
-    /// different block: `adrw1`/`adrw2`, `pinw1`/`pinw2`, `pdcw1`/`pdcw2`, `adsw1`/`adsw2`, `aixw*`,
-    /// `abwl1`/`abll3`, then `nnmw1` + `morw2` (`TST`: `tsmw1` + `mmrw3`, and no write).
+    /// One <b>word</b> or <b>byte</b> single-operand instruction — the same five families, the same ALU
+    /// and flags, a different block: `adrw1`/`adrw2`, `pinw1`/`pinw2`, `pdcw1`/`pdcw2`,
+    /// `adsw1`/`adsw2`, `aixw*`, `abwl1`/`abll3`, then `nnmw1` + `morw2` (`TST`: `tsmw1` + `mmrw3`,
+    /// and no write).
+    ///
+    /// <para>
+    /// The byte forms are the <em>same</em> block, not a third one: `adrw1`/`adrw2` are one script for
+    /// both sizes, and only the access's width (and the EA's unit step, one byte instead of two) tells
+    /// them apart — the reference's byte read is the word read with a lane mask, `m_edb >>= 8` on an
+    /// even address. So <paramref name="size"/> is 1 (word) or 0 (byte) and nothing else in the state
+    /// list moves.
+    /// </para>
     ///
     /// <para>
     /// Three ways the word block is not the long one shrunk. (1) The register form is `nnrw1` + `roaw2`
@@ -770,8 +781,16 @@ public sealed partial class M68000
     /// (3) `pinw2` commits the post-increment <em>before</em> its read (the long form's `pinl3` commits
     /// after both words), so a faulting `(An)+` word read leaves `An` incremented.
     /// </para>
+    ///
+    /// <para>
+    /// `CLR` is in here with a read: the microcode's `clr_bw_*` reads the operand it zeroes (`nnmw1`
+    /// runs `alu_and8/alu_and(word, 0)` on `m_dbin`, not on a constant), so a byte `CLR` that only
+    /// wrote was 4 clocks short on its 2 099 memory records — the read is the missing access, and it
+    /// costs the same 4 as the write. That is the whole reason the byte batch is a port and not a
+    /// timing-table edit.
+    /// </para>
     /// </summary>
-    async ValueTask SingleOperandWordAsync(ushort op)
+    async ValueTask SingleOperandWordOrByteAsync(ushort op, int size)
     {
         SingleOperand kind = SingleOperandKindOf(op);
 
@@ -780,9 +799,9 @@ public sealed partial class M68000
 
         if (mode == 0)                                     // nnrw1, roaw2 / tsrw1, mmrw3
         {
-            uint register = _d[reg] & 0xFFFF;
+            uint register = _d[reg] & SizeMask(size);
             uint result = SingleOperandResult(kind, register);
-            SetSingleOperandFlags(kind, register, result, 1);
+            SetSingleOperandFlags(kind, register, result, size);
 
             if (kind == SingleOperand.Tst)
             {
@@ -790,20 +809,28 @@ public sealed partial class M68000
                 return;
             }
 
-            Set16L(reg, result);                           // roaw2 — set_16l, before the fetch
+            if (size == 0)
+            {
+                _d[reg] = (_d[reg] & 0xFFFF_FF00) | (result & 0xFF);   // roaw2 — set_8, before the fetch
+            }
+            else
+            {
+                Set16L(reg, result);                       // roaw2 — set_16l, before the fetch
+            }
+
             await TrailingFetchAsync();                    // roaw2 — the instruction's one read
             return;                                        // no closing idle: the word form ends here
         }
 
-        uint? address = await ReadWordEaAsync(mode, reg);
+        uint? address = await ReadSmallEaAsync(mode, reg, size);
         if (address is null)
         {
             return;
         }
 
-        uint operand = _dbin;
+        uint operand = _dbin;                              // a byte arrives in the low lane (adrw2's shift)
         uint outcome = SingleOperandResult(kind, operand);
-        SetSingleOperandFlags(kind, operand, outcome, 1);  // nnmw1/tsmw1 — the ALU and its flags
+        SetSingleOperandFlags(kind, operand, outcome, size);   // nnmw1/tsmw1 — the ALU and its flags
 
         await TrailingFetchAsync();                        // nnmw1/tsmw1 — m_pc = m_au, the one read
         if (_busFaulted) return;
@@ -813,16 +840,25 @@ public sealed partial class M68000
             return;                                        // mmrw3 closes; nothing is written back
         }
 
-        await WriteWordAsync(address.Value, (ushort)outcome);   // morw2 — the word at m_at
+        if (size == 0)
+        {
+            await WriteByteAsync(address.Value, (byte)outcome);   // morw2 — the byte, in its lane
+            return;
+        }
+
+        await WriteWordAsync(address.Value, (ushort)outcome);     // morw2 — the word at m_at
     }
 
     /// <summary>
-    /// The word operand's address and its read — the same EA states the long script uses, with the
-    /// word block's own three differences: `adrw1` is an address latch with no bus cycle, `pdcw1`
-    /// begins a fetch state, and `pinw2` commits the increment before the read.
+    /// The word or byte operand's address and its read — the same EA states the long script uses, with
+    /// the word block's own three differences (`adrw1` is a latch with no bus cycle, `pdcw1` begins a
+    /// fetch state, `pinw2` commits the increment before the read) and one size-dependent fact: the
+    /// unit step is a byte for the byte forms, except on <c>A7</c>, whose byte forms step by two —
+    /// MAME's `m_au = m_da[ry] + (ry &lt; 15 ? 1 : 2)` in `pinw1`/`pdcw1`.
     /// </summary>
-    async ValueTask<uint?> ReadWordEaAsync(int mode, int reg)
+    async ValueTask<uint?> ReadSmallEaAsync(int mode, int reg, int size)
     {
+        int step = size == 1 || reg == 7 ? 2 : 1;
         uint address;
 
         switch (mode)
@@ -837,7 +873,7 @@ public sealed partial class M68000
 
             case 4:                                        // pais — pdcw1 (2 clocks), pdcw2 (the commit)
                 BeginFetchState();                         // pdcw1 — m_pc = m_au
-                address = GetA(reg) - 2;
+                address = GetA(reg) - (uint)step;
                 await IdleAsync();
                 SetA(reg, address);
                 break;
@@ -883,10 +919,13 @@ public sealed partial class M68000
 
         if (mode == 3)
         {
-            SetA(reg, address + 2);                        // pinw2 — the increment, before the read
+            SetA(reg, address + (uint)step);               // pinw2 — the increment, before the read
         }
 
-        _dbin = await ReadWordAsync(address);              // adrw2 / abll3 — SSW_DATA | SSW_R
+        _dbin = size == 0
+            ? await ReadByteAsync(address)                 // adrw2 / abll3, in the byte's own lane
+            : await ReadWordAsync(address);
+
         if (_busFaulted)
         {
             await ChargeAbortedReadAsync();
