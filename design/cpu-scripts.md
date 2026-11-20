@@ -116,6 +116,10 @@ size (`IsScriptedSingleOperandLong`, `IsScriptedSingleOperandWord` and `IsScript
 | the same five `.w` | 8 each, **one** method | ~140 (the word block, `ReadWordEaAsync`) | 2 500 a file | **2 500 / 2 500** each (was 2 251 / 2 262 / 2 244 / 2 248 / 2 254), **every record exact-clock** |
 | the same five `.b` | 8 each, **the same** method | + `size` 0 in the block and the step (`ReadSmallEaAsync`) | 2 500 a file | **2 500 / 2 500** each, and 12 500 exact-clock — `CLR.b` was the only one short (401 → 2 500) |
 | `ADDX.l` / `SUBX.l` (both directions) | 2 scripts, **one** method | ~135 (`ExchangeLongAsync`, the word-at-a-time block) | 2 500 a file | **2 500 / 2 500** each (was 1 671 / 1 673), **every record exact-clock** (was 0) |
+| `MULU` / `MULS` (seven EA shapes each) | 3 loop states + the tails, **one** method | ~110 (`MultiplyAsync`) | 2 500 a file | **2 500 / 2 500** each (was 2 203 / 2 223), **every record exact-clock** (was 1 682 / 352) |
+| `DIVU` (seven EA shapes) | 17 states, **one** method | ~105 (`DivideUnsignedAsync`) | 2 500 | **2 500 / 2 500** (was 1 648), **every record exact-clock** (was 1 007) |
+| `DIVS` (seven EA shapes) | 26 states, **one** method | ~170 (`DivideSignedAsync`) | 2 500 | **2 500 / 2 500** (was 1 348), **every record exact-clock** (was 545) |
+| `CHK` (seven EA shapes) | 3 states + the trap | ~50 (`CheckAsync`) | 2 500 | **2 500 / 2 500** (was 2 090), **every record exact-clock** (was 301) |
 | the `.b`/`.w` `ADDX`/`SUBX` memory forms | — | 2 lines (`asxw1`'s idle, in `ExchangeArithmeticAsync`) | 5 004 records | every one exact-clock (was 2 clocks short on all of them) |
 
 The control transfers are the first family whose **frame's saved counter** the script decides, and they
@@ -191,6 +195,34 @@ charges), so the *next* two-operand long family is a tail and a dispatch, not 33
 named for the micro-states and are family-independent. That is the number #78 asked for, and the
 follow-up port measured it: AND, EOR, ADD and SUB cost **one line case and one `AluLong` value each**,
 and the address-register forms one more tail (the same block, without the flag call).
+
+The **variable-time families** are the row that most needs the ALU this file describes: their clocks are a
+**counter on a value the core holds**, so a handler that computes the answer directly has neither the value
+nor the count, and no shape table can carry them — which is why `DIVS` sat 110 clocks short on every clean
+record and `MULS` scattered ±30 around `34 + 2 × popcount`. The scripts are the microcode's loops: `MULU`
+is `mulr1`/`mulm1`, `mulm2` (the instruction's one read), then `mulm3`/`mulm4` and `mulm6`; `MULS` adds
+`mulm5` and tests two bits at a time (Booth); `DIVU` is `dvur1`, `dvum2`, `dvum3`, `dvum5`…`dvumc` and
+`dvum0`; `DIVS` is that loop inside a sign-fixing prologue and epilogue; `CHK` is `chkm1`/`chkr1`, `chkr2`
+and `chkr3`. Six things a reader will not get from the manual:
+
+- **the state's own ALU**: the loops need `m_isr` (the flag latch) and `m_alue` (the multiply's shift
+  register, the divide's quotient register), so `M68000.Micro.cs` gains the chip's sixteen-bit operations
+  verbatim — including `sr_nzvc_u`, whose `~SR_Z` has the Z bit *clear*, which is what makes it a
+  clear-only update rather than the no-op it reads as;
+- **the counter is `m_ftu`**, the instruction's timing constant, and it is **15** for all five (the loop
+  tests `au & 0x3f`); the number came out of a python transcription validated against the corpus record by
+  record before the C# was written — that is the cheapest form of this batch's verification;
+- **a divide's overflow is `alu_over`**: N **and** V set, Z and C cleared. The manual says V; both corpora
+  carry `0x0A` on every overflow record;
+- **`CHK`'s two tests**: `bound − value` (V or N → out of range) and then the value's own sign, and the
+  *second* one's flags are what the instruction leaves. `chkr2` branches straight to the trap, so the trap
+  path is two states and the clean one three;
+- **the frame's saved `pc` is the first extension word** for a displacement or an index shape, and moves
+  only where the microcode says `m_pc = m_au` — `abwl1`/`abll2` for the absolute shapes, `pdcw1` for
+  `-(An)`; `pinw1` leaves it. That is `FrameSavesFirstExtensionWord()` plus `BeginFetchState()`;
+- **a clock row can claim a neighbour**: `(op & 0x00C0) == 0x00C0` charged these families 2 as `CMPA.w`,
+  and `(op & 0xF130) == 0x8100` matched `DIVS Dn,<any>` as `ADDX`/`SUBX`. In `AluOwnClocks` a scripted
+  family's `_own` must be tested **before** every masked row.
 
 ## 5. The two things that stay open, and why
 
@@ -384,3 +416,25 @@ moved** and are the owner's blessing of 2026-11-20: `run.digest`
 is the pair they replace. The byte/word half of the commit was measured **not** to move the folds on its
 own: a build with its `IdleAsync` removed produces the identical pair, so the movement is the long
 script's clocks.
+
+The variable-time families, and the loop that is the clock (row 75, 2026-11-20):
+
+| measure | `main` (after row 74) | the five families scripted |
+|---|---|---|
+| MAME gate, whole corpus | 306 377 / 317 500 (96.5 %) | **309 365 / 317 500 (97.4 %)** |
+| files green | 92 of 127 | **97 of 127** (+5, exactly these files) |
+| `DIVU` / `DIVS` / `MULU` / `MULS` / `CHK` | 1 648 / 1 348 / 2 203 / 2 223 / 2 090 | **2 500 each** |
+| their exact-clock column | 1 007 / 545 / 1 682 / 352 / 301 | **2 500 each** (12 500 records) |
+| exact-clock, whole corpus | 265 331 (83.6 %) | **273 944 (86.3 %)** (+8 613, no file falls) |
+| CLK beside it | 862 212 / 1 000 060 | **859 459** — only those five files move |
+| sample (`--dir tests/680x0/v1`) | 2 540 / 2 976 | **2 533 / 2 976** |
+
+The failure sets were diffed record by record in both corpora: **2 988 fixed, 0 new failures, 0 other
+moves** — the five files' whole red set. CLK falls 2 753 and the fall is the measurement: MULU +420, MULS
++472, CHK +143, DIVU −1 368, DIVS −2 420, and the losses are the two contested conventions (a divide's
+overflow: CLK keeps the manual's `V` alone, MAME and ours set `N|V`; and the group-0 frame's status word).
+No file's green/red verdict changes (60 of 124 both sides). Boot: desktop **611**, pops **34 246.9** a
+frame, `validate.sh` **PASS** (G8 8.84 ms at n 760). **Both folds moved** and are the owner's blessing of
+2026-11-20: `run.digest` `ccd91815a56cd67c89041984377fb872b2924dcc6cafba2ed9673cd7fe8a38ae`, `run.stream`
+`9a62f0cf95f1e78048eaed7c58b3796fdbb5798a1dbe9512436f3a7911cafd88` — row 74's `b5cb195b…` / `d39246cb…`
+is the pair they replace.
