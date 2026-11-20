@@ -120,6 +120,8 @@ size (`IsScriptedSingleOperandLong`, `IsScriptedSingleOperandWord` and `IsScript
 | `DIVU` (seven EA shapes) | 17 states, **one** method | ~105 (`DivideUnsignedAsync`) | 2 500 | **2 500 / 2 500** (was 1 648), **every record exact-clock** (was 1 007) |
 | `DIVS` (seven EA shapes) | 26 states, **one** method | ~170 (`DivideSignedAsync`) | 2 500 | **2 500 / 2 500** (was 1 348), **every record exact-clock** (was 545) |
 | `CHK` (seven EA shapes) | 3 states + the trap | ~50 (`CheckAsync`) | 2 500 | **2 500 / 2 500** (was 2 090), **every record exact-clock** (was 301) |
+| the two-operand families' `.w` forms (`or/and/eor/add/sub`, `ADDA`, `SUBA`, `CMPA`) | opmodes 1/3/5, 18 each | ~200 (three tails, two of them shared) | 2 500 a file, nine files | **2 500 / 2 500** each (were 2 186 … 2 241), **every record exact-clock** (20 000; `ADDA.w` was 144) — `CMP.w` 2 338, its 162 left `CMPM.w`'s |
+| line 0's word immediates and line 5's word quicks (they live in those nine files) | 8 × 6 and 9 × 2 | + `ImmediateWordAsync`/`QuickWordAsync` over the same tails | ~2 200 records | every one green and **exact-clock** |
 | the `.b`/`.w` `ADDX`/`SUBX` memory forms | — | 2 lines (`asxw1`'s idle, in `ExchangeArithmeticAsync`) | 5 004 records | every one exact-clock (was 2 clocks short on all of them) |
 
 The control transfers are the first family whose **frame's saved counter** the script decides, and they
@@ -437,4 +439,45 @@ No file's green/red verdict changes (60 of 124 both sides). Boot: desktop **611*
 frame, `validate.sh` **PASS** (G8 8.84 ms at n 760). **Both folds moved** and are the owner's blessing of
 2026-11-20: `run.digest` `ccd91815a56cd67c89041984377fb872b2924dcc6cafba2ed9673cd7fe8a38ae`, `run.stream`
 `9a62f0cf95f1e78048eaed7c58b3796fdbb5798a1dbe9512436f3a7911cafd88` — row 74's `b5cb195b…` / `d39246cb…`
+is the pair they replace.
+
+The **word forms** of the two-operand families, and the three neighbours that share their opmodes
+(row 76, 2026-11-20):
+
+| measure | `main` (after row 75) | the word forms scripted |
+|---|---|---|
+| MAME gate, whole corpus | 309 365 / 317 500 (97.4 %) | **311 850 / 317 500 (98.2 %)** |
+| files green | 97 of 127 | **105 of 127** (+8, exactly these files) |
+| `AND.w` / `OR.w` / `EOR.w` / `SUB.w` / `ADD.w` | 2 186 / 2 196 / 2 210 / 2 220 / 2 229 | **2 500 each** |
+| `ADDA.w` / `SUBA.w` / `CMPA.w` | 2 254 / 2 234 / 2 241 | **2 500 each** |
+| their exact-clock column | 1 587 / 1 517 / 1 660 / 1 729 / 1 727, and **144 / 143 / 1 798** | **2 500 each** (20 000 records) |
+| `CMP.w` | 2 083 | **2 338** — its 162 left are `CMPM.w`'s faulting frames |
+| exact-clock, whole corpus | 273 944 (86.3 %) | **284 223 (89.5 %)** (+10 279, no file falls) |
+| CLK beside it | 859 459 / 1 000 060 | **863 549** — only those nine files move, all up |
+| sample (`--dir tests/680x0/v1`) | 2 533 / 2 976 | **2 548 / 2 976** |
+
+Three facts separate the word block from the long one, and none of them is a mask. (1) The destination's
+tail is `roaw1`/`roaw2` (`rorw1`/`rrgw2` for `<ea>,Dn`): the ALU and its flags sit in a state with **no bus
+cycle and no idle charge**, then `set_16l` and the instruction's one read — and `roaw2` **ends the script**,
+so there is no closing idle and `OR.w Dn,Dn` is 4 clocks where `OR.l Dn,Dn` is 6. (2) The memory tail is
+`morw1` + `morw2` and the ALU runs **before** the closing prefetch, where the long form's `morl1` fetches
+first. (3) `ADDA.w`/`SUBA.w`/`CMPA.w` are the **long** tails: a word source is sign-extended (`romm1`/
+`cpmm1`: `m_at = ext32(m_dbin)`) and the ALU runs twice, `alu_add`/`alu_sub` then `alu_addc`/`alu_subc`,
+which is what `AluIntoAddressRegisterAsync` already expands — and it is where the timing table's flat 4 was
+measured short (`ADDA.w` was 144 exact of 2 500). Their red records were all in a PC-relative or an absolute
+source: the line-0 immediates read `o#w1` **before** the destination's extension word, and the old handlers
+read them the other way round.
+
+**The block's own trap is its opmodes.** A word form's opmode field carries the size bits — 1 for
+`<ea>,Dn`, 3 for `<ea>,An`, 5 for `Dn,<ea>` — so every opmode carries a neighbour, and the first run of the
+batch lost 3 500 records to three of them: `DIVU` (line 8 opmode 3), `MULU` (line C opmode 3),
+`DIVS`/`MULS` (opmode 7) are already scripted, but `CMPM.w` (line B opmode 5, mode 1), `EXG Dn,Dn` (line C
+opmode 5, mode 0) and `ADDX.w`/`SUBX.w` (lines D and 9, opmode 5, mode 0 — 2 500 green each) were not. They
+are excluded by mask, and the dispatch is **above the five line handlers**, because each of them would
+otherwise repeat the same test. The failure sets were diffed record by record in both corpora: **2 485
+fixed, 0 new failures, 0 other moves**; `--reads` reports 0 mismatches on all nine files. Boot: desktop
+**611**, pops 34 246.9 → **34 232.3** a frame, `validate.sh` **PASS** (G8 8.85 ms at n 760). **Both folds
+moved** and are the owner's blessing of 2026-11-20: `run.digest`
+`0512273664adf28c0fdb5351baf9b09f04a3b24faacf26768bdd7857eb30e350`, `run.stream`
+`3d2f1b234598f7d97dfc98ab8e7b84e41f55070949ebb89fdfd5d9907d2b2c1d` — row 75's `ccd91815…` / `9a62f0cf…`
 is the pair they replace.
