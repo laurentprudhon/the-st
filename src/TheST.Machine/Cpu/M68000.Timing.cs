@@ -211,6 +211,16 @@ public sealed partial class M68000
     /// </summary>
     int AluOwnClocks(ushort op, int line, int size, int mode)
     {
+        // ADDX.l/SUBX.l are their own block (`asxl`/`rorl`), not the ALU tails — and they are the
+        // reason the row below needed a predicate of its own: their size field at 2 lands them on the
+        // ALU opmodes 2 and 6, so IsScriptedAluLong answered 0 for them by accident, and their clock
+        // column was the scripts' while no script existed (the memory forms were 2 short, the
+        // register forms 4)
+        if (IsScriptedExchangeLong(op))
+        {
+            return 0;
+        }
+
         // the ported long families are scripted (M68000.Scripts.cs): the script's own states are
         // their clocks, so the measure-by-shape table must not charge them at all
         if (IsScriptedAluLong(op))

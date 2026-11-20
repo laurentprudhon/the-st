@@ -1275,4 +1275,140 @@ public sealed partial class M68000
         A7 = address + 4;                                  // unlk3 — m_da[m_sp] = m_au
         SetA(reg, value);                                  // unlk4 — merge_16_32 of the two words
     }
+
+    // =========================================================================================
+    // ADDX.l / SUBX.l — the long exchange arithmetic, `<ea>,Dn` and `Dn,<ea>`
+    // =========================================================================================
+
+    /// <summary>
+    /// The long <c>ADDX</c>/<c>SUBX</c>: opmode 2 (<c>&lt;ea&gt;,Dn</c>) and opmode 6
+    /// (<c>Dn,&lt;ea&gt;</c>) on lines 9 and D with the size field at 2. Those are the two opmodes the
+    /// two-operand longs use, so <see cref="IsScriptedAluLong"/> already answers 0 clocks for them —
+    /// this predicate is the one that says <em>why</em>: they are the <c>asxl</c>/<c>rorl</c> block,
+    /// not the ALU tails. A byte or a word is not here: those are still measured by shape.
+    /// </summary>
+    static bool IsScriptedExchangeLong(ushort op) =>
+        ((op & 0xF130) is 0x9100 or 0xD100) && ((op >> 6) & 0x3) == 2;
+
+    /// <summary>
+    /// ADDX.l / SUBX.l — two scripts, and both step their operands <b>a word at a time</b>, which is
+    /// the one place they differ from the other long forms.
+    ///
+    /// <para>
+    /// The register form is <c>rorl1</c> (the whole 32-bit operation and its flags, no bus cycle),
+    /// <c>rorl2</c> (<c>set_16l</c> then the instruction's one read), <c>rorl3</c> + <c>roml3</c>
+    /// (<c>set_16h</c> between two 2-clock idles) — 8 clocks, 4 of them off the bus.
+    /// </para>
+    /// <para>
+    /// The memory form is <c>asxl1</c>…<c>asxl8</c> + <c>morw2</c>: one idle state, the source's low
+    /// word at <c>A − 2</c>, <b>the register's commit</b>, the source's high word at <c>A − 4</c>, the
+    /// destination's low word at <c>A − 2</c>, its commit, its high word at <c>A − 4</c>, the low
+    /// result written at <c>rx − 2</c>, the instruction's one read, and the high result at
+    /// <c>rx − 4</c>. Three facts the corpus pins and the word form does not share: the commit comes
+    /// <em>after</em> each pair's first read (<c>asxl3</c>/<c>asxl6</c> — an odd register is left
+    /// where it was, 797 records), the low word goes out <em>before</em> the closing fetch
+    /// (<c>asxl7</c>), and the two halves are ALUed word by word.
+    /// </para>
+    /// </summary>
+    async ValueTask ExchangeLongAsync(ushort op, bool subtract)
+    {
+        int rx = (op >> 9) & 0x7;
+        int ry = op & 0x7;
+        uint extended = (uint)((_sr & FlagX) != 0 ? 1 : 0);
+
+        if ((op & 0x0008) == 0)                            // rorl1 … roml3, the register form
+        {
+            uint registerSource = _d[ry];
+            uint registerDestination = _d[rx];
+            uint registerResult = subtract
+                ? registerDestination - registerSource - extended
+                : registerDestination + registerSource + extended;
+
+            SetExchangeFlags(subtract, registerSource, registerDestination, registerResult, 2);  // rorl1
+
+            Set16L(rx, Low16(registerResult));             // rorl2 — set_16l, before the read
+            await TrailingFetchAsync();                    // rorl2 — the instruction's one read
+            if (_busFaulted)
+            {
+                return;
+            }
+
+            await IdleAsync();                             // rorl3
+            Set16H(rx, High16(registerResult));            // roml3 — set_16h, after the read
+            await IdleAsync();                             // roml3
+            return;
+        }
+
+        // asxl1 — `m_pc = m_au` and the memory form's one idle state (2 clocks)
+        BeginFetchState();
+        await IdleAsync();
+        _alub = _dbin;
+
+        _dbin = await ReadWordAsync(GetA(ry) - 2);         // asxl2 — the source's low word, at A − 2
+        if (_busFaulted)
+        {
+            await ChargeAbortedReadAsync();
+            return;
+        }
+
+        // asxl3 — the source's register commits <b>after</b> the low word came back, so a first read
+        // that faults leaves it where it stood (the word form's asxw2 commits before its read)
+        SetA(ry, GetA(ry) - 4);
+        uint sourceLow = _dbin;                            // asxl3 — alu_and(m_dbin, 0xffff)
+
+        _dbin = await ReadWordAsync(GetA(ry));             // asxl4 — the source's high word, at A − 4
+        if (_busFaulted)
+        {
+            await ChargeAbortedReadAsync();
+            return;
+        }
+
+        uint sourceHigh = _dbin;
+        _alub = _dbin;                                     // asxl5 — m_alub = the source's high word
+
+        uint destinationAddress = GetA(rx) - 2;            // asxl4/asxl5
+        _dbin = await ReadWordAsync(destinationAddress);   // asxl5 — the destination's low word
+        if (_busFaulted)
+        {
+            await ChargeAbortedReadAsync();
+            return;
+        }
+
+        uint destinationLow = _dbin;
+        SetA(rx, GetA(rx) - 4);                            // asxl6 — the destination commits
+
+        _dbin = await ReadWordAsync(GetA(rx));             // asxl6 — the destination's high word
+        if (_busFaulted)
+        {
+            await ChargeAbortedReadAsync();
+            return;
+        }
+
+        uint source = Merge16_32(sourceHigh, (ushort)sourceLow);
+        uint destination = Merge16_32(_dbin, (ushort)destinationLow);
+        uint result = subtract
+            ? destination - source - extended
+            : destination + source + extended;
+
+        // asxl6/asxl8 — MAME ALUs the halves and calls sr_xnzvc_u on each; the thirty-two-bit
+        // operation gives the same result and the same final flags, because the low half's carry
+        // out is the high half's carry in and `_u` only ever clears Z. No fault can land between
+        // the halves here (a long predecrement's two words have the same parity), so the two calls
+        // have one observable value.
+        SetExchangeFlags(subtract, source, destination, result, 2);
+
+        await WriteWordAsync(destinationAddress, (ushort)Low16(result));   // asxl7 — low word, before the read
+        if (_busFaulted)
+        {
+            return;
+        }
+
+        await TrailingFetchAsync();                        // asxl8 — the instruction's one read
+        if (_busFaulted)
+        {
+            return;
+        }
+
+        await WriteWordAsync(GetA(rx), (ushort)High16(result));    // morw2 — the high word, at m_at
+    }
 }

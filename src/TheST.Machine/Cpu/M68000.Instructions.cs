@@ -1525,6 +1525,12 @@ public sealed partial class M68000
 
         if ((op & 0xF130) == 0x9100 && size != 3)   // SUBX
         {
+            if (size == 2)
+            {
+                await ExchangeLongAsync(op, subtract: true);    // subx.l — scripted
+                return;
+            }
+
             await ExchangeArithmeticAsync(op, subtract: true);
             return;
         }
@@ -1583,6 +1589,14 @@ public sealed partial class M68000
         int destinationReg = (op >> 9) & 0x7;
         bool predecrement = (op & 0x0008) != 0;
 
+        // The memory form's own idle state (`asxw1`/`asxb1`, 2 clocks) — the register form has none
+        // and is exact without it. Only the byte and word sizes reach this method: the long form is
+        // the `asxl` block (M68000.Scripts.cs, ExchangeLongAsync), whose single idle sits with it.
+        if (predecrement)
+        {
+            await IdleAsync();
+        }
+
         // ADDX/SUBX issue their prefetch before the access even with no idle clock to spend (#76: their
         // memory forms charge no own clocks, and MAME's frame still saves one prefetch deeper)
         await PrefetchAsync();
@@ -1636,6 +1650,13 @@ public sealed partial class M68000
     /// steps down a word at a time and reads the low word first (at <c>A − 2</c>), which is what the
     /// corpus pins: an odd <c>A</c> faults on that first word with the register down 2, not 4
     /// (FINDINGS row 40).
+    /// <para>
+    /// The long form's <b>commit</b> is the ADDX rule, not the word rule: <c>asxl3</c> writes the
+    /// register only once the low word has come back, so an odd <c>A</c> leaves it where it stood.
+    /// Since <c>asxl</c> is a script, <see cref="ExchangeLongAsync"/> is the call site that does this
+    /// in the microcode's order; the branch here keeps the same rule for any long that still comes
+    /// through the EA machine.
+    /// </para>
     /// </summary>
     async ValueTask<uint> PredecrementAsync(int reg, int size)
     {
@@ -1643,11 +1664,10 @@ public sealed partial class M68000
         {
             uint start = GetA(reg);
 
-            SetA(reg, start - 2);
             ushort low = await ReadWordAsync(start - 2);
             if (_busFaulted) return 0;
 
-            SetA(reg, start - 4);
+            SetA(reg, start - 4);                          // asxl3 — the commit, after the low word
             ushort high = await ReadWordAsync(start - 4);
             if (_busFaulted) return 0;
 
@@ -1939,6 +1959,12 @@ public sealed partial class M68000
 
         if ((op & 0xF130) == 0xD100 && size != 3)   // ADDX
         {
+            if (size == 2)
+            {
+                await ExchangeLongAsync(op, subtract: false);   // addx.l — scripted
+                return;
+            }
+
             await ExchangeArithmeticAsync(op, subtract: false);
             return;
         }
