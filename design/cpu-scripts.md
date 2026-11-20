@@ -108,6 +108,8 @@ not move, and the boot still reaches the desktop (§5).
 | `BSR` (both sizes) | 2 | ~40, one method | 2 500 in `BSR` | **2 500 / 2 500** (was 1 229), all exact-clock |
 | `JMP` (seven addressing modes) | 7 | ~90, one method | 2 500 in `JMP` | **2 500 / 2 500** (was 1 589), all exact-clock |
 | `UNLK` | 1 | ~20, one method | 2 500 in `UNLINK` | **2 500 / 2 500** (was 1 385), all exact-clock |
+| `JSR` (seven addressing modes) | 7 | ~105, one method | 2 500 in `JSR` | **2 500 / 2 500**, **838 → 2 500** exact-clock |
+| `RTS` / `RTR` / `RTE` | 1 each | 3 lines each (`ChargeAbortedReadAsync`) | 2 500 each | **2 500 / 2 500** each, 1 263 / 1 285 / 1 886 → **2 500** exact-clock |
 
 The control transfers are the first family whose **frame's saved counter** the script decides, and they
 are also where the queue's lookahead shows: a transfer never refills the slot behind the word it took, so
@@ -117,6 +119,18 @@ closing fetch a transfer never runs), and the target's read is either a fetch st
 boundary's word, so `JMP` saves `opcode + 2` on every shape). That last distinction is
 `FrameSavesOnFetch` — a script-declared override, because `_fetchPointer − 2` (the default, #76) is right
 only for a fault inside an instruction's own trailing fetch.
+
+`JSR` is the same tail with a push in the middle, and it is the family a **dead predicate** hid: its
+shape row in `M68000.Timing.cs` was `(op & 0xFFC0) == 0x4E90`, and `0x4E90 & 0xFFC0` is `0x4E80`, so the
+row could never fire and `_own` was 0 on every `JSR` while the state verdict was green. Its two facts a
+reader will not guess: the target's read comes **before** the push (`jsra1`/`jsrd3`, so an odd target
+pushes nothing and pays the aborting state's 4), and `m_pc` **advances past each consumed extension
+word** (`jsrd2`/`jsrd3`), so the pushed return address and an odd target's frame are one number — the
+counter past the last extension word (`opcode + 2` / `+4` / `+6`). `jsal2` is the single state where a
+**queue read moves that counter** (`ReadQueueWordAsync` does not advance `_pc`, so `(xxx).l` needs an
+explicit `_pc += 2`, or the push is a word low). The three returns needed no script at all: they were
+green on state and exactly 4 short on only their faulting records, because the aborted cycle's 4 is
+charged by `Cycle` and their shape rows carry none — `ChargeAbortedReadAsync` at every fault point.
 
 The 18 OR.l shapes are 18 short methods over **five** shared blocks (the operand pair, the
 register-destination tail, the memory-destination tail, the program-status read, and the two idle
@@ -197,3 +211,23 @@ folds moved** and the owner **blessed the new pair on 2026-11-20**, so it is `ma
 `7331f4182da425ff85cfe0e56c8faeda923183e7c6ed29cf5218b54ad71a88a5`, `run.stream`
 `4b7cf3ac5d7bdc24141f980b9f47bdfc12e169d214ca2b507effac1b34240795` (Debug `boot --frames 800`) — row
 68's `9e1b0202…` / `0d972633…` is the pair they replace.
+
+The return half of that family (row 70, 2026-11-20):
+
+| measure | `main` | JSR + the returns |
+|---|---|---|
+| MAME gate, whole corpus | 300 463 / 317 500 (94.6 %) | **300 463 / 317 500 — unmoved** |
+| files green | 80 of 127 | **80 of 127 — unmoved** |
+| `JSR` exact-clock | 838 / 2 500 | **2 500 / 2 500** |
+| `RTS` / `RTR` / `RTE` exact-clock | 1 263 / 1 285 / 1 886 | **2 500 each** |
+| exact-clock, whole corpus | 237 839 (74.9 %) | **242 567 (76.4 %)** |
+| CLK beside it | 856 572 / 1 000 060 | **856 572** (unmoved, to the file) |
+| sample (`--dir tests/680x0/v1`) | 2 522 / 2 976 | **2 522 / 2 976** (unmoved) |
+
+A clock-column batch: the whole corpus's per-file verdicts and every `--failures` detail line are
+**byte-identical** to a `7a487a5` worktree's, and exact-clock rose by exactly the 4 728 records those four
+files account for. Boot: desktop **611**, pops 34 247.2 → 34 221.8 a frame, `validate.sh` **PASS** (G8
+8.81 ms at n 760). **Both folds moved** and are the owner's blessing of 2026-11-20: `run.digest`
+`e48e7e91429ab7c1b3d73a2795414b6ca25e84d35787c63f68ffd42b72386825`, `run.stream`
+`c687ef97e155741a213fe286c8c276b0069f97bb4821c11570b8ebc0e17b9dcb` — row 69's `7331f418…` /
+`4b7cf3ac…` is the pair they replace.
