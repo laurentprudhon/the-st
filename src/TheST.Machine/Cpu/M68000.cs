@@ -456,6 +456,13 @@ public sealed partial class M68000 : Chip
             _busFaulted = true;
             _faultProgram = isProgram;
             SettlePostIncrement(isWrite);
+
+            // the abandoned cycle: the hardware asserts nothing, but an address error's length carries
+            // the 4 clocks of the cycle it started and threw away — MAME's `re` transaction (AS never
+            // asserted) is that cycle, and every faulting record of every scripted family was exactly
+            // 4 clocks short without it. Internal work, so an idle wait: no record, no prefetch.
+            await ClocksAsync(4);
+
             return new BusResult(0, true, false);
         }
 
