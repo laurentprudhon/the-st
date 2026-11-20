@@ -110,6 +110,7 @@ not move, and the boot still reaches the desktop (§5).
 | `UNLK` | 1 | ~20, one method | 2 500 in `UNLINK` | **2 500 / 2 500** (was 1 385), all exact-clock |
 | `JSR` (seven addressing modes) | 7 | ~105, one method | 2 500 in `JSR` | **2 500 / 2 500**, **838 → 2 500** exact-clock |
 | `RTS` / `RTR` / `RTE` | 1 each | 3 lines each (`ChargeAbortedReadAsync`) | 2 500 each | **2 500 / 2 500** each, 1 263 / 1 285 / 1 886 → **2 500** exact-clock |
+| `NOT` / `NEG` / `NEGX` / `CLR` / `TST` `.l` | 8 each, **one** method | ~150 (the RMW block + two helpers) | 2 500 a file | **2 500 / 2 500** each (was 1 867 / 1 918 / 1 891 / 1 921 / 1 886), **every record exact-clock** |
 
 The control transfers are the first family whose **frame's saved counter** the script decides, and they
 are also where the queue's lookahead shows: a transfer never refills the slot behind the word it took, so
@@ -131,6 +132,19 @@ counter past the last extension word (`opcode + 2` / `+4` / `+6`). `jsal2` is th
 explicit `_pc += 2`, or the push is a word low). The three returns needed no script at all: they were
 green on state and exactly 4 short on only their faulting records, because the aborted cycle's 4 is
 charged by `Cycle` and their shape rows carry none — `ChargeAbortedReadAsync` at every fault point.
+
+The five **single-operand** families are the cheapest row in this table and the one a reader should study
+first: `NOT`, `NEG`, `NEGX`, `CLR` and `TST` in size 2 are *one* script shape, because the microcode gives
+them one (`nnml1`/`nnml2`/`morw2`, or `tsml1`/`tsml2` for `TST`, which writes nothing). Three facts:
+`nnml1` is the state that both runs the ALU's low half and issues the closing prefetch, so the operand's
+read, the fetch and the two writes are in that order (low word at `address + 2`, then high at `address`);
+`CLR` **reads** the operand it zeroes, which is why it is the block and not a store; and the register form
+is the same block with `set_16l` before the fetch and `set_16h` after it, ending on `roal4`'s 2 clocks
+(`TST` ends on `tsrl2` and charges none). One 32-bit operation gives the result and the final flags
+(`SingleOperandResult`/`SetSingleOperandFlags` — `NEG` is `SetSubFlags(operand, 0, …)`, `NEGX` the exchange
+form, the other three a plain `nzvc` with `V`/`C` cleared). And the **predicate reads the operation field
+as bits 11-8**, four bits wide: read as bits 11-9, `0x4180` looks like `NEGX.l` and `CHK` loses 896
+records, because `CHK`'s own "size" field is `10` too.
 
 The 18 OR.l shapes are 18 short methods over **five** shared blocks (the operand pair, the
 register-destination tail, the memory-destination tail, the program-status read, and the two idle
@@ -231,3 +245,33 @@ files account for. Boot: desktop **611**, pops 34 247.2 → 34 221.8 a frame, `v
 `e48e7e91429ab7c1b3d73a2795414b6ca25e84d35787c63f68ffd42b72386825`, `run.stream`
 `c687ef97e155741a213fe286c8c276b0069f97bb4821c11570b8ebc0e17b9dcb` — row 69's `7331f418…` /
 `4b7cf3ac…` is the pair they replace.
+
+The single-operand longs, and the proof that "one block" is measurable (row 71, 2026-11-20):
+
+| measure | `main` | single-operand longs scripted |
+|---|---|---|
+| MAME gate, whole corpus | 300 463 / 317 500 (94.6 %) | **303 480 / 317 500 (95.6 %)** |
+| files green | 80 of 127 | **85 of 127** (+5, exactly these files) |
+| `NOT.l` / `TST.l` / `NEGX.l` / `NEG.l` / `CLR.l` | 1 867 / 1 886 / 1 891 / 1 918 / 1 921 | **2 500 each** |
+| their exact-clock column | 1 645 / 1 292 / 1 733 / 1 720 / 560 | **2 500 each** |
+| exact-clock, whole corpus | 242 567 (76.4 %) | **248 117 (78.1 %)** |
+| CLK beside it | 856 572 / 1 000 060 | **859 506** (+2 934; the five files rise, no file falls) |
+| sample (`--dir tests/680x0/v1`) | 2 522 / 2 976 | **2 529 / 2 976** |
+
+The failure sets were diffed record by record in both corpora: **no record that passed fails**, and the
+3 017 records that moved are exactly the five files'. One predicate bug was measured on the way and is the
+row's own trap: `(op >> 9) & 7` made `CHK` (`0x4180`) a `NEGX.l` and cost it **896 records** — the
+operation field of these five families is **bits 11-8**. Boot: desktop **611**, pops 34 221.8 → 34 217.6 a
+frame, `validate.sh` **PASS** (G8 8.65 ms at n 760). **Both folds moved** and are the owner's blessing of
+2026-11-20: `run.digest` `8506aeb6687c5b5a0b3cba3b95f80b65bdb650f24a922d4f798b0008c5397766`, `run.stream`
+`bf9808c47fbbcd1e7311c9b2666510c5abffd71046b0b12e5192f5fb24d61cb4` — row 70's `e48e7e91…` / `c687ef97…`
+is the pair they replace.
+
+**The word forms are a different block, and their clocks are nearly free.** Measured on the tree row 71
+landed on: `NOT.w`'s clock column is **0 or +4** over its 2 500 records and nothing else — 1 696 exact,
+804 exactly 4 short — and the 804 are a subset of the file's **991 faulting** records (an odd operand;
+the other 187 are already exact), i.e. the aborted read's own state. So the `.w`/`.b` families need no new
+clock numbers: their shape rows are right, and a script would charge the abort where the microcode does
+(`pinw1`/`pinw2`, `adrw1`/`adrw2`, `nnmw1`, `morw2` — one word, not two). Their state verdict is the
+**group-0 frame's saved `pc`** in every red record (`NOT.w`: 249 of 249), the class §6's row 71 shows a
+script decides; the five `.w` files carry **1 241** of them.
