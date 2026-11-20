@@ -92,7 +92,9 @@ not move, and the boot still reaches the desktop (§5).
 
 ## 4. The ledger, and what a family costs
 
-`IsScriptedAluLong` in `M68000.Scripts.cs` is the ledger of ported families.
+`IsScriptedAluLong` in `M68000.Scripts.cs` is the ledger of ported families; the single-operand
+families are the exception — their ledger is `IsScriptedSingleOperand(op, size)` with one predicate per
+size (`IsScriptedSingleOperandLong`, `IsScriptedSingleOperandWord`).
 
 | family | shapes | lines | MAME records | result |
 |---|---|---|---|---|
@@ -111,6 +113,7 @@ not move, and the boot still reaches the desktop (§5).
 | `JSR` (seven addressing modes) | 7 | ~105, one method | 2 500 in `JSR` | **2 500 / 2 500**, **838 → 2 500** exact-clock |
 | `RTS` / `RTR` / `RTE` | 1 each | 3 lines each (`ChargeAbortedReadAsync`) | 2 500 each | **2 500 / 2 500** each, 1 263 / 1 285 / 1 886 → **2 500** exact-clock |
 | `NOT` / `NEG` / `NEGX` / `CLR` / `TST` `.l` | 8 each, **one** method | ~150 (the RMW block + two helpers) | 2 500 a file | **2 500 / 2 500** each (was 1 867 / 1 918 / 1 891 / 1 921 / 1 886), **every record exact-clock** |
+| the same five `.w` | 8 each, **one** method | ~140 (the word block, `ReadWordEaAsync`) | 2 500 a file | **2 500 / 2 500** each (was 2 251 / 2 262 / 2 244 / 2 248 / 2 254), **every record exact-clock** |
 
 The control transfers are the first family whose **frame's saved counter** the script decides, and they
 are also where the queue's lookahead shows: a transfer never refills the slot behind the word it took, so
@@ -145,6 +148,13 @@ is the same block with `set_16l` before the fetch and `set_16h` after it, ending
 form, the other three a plain `nzvc` with `V`/`C` cleared). And the **predicate reads the operation field
 as bits 11-8**, four bits wide: read as bits 11-9, `0x4180` looks like `NEGX.l` and `CHK` loses 896
 records, because `CHK`'s own "size" field is `10` too.
+
+The same five in size 1 are the subtlest block in this file: the word form is **not** the long
+one with a mask. `adrw1` is an address latch with no bus cycle (one read for `(An)`), `pdcw1` begins a
+fetch state before it steps `An` down, `pinw2` commits the post-increment **before** its read (so a
+faulting `(An)+` word read leaves `An` stepped, where the long form's `pinl3` leaves it alone), and the
+register form ends on `roaw2` with no closing idle. `ReadWordEaAsync` is that block; the ALU, the flags and
+`SingleOperandResult` are shared, which is why the second size cost ~140 lines and not a second family.
 
 The 18 OR.l shapes are 18 short methods over **five** shared blocks (the operand pair, the
 register-destination tail, the memory-destination tail, the program-status read, and the two idle
@@ -267,11 +277,30 @@ frame, `validate.sh` **PASS** (G8 8.65 ms at n 760). **Both folds moved** and ar
 `bf9808c47fbbcd1e7311c9b2666510c5abffd71046b0b12e5192f5fb24d61cb4` — row 70's `e48e7e91…` / `c687ef97…`
 is the pair they replace.
 
-**The word forms are a different block, and their clocks are nearly free.** Measured on the tree row 71
-landed on: `NOT.w`'s clock column is **0 or +4** over its 2 500 records and nothing else — 1 696 exact,
-804 exactly 4 short — and the 804 are a subset of the file's **991 faulting** records (an odd operand;
-the other 187 are already exact), i.e. the aborted read's own state. So the `.w`/`.b` families need no new
-clock numbers: their shape rows are right, and a script would charge the abort where the microcode does
-(`pinw1`/`pinw2`, `adrw1`/`adrw2`, `nnmw1`, `morw2` — one word, not two). Their state verdict is the
-**group-0 frame's saved `pc`** in every red record (`NOT.w`: 249 of 249), the class §6's row 71 shows a
-script decides; the five `.w` files carry **1 241** of them.
+The single-operand words, and the four ways a block is not its sibling shrunk (row 72, 2026-11-20):
+
+| measure | `main` | single-operand words scripted |
+|---|---|---|
+| MAME gate, whole corpus | 303 480 / 317 500 (95.6 %) | **304 721 / 317 500 (96.0 %)** |
+| files green | 85 of 127 | **90 of 127** (+5, exactly these files) |
+| `NOT.w` / `TST.w` / `NEGX.w` / `NEG.w` / `CLR.w` | 2 251 / 2 254 / 2 244 / 2 262 / 2 248 | **2 500 each** |
+| their exact-clock column | 1 696 / 1 702 / 1 710 / 1 711 / 570 | **2 500 each** |
+| exact-clock, whole corpus | 248 117 (78.1 %) | **253 228 (79.8 %)** |
+| CLK beside it | 859 506 / 1 000 060 | **862 212** (+2 706; the five files rise, no file falls) |
+| sample (`--dir tests/680x0/v1`) | 2 529 / 2 976 | **2 540 / 2 976** |
+
+The word forms are a **different block**, not the long one shrunk, and all four differences are in the
+microcode rather than in a flag: `adrw1` is an address latch with no bus cycle (so `(An)` is one read, not
+two); `pdcw1` writes `m_pc = m_au` **before** it steps `An` down, where the long form's `pdcl1` never
+touches `m_pc`; `pinw2` commits the post-increment **before** its read, where `pinl3` commits after both
+words (so a faulting `(An)+` word read leaves `An` stepped); and the register form ends on `roaw2` with no
+closing idle (`NOT.w Dn` 4 clocks, `NOT.l Dn` 6). Their clocks were measured as expected and then were
+right on the first build — the old handler simply never issued the instruction's prefetch (`nnmw1`'s
+`m_pc = m_au` read), which is the 4 every record was short of, and `CLR.w`'s row undercharged its 448
+clean extension-word shapes by another 4. The failure sets were diffed record by record in both corpora:
+**no record that passed fails**, no other file's verdict moves, and the 1 241 records that changed are
+exactly the five files'. Boot: desktop **611**, pops 34 217.6 → 34 245.0 a frame, `validate.sh` **PASS**
+(G8 8.77 ms at n 760). **Both folds moved** and are the owner's blessing of 2026-11-20: `run.digest`
+`a649d65961ba6c10efda5602c9d203f921f66236115f611dc708d071792b6ae7`, `run.stream`
+`8785ea1da0fc797432da8fd2595fa8ceff09d9755f5798405d8ace46e7478126` — row 71's `8506aeb6…` / `bf9808c4…`
+is the pair they replace.
