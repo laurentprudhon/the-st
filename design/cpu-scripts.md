@@ -115,6 +115,8 @@ size (`IsScriptedSingleOperandLong`, `IsScriptedSingleOperandWord` and `IsScript
 | `NOT` / `NEG` / `NEGX` / `CLR` / `TST` `.l` | 8 each, **one** method | ~150 (the RMW block + two helpers) | 2 500 a file | **2 500 / 2 500** each (was 1 867 / 1 918 / 1 891 / 1 921 / 1 886), **every record exact-clock** |
 | the same five `.w` | 8 each, **one** method | ~140 (the word block, `ReadWordEaAsync`) | 2 500 a file | **2 500 / 2 500** each (was 2 251 / 2 262 / 2 244 / 2 248 / 2 254), **every record exact-clock** |
 | the same five `.b` | 8 each, **the same** method | + `size` 0 in the block and the step (`ReadSmallEaAsync`) | 2 500 a file | **2 500 / 2 500** each, and 12 500 exact-clock — `CLR.b` was the only one short (401 → 2 500) |
+| `ADDX.l` / `SUBX.l` (both directions) | 2 scripts, **one** method | ~135 (`ExchangeLongAsync`, the word-at-a-time block) | 2 500 a file | **2 500 / 2 500** each (was 1 671 / 1 673), **every record exact-clock** (was 0) |
+| the `.b`/`.w` `ADDX`/`SUBX` memory forms | — | 2 lines (`asxw1`'s idle, in `ExchangeArithmeticAsync`) | 5 004 records | every one exact-clock (was 2 clocks short on all of them) |
 
 The control transfers are the first family whose **frame's saved counter** the script decides, and they
 are also where the queue's lookahead shows: a transfer never refills the slot behind the word it took, so
@@ -169,6 +171,19 @@ where the byte forms step by two (`pinw1`/`pdcw1`: `m_au = m_da[ry] + (ry < 15 ?
 reference reads the operand it zeroes, so every memory record was one access (4 clocks) short. The
 lesson generalises: **an instruction that the microcode's ALU reads `m_dbin` in is a read on the bus**,
 and a handler that computes from a constant is invisible until someone counts the cycles.
+
+`ADDX.l`/`SUBX.l` are the row that teaches the **ledger's one failure mode**: a predicate that answers 0
+is not evidence of a script. Their size field at 2 lands them on the two-operand longs' opmodes 2 and 6,
+so `IsScriptedAluLong` had been answering 0 clocks for them while no script existed — the clock column
+belonged to a table row that never fired (`(op & 0xF130) == 0x0100` never matches `0xD100`/`0x9100`) and
+to a ledger that had claimed the family by accident. `IsScriptedExchangeLong` is the explicit one now, and
+the rule for the next family is: **the answer 0 must have a script behind it.** The script itself is two
+blocks, both stepping their operands **a word at a time**, and its one surprise is the commit rule —
+`asxl3`/`asxl6` write the register only **after** that operand's first word comes back, so an odd `A`
+leaves it exactly where it stood, where the *word* form's `asxw2` commits before its read. The two corpora
+contest this one: CLK commits `A − 2`, MAME does not, and MAME wins — so CLK's `ADDX.l` records, already
+red on the frame's status byte, gain an `aN` disagreement and its state count does not move. That is also
+why a **failure-set** diff is not enough here: diff the first differing field per record too.
 
 The 18 OR.l shapes are 18 short methods over **five** shared blocks (the operand pair, the
 register-destination tail, the memory-destination tail, the program-status read, and the two idle
@@ -345,3 +360,27 @@ frame, `validate.sh` **PASS** (G8 8.94 ms at n 760). **Both folds moved** and ar
 `00a727cf80c237eb00757f3afc61f95601d5bbe9cf7d6a1e5e3c79b5541d02b3`, `run.stream`
 `a7209d81575a3620a2bc4dbd19d5e7c707df8d89d6c826d599db48203fd88582` — row 72's `a649d659…` / `8785ea1d…`
 is the pair they replace.
+
+The long exchange arithmetic and the ledger that claimed it (row 74, 2026-11-20):
+
+| measure | `main` (after row 73) | `ADDX.l`/`SUBX.l` scripted |
+|---|---|---|
+| MAME gate, whole corpus | 304 721 / 317 500 (96.0 %) | **306 377 / 317 500 (96.5 %)** |
+| files green | 90 of 127 | **92 of 127** (+2, exactly these files) |
+| `ADDX.l` / `SUBX.l` | 1 671 / 1 673 | **2 500 each** |
+| their exact-clock column | **0 / 0** | **2 500 each** |
+| the `.b`/`.w` memory forms' exact-clock | 1 277 / 1 262 / 1 255 / 1 202 of 2 500 | **2 500 each** (5 004 records) |
+| exact-clock, whole corpus | 255 327 (80.4 %) | **265 331 (83.6 %)** (+10 004, no file falls) |
+| CLK beside it | 862 212 / 1 000 060 | **862 212 — state unmoved** (its clock column rises) |
+| sample (`--dir tests/680x0/v1`) | 2 540 / 2 976 | **2 540 / 2 976** |
+
+The failure sets were diffed record by record: **1 656 fixed, 0 new failures, 0 other moves**. CLK's state
+count does not move but 2 593 of its `ADDX.l` records gain a differing field — the commit rule is contested
+between the corpora, MAME wins, and those records were already red on the frame's status byte (see §4).
+Boot: desktop **611**, pops **34 246.7** a frame, `validate.sh` **PASS** (G8 8.75 ms at n 760). **Both folds
+moved** and are the owner's blessing of 2026-11-20: `run.digest`
+`b5cb195b38e87379a6dd58a6384b63054d43172b9ff4a35ddd02975cab5a295a`, `run.stream`
+`d39246cbea7f2bfaa5e6baecb0b99f164fe5eb85a6a7f8abe40b12a4f3da8c5b` — row 73's `00a727cf…` / `a7209d81…`
+is the pair they replace. The byte/word half of the commit was measured **not** to move the folds on its
+own: a build with its `IdleAsync` removed produces the identical pair, so the movement is the long
+script's clocks.
