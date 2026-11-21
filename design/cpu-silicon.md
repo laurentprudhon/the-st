@@ -232,8 +232,8 @@ Every landing of this campaign is graded with one command and no hand runs:
 scripts/cpu-shape-check.sh <parent-commit> [clk-baseline-file]
 ```
 
-It prints one table, and it exits 0 only if all five rows hold. This session's own smoke run
-(`HEAD~1`, a docs-only parent — the pair must be identical) reads:
+It prints one table, and it exits 0 only if all five rows hold. The run that landed it
+(`bash scripts/cpu-shape-check.sh 82b5580` on the tree at `8b947c2`, 2 m 33 s) reads:
 
 ```
 | verdict        | measured
@@ -241,8 +241,8 @@ It prints one table, and it exits 0 only if all five rows hold. This session's o
 | corpus clk     | 863 265 state, 819 372 exact-clock, 136 795 red records in 66 files
 |                |   (0 new, 0 fixed vs parent); per-file table vs the baseline: 0 rows differ PASS
 | folds          | digest 4eac06dc… / stream 1693218a…, desktop 602 (596), 34 122.2 pops      PASS
-| G8             | parent 9.63 / 9.19 / 8.94 vs child 9.01 / 8.89 / 8.88 ms at n 751,
-|                |   worst pair −0.06 ms                                                       PASS
+| G8             | parent 9.46 / 8.61 / 8.88 vs child 9.09 / 8.78 / 8.55 ms at n 751,
+|                |   worst pair +0.17 ms                                                       PASS
 | interface      | cpu-surface absent (#85, documented skip); gen.py Sync+Folded, build ok     PASS
 ```
 
