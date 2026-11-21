@@ -630,4 +630,30 @@ against new 14.78 / 14.85 / 14.77** — +1.2 %, the +1.25 % pops a frame the bat
 `4eac06dc31e69fc5146400afffc7cc8832ac1697e5a9034137bd642899d6423a`, `run.stream`
 `1693218ad9360cdbfe253a064e011488463d4b2e9bd88c38c44957add687dc28` (Debug `boot --frames 800`,
 reproduced three times on the committed tree) — row 79's `5c7d1312…` / `b452114a…` is the pair they
-replace.
+replace. Row 81 left the pair untouched: EmuTOS executes no memory `TAS` in the first 800 frames.
+
+### Row 81: the last two classes, and why one of them was not a disagreement
+
+1. **`TAS`'s memory form carries one idle state, and that is the whole of the gate's last residue.**
+   `tas_ais` is `adrw1` (address latch) → `adrw2` (the byte's read) → `tasm1` (`alu_or8` on it, then
+   `m_icount -= 2`) → `tasm2` (the write) → `b`/`mmrw3` (the closing fetch), so `TAS (An)` is 14 clocks:
+   `r n2 w r`, which is MAME's record verbatim. CLK times the same 14 as one `['t', 10, …]` read-modify-
+   write transaction — its model has the RMW atomic — which is why `LENGTH.md`'s census read the family
+   as "10 clocks nobody models": the two accesses were inside the `t`. Two independent corpora agreeing
+   on a total the gate's README disowns is a measurement, not a convention split, so the family is
+   **fixed rather than quoted**: `await IdleAsync()` between `ReadByteAsync` and the write, never on the
+   fault path, and the table row that was meant to carry it deleted (see 2). MAME 2 108 → 0 and CLK
+   6 828 → 0, and **both corpora's clock columns are now complete on this family**.
+2. **A `(op & 0xFF00) == 0x…` row can never fire — twice now.** `TAS`'s ten-clock row tested
+   `(op & 0xFF00) == 0x4AC0`, whose right-hand side has its low byte masked off; `JSR`'s (FINDINGS row 70)
+   tested `(op & 0xFFC0) == 0x4E90`, and `0x4E90 & 0xFFC0` is `0x4E80`. Both were invisible because the
+   family's *state* column was green and only the clock column could see them. Before trusting a masked
+   row, compute the residual.
+3. **An encoding with no entry in MAME's decode table is illegal on the part, and the core executed one.**
+   `MOVEM <list>,(An)+` (`0x48D8`/`0x48F8`) — the store direction's postincrement, which the manual does
+   not have — had no `.lst` entry and ran anyway, with a per-store `An` step this core had invented. It
+   now raises vector 4, and the illegal-form test in **both** directions is taken *before* the mask's
+   fetch: the part decodes the opcode first, so an illegal form must not read an extension word it never
+   sees (the load direction's `-(An)`, `0x4CE0`, was already trapped — with the phantom read). No corpus
+   record moves, because neither corpus carries a record for an illegal form; the boot is the witness,
+   and it is unchanged.

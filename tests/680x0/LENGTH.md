@@ -183,7 +183,11 @@ moves it. A blank means the family has no records of that shape.
 Read the pattern: **0, 2, 4, 6, 10 — and the two-clock steps are the effective address's own work.** A
 `-(An)` costs 2 whatever the family; a `(d8,An,Xn)` costs 2 (4 where the family is already 2); a long
 operation costs 2 more than the word one for a register destination (`CLR.l Dn` 2 against `CLR.w Dn` 0);
-`TAS` is 10 because its read-modify-write is the reference's `t` transaction, 10 clocks, not a bus cycle;
+`TAS` is the row that needs its own reading: CLK models the memory form's read-modify-write as **one `t`
+transaction of 10 clocks** (the byte's read, its write and the 2-clock state between them), where
+MAME's `tas_ais` splits the same 14 clocks into `r`, `n2`, `w` — so the residue looks like 10 clocks
+nobody models when 2 were missing and 8 *were* the two accesses (FINDINGS row 81; the core charges
+`tasm1`'s 2 between the read and the write);
 `RESET`'s 128 are the 124 the manual's `RESET` asserts plus its fetch. That is the same shape `#74` found in the read's placement: **a per-EA script, not a
 clause** — and the numbers are small enough to be a small table.
 
