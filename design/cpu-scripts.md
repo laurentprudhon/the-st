@@ -124,6 +124,23 @@ size (`IsScriptedSingleOperandLong`, `IsScriptedSingleOperandWord` and `IsScript
 | line 0's word immediates and line 5's word quicks (they live in those nine files) | 8 × 6 and 9 × 2 | + `ImmediateWordAsync`/`QuickWordAsync` over the same tails | ~2 200 records | every one green and **exact-clock** |
 | the `.b`/`.w` `ADDX`/`SUBX` memory forms | — | 2 lines (`asxw1`'s idle, in `ExchangeArithmeticAsync`) | 5 004 records | every one exact-clock (was 2 clocks short on all of them) |
 | `MOVE` / `MOVEA`, `.w` and `.l` (nine destination classes, four `MoveLongFlags` placements) | 2 × 9 blocks, **one** method | ~430 (`MoveScriptAsync`, `MoveStoreAsync`, `WriteMoveAsync`) | 2 500 a file, four files | **2 500 / 2 500** each (were 1 767 / 1 468 / 2 247 / 1 984), **every record exact-clock** (10 000) |
+| `MOVEM` `.l` / `.w`, both directions — **not ported, and it did not need to be** | the two old loops stay | +48 (`MovemToRegistersAsync`: the commit, the class, the read-ahead) | 2 500 a file, two files | **2 500 / 2 500** each (were 2 331 / 2 347), **every record exact-clock** (was 1 836 / 1 802) |
+
+`MOVEM` is the one row of this table that is **not a script**, and it is the honest counter-example to the
+recipe: the family's loop was already the right shape and every clock of it is a bus read, so what the
+corpus caught was three *placements*. (1) The load direction's `(An)+` increment is `popm6`'s
+`m_da[ry] = m_at`, reached only when `step_movem` exhausts the mask, so **any** fault leaves `An`
+untouched — a per-register pre-commit of `address + width` put 249 records two bytes high. (2) The two
+PC-relative classes (`movem_l_dpc_list`, `movem_l_axpc_list`) set `m_base_ssw = SSW_PROGRAM | SSW_R` for
+the address's states and never reset it, so the transfer's reads are program reads and a fault frames an
+*access class* (`0x4CF2`, not `SSW_DATA`'s `0x4CF1`) — 73 records; `(xxx).w`/`.l` are
+`movem_l_adr32_list`, which sets `SSW_DATA` per access, so the predicate is `mode == 7 && reg is 2 or 3`
+and widening it to `mode == 7` trades 73 records for 81 of the other kind. (3) `popm5` reads one word
+**ahead** (`m_aob = m_au`, `m_at = m_au`), so a clean transfer ends with one discarded word read past the
+last register — `fc 5`, 4 clocks — and 1 331 clean records were exactly that short while every faulting
+one was already exact. No charge was added to `M68000.Timing.cs`: the table's `MOVEM` row was right all
+along, and `movem_*_list` has **zero idle states** (`10 bus accesses, 0 idle`), which is what the class
+listing says before any clock is measured.
 
 The control transfers are the first family whose **frame's saved counter** the script decides, and they
 are also where the queue's lookahead shows: a transfer never refills the slot behind the word it took, so
