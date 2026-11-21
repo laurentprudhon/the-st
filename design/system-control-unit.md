@@ -163,7 +163,10 @@ Consequences the code must honour:
    phase's RAS term requires a pending CPU access); the CPU cannot take the internal one.
 2. **Refresh is filler, never a preemptor.** Its 7.8 µs expiry may fall inside a display window; it is
    *deferred to the next blanking slot*, never served mid-window.
-3. **Sound lives in blanking**: 48 internal slots per line against ≤3.2 needed, and refresh's ≈8.2.
+3. **Sound lives in blanking**: 48 internal slots per line against ≤3.2 needed, and refresh's share — which
+   the recovered design has now made *contingent*: the counter is ten stages clocked by `REFCLKB`, so its
+   demand is 32 slots per line at 500 kHz and 4 at 62.5 kHz, and the 7.8 µs this line used to quote matches
+   neither pending a reading of `REFCLK`'s rate (study §5.2, §7.5).
 4. **A wider window costs refresh and sound their slots, not the CPU.** There is no overscan stretch in
    the reconstruction or in either vendored emulator; recorded as a fidelity gap, not modelled as a rule.
 5. **Border lines do not hand their window slots over.** `hde` is horizontal, so the window exists on
@@ -288,7 +291,9 @@ call neither is the leaf nor makes it cheaper to justify (ADR 0014, consequences
 
 ## 11. Open points
 
-1. **The refresh period is `derived` and now only arithmetic.** 7.8 µs = 512 rows ÷ 4 ms; the
+1. **The refresh period is `derived` and now only arithmetic — and no longer credible as a number.** The
+   counter is ten stages on sheet 11 clocked by `REFCLKB`, which makes the period `1024 / f(REFCLK)`; the
+   7.8 µs = 512 rows ÷ 4 ms figure has no supporting clock at all. The old arithmetic read: 7.8 µs = 512 rows ÷ 4 ms; the
    reconstruction hard-wires the refresh address to 0 and proves the slot, never the row. With refresh
    off the deadline list (owner's ruling, 2026-11-09, §12), the period only shapes the *budget* — how
    many of a line's blanking slots refresh consumes — and no instant depends on it. A scope on `RAS0`
