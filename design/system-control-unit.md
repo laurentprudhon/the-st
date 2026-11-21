@@ -314,3 +314,23 @@ internal to memory, so nextDeadline should not be concerned by refresh."*
   wakes are exactly its crossings — 4 000 group deliveries, ≤313 refills, and its bus answers.
 - Consequences: ADR 0011 §5 and its Consequences line revised in place; ADR 0008 §5's deadline list
   corrected; open point 1 above softened — the 7.8 µs figure now only shapes the budget, not any instant.
+
+## 13. Revision — 2026-11-21: three facts the recovered design supplies
+
+The GSTMCU study's new operating section (`research/gstmcu-silicon-implementation.md` §5) reads the
+chip's own equations and the two April 1988 timing charts. Three of its findings touch this document;
+one opens a question that this document had assumed away.
+
+- **§3's "the internal slot precedes the external one" is now `documented`, not assumed.** `RAS0`'s two
+  terms are gated on `TIME0` high (internal, `ADDRSELB`) and `TIME0` low (external, `ADDRSEL`)
+  respectively, so the order within every 500 ns window is a property of the phase's polarity.
+- **§3's "the phase, not a schedule" gains a hardware anchor for its answering instant.** `DTACK` is the
+  output of a flip-flop clocked on `ICLK8B`, so ADR 0009's round-up-to-four is what the silicon does,
+  not merely the rule we chose.
+- **§6's fill rule is incomplete, and this is the open point.** `DCYC` — the word-load strobe the STE
+  Shifter takes as `LOAD` — is gated by `VIDEN`, the *inverse* of the video enable, in the design's own
+  netlist. Either the inversion is undone between the two chips or the Shifter's load comes from another
+  net; no drawing in the archive joins them. Recorded as an `unknown` in the study (§5.2, and the four
+  questions at the end of §5) and testable with a scope on `DCYC` and `DE` together; until then this
+  document's "one word per cycle while the window is open" describes the *fill rate* and makes no claim
+  about the strobe that delivers it.
