@@ -2,20 +2,133 @@
      font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" role="img" aria-label="04 · The two control words, bit by bit">
 <defs>
   <marker id="a-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-    <path d="M0,0 L10,5 L0,10 z" fill="#1f5fa8"/></marker>
+    <path d="M0,0 L10,5 L0,10 z" fill="#1f5fa8"/>
+</marker>
   <marker id="a-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-    <path d="M0,0 L10,5 L0,10 z" fill="#2f7f5b"/></marker>
+    <path d="M0,0 L10,5 L0,10 z" fill="#2f7f5b"/>
+</marker>
   <marker id="a-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-    <path d="M0,0 L10,5 L0,10 z" fill="#b4761a"/></marker>
+    <path d="M0,0 L10,5 L0,10 z" fill="#b4761a"/>
+</marker>
   <marker id="a-k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-    <path d="M0,0 L10,5 L0,10 z" fill="#8a4fb0"/></marker>
+    <path d="M0,0 L10,5 L0,10 z" fill="#8a4fb0"/>
+</marker>
   <marker id="a-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-    <path d="M0,0 L10,5 L0,10 z" fill="#6f5aad"/></marker>
+    <path d="M0,0 L10,5 L0,10 z" fill="#6f5aad"/>
+</marker>
   <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
-    <path d="M24 0 L0 0 0 24" fill="none" stroke="#e8e5db" stroke-width="1"/></pattern>
+    <path d="M24 0 L0 0 0 24" fill="none" stroke="#e8e5db" stroke-width="1"/>
+</pattern>
 </defs>
 <rect width="100%" height="100%" fill="#fbfaf6"/>
 <rect width="100%" height="100%" fill="url(#grid)" opacity=".6"/>
 <text x="44" y="44" font-size="25" font-weight="700" fill="#22232a" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">04 · The two control words, bit by bit</text>
 <text x="44" y="71" font-size="14" fill="#63666f" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">17 bits of sequencing and 68 bits of datapath. Field names are the patent's; bit numbers are the production part's.</text>
-<text x="90" y="130" text-anchor="start" font-size="12.5" fill="#22232a" font-weight="700">FORMAT I — direct next address (bit 1 = 0)</text><rect x="90" y="160" width="88" height="54" fill="#e8eefa" stroke="#98a0ac" stroke-width="1"/><text x="134.0" y="184" text-anchor="middle" font-size="11.5" fill="#22232a" font-weight="700">FC</text><text x="134.0" y="202" text-anchor="middle" font-size="9.5" fill="#63666f" font-weight="400">space</text><rect x="530" y="160" width="440" height="54" fill="#e8eefa" stroke="#98a0ac" stroke-width="1"/><text x="750.0" y="184" text-anchor="middle" font-size="11.5" fill="#22232a" font-weight="700">NMA · next address</text><text x="750.0" y="202" text-anchor="middle" font-size="9.5" fill="#63666f" font-weight="400">10 bits</text><rect x="178" y="160" width="44" height="54" fill="#fdf1de" stroke="#98a0ac" stroke-width="1"/><text x="200.0" y="184" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">C</text><text x="200.0" y="202" text-anchor="middle" font-size="9.5" fill="#63666f" font-weight="400"></text><rect x="354" y="160" width="88" height="54" fill="#fdf1de" stroke="#98a0ac" stroke-width="1"/><text x="398.0" y="184" text-anchor="middle" font-size="11.5" fill="#22232a" font-weight="700">TY</text><text x="398.0" y="202" text-anchor="middle" font-size="9.5" fill="#63666f" font-weight="400">source</text><rect x="266" y="160" width="44" height="54" fill="#f2f2ee" stroke="#98a0ac" stroke-width="1"/><text x="288.0" y="184" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">0</text><text x="288.0" y="202" text-anchor="middle" font-size="9.5" fill="#63666f" font-weight="400"></text><rect x="310" y="160" width="44" height="54" fill="#e7f2ec" stroke="#98a0ac" stroke-width="1"/><text x="332.0" y="184" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">I</text><text x="332.0" y="202" text-anchor="middle" font-size="9.5" fill="#63666f" font-weight="400">load IR</text><text x="112.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">16</text><text x="156.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">15</text><text x="200.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">14</text><text x="244.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">13</text><text x="288.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">12</text><text x="332.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">11</text><text x="376.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">10</text><text x="420.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">9</text><text x="464.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">8</text><text x="508.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">7</text><text x="552.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">6</text><text x="596.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">5</text><text x="640.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">4</text><text x="684.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">3</text><text x="728.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">2</text><text x="772.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">1</text><text x="816.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">0</text><text x="90" y="250" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">TY: 00 = NMA · 01 = A1 · 10 = A2 · 11 = A3        FC: n none · u unknown · d data · i instruction · a interrupt ack</text><text x="90" y="272" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">C+I: db neither · dbi IRC→IR + trap vector · dbc IRC→IR only · dbl partial vector</text><text x="90" y="340" text-anchor="start" font-size="12.5" fill="#22232a" font-weight="700">FORMAT II — conditional (bit 1 = 1): the condition supplies address bits 7 and 6</text><rect x="90" y="370" width="88" height="54" fill="#e8eefa" stroke="#98a0ac" stroke-width="1"/><text x="134.0" y="394" text-anchor="middle" font-size="11.5" fill="#22232a" font-weight="700">FC</text><text x="134.0" y="412" text-anchor="middle" font-size="9.5" fill="#63666f" font-weight="400">space</text><rect x="442" y="370" width="352" height="54" fill="#e8eefa" stroke="#98a0ac" stroke-width="1"/><text x="618.0" y="394" text-anchor="middle" font-size="11.5" fill="#22232a" font-weight="700">NMBA · base address</text><text x="618.0" y="412" text-anchor="middle" font-size="9.5" fill="#63666f" font-weight="400">8 bits</text><rect x="530" y="370" width="220" height="54" fill="#fdf1de" stroke="#98a0ac" stroke-width="1"/><text x="640.0" y="394" text-anchor="middle" font-size="11.5" fill="#22232a" font-weight="700">CBC · condition</text><text x="640.0" y="412" text-anchor="middle" font-size="9.5" fill="#63666f" font-weight="400">32 codes</text><rect x="222" y="370" width="44" height="54" fill="#f2f2ee" stroke="#98a0ac" stroke-width="1"/><text x="244.0" y="394" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">1</text><text x="244.0" y="412" text-anchor="middle" font-size="9.5" fill="#63666f" font-weight="400"></text><rect x="266" y="370" width="44" height="54" fill="#e7f2ec" stroke="#98a0ac" stroke-width="1"/><text x="288.0" y="394" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">I</text><text x="288.0" y="412" text-anchor="middle" font-size="9.5" fill="#63666f" font-weight="400">load IR</text><text x="112.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">16</text><text x="156.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">15</text><text x="200.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">14</text><text x="244.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">13</text><text x="288.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">12</text><text x="332.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">11</text><text x="376.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">10</text><text x="420.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">9</text><text x="464.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">8</text><text x="508.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">7</text><text x="552.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">6</text><text x="596.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">5</text><text x="640.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">4</text><text x="684.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">3</text><text x="728.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">2</text><text x="772.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">1</text><text x="816.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">0</text><text x="90" y="460" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">target = { NMA[9:8], C1 C0, NMA[5:0] }   → four destinations in one logical row of both ROMs</text><text x="90" y="482" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">conditions: auz (AU = 0) · c · z · n · v · nz1 · nz2 · ms0 · m01 · ze · nv · d4 · enl · cc · i11  (+ inverted)</text><text x="90" y="545" text-anchor="start" font-size="12.5" fill="#22232a" font-weight="700">NANOWORD — 68 bits, 66 driven</text><rect x="90" y="570" width="56" height="46" fill="#f2eaf8" stroke="#98a0ac" stroke-width="1"/><text x="118.0" y="598" text-anchor="middle" font-size="8.5" fill="#22232a" font-weight="700">AU const</text><rect x="146" y="570" width="448" height="46" fill="#e7f2ec" stroke="#98a0ac" stroke-width="1"/><text x="370.0" y="598" text-anchor="middle" font-size="10.5" fill="#22232a" font-weight="700">transfers and destinations</text><rect x="594" y="570" width="448" height="46" fill="#fdf1de" stroke="#98a0ac" stroke-width="1"/><text x="818.0" y="598" text-anchor="middle" font-size="10.5" fill="#22232a" font-weight="700">mid-state, ALU mode, flags</text><text x="90" y="636" text-anchor="start" font-size="10.5" fill="#63666f" font-weight="400">bits 67 and 66 are unused on the die: two metal traces leave the array and stop</text><text x="90" y="656" text-anchor="start" font-size="10.5" fill="#63666f" font-weight="400">fields: register ↔ bus transfers · sign extends · AU input constant · au = alu · d/a/pc destination ·</text><text x="90" y="672" text-anchor="start" font-size="10.5" fill="#63666f" font-weight="400">4-bit mid-state (trace, SR, ibuf, MOVEM) · ALU column 1–6 with initiate/finish · flag masks</text><text x="980" y="506" text-anchor="start" font-size="12.5" fill="#22232a" font-weight="700">How the bits are stored</text><rect x="980" y="520" width="120" height="34" fill="#ece7f7" stroke="#6f5aad"/><text x="1040" y="542" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">µROM 34 × 16</text><rect x="980" y="562" width="120" height="86" fill="#ece7f7" stroke="#6f5aad"/><text x="1040" y="610" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">NROM 84 × 4</text><text x="1114" y="536" text-anchor="start" font-size="10.5" fill="#63666f" font-weight="400">= 544 addresses</text><text x="1114" y="612" text-anchor="start" font-size="10.5" fill="#63666f" font-weight="400">= 336 addresses</text><text x="980" y="670" text-anchor="start" font-size="10.5" fill="#63666f" font-weight="400">row selected by an address PLA;</text><text x="980" y="686" text-anchor="start" font-size="10.5" fill="#63666f" font-weight="400">the 10-bit address is permuted on the die,</text><text x="980" y="702" text-anchor="start" font-size="10.5" fill="#63666f" font-weight="400">so field slicing needs a scramble.</text><text x="90" y="700" text-anchor="start" font-size="11" fill="#63666f" font-weight="700">LEGEND</text><line x1="90" y1="716" x2="118" y2="716" stroke="#e8eefa" stroke-width="6" stroke-linecap="round"/><text x="128" y="720" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">address / space</text><line x1="90" y1="734" x2="118" y2="734" stroke="#fdf1de" stroke-width="6" stroke-linecap="round"/><text x="128" y="738" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">sequencing</text><line x1="90" y1="752" x2="118" y2="752" stroke="#e7f2ec" stroke-width="6" stroke-linecap="round"/><text x="128" y="756" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">datapath / IR</text><line x1="90" y1="770" x2="118" y2="770" stroke="#f2eaf8" stroke-width="6" stroke-linecap="round"/><text x="128" y="774" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">constants</text><text x="44" y="848" text-anchor="start" font-size="11.5" fill="#98a0ac" font-weight="400" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-style="italic">MC68000 · microcode and nanocode formats · after US 4,325,121 fig. 8 and the die dump</text></svg>
+<text x="90" y="130" text-anchor="start" font-size="12.5" fill="#22232a" font-weight="700">FORMAT I — direct next address (bit 1 = 0)</text>
+<rect x="90" y="160" width="88" height="54" fill="#e8eefa" stroke="#98a0ac" stroke-width="1"/>
+<text x="134.0" y="184" text-anchor="middle" font-size="11.5" fill="#22232a" font-weight="700">FC</text>
+<text x="134.0" y="202" text-anchor="middle" font-size="9.5" fill="#63666f" font-weight="400">space</text>
+<rect x="530" y="160" width="440" height="54" fill="#e8eefa" stroke="#98a0ac" stroke-width="1"/>
+<text x="750.0" y="184" text-anchor="middle" font-size="11.5" fill="#22232a" font-weight="700">NMA · next address</text>
+<text x="750.0" y="202" text-anchor="middle" font-size="9.5" fill="#63666f" font-weight="400">10 bits</text>
+<rect x="178" y="160" width="44" height="54" fill="#fdf1de" stroke="#98a0ac" stroke-width="1"/>
+<text x="200.0" y="184" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">C</text>
+<text x="200.0" y="202" text-anchor="middle" font-size="9.5" fill="#63666f" font-weight="400">
+</text>
+<rect x="354" y="160" width="88" height="54" fill="#fdf1de" stroke="#98a0ac" stroke-width="1"/>
+<text x="398.0" y="184" text-anchor="middle" font-size="11.5" fill="#22232a" font-weight="700">TY</text>
+<text x="398.0" y="202" text-anchor="middle" font-size="9.5" fill="#63666f" font-weight="400">source</text>
+<rect x="266" y="160" width="44" height="54" fill="#f2f2ee" stroke="#98a0ac" stroke-width="1"/>
+<text x="288.0" y="184" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">0</text>
+<text x="288.0" y="202" text-anchor="middle" font-size="9.5" fill="#63666f" font-weight="400">
+</text>
+<rect x="310" y="160" width="44" height="54" fill="#e7f2ec" stroke="#98a0ac" stroke-width="1"/>
+<text x="332.0" y="184" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">I</text>
+<text x="332.0" y="202" text-anchor="middle" font-size="9.5" fill="#63666f" font-weight="400">load IR</text>
+<text x="112.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">16</text>
+<text x="156.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">15</text>
+<text x="200.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">14</text>
+<text x="244.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">13</text>
+<text x="288.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">12</text>
+<text x="332.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">11</text>
+<text x="376.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">10</text>
+<text x="420.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">9</text>
+<text x="464.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">8</text>
+<text x="508.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">7</text>
+<text x="552.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">6</text>
+<text x="596.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">5</text>
+<text x="640.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">4</text>
+<text x="684.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">3</text>
+<text x="728.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">2</text>
+<text x="772.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">1</text>
+<text x="816.0" y="152" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">0</text>
+<text x="90" y="250" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">TY: 00 = NMA · 01 = A1 · 10 = A2 · 11 = A3        FC: n none · u unknown · d data · i instruction · a interrupt ack</text>
+<text x="90" y="272" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">C+I: db neither · dbi IRC→IR + trap vector · dbc IRC→IR only · dbl partial vector</text>
+<text x="90" y="340" text-anchor="start" font-size="12.5" fill="#22232a" font-weight="700">FORMAT II — conditional (bit 1 = 1): the condition supplies address bits 7 and 6</text>
+<rect x="90" y="370" width="88" height="54" fill="#e8eefa" stroke="#98a0ac" stroke-width="1"/>
+<text x="134.0" y="394" text-anchor="middle" font-size="11.5" fill="#22232a" font-weight="700">FC</text>
+<text x="134.0" y="412" text-anchor="middle" font-size="9.5" fill="#63666f" font-weight="400">space</text>
+<rect x="442" y="370" width="352" height="54" fill="#e8eefa" stroke="#98a0ac" stroke-width="1"/>
+<text x="618.0" y="394" text-anchor="middle" font-size="11.5" fill="#22232a" font-weight="700">NMBA · base address</text>
+<text x="618.0" y="412" text-anchor="middle" font-size="9.5" fill="#63666f" font-weight="400">8 bits</text>
+<rect x="530" y="370" width="220" height="54" fill="#fdf1de" stroke="#98a0ac" stroke-width="1"/>
+<text x="640.0" y="394" text-anchor="middle" font-size="11.5" fill="#22232a" font-weight="700">CBC · condition</text>
+<text x="640.0" y="412" text-anchor="middle" font-size="9.5" fill="#63666f" font-weight="400">32 codes</text>
+<rect x="222" y="370" width="44" height="54" fill="#f2f2ee" stroke="#98a0ac" stroke-width="1"/>
+<text x="244.0" y="394" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">1</text>
+<text x="244.0" y="412" text-anchor="middle" font-size="9.5" fill="#63666f" font-weight="400">
+</text>
+<rect x="266" y="370" width="44" height="54" fill="#e7f2ec" stroke="#98a0ac" stroke-width="1"/>
+<text x="288.0" y="394" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">I</text>
+<text x="288.0" y="412" text-anchor="middle" font-size="9.5" fill="#63666f" font-weight="400">load IR</text>
+<text x="112.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">16</text>
+<text x="156.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">15</text>
+<text x="200.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">14</text>
+<text x="244.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">13</text>
+<text x="288.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">12</text>
+<text x="332.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">11</text>
+<text x="376.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">10</text>
+<text x="420.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">9</text>
+<text x="464.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">8</text>
+<text x="508.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">7</text>
+<text x="552.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">6</text>
+<text x="596.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">5</text>
+<text x="640.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">4</text>
+<text x="684.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">3</text>
+<text x="728.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">2</text>
+<text x="772.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">1</text>
+<text x="816.0" y="362" text-anchor="middle" font-size="8.5" fill="#98a0ac" font-weight="400">0</text>
+<text x="90" y="460" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">target = { NMA[9:8], C1 C0, NMA[5:0] }   → four destinations in one logical row of both ROMs</text>
+<text x="90" y="482" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">conditions: auz (AU = 0) · c · z · n · v · nz1 · nz2 · ms0 · m01 · ze · nv · d4 · enl · cc · i11  (+ inverted)</text>
+<text x="90" y="545" text-anchor="start" font-size="12.5" fill="#22232a" font-weight="700">NANOWORD — 68 bits, 66 driven</text>
+<rect x="90" y="570" width="56" height="46" fill="#f2eaf8" stroke="#98a0ac" stroke-width="1"/>
+<text x="118.0" y="598" text-anchor="middle" font-size="8.5" fill="#22232a" font-weight="700">AU const</text>
+<rect x="146" y="570" width="448" height="46" fill="#e7f2ec" stroke="#98a0ac" stroke-width="1"/>
+<text x="370.0" y="598" text-anchor="middle" font-size="10.5" fill="#22232a" font-weight="700">transfers and destinations</text>
+<rect x="594" y="570" width="448" height="46" fill="#fdf1de" stroke="#98a0ac" stroke-width="1"/>
+<text x="818.0" y="598" text-anchor="middle" font-size="10.5" fill="#22232a" font-weight="700">mid-state, ALU mode, flags</text>
+<text x="90" y="636" text-anchor="start" font-size="10.5" fill="#63666f" font-weight="400">bits 67 and 66 are unused on the die: two metal traces leave the array and stop</text>
+<text x="90" y="656" text-anchor="start" font-size="10.5" fill="#63666f" font-weight="400">fields: register ↔ bus transfers · sign extends · AU input constant · au = alu · d/a/pc destination ·</text>
+<text x="90" y="672" text-anchor="start" font-size="10.5" fill="#63666f" font-weight="400">4-bit mid-state (trace, SR, ibuf, MOVEM) · ALU column 1–6 with initiate/finish · flag masks</text>
+<text x="980" y="506" text-anchor="start" font-size="12.5" fill="#22232a" font-weight="700">How the bits are stored</text>
+<rect x="980" y="520" width="120" height="34" fill="#ece7f7" stroke="#6f5aad"/>
+<text x="1040" y="542" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">µROM 34 × 16</text>
+<rect x="980" y="562" width="120" height="86" fill="#ece7f7" stroke="#6f5aad"/>
+<text x="1040" y="610" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">NROM 84 × 4</text>
+<text x="1114" y="536" text-anchor="start" font-size="10.5" fill="#63666f" font-weight="400">= 544 addresses</text>
+<text x="1114" y="612" text-anchor="start" font-size="10.5" fill="#63666f" font-weight="400">= 336 addresses</text>
+<text x="980" y="670" text-anchor="start" font-size="10.5" fill="#63666f" font-weight="400">row selected by an address PLA;</text>
+<text x="980" y="686" text-anchor="start" font-size="10.5" fill="#63666f" font-weight="400">the 10-bit address is permuted on the die,</text>
+<text x="980" y="702" text-anchor="start" font-size="10.5" fill="#63666f" font-weight="400">so field slicing needs a scramble.</text>
+<text x="90" y="700" text-anchor="start" font-size="11" fill="#63666f" font-weight="700">LEGEND</text>
+<line x1="90" y1="716" x2="118" y2="716" stroke="#e8eefa" stroke-width="6" stroke-linecap="round"/>
+<text x="128" y="720" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">address / space</text>
+<line x1="90" y1="734" x2="118" y2="734" stroke="#fdf1de" stroke-width="6" stroke-linecap="round"/>
+<text x="128" y="738" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">sequencing</text>
+<line x1="90" y1="752" x2="118" y2="752" stroke="#e7f2ec" stroke-width="6" stroke-linecap="round"/>
+<text x="128" y="756" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">datapath / IR</text>
+<line x1="90" y1="770" x2="118" y2="770" stroke="#f2eaf8" stroke-width="6" stroke-linecap="round"/>
+<text x="128" y="774" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">constants</text>
+<text x="44" y="848" text-anchor="start" font-size="11.5" fill="#98a0ac" font-weight="400" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-style="italic">MC68000 · microcode and nanocode formats · after US 4,325,121 fig. 8 and the die dump</text>
+</svg>
+

@@ -2,20 +2,120 @@
      font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" role="img" aria-label="03 · Time — one clock, two phases, four clocks per bus cycle">
 <defs>
   <marker id="a-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-    <path d="M0,0 L10,5 L0,10 z" fill="#1f5fa8"/></marker>
+    <path d="M0,0 L10,5 L0,10 z" fill="#1f5fa8"/>
+</marker>
   <marker id="a-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-    <path d="M0,0 L10,5 L0,10 z" fill="#2f7f5b"/></marker>
+    <path d="M0,0 L10,5 L0,10 z" fill="#2f7f5b"/>
+</marker>
   <marker id="a-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-    <path d="M0,0 L10,5 L0,10 z" fill="#b4761a"/></marker>
+    <path d="M0,0 L10,5 L0,10 z" fill="#b4761a"/>
+</marker>
   <marker id="a-k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-    <path d="M0,0 L10,5 L0,10 z" fill="#8a4fb0"/></marker>
+    <path d="M0,0 L10,5 L0,10 z" fill="#8a4fb0"/>
+</marker>
   <marker id="a-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-    <path d="M0,0 L10,5 L0,10 z" fill="#6f5aad"/></marker>
+    <path d="M0,0 L10,5 L0,10 z" fill="#6f5aad"/>
+</marker>
   <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
-    <path d="M24 0 L0 0 0 24" fill="none" stroke="#e8e5db" stroke-width="1"/></pattern>
+    <path d="M24 0 L0 0 0 24" fill="none" stroke="#e8e5db" stroke-width="1"/>
+</pattern>
 </defs>
 <rect width="100%" height="100%" fill="#fbfaf6"/>
 <rect width="100%" height="100%" fill="url(#grid)" opacity=".6"/>
 <text x="44" y="44" font-size="25" font-weight="700" fill="#22232a" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">03 · Time — one clock, two phases, four clocks per bus cycle</text>
 <text x="44" y="71" font-size="14" fill="#63666f" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">A microword costs two clock periods; a bus access costs four; wait states stretch the microword, never the instruction's script.</text>
-<path d="M 120 150 L 120 116 L 155.0 116 L 155.0 150 L 190 150 L 190 116 L 225.0 116 L 225.0 150 L 260 150 L 260 116 L 295.0 116 L 295.0 150 L 330 150 L 330 116 L 365.0 116 L 365.0 150 L 400 150 L 400 116 L 435.0 116 L 435.0 150 L 470 150 L 470 116 L 505.0 116 L 505.0 150 L 540 150 L 540 116 L 575.0 116 L 575.0 150 L 610 150 L 610 116 L 645.0 116 L 645.0 150 L 680 150" fill="none" stroke="#8a4fb0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><text x="108" y="130" text-anchor="end" font-size="12" fill="#8a4fb0" font-weight="700">CLK</text><text x="1338" y="142" text-anchor="start" font-size="10.5" fill="#63666f" font-weight="400">pin</text><line x1="120" y1="154" x2="120" y2="162" stroke="#98a0ac" stroke-width="1" stroke-linecap="round"/><line x1="190" y1="154" x2="190" y2="162" stroke="#98a0ac" stroke-width="1" stroke-linecap="round"/><line x1="260" y1="154" x2="260" y2="162" stroke="#98a0ac" stroke-width="1" stroke-linecap="round"/><line x1="330" y1="154" x2="330" y2="162" stroke="#98a0ac" stroke-width="1" stroke-linecap="round"/><line x1="400" y1="154" x2="400" y2="162" stroke="#98a0ac" stroke-width="1" stroke-linecap="round"/><line x1="470" y1="154" x2="470" y2="162" stroke="#98a0ac" stroke-width="1" stroke-linecap="round"/><line x1="540" y1="154" x2="540" y2="162" stroke="#98a0ac" stroke-width="1" stroke-linecap="round"/><line x1="610" y1="154" x2="610" y2="162" stroke="#98a0ac" stroke-width="1" stroke-linecap="round"/><line x1="680" y1="154" x2="680" y2="162" stroke="#98a0ac" stroke-width="1" stroke-linecap="round"/><text x="120" y="180" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">every microword is two clock periods wide (four phase edges: φ1 φ2 φ1 φ2)</text><rect x="120" y="250" width="140" height="44" rx="6" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.3"/><text x="190" y="277" text-anchor="middle" font-size="11.5" fill="#22232a" font-weight="700">microword 1</text><rect x="260" y="250" width="140" height="44" rx="6" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.3"/><text x="330" y="277" text-anchor="middle" font-size="11.5" fill="#22232a" font-weight="700">microword 2</text><rect x="400" y="250" width="140" height="44" rx="6" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.3"/><text x="470" y="277" text-anchor="middle" font-size="11.5" fill="#22232a" font-weight="700">microword 3</text><rect x="540" y="250" width="140" height="44" rx="6" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.3"/><text x="610" y="277" text-anchor="middle" font-size="11.5" fill="#22232a" font-weight="700">microword 4</text><text x="120" y="240" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">one microword per microcycle</text><rect x="120.0" y="360" width="35.0" height="52" fill="#ffffff" stroke="#8a90a8" stroke-width="1.1"/><text x="137.5" y="392" text-anchor="middle" font-size="11" fill="#22232a" font-weight="700">S0</text><rect x="155.0" y="360" width="35.0" height="52" fill="#f4f2ea" stroke="#8a90a8" stroke-width="1.1"/><text x="172.5" y="392" text-anchor="middle" font-size="11" fill="#22232a" font-weight="700">S1</text><rect x="190.0" y="360" width="35.0" height="52" fill="#ffffff" stroke="#8a90a8" stroke-width="1.1"/><text x="207.5" y="392" text-anchor="middle" font-size="11" fill="#22232a" font-weight="700">S2</text><rect x="225.0" y="360" width="35.0" height="52" fill="#f4f2ea" stroke="#8a90a8" stroke-width="1.1"/><text x="242.5" y="392" text-anchor="middle" font-size="11" fill="#22232a" font-weight="700">S3</text><rect x="260.0" y="360" width="35.0" height="52" fill="#ffffff" stroke="#8a90a8" stroke-width="1.1"/><text x="277.5" y="392" text-anchor="middle" font-size="11" fill="#22232a" font-weight="700">S4</text><rect x="295.0" y="360" width="35.0" height="52" fill="#f4f2ea" stroke="#8a90a8" stroke-width="1.1"/><text x="312.5" y="392" text-anchor="middle" font-size="11" fill="#22232a" font-weight="700">S5</text><rect x="330.0" y="360" width="35.0" height="52" fill="#ffffff" stroke="#8a90a8" stroke-width="1.1"/><text x="347.5" y="392" text-anchor="middle" font-size="11" fill="#22232a" font-weight="700">S6</text><rect x="365.0" y="360" width="35.0" height="52" fill="#f4f2ea" stroke="#8a90a8" stroke-width="1.1"/><text x="382.5" y="392" text-anchor="middle" font-size="11" fill="#22232a" font-weight="700">S7</text><text x="120" y="348" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">a bus cycle is eight states over four clock periods — two states per clock, two microwords</text><text x="196" y="430" text-anchor="start" font-size="10.5" fill="#1f5fa8" font-weight="400">address out · AS low</text><text x="266" y="430" text-anchor="start" font-size="10.5" fill="#b4761a" font-weight="400">DTACK sampled at the end of S4</text><text x="120" y="458" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">if DTACK is late, whole clocks are inserted and the current microword is held</text><rect x="120" y="470" width="35.0" height="46" fill="#fff8ea" stroke="#b4761a" stroke-width="1.2"/><text x="137.5" y="499" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">S0</text><rect x="155.0" y="470" width="35.0" height="46" fill="#fff8ea" stroke="#b4761a" stroke-width="1.2"/><text x="172.5" y="499" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">S1</text><rect x="190.0" y="470" width="35.0" height="46" fill="#fff8ea" stroke="#b4761a" stroke-width="1.2"/><text x="207.5" y="499" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">S2</text><rect x="225.0" y="470" width="35.0" height="46" fill="#fff8ea" stroke="#b4761a" stroke-width="1.2"/><text x="242.5" y="499" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">S3</text><rect x="260.0" y="470" width="35.0" height="46" fill="#fff8ea" stroke="#b4761a" stroke-width="1.2"/><text x="277.5" y="499" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">S4</text><rect x="295.0" y="470" width="26.25" height="46" fill="#fff8ea" stroke="#b4761a" stroke-width="1.2"/><text x="308.125" y="499" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">S5</text><rect x="321.25" y="470" width="26.25" height="46" fill="#fff8ea" stroke="#b4761a" stroke-width="1.2"/><text x="334.375" y="499" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">S5</text><rect x="347.5" y="470" width="26.25" height="46" fill="#fff8ea" stroke="#b4761a" stroke-width="1.2"/><text x="360.625" y="499" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">S5</text><rect x="373.75" y="470" width="35.0" height="46" fill="#fff8ea" stroke="#b4761a" stroke-width="1.2"/><text x="391.25" y="499" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">S6</text><rect x="408.75" y="470" width="35.0" height="46" fill="#fff8ea" stroke="#b4761a" stroke-width="1.2"/><text x="426.25" y="499" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">S7</text><text x="453.75" y="499" text-anchor="start" font-size="12" fill="#63666f" font-weight="400">…</text><text x="120" y="586" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">E clock: one period every ten CLK periods — six low, four high</text><path d="M 120 600 L 120 570 L 540 570 L 540 600 L 820 600 L 820 570 L 1240 570 L 1240 600 L 1520 600" fill="none" stroke="#8a4fb0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><text x="330" y="560" text-anchor="middle" font-size="10.5" fill="#8a4fb0" font-weight="400">6 low</text><text x="680" y="560" text-anchor="middle" font-size="10.5" fill="#8a4fb0" font-weight="400">4 high</text><rect x="120" y="674" width="470" height="150" rx="8" fill="#ffffff" stroke="#98a0ac" stroke-width="1.2"/><text x="136" y="694" text-anchor="start" font-size="12.5" fill="#22232a" font-weight="700">cost = number of microwords</text><text x="136" y="722" text-anchor="start" font-size="11.5" fill="#22232a" font-weight="700">NOP</text><text x="260" y="722" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">2 words, one bus read</text><text x="520" y="722" text-anchor="end" font-size="11" fill="#2f7f5b" font-weight="700">4 clocks</text><text x="136" y="748" text-anchor="start" font-size="11.5" fill="#22232a" font-weight="700">MOVE.W Dn,Dn</text><text x="260" y="748" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">one read, one write</text><text x="520" y="748" text-anchor="end" font-size="11" fill="#2f7f5b" font-weight="700">4 clocks</text><text x="136" y="774" text-anchor="start" font-size="11.5" fill="#22232a" font-weight="700">DIVU</text><text x="260" y="774" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">a loop of words</text><text x="520" y="774" text-anchor="end" font-size="11" fill="#2f7f5b" font-weight="700">76–130 clocks</text><text x="640" y="694" text-anchor="start" font-size="12.5" fill="#22232a" font-weight="700">Consequences worth remembering</text><text x="640" y="720" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">· a wait state lengthens the current microword, not the next one;</text><text x="640" y="744" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">· timing therefore depends on the script, and the script is data;</text><text x="640" y="768" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">· the E clock is the only slow clock in the machine.</text><text x="640" y="792" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">· there is no cycle counter — the microcode is the counter.</text><text x="980" y="690" text-anchor="start" font-size="11" fill="#63666f" font-weight="700">LEGEND</text><line x1="980" y1="706" x2="1008" y2="706" stroke="#8a4fb0" stroke-width="6" stroke-linecap="round"/><text x="1018" y="710" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">clocking</text><line x1="980" y1="724" x2="1008" y2="724" stroke="#1f5fa8" stroke-width="6" stroke-linecap="round"/><text x="1018" y="728" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">address</text><line x1="980" y1="742" x2="1008" y2="742" stroke="#b4761a" stroke-width="6" stroke-linecap="round"/><text x="1018" y="746" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">bus control</text><line x1="980" y1="760" x2="1008" y2="760" stroke="#2f7f5b" stroke-width="6" stroke-linecap="round"/><text x="1018" y="764" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">timing result</text><text x="44" y="888" text-anchor="start" font-size="11.5" fill="#98a0ac" font-weight="400" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-style="italic">MC68000 · timing · after the user's manual bus-state diagrams and the die-derived sequencer</text></svg>
+<path d="M 120 150 L 120 116 L 155.0 116 L 155.0 150 L 190 150 L 190 116 L 225.0 116 L 225.0 150 L 260 150 L 260 116 L 295.0 116 L 295.0 150 L 330 150 L 330 116 L 365.0 116 L 365.0 150 L 400 150 L 400 116 L 435.0 116 L 435.0 150 L 470 150 L 470 116 L 505.0 116 L 505.0 150 L 540 150 L 540 116 L 575.0 116 L 575.0 150 L 610 150 L 610 116 L 645.0 116 L 645.0 150 L 680 150" fill="none" stroke="#8a4fb0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="108" y="130" text-anchor="end" font-size="12" fill="#8a4fb0" font-weight="700">CLK</text>
+<text x="1338" y="142" text-anchor="start" font-size="10.5" fill="#63666f" font-weight="400">pin</text>
+<line x1="120" y1="154" x2="120" y2="162" stroke="#98a0ac" stroke-width="1" stroke-linecap="round"/>
+<line x1="190" y1="154" x2="190" y2="162" stroke="#98a0ac" stroke-width="1" stroke-linecap="round"/>
+<line x1="260" y1="154" x2="260" y2="162" stroke="#98a0ac" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="154" x2="330" y2="162" stroke="#98a0ac" stroke-width="1" stroke-linecap="round"/>
+<line x1="400" y1="154" x2="400" y2="162" stroke="#98a0ac" stroke-width="1" stroke-linecap="round"/>
+<line x1="470" y1="154" x2="470" y2="162" stroke="#98a0ac" stroke-width="1" stroke-linecap="round"/>
+<line x1="540" y1="154" x2="540" y2="162" stroke="#98a0ac" stroke-width="1" stroke-linecap="round"/>
+<line x1="610" y1="154" x2="610" y2="162" stroke="#98a0ac" stroke-width="1" stroke-linecap="round"/>
+<line x1="680" y1="154" x2="680" y2="162" stroke="#98a0ac" stroke-width="1" stroke-linecap="round"/>
+<text x="120" y="180" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">every microword is two clock periods wide (four phase edges: φ1 φ2 φ1 φ2)</text>
+<rect x="120" y="250" width="140" height="44" rx="6" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.3"/>
+<text x="190" y="277" text-anchor="middle" font-size="11.5" fill="#22232a" font-weight="700">microword 1</text>
+<rect x="260" y="250" width="140" height="44" rx="6" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.3"/>
+<text x="330" y="277" text-anchor="middle" font-size="11.5" fill="#22232a" font-weight="700">microword 2</text>
+<rect x="400" y="250" width="140" height="44" rx="6" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.3"/>
+<text x="470" y="277" text-anchor="middle" font-size="11.5" fill="#22232a" font-weight="700">microword 3</text>
+<rect x="540" y="250" width="140" height="44" rx="6" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.3"/>
+<text x="610" y="277" text-anchor="middle" font-size="11.5" fill="#22232a" font-weight="700">microword 4</text>
+<text x="120" y="240" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">one microword per microcycle</text>
+<rect x="120.0" y="360" width="35.0" height="52" fill="#ffffff" stroke="#8a90a8" stroke-width="1.1"/>
+<text x="137.5" y="392" text-anchor="middle" font-size="11" fill="#22232a" font-weight="700">S0</text>
+<rect x="155.0" y="360" width="35.0" height="52" fill="#f4f2ea" stroke="#8a90a8" stroke-width="1.1"/>
+<text x="172.5" y="392" text-anchor="middle" font-size="11" fill="#22232a" font-weight="700">S1</text>
+<rect x="190.0" y="360" width="35.0" height="52" fill="#ffffff" stroke="#8a90a8" stroke-width="1.1"/>
+<text x="207.5" y="392" text-anchor="middle" font-size="11" fill="#22232a" font-weight="700">S2</text>
+<rect x="225.0" y="360" width="35.0" height="52" fill="#f4f2ea" stroke="#8a90a8" stroke-width="1.1"/>
+<text x="242.5" y="392" text-anchor="middle" font-size="11" fill="#22232a" font-weight="700">S3</text>
+<rect x="260.0" y="360" width="35.0" height="52" fill="#ffffff" stroke="#8a90a8" stroke-width="1.1"/>
+<text x="277.5" y="392" text-anchor="middle" font-size="11" fill="#22232a" font-weight="700">S4</text>
+<rect x="295.0" y="360" width="35.0" height="52" fill="#f4f2ea" stroke="#8a90a8" stroke-width="1.1"/>
+<text x="312.5" y="392" text-anchor="middle" font-size="11" fill="#22232a" font-weight="700">S5</text>
+<rect x="330.0" y="360" width="35.0" height="52" fill="#ffffff" stroke="#8a90a8" stroke-width="1.1"/>
+<text x="347.5" y="392" text-anchor="middle" font-size="11" fill="#22232a" font-weight="700">S6</text>
+<rect x="365.0" y="360" width="35.0" height="52" fill="#f4f2ea" stroke="#8a90a8" stroke-width="1.1"/>
+<text x="382.5" y="392" text-anchor="middle" font-size="11" fill="#22232a" font-weight="700">S7</text>
+<text x="120" y="348" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">a bus cycle is eight states over four clock periods — two states per clock, two microwords</text>
+<text x="196" y="430" text-anchor="start" font-size="10.5" fill="#1f5fa8" font-weight="400">address out · AS low</text>
+<text x="266" y="430" text-anchor="start" font-size="10.5" fill="#b4761a" font-weight="400">DTACK sampled at the end of S4</text>
+<text x="120" y="458" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">if DTACK is late, whole clocks are inserted and the current microword is held</text>
+<rect x="120" y="470" width="35.0" height="46" fill="#fff8ea" stroke="#b4761a" stroke-width="1.2"/>
+<text x="137.5" y="499" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">S0</text>
+<rect x="155.0" y="470" width="35.0" height="46" fill="#fff8ea" stroke="#b4761a" stroke-width="1.2"/>
+<text x="172.5" y="499" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">S1</text>
+<rect x="190.0" y="470" width="35.0" height="46" fill="#fff8ea" stroke="#b4761a" stroke-width="1.2"/>
+<text x="207.5" y="499" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">S2</text>
+<rect x="225.0" y="470" width="35.0" height="46" fill="#fff8ea" stroke="#b4761a" stroke-width="1.2"/>
+<text x="242.5" y="499" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">S3</text>
+<rect x="260.0" y="470" width="35.0" height="46" fill="#fff8ea" stroke="#b4761a" stroke-width="1.2"/>
+<text x="277.5" y="499" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">S4</text>
+<rect x="295.0" y="470" width="26.25" height="46" fill="#fff8ea" stroke="#b4761a" stroke-width="1.2"/>
+<text x="308.125" y="499" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">S5</text>
+<rect x="321.25" y="470" width="26.25" height="46" fill="#fff8ea" stroke="#b4761a" stroke-width="1.2"/>
+<text x="334.375" y="499" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">S5</text>
+<rect x="347.5" y="470" width="26.25" height="46" fill="#fff8ea" stroke="#b4761a" stroke-width="1.2"/>
+<text x="360.625" y="499" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">S5</text>
+<rect x="373.75" y="470" width="35.0" height="46" fill="#fff8ea" stroke="#b4761a" stroke-width="1.2"/>
+<text x="391.25" y="499" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">S6</text>
+<rect x="408.75" y="470" width="35.0" height="46" fill="#fff8ea" stroke="#b4761a" stroke-width="1.2"/>
+<text x="426.25" y="499" text-anchor="middle" font-size="10" fill="#22232a" font-weight="700">S7</text>
+<text x="453.75" y="499" text-anchor="start" font-size="12" fill="#63666f" font-weight="400">…</text>
+<text x="120" y="586" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">E clock: one period every ten CLK periods — six low, four high</text>
+<path d="M 120 600 L 120 570 L 540 570 L 540 600 L 820 600 L 820 570 L 1240 570 L 1240 600 L 1520 600" fill="none" stroke="#8a4fb0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="330" y="560" text-anchor="middle" font-size="10.5" fill="#8a4fb0" font-weight="400">6 low</text>
+<text x="680" y="560" text-anchor="middle" font-size="10.5" fill="#8a4fb0" font-weight="400">4 high</text>
+<rect x="120" y="674" width="470" height="150" rx="8" fill="#ffffff" stroke="#98a0ac" stroke-width="1.2"/>
+<text x="136" y="694" text-anchor="start" font-size="12.5" fill="#22232a" font-weight="700">cost = number of microwords</text>
+<text x="136" y="722" text-anchor="start" font-size="11.5" fill="#22232a" font-weight="700">NOP</text>
+<text x="260" y="722" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">2 words, one bus read</text>
+<text x="520" y="722" text-anchor="end" font-size="11" fill="#2f7f5b" font-weight="700">4 clocks</text>
+<text x="136" y="748" text-anchor="start" font-size="11.5" fill="#22232a" font-weight="700">MOVE.W Dn,Dn</text>
+<text x="260" y="748" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">one read, one write</text>
+<text x="520" y="748" text-anchor="end" font-size="11" fill="#2f7f5b" font-weight="700">4 clocks</text>
+<text x="136" y="774" text-anchor="start" font-size="11.5" fill="#22232a" font-weight="700">DIVU</text>
+<text x="260" y="774" text-anchor="start" font-size="11" fill="#63666f" font-weight="400">a loop of words</text>
+<text x="520" y="774" text-anchor="end" font-size="11" fill="#2f7f5b" font-weight="700">76–130 clocks</text>
+<text x="640" y="694" text-anchor="start" font-size="12.5" fill="#22232a" font-weight="700">Consequences worth remembering</text>
+<text x="640" y="720" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">· a wait state lengthens the current microword, not the next one;</text>
+<text x="640" y="744" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">· timing therefore depends on the script, and the script is data;</text>
+<text x="640" y="768" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">· the E clock is the only slow clock in the machine.</text>
+<text x="640" y="792" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">· there is no cycle counter — the microcode is the counter.</text>
+<text x="980" y="690" text-anchor="start" font-size="11" fill="#63666f" font-weight="700">LEGEND</text>
+<line x1="980" y1="706" x2="1008" y2="706" stroke="#8a4fb0" stroke-width="6" stroke-linecap="round"/>
+<text x="1018" y="710" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">clocking</text>
+<line x1="980" y1="724" x2="1008" y2="724" stroke="#1f5fa8" stroke-width="6" stroke-linecap="round"/>
+<text x="1018" y="728" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">address</text>
+<line x1="980" y1="742" x2="1008" y2="742" stroke="#b4761a" stroke-width="6" stroke-linecap="round"/>
+<text x="1018" y="746" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">bus control</text>
+<line x1="980" y1="760" x2="1008" y2="760" stroke="#2f7f5b" stroke-width="6" stroke-linecap="round"/>
+<text x="1018" y="764" text-anchor="start" font-size="11.5" fill="#63666f" font-weight="400">timing result</text>
+<text x="44" y="888" text-anchor="start" font-size="11.5" fill="#98a0ac" font-weight="400" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-style="italic">MC68000 · timing · after the user's manual bus-state diagrams and the die-derived sequencer</text>
+</svg>
+

@@ -62,6 +62,11 @@ def tw(s, size: float) -> float:
     return len(s) * size * 0.60
 
 
+def esc(s: str) -> str:
+    """XML-escape text content (a bare & or < in a label is fatal to an SVG parser)."""
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def box(x, y, w, h, name, sub="", kind="unit", fill=None, stroke=None, dashed=False,
         rx=8, name_size: float = 15, sub_size: float = 11.5):
     fills = {"unit": FILL_GREY, "addr": FILL_ADDR, "data": FILL_DATA, "ctrl": FILL_CTRL,
@@ -78,12 +83,12 @@ def box(x, y, w, h, name, sub="", kind="unit", fill=None, stroke=None, dashed=Fa
     cy = y + h / 2 - total / 2 + name_size
     for i, ln in enumerate(lines):
         out += (f'<text x="{x + w / 2}" y="{cy + i * (name_size + 4)}" text-anchor="middle" '
-                f'font-size="{name_size}" font-weight="700" fill="{INK}">{ln}</text>')
+                f'font-size="{name_size}" font-weight="700" fill="{INK}">{esc(ln)}</text>')
         _audit.append((tw(ln, name_size), x + w / 2, cy + i * (name_size + 4), ln, w))
     if sub:
         sy = cy + (n - 1) * (name_size + 4) + sub_size + 8
         out += (f'<text x="{x + w / 2}" y="{sy}" text-anchor="middle" font-size="{sub_size}" '
-                f'fill="{MUT}">{sub}</text>')
+                f'fill="{MUT}">{esc(sub)}</text>')
         _audit.append((tw(sub, sub_size), x + w / 2, sy, sub, w))
     return out
 
@@ -95,7 +100,7 @@ def txt(x, y, s, size: float = 13, fill=MUT, anchor="start", weight="400", famil
     if anchor == "start":
         _audit.append((tw(s, size), x + tw(s, size) / 2, y, s, None))
     return (f'<text x="{x}" y="{y}" text-anchor="{anchor}" font-size="{size}" fill="{fill}" '
-            f'font-weight="{weight}"{fam}{style}{rot}>{s}</text>')
+            f'font-weight="{weight}"{fam}{style}{rot}>{esc(s)}</text>')
 
 
 def line(x1, y1, x2, y2, color=ADDR, width: float = 2.0, marker=None, dash=None):
@@ -546,6 +551,8 @@ def main():
     problems = {}
     for name, fn in SHEETS.items():
         svg = fn()
+        # one element per line: readable diffs, and the file survives review
+        svg = svg.replace("><", ">\n<") + "\n"
         p = os.path.join(here, name)
         open(p, "w").write(svg)
         problems[name] = audit(p, svg)
