@@ -162,7 +162,7 @@ The netlist supplies the clocks: `REFCLK` and `VIDCLK` each drive only a handful
 
 | counter | clock / enable | width | evidence |
 |---|---|---|---|
-| refresh row | a carry-chained group of `NCBMS`/`NLCBN` gates on **sheet 11**, taps printed 1…10 | ten taps = 1 024 states against 512 rows per bank, and ten `MAL` lines leave the chip (`board-inventory.md` §3.4b) | `documented` (sheets 11, pins); which tap reaches which `MAL` pin `unknown` |
+| refresh row | a carry-chained group of `NCBMS`/`NLCBN` gates on **sheet 11**, taps printed 1…10, reaching the address muxes as `RA0`–`RA9` | ten taps = 1 024 states against 512 rows per bank | `documented` (sheet 11 chain, `RA9` read into the `MAD9` mux); which tap is `RA0` and the row order `unknown` |
 | video address | advances once per 500 ns cycle while the display window is open | 24 bits across `VIDBH/VIDBM/VIDBL` + `VCOUNT` | `documented` (sheets 4, 12, 15) |
 | sound address | `SNDCLK` = the granted slot | 21 bits (`SFTH/SFTM/SFTL`) | `documented` (sheet 17 + memo §4) |
 | disk DMA address | `DMADIR`/`RDY` handshake with U300 | 24 bits (`DMAH/DMAM/DMAL`) | `documented` (sheet 16) |
@@ -175,7 +175,9 @@ The netlist supplies the clocks: `REFCLK` and `VIDCLK` each drive only a handful
 `documented` What sheet 31 actually draws, read off the sheet by its owner: `K500CLK` into the `C` pin of `DPR` `PV009`, then a chain of `NLCB1` and six `NLCBN` carry cells, giving eight taps printed 0–7, reset by `PADRST`, with one tap leaving the sheet as `PADC` towards sheet 32 (pads `PV001`–`PV017`).[2]
 `derived` That is the **paddle** divider and nothing else — the pen has its own clocks on sheet 33 and does not see `PADC` at all — so `PADC` is the 500 kHz timebase divided down by these eight taps, which is what the owner reported as "directly derived from `K500CLK`".
 `derived` The ten-tap chain that can be a row counter is on **sheet 11** instead: `NCBMS`, seven `NLCBN` and an `NLCB1`, with `CI`/`CO` carried stage to stage and the `Q` outputs printed 1…10, drawn beside the `WLOC*` line-offset registers and their `MX21` muxes (pads `PB001`–`PB010`).[2]
-`derived` Ten taps is 1 024 states, and 512 rows per bank is half of that — the first reading in this study that makes ten `MAL` lines fit the row count instead of contradicting it. Which tap reaches which pin is still `unknown`: no `MAL` net appears anywhere in the archive's text layer, and the owner's read of sheet 31 found none either.
+`derived` Ten taps is 1 024 states, and 512 rows per bank is half of that — the first reading in this study that makes ten address bits fit the row count instead of contradicting it.
+`documented` And there is no `MAL` net anywhere in the archive: the chip's symbol carries `MAD0`–`MAD9` (the multiplexed DRAM address, §3.6), and the refresh counter reaches them as `RA0`–`RA9` through the ten `MX41` muxes (read at `RA9`, sheet 25).[2]
+`derived` So `design/board-inventory.md`'s "`MAL0–MAL9`, refresh counter" pins are almost certainly the same ten lines under another name — the archive has no refresh pin at all — and the inventory's open item can be re-checked against the service manual's symbol rather than searched for in the design.
 
 `documented` Sheet 33 is the **pen**, and it is the same shape twice: a horizontal section (`NCBMS`/`NLCB` chain `PX021`–`PX026` with `DPR` `PX027`, capture bank `MF2` `PX010`–`PX017`) clocked from `M2CLOCK` through `PX033`/`PX031`/`PX032` and cleared from `IHSYNC` through `PX029`/`PX030`/`PX028`; and a vertical section (chain `PX052`–`PX059`, `DPR` `PX060`, capture bank `MF2` `PX038`–`PX046`) clocked from the `IHSYNC`/`VDE` logic at `PX064`–`PX066` and cleared from `IVSYNC` at `PX061`–`PX063`.[2]
 `documented` The `MF2` stages are capture latches, not counters: their `D` inputs take the counters' bits and their clock comes from the pen signal's own conditioning chain — `PAD` … `PEN` → `PX036` → `PX034` → `PX035` → `PX037` → capture.[2]
@@ -195,7 +197,9 @@ That is the same organising idea as the 68000's register file: bits sit on a pai
 ### 3.6 The address path: ten muxes and a printed table
 
 `documented` The drawing-level netlist holds exactly **ten `MX41` cells** — 4:1 muxes — each selecting with `SADSEL` and `REF` and driving one `MADn` line (e.g. `PN037 → MAD1`)[2].
-Ten muxes for ten address lines, one per DRAM multiplexed address bit, and the fourth input comes from the phase decode[2].
+`documented` Sheet 25 read by its owner gives one mux in full, and with it the naming the rest of this section uses: the `MAD9` mux takes `RA9` (sheet 11), `VA9` (sheet 11), `MA9` (sheet 17) and `A9` (sheet 19) as its four data inputs, selected by `REF`, `SADSEL`, `IXDMAB` and `ADDRSELB`.[2]
+`derived` The four names are the four owners, and there are only four because two of the table's five lanes share an input: `RA` is the refresh address, `VA` the video address, `MA` the sound address (sheet 17 is the `SOUND ADDRESS COUNTER`), and `A` the bus address — which serves both CPU and DMA, because on an external slot the granted master *is* driving the bus. `IXDMAB` therefore selects between lanes that are already distinguishable in time, not between two wires.
+`derived` That is also the join the study had been missing: `RA9` comes from **sheet 11**, the same sheet as the ten-tap `NCBMS`/`NLCB` chain, so the refresh row address is that counter and the ten `MAD` lines are its taps (one instance read; the other nine are read as symmetric).
 `derived` That is why the chip can change owner of the address bus in half a clock: there is no address computation to switch, only a select line[2].
 
 `documented` And the designer printed the truth table on the same sheet, "MEMORY ADDR MUX 1 OF 3" (sheet 23):
@@ -519,7 +523,7 @@ Tiers per the handoff: T1 hardware-captured, T2 hardware-corrected, T3 emulator-
 | 2 | Does the sound counter increment on grant or on load? | RTL: on grant; memo: `SLOADB` rising edge latches data. Unresolved ordering | T3 | `design/crossings.md` (§2 refills) |
 | 3 | Is `SINT` a slot-wide level or a 480 ns pulse? | 480 ns pulse, and the next frame's first fetch may overlap it | T2 (memo) | Sound's frame-end event |
 | 4 | Does a mid-frame `top` write move the current boundary? | no — the boundary is `count == top`, evaluated continuously | T2 (memo) | Sound |
-| 5 | What is the refresh period and row order? | `derived` 7.8 µs for 512 rows in 4 ms; the row counter is a ten-tap gate chain on sheet 11 (1 024 states), so ten `MAL` lines now fit 512 rows; which tap goes to which pin is unread | T3 | SCU §11.1 |
+| 5 | What is the refresh period and row order? | `derived` 7.8 µs for 512 rows in 4 ms; the counter is a ten-tap chain on sheet 11 feeding the muxes as `RA0`–`RA9`, so ten address bits fit 512 rows; which tap is bit 0 — and therefore the row order — is unread | T3 | SCU §11.1 |
 | 6 | Is the paddle a counting ADC, and what is its law? | counting, clocked from the 500 kHz timebase through sheet 31's divider; cleared only by `PADRST`, not started by the register select, and with no `PADC` path into sheet 33 — so what remains unknown is the *capture* of the count, in sheet 32's registers or at the pad pin | unknown | Controllers |
 | 7 | Are 313 lines × 512 clocks right, and where is the `DE` edge? | design has `HDE/LPHDE/VDE/HBLANK`, `SYNCSEL`, `MDE0/MDE1`; the reconstruction gives `ivsync_set` 508/510 | T3 | Video |
 | 8 | Does the CPU really get every second slot? | yes — `ADDRSELB` is a phase, and CPU-outranks-DMA only *inside* the external slot | T2 (design table) | SCU §3 |
@@ -560,7 +564,7 @@ None of the six needs a die, and all six are cheaper than one decap attempt by o
   our board is `ST-4081` or the `TXL` variant is not established; nothing in the design fixes which one shipped
   in C300589-001. A decap answers this and the two revisions differ in cell count (68 vs 73 FFs), so the
   question is not academic[2].
-- **The join from the refresh counter's taps to `MAL0–MAL9`.** The ten-tap chain is on sheet 11, the ten `MAL` lines leave the chip, and nothing in the archive draws the connection — no `MAL` net appears in any sheet's text layer.
+- **The refresh counter's tap order.** The chain is on sheet 11 and reaches the muxes as `RA0`–`RA9` (read at `RA9`), but no sheet prints which tap is bit 0, so the row order a refresh walks is still an assumption.
 - **The paddle's capture edge and conversion law** — the pen's counterpart is now closed: sheet 33 latches two free-running position counters on the pen's own edge, so the pen needs no law, only two counters and one event.
 - **`BINT`'s function inside the GSTMCU**, and whether the C302183 variant's blitter logic reuses it.
 - **The test mode** (`TEST` pin 74, `ITEST` gating dozens of cells) — undocumented here, unlike the 68000's VPA
