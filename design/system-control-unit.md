@@ -291,9 +291,10 @@ call neither is the leaf nor makes it cheaper to justify (ADR 0014, consequences
 
 ## 11. Open points
 
-1. **The refresh period is `derived` and now only arithmetic — and no longer credible as a number.** The
-   counter is ten stages on sheet 11 clocked by `REFCLKB`, which makes the period `1024 / f(REFCLK)`; the
-   7.8 µs = 512 rows ÷ 4 ms figure has no supporting clock at all. The old arithmetic read: 7.8 µs = 512 rows ÷ 4 ms; the
+1. **The refresh period is a bound, not a number.** The counter is ten stages on sheet 11 clocked by
+   `REFCLKB`, a sheet-6 flop on the 500 kHz timebase whose `D` is `NAND(HCTR, LC)`; 2 µs granularity, at
+   most 32 steps per line, 1 024 steps in 2.05 ms. The 7.8 µs = 512 rows ÷ 4 ms figure this point used to
+   carry has no supporting clock at all. The old arithmetic read: 7.8 µs = 512 rows ÷ 4 ms; the
    reconstruction hard-wires the refresh address to 0 and proves the slot, never the row. With refresh
    off the deadline list (owner's ruling, 2026-11-09, §12), the period only shapes the *budget* — how
    many of a line's blanking slots refresh consumes — and no instant depends on it. A scope on `RAS0`
