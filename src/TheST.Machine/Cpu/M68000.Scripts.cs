@@ -591,6 +591,308 @@ public sealed partial class M68000
     }
 
     // =========================================================================================
+    // CMPM — the one family whose two operands are both `(Ay)+`, and whose register writes are
+    // what its corpus records actually disagree about
+    // =========================================================================================
+
+    /// <summary>
+    /// <b>CMPM</b> — <c>cmpm.b/.w/.l (Ay)+,(Ax)+</c>, line B opmode 5 with the source mode 1. The
+    /// size field is two bits wide (a byte form of a line-B instruction is size 0, but MAME's
+    /// <c>cmpm</c> block is one block for 0 and 1), so the long form lands on <c>EOR</c>'s opmode and
+    /// the word form on the word ALU's: the exclusion in <see cref="IsScriptedAluLong"/> and
+    /// <see cref="IsScriptedAluWord"/> is this family, and size 3 (<c>CMPM</c> takes no size 3) stays
+    /// out of the script.
+    /// </summary>
+    static bool IsScriptedCmpm(ushort op) =>
+        (op & 0xF138) == 0xB108 && ((op >> 6) & 0x3) != 3;
+
+    /// <summary>
+    /// <c>cmpm</c> — <c>cmpm_b/w/l_aips_aipd</c>, one state list for sizes 0 and 1 (<c>cmmw1</c>…
+    /// <c>cmmw4</c>) and a four-read one for size 2 (<c>cmml1</c>…<c>cmml7</c>). Three facts the
+    /// generic <c>CMP</c> handler could not have, each measured on the last 162/165 records of
+    /// <c>CMP.w</c>/<c>CMP.l</c>:
+    /// <list type="number">
+    /// <item><b>the frame's counter moves before the first read</b> — <c>cmmw1</c> is
+    /// <c>m_pc = m_au</c>, so a source fault frames the queue's word (<see cref="BeginFetchState"/>);
+    /// 115 records of <c>CMP.w</c> saved 2 too low without it;</item>
+    /// <item><b>the destination's increment lands after its read</b> — <c>cmmw4</c>/<c>cmml6</c> is
+    /// <c>m_da[rx] = m_au</c>, with the read at <c>cmmw3</c>/<c>cmml4</c>…<c>cmml5</c> before it, so a
+    /// destination fault leaves <c>Ax</c> where it stood (47 <c>CMP.w</c> and 165 <c>CMP.l</c> records
+    /// were 2 high, the long ones 2 high by the first word's step: <c>cmml2</c> commits
+    /// <c>A + 2</c> and <c>cmml3</c> <c>A + 4</c>, so a long source fault is a 2-clock step and not
+    /// a 4);</item>
+    /// <item><b>no idle states</b> — the listing's own footer (<c># bus accesses … idle states: 0</c>),
+    /// which is why the family's entry in <c>M68000.Timing.cs</c> has to be zero: the long form's
+    /// opmode was charged the two-operand long's 4 on 82 records of <c>CMP.l</c>.</item>
+    /// </list>
+    /// A faulting record's clocks are the aborted read's own 4 (<see cref="ChargeAbortedReadAsync"/>)
+    /// on top of the cycle's, at every read and in both sizes.
+    /// </summary>
+    async ValueTask CompareMemoryAsync(ushort op)
+    {
+        int rx = (op >> 9) & 0x7;                          // the destination: the second An
+        int ry = op & 0x7;                                 // the source
+        int size = (op >> 6) & 0x3;
+
+        BeginFetchState();                                 // cmmw1 / cmml1 — `m_pc = m_au`
+
+        // a byte steps by one, except on A7, whose byte forms move a whole word (row 48)
+        uint sourceStep = (uint)(size == 0 && ry == 7 ? 2 : SizeBytes(size));
+        uint destinationStep = (uint)(size == 0 && rx == 7 ? 2 : SizeBytes(size));
+
+        uint sourceAddress = GetA(ry);
+
+        // the destination's address is read at its own state, *after* the source has committed: when
+        // both operands name the same register (`(A4)+,(A4)+`) the second address is the first one's
+        // stepped value, not its own old one (18 + 21 records of the two files)
+        uint source;
+        uint destination;
+
+        if (size == 2)
+        {
+            SetA(ry, sourceAddress + 2);                   // cmml2 — the step lands before the read
+            ushort sourceHigh = await ReadWordAsync(sourceAddress);
+            if (_busFaulted)
+            {
+                await ChargeAbortedReadAsync();
+                return;
+            }
+
+            SetA(ry, sourceAddress + 4);                   // cmml3 — the second word's commit
+            ushort sourceLow = await ReadWordAsync(sourceAddress + 2);
+            if (_busFaulted)
+            {
+                await ChargeAbortedReadAsync();
+                return;
+            }
+
+            source = Merge16_32(sourceHigh, sourceLow);
+
+            uint destAddress = GetA(rx);                                          // cmml4 — m_da[rx]
+            ushort destinationHigh = await ReadWordAsync(destAddress);            // cmml4
+            if (_busFaulted)
+            {
+                await ChargeAbortedReadAsync();
+                return;
+            }
+
+            ushort destinationLow = await ReadWordAsync(destAddress + 2);         // cmml5
+            if (_busFaulted)
+            {
+                await ChargeAbortedReadAsync();
+                return;
+            }
+
+            destination = Merge16_32(destinationHigh, destinationLow);
+            SetA(rx, destAddress + destinationStep);             // cmml6 — after both words
+
+            AluLongOp(source, destination, AluLong.Sub);         // cmml6 — alu_sub, sr_nzvc
+            SetLongFlags(AluLong.Sub, source, destination, _aluo, extend: false);
+
+            await TrailingFetchAsync();                          // cmml7 — the closing prefetch
+            return;
+        }
+
+        SetA(ry, sourceAddress + sourceStep);              // cmmw2 — the step lands before the read
+        source = await ReadAtAsync(sourceAddress, size);
+        if (_busFaulted)
+        {
+            await ChargeAbortedReadAsync();
+            return;
+        }
+
+        uint destinationAddress = GetA(rx);                         // cmmw3 — after the source's step
+        destination = await ReadAtAsync(destinationAddress, size);   // cmmw3
+        if (_busFaulted)
+        {
+            await ChargeAbortedReadAsync();
+            return;
+        }
+
+        SetA(rx, destinationAddress + destinationStep);    // cmmw4 — after the read, before the fetch
+        SetCompareFlags(source, destination, (destination - source) & SizeMask(size), size);
+
+        await TrailingFetchAsync();                        // cmmw4's read at `m_pc`
+    }
+
+    // =========================================================================================
+    // The status-register moves — MOVE from SR, MOVE to CCR, MOVE to SR
+    // =========================================================================================
+
+    /// <summary>
+    /// The three status moves: <c>move.w sr,&lt;ea&gt;</c> (<c>0x40C0</c>), <c>move.w &lt;ea&gt;,ccr</c>
+    /// (<c>0x44C0</c>) and <c>move.w &lt;ea&gt;,sr</c> (<c>0x46C0</c>) — one block each, every mode and
+    /// register inside it. <c>0x42C0</c> (<c>MOVE from CCR</c>) is <b>not</b> here: it is 68010+ and
+    /// traps as an illegal instruction, which is what EmuTOS's CPU probe reads.
+    /// </summary>
+    static bool IsScriptedMoveToStatus(ushort op) =>
+        (op & 0xFFC0) is 0x40C0 or 0x44C0 or 0x46C0;
+
+    /// <summary>
+    /// <c>move_sr_*</c>, <c>move_*_ccr</c> and <c>move_*_sr</c>. Two scripts, not three: the to-CCR and
+    /// to-SR blocks are the same states (<c>mstw1</c>/<c>stiw4</c> for one, <c>stiw1</c>…<c>stiw3</c>
+    /// for the other) and differ only in which bits of the status register they write.
+    /// <list type="bullet">
+    /// <item><b>the write direction reads its operand first.</b> <c>move_sr_ais</c> is
+    /// <c>r w</c> — a read at the destination, the instruction's program read, then the store — so
+    /// every memory record of <c>MOVEfromSR</c> was 4 clocks short while the handler only stored
+    /// (1 118 records), and a fault on it is a <em>read</em> fault, which is also what its frame's
+    /// status word records;</item>
+    /// <item><b>the register destination ends on one idle</b> (<c>move_sr_ds</c>'s last
+    /// <c>m_icount -= 2</c>): 6 clocks, not 4;</item>
+    /// <item><b>the read direction refills its queue after the status write</b> — <c>move_dais_sr</c>
+    /// ends <c>n 4</c> then two program reads at the next opcode and the word after it (a status write
+    /// can change which stack and bus the CPU runs on, so MAME re-fetches the stream), which is why
+    /// every supervisor record was exactly 8 short: 4 of idle and 4 of read. <see cref="RefillAsync"/>
+    /// is that pair, at <c>_pc</c> — the measured addresses are the instruction's own next word
+    /// (<c>5722028</c> for a <c>(d16,An)</c> shape, i.e. the extension word read again, then
+    /// <c>+2</c>);</item>
+    /// <item><b>its clock charge is nothing of its own</b>: the whole difference is that pair plus the
+    /// idle, and a privilege violation (<c>move_dais_sr</c>'s first state) frames before any of it —
+    /// which is why the 354 user-mode records were already exact.</item>
+    /// </list>
+    /// A fault at the operand's read costs the aborting state's own 4 on every shape but the
+    /// predecrement block, exactly as in the memory shifts (the same measure: 242 + 444 records).
+    /// </summary>
+    async ValueTask MoveToStatusAsync(ushort op)
+    {
+        int mode = (op >> 3) & 0x7;
+        int reg = op & 0x7;
+        bool fromStatus = (op & 0xFFC0) == 0x40C0;
+        bool toStatus = (op & 0xFFC0) == 0x46C0;
+
+        // the privilege check is the script's first state, before any effective address is built
+        if (toStatus && !Supervisor)
+        {
+            await EnterExceptionAsync(8, 0);
+            return;
+        }
+
+        if (mode == 0)                                     // move_sr_ds / move_ds_ccr / move_ds_sr
+        {
+            if (fromStatus)
+            {
+                _d[reg] = (_d[reg] & 0xFFFF0000u) | (uint)(_sr & DefinedSr);
+                _own = 2;                                  // the one idle state
+                return;
+            }
+
+            WriteStatusRegister(toStatus, _d[reg] & 0xFFFF);
+            await StatusWriteRefillAsync();                 // `n 4`, then the queue's two reads
+            return;
+        }
+
+        if (mode == 7 && reg == 4)                         // `move.w #,ccr` / `,sr`: the immediate word
+        {
+            uint immediate = await FetchAsync();
+            if (_busFaulted)
+            {
+                return;
+            }
+
+            WriteStatusRegister(toStatus, immediate);
+            await StatusWriteRefillAsync();
+            return;
+        }
+
+        // the predecrement's 2 clocks carry no read in these three scripts — the queue is refilled
+        // after the operand, not behind the decrement (`move_pais_sr` is `n 2`, `r`, `n 4`, `r`, `r`),
+        // so the idle is spent here and the EA block must not spend its own (`EaAddressAsync` would
+        // issue a prefetch inside it: 200 of MOVEtoCCR and 109 of MOVEtoSR were 4 over)
+        if (mode == 4)
+        {
+            _eaCharged = true;
+            await ClocksAsync(2);
+        }
+
+        uint address = await EaAddressAsync(mode, reg, 1);
+        if (_busFaulted)
+        {
+            return;
+        }
+
+        // the same frame rule the memory shifts carry: `asr_adr16`/`adr32` move `m_pc`, `aixl1`
+        // does not (83 records of ASR.w and 412 of these three files measured it)
+        FrameCounterForExtensionShape(mode, reg);
+
+        // a PC-relative shape's operand read is still the instruction stream: `move_dpc_sr`'s adsw1
+        // and adrw2 both set `SSW_PROGRAM`, so a fault there frames a program access (0xF6, not the
+        // data class's 0xF5) — 25 records of MOVEtoSR and 49 of MOVEtoCCR
+        bool pcRelative = mode == 7 && reg is 2 or 3;
+        uint operand = pcRelative ? await ReadOperandProgramAsync(address) : await ReadWordAsync(address);
+        if (_busFaulted)
+        {
+            // every shape pays the aborting state's own 4 here, the predecrement included — its idle
+            // is spent above and carries no read, so there is no other state to pay it (444 records)
+            await ChargeAbortedReadAsync();
+            return;
+        }
+
+        if (fromStatus)
+        {
+            // `r w`: the instruction's own program read sits between the destination's read and its
+            // store, so the store goes out after the trailing fetch rather than before it
+            await TrailingFetchAsync();
+            if (_busFaulted)
+            {
+                return;
+            }
+
+            await WriteWordAsync(address, (ushort)(_sr & DefinedSr));
+            return;
+        }
+
+        WriteStatusRegister(toStatus, operand);
+        await StatusWriteRefillAsync();
+    }
+
+    /// <summary>
+    /// A status write's tail: <c>n 4</c>, then the queue's two reads at the instruction's own next
+    /// word. <see cref="RefillAsync"/> is the pair and it marks the flow transferred, so the closing
+    /// steps do not fetch a third word behind them.
+    /// </summary>
+    async ValueTask StatusWriteRefillAsync()
+    {
+        await ClocksAsync(4);                              // `mstw1`/`stiw*`: two idle states
+        await RefillAsync(_pc);
+    }
+
+    void WriteStatusRegister(bool toStatus, uint value)
+    {
+        // the undefined bits (7–5) read back as zero — the corpus compares the register, not the wire
+        _sr = toStatus
+            ? (ushort)(value & DefinedSr)
+            : (ushort)((_sr & 0xFF00u) | (value & 0x00FFu));
+    }
+
+    /// <summary>
+    /// Where MAME's <c>m_pc</c> stands when an operand's read faults in an extension-addressed shape:
+    /// <c>asr_adr16</c>'s first state and <c>asr_adr32</c>'s second are <c>m_pc = m_au</c> (the word
+    /// past the extension words, one behind the queue — <c>_fetchPointer - 2</c>), while
+    /// <c>aixl1</c> never moves it (the first extension word's own address, <c>opcode + 2</c>), and
+    /// <c>(d16,An)</c>, <c>(An)</c>, <c>(An)+</c> and <c>-(An)</c> already frame what the core's own
+    /// state leaves. Measured over <c>ASR.w</c> (83) and the three status files (412).
+    /// </summary>
+    void FrameCounterForExtensionShape(int mode, int reg)
+    {
+        switch (mode)
+        {
+            case 4:                                            // the predecrement block's own `m_pc = m_au`
+                _fetchStateAddress = _opcodeAddress + 4;
+                break;
+            case 6:                                            // aixl1 — never moves `m_pc`
+                _fetchStateAddress = _opcodeAddress + 2;
+                break;
+            case 7 when reg <= 1:                              // adr16/adr32 — `m_pc = m_au` twice
+                _fetchStateAddress = _fetchPointer - 2;
+                break;
+            case 7:                                            // dpc/axpc — `m_pc` is the operand's own base
+                _fetchStateAddress = _opcodeAddress + 2;
+                break;
+        }
+    }
+
+    // =========================================================================================
     // Line 0's immediates and line 5's quicks — the same tails, a different operand block
     // =========================================================================================
 

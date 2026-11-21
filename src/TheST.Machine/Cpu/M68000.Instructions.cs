@@ -607,27 +607,12 @@ public sealed partial class M68000
         int reg = op & 0x7;
         int size = (op >> 6) & 0x3;
 
-        // MOVE to SR / to CCR / from CCR — the 0x46xx and 0x44xx/0x42xx blocks otherwise collide
-        // with NOT and NEG/CLR
-        if ((op & 0xFFC0) == 0x46C0)
+        // MOVE to SR / to CCR — the 0x46xx and 0x44xx blocks otherwise collide with NOT and NEG/CLR.
+        // Scripted (M68000.Scripts.cs): both read their operand, idle 4 clocks and refill the queue;
+        // MOVE from SR is the same block in the other direction (`0x40C0`, below in the line-4 cases)
+        if (IsScriptedMoveToStatus(op))
         {
-            if (!Supervisor)
-            {
-                await EnterExceptionAsync(8, 0);
-                return;
-            }
-
-            uint status = await ReadEaAsync(mode, reg, 1);
-            if (_busFaulted) return;
-            _sr = (ushort)status;
-            return;
-        }
-
-        if ((op & 0xFFC0) == 0x44C0)
-        {
-            uint condition = await ReadEaAsync(mode, reg, 1);
-            if (_busFaulted) return;
-            _sr = (ushort)((_sr & 0xFF00) | (int)(condition & 0xFF));
+            await MoveToStatusAsync(op);
             return;
         }
 
@@ -729,10 +714,9 @@ public sealed partial class M68000
                     return;
                 }
 
-                if (sz == 3)
+                if (sz == 3)   // MOVE from SR — scripted: it reads the destination, then stores
                 {
-                    await WriteEaAsync(destinationMode, destinationReg, 1, (uint)(_sr & 0xA71F));
-                    if (_busFaulted) return;
+                    await MoveToStatusAsync(op);
                     return;
                 }
 
@@ -1524,6 +1508,12 @@ public sealed partial class M68000
         if (Condition(condition))
         {
             await ClocksAsync(2);                                   // taken: 10 clocks, 2 of them its own
+
+            // an odd target's fault is `bbci3`'s read, and `m_pc` has not moved since the boundary:
+            // it saves the extension word's own address (`opcode + 2`), not the word behind the queue
+            // — the one measured record of the family (a rel16 branch to an odd address, saved
+            // `00de2886` for an opcode at `00de2884`)
+            FrameSavesOnFetch(_opcodeAddress + 2);
             await RefillAsync((uint)target);
         }
         else
@@ -1770,23 +1760,9 @@ public sealed partial class M68000
         int reg = op & 0x7;
         int size = (op >> 6) & 0x3;
 
-        if ((op & 0xF138) == 0xB108 && size != 3)   // CMPM
+        if ((op & 0xF138) == 0xB108 && size != 3)   // CMPM — scripted (M68000.Scripts.cs)
         {
-            // a byte steps the register by one, unless it is A7, which always moves a whole word
-            uint delta = (uint)(size == 0 && (op & 0x7) == 7 ? 2 : SizeBytes(size));
-            uint sourceAddress = GetA(reg);
-            SetA(reg, sourceAddress + delta);
-            uint source = await ReadAtAsync(sourceAddress, size);
-            if (_busFaulted) return;
-
-            // the destination has its own step: a byte moves A7 by a word, every other register by one
-            int destinationReg = (op >> 9) & 0x7;
-            uint destinationDelta = (uint)(size == 0 && destinationReg == 7 ? 2 : SizeBytes(size));
-            uint destinationAddress = GetA(destinationReg);
-            SetA(destinationReg, destinationAddress + destinationDelta);
-            uint destination = await ReadAtAsync(destinationAddress, size);
-            if (_busFaulted) return;
-            SetCompareFlags(source, destination, (destination - source) & SizeMask(size), size);
+            await CompareMemoryAsync(op);
             return;
         }
 
@@ -2155,11 +2131,29 @@ public sealed partial class M68000
 
         count &= 63;
 
-        // the bit a shift kind moves out last — empty when the count runs past the operand's width
+        // the bit a shift kind moves out last. A left shift or a logical right one takes it from a
+        // position inside the operand, so a count past the width shifts only zeros out and C, X come
+        // out zero — but an <b>arithmetic</b> right shift keeps propagating the sign bit, so past the
+        // width the bit that comes out last is the operand's own sign (MAME's `alu_asr8` is a byte
+        // operation in a loop: `0x80` shifted 17 times leaves `xFF` with C and X <em>set</em>).
         uint lastOut = 0;
-        if (kind <= 1 && count != 0 && count <= bits)
+        if (kind <= 1 && count != 0)
         {
-            lastOut = left ? (operand >> (bits - count)) & 1u : (operand >> (count - 1)) & 1u;
+            if (left)
+            {
+                if (count <= bits)
+                {
+                    lastOut = (operand >> (bits - count)) & 1u;
+                }
+            }
+            else if (kind == 0)
+            {
+                lastOut = (operand >> (Math.Min(count, bits) - 1)) & 1u;   // the sign bit, once the count passes the width
+            }
+            else if (count <= bits)
+            {
+                lastOut = (operand >> (count - 1)) & 1u;
+            }
         }
 
         for (int step = 0; step < count; step++)
@@ -2261,11 +2255,41 @@ public sealed partial class M68000
         return result & mask;
     }
 
+    /// <summary>
+    /// A memory shift: one word, by one, read–modified–written. The scripts are `asr_ais` (modes 2/3,
+    /// 6 accesses and no idle), `asr_pais`/the predecrement block (mode 4) and `asr_dais` (indexed) /
+    /// `asr_adr16` / `asr_adr32` (absolute) — the last three are the ones whose *first* state moves
+    /// `m_pc`, and that is the whole of the frame difference this method carries.
+    /// </summary>
     async ValueTask MemoryShiftAsync(int mode, int reg, int kind, bool left)
     {
         uint address = await EaAddressAsync(mode, reg, 1);
-        uint value = await ReadWordAsync(address);
         if (_busFaulted) return;
+
+        // where MAME's `m_pc` stands when the operand's read faults: `asr_adr16`'s first state and
+        // `asr_adr32`'s second are `m_pc = m_au` (so the absolute classes frame the slot past their
+        // extension words — `_fetchPointer - 2`, one word behind the queue, which is where our own
+        // fetch of that word left it), `asr_dais`'s `aixl1` never moves it (so the indexed class
+        // frames the extension word's own address, `opcode + 2`), and the predecrement block moves it
+        // the way `EaAddressAsync`'s prefetch already does. Measured: 83 records of `ASR.w` were 2
+        // off in exactly these three classes and correct in the other five.
+        FrameCounterForExtensionShape(mode, reg);
+
+        uint value = await ReadWordAsync(address);
+        if (_busFaulted)
+        {
+            // every memory shape but the predecrement block pays the aborting state's own 4: the
+            // `-(An)` scripts charge the read from a state that has already spent its 2 clocks as the
+            // predecrement's, which is why those 41 records were exact without this and the other
+            // 242 were exactly 4 short (measured per record, both sides)
+            if (mode != 4)
+            {
+                await ChargeAbortedReadAsync();
+            }
+
+            return;
+        }
+
         uint result = Shift(value, 1, 1, kind, left);
         await WriteWordAsync(address, (ushort)result);
     }

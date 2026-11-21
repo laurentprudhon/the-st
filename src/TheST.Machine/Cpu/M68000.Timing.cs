@@ -129,6 +129,13 @@ public sealed partial class M68000
                     return 0;
                 }
 
+                // the three status moves are scripts: their idle states and the queue's refill after
+                // the status write are theirs (the rows below carried the Dn form's 2 only)
+                if (IsScriptedMoveToStatus(op))
+                {
+                    return 0;
+                }
+
                 if ((op & 0xFFF8) == 0x4840 || (op & 0xFFF8) == 0x4880 || (op & 0xFFF8) == 0x48C0)
                 {
                     return 0;                                       // SWAP, EXT.W, EXT.L
@@ -230,6 +237,14 @@ public sealed partial class M68000
         // destination class's tail are their clocks, and the shape rows below never charged the
         // `(An)+` destinations correctly (they read size 3 off the opcode and answered 4)
         if (IsScriptedMove(op))
+        {
+            return 0;
+        }
+
+        // CMPM is a script of its own (M68000.Scripts.cs): its four states carry no idle clock at
+        // all (the listing's footer: 6 accesses, 0 idle states), and its long form's opmode is the one
+        // the two-operand long's row below reads — 82 records of CMP.l were charge 4 by it
+        if (IsScriptedCmpm(op))
         {
             return 0;
         }
