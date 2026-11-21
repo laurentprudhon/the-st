@@ -205,7 +205,7 @@ already has in its hand at the moment it executes.
   the rest — the reference's loop runs one iteration more than the naive popcount for a quarter of the
   values. That is a build's detail, not a study's: the class is data-dependent and no table can hold it.
 
-## 6. The one open datum
+## 6. The one open datum — settled 2026-11-21 (row 80)
 
 **`BCHG`/`BCLR`/`BSET` on a data register pay 6 or 8 clocks on the same shape**, about half each
 (`BCHG` 1 301 records: 643 at 6, 658 at 8; `BCLR` and `BSET` the same; `BTST` on a data register, 2 clocks,
@@ -215,6 +215,26 @@ not the operand's value or its sign, not the flags, not the position in the file
 opcode, the same operand shape and the same operands differ. Until the reference's own state machine says
 why, this family cannot be graded — settle it from CLK's source the way row 58 was settled, not by
 guessing a rule (row 57 is what a guessed rule costs).
+
+**It is the bit position, and CLK's source says so in one line.** `complete_bcc`'s neighbour in
+`Processors/68000/Implementation/68000Implementation.hpp` is
+
+```cpp
+void ProcessorBase::did_bit_op(int bit_position) {
+	dynamic_instruction_length_ = int(bit_position > 15);
+}
+```
+
+and the data-register states spend it: `BCHG_BSET_Dn` is `PerformDynamic(); Prefetch();
+IdleBus(1 + dynamic_instruction_length_); …`, `BCLR_Dn` is the same with `2 +`. So the register form is
+**6 clocks (8 for `BCLR`) with the bit in 0–15 and 8 (10) above it** — and the static form, whose bit
+number is the extension word, is 10 (12) and 12 (14) the same way. The rule reproduces **every record of
+the three files** (410/410 `BCHG`, 413/413 `BCLR`, 389/389 `BSET`) and `BTST` is out of it because it
+writes nothing: its state is `Perform_np_n`, which never spends the dynamic length. The "nothing in the
+record separates them" above was true of the operand *text*: the bit number is a value in a data register
+(`Dn & 31`, or the static form's extension word), so the two groups differ only in `initial.d0`…`d7`, which
+is exactly the field a table keyed on the encoding does not read. The charge is in
+`BitOperationAsync`'s `_own` and the verdict is `cpu-tests --clocks` (`tests/680x0/FINDINGS.md` row 80).
 
 ## 7. The ruling: reported now, graded when the table is data
 

@@ -562,3 +562,70 @@ moved** and are the owner's blessing of 2026-11-20: `run.digest`
 `0512273664adf28c0fdb5351baf9b09f04a3b24faacf26768bdd7857eb30e350`, `run.stream`
 `3d2f1b234598f7d97dfc98ab8e7b84e41f55070949ebb89fdfd5d9907d2b2c1d` — row 75's `ccd91815…` / `9a62f0cf…`
 is the pair they replace.
+
+The **clock residue**, which is what row 79's 100 % gate left (row 80, 2026-11-21):
+
+| measure | `main` (after row 79) | the residue closed |
+|---|---|---|
+| MAME gate, whole corpus | 317 500 / 317 500 (100 %) | **317 500 / 317 500 (100 %)** |
+| files green | 127 of 127 | **127 of 127** |
+| exact-clock, whole corpus | 298 755 (94.1 %) | **315 392 (99.3 %)** (+16 637, no file falls) |
+| records with a residue | 18 745 in 24 files | **2 108, all `TAS`** (outside any claim) |
+| CLK beside it | 863 265 / 1 000 060 | **863 265 — its per-file table is byte-identical** |
+| sample (`--dir tests/680x0/v1`) | 2 552 / 2 976 | **2 552 / 2 976** |
+
+**The rule that organises all of it: a ±2 is a state and a ±4 is a read.** The residue is a *class* problem
+and each class is one of those two, so the instrument is `--clocks` grouped by the record's own operand
+shape — never a family's pass count, because these files were all green on state already. Nine facts:
+
+1. **A microcode state can sit on either side of the instruction's own read.** The three `to-SR`
+   immediates (`andi_i16u_sr` and its two neighbours) test privilege *first* — `S_PRIVILEDGE` before
+   `o#w1` — so a user-mode record never reads the immediate word (3 × ~1 240 were 4 over), and the
+   supervisor tail is the status moves' own: `stiw1`…`stiw4` (8 clocks) then **two** program reads at the
+   instruction's own next word (`malw3` + the branch's `mmrw3`), where `CloseInstructionAsync` issues one.
+   `ClocksAsync(_own)` + `RefillAsync(_pc)` is that tail, and it is the same shape `StatusWriteRefillAsync`
+   already had — a status write can change which stack the CPU runs on, so the queue is rebuilt.
+2. **`Scc` on memory reads the byte it writes** — `adrw2` (operand) + `sccb2`/`sccb3` (program) + `morw2`
+   (store), footer `idle states: 0`. 2 096 records. `CLR`'s lesson (a file green on state and short on
+   clocks has an access missing) applied to a family that "obviously" only stores.
+3. **A branch's displacement word is free when the stream is abandoned** — `dbcc1`/`bbcw1` take it out of
+   `m_dbin` — so a taken branch is two reads (the target's pair) and not three. `JumpWordAsync(0)` is that
+   pop, and it is the control transfers' rule (`BSR`, row 69) reaching the branches. But `Bcc`'s
+   *fall-through* is not a transfer: it reads the word (`bbcw3` + `malw3`) — 9 records, and it is why the
+   pop is peeked (`_ir`) and consumed twice, by kind.
+4. **A free pop still moves the pipeline depth.** `dbcc3` sets `m_pc = m_au` before it reads the target, so
+   an odd target's frame saves the word past the displacement — the pop must move `_fetchPointer` with it,
+   which is what a `FetchAsync` used to do for free (632 records), and the refill's aborted read is the
+   branch's own state, so it pays `ChargeAbortedReadAsync` (another 632, and 669 on `Bcc`).
+5. **`LEA` and `PEA` have two idle states in their indexed shape** — `leax0`/`peax0` before the index
+   word, `leax4`/`peax4` after the address is built (footers `idle states: 2`) — where `EaAddressAsync`
+   charges one. `IndexedBlockIdleAsync` is the second, and it is the only place a *pure address* family
+   takes a charge of its own.
+6. **`NBCD`'s register form ends on 2 clocks** (`nbcr3`: `set_8` + `m_icount -= 2`); the memory forms have
+   no such state and were exact. One `_own`.
+7. **The bit operation's own charge is a function of the bit position**, and that is `LENGTH.md` §6's open
+   datum, settled from CLK's source: `did_bit_op` sets `dynamic_instruction_length_ = int(bit > 15)` and
+   `BCHG_BSET_Dn` spends `IdleBus(1 + …)` (`BCLR_Dn`: `2 + …`). 6 → 8 clocks above bit 15, static forms
+   included; `BTST` reads only and its state (`Perform_np_n`) never spends it. Every record of the three
+   files (1 212) is explained; the `BTST Dn,#data` form is separate — two reads and `btsr3`'s idle (58).
+8. **A line that falls through to `AluOwnClocks` is charged by whatever row matches.** `MOVEQ`'s "size"
+   field is the value's top two bits and its "mode" field is part of the value, so the plain long row
+   claimed it (1 081 + 123); `MOVE.b` — the one MOVE size `IsScriptedMove` does not cover — has size 3 in
+   its own encoding, so the `(op & 0x00C0) == 0x00C0` CMPA/ADDA row claimed every one (1 259 + 124). Both
+   lines now answer 0 of their own. `MOVE.b`'s two operands' EA blocks are **per operand** and not once
+   per instruction: the predecrement is charged once per instruction (`_eaCharged`), the indexed one twice
+   — 65 + 67 records were 2 short behind a charged source and 281 were 2 long behind an uncharged one.
+9. **A ledger predicate can claim a family it did not port** — again. `IsScriptedAluLong` excluded `CMPM`
+   with the raw mask `(op & 0xF138) == 0xB108`, which cannot tell CMPM's two-bit size field from `CMPA.l`
+   with a mode-1 source: so `cmpa_l_as_ad` was charged `CMPA`'s 2 by the table *and* its own `rcal3` by the
+   script (315 records 2 long). Using `IsScriptedCmpm(op)` in the ledger is the fix, and it is row 74's
+   `ADDX.l` lesson a second time: the ledger must be the one predicate that decides, not a mask.
+
+Boot: desktop **666 → 602**, `_frclock_at_desktop` 659 → **596**, pops 33 699.8 → **34 122.2** a frame,
+4 213 332 → **4 110 085** instructions, `validate.sh` **PASS** on every row but G8, which read 15.23 ms at
+n 751 on a host whose A/B (3 interleaved Release pairs, same session) is **old 14.60 / 14.64 / 14.49 ms
+against new 14.78 / 14.85 / 14.77** — +1.2 %, the +1.25 % pops a frame the batch's reads cost, and a host
+60 % slower than the day row 79 was measured on. **Both folds moved** and are **awaiting the owner's
+blessing**: `run.digest` `4eac06dc31e69fc5146400afffc7cc8832ac1697e5a9034137bd642899d6423a`, `run.stream`
+`1693218ad9360cdbfe253a064e011488463d4b2e9bd88c38c44957add687dc28` (reproduced twice) — row 79's
+`5c7d1312…` / `b452114a…` is the pair they replace.
