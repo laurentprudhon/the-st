@@ -327,10 +327,13 @@ one opens a question that this document had assumed away.
 - **§3's "the phase, not a schedule" gains a hardware anchor for its answering instant.** `DTACK` is the
   output of a flip-flop clocked on `ICLK8B`, so ADR 0009's round-up-to-four is what the silicon does,
   not merely the rule we chose.
-- **§6's fill rule is incomplete, and this is the open point.** `DCYC` — the word-load strobe the STE
-  Shifter takes as `LOAD` — is gated by `VIDEN`, the *inverse* of the video enable, in the design's own
-  netlist. Either the inversion is undone between the two chips or the Shifter's load comes from another
-  net; no drawing in the archive joins them. Recorded as an `unknown` in the study (§5.2, and the four
-  questions at the end of §5) and testable with a scope on `DCYC` and `DE` together; until then this
-  document's "one word per cycle while the window is open" describes the *fill rate* and makes no claim
-  about the strobe that delivers it.
+- **§6's fill rule now has its strobe, and the question that looked open was a model bug.** `DCYC` — the
+  word-load strobe the STE Shifter takes as `LOAD` — is gated on `VIDEN` taken **directly** in the design
+  (sheet 21), while `SNDEN` takes the inverted form of the same net (sheet 20); sheet 49 draws the `DCYC`
+  pulse in the cycle labelled `video`. So the fill rule stands as written, one word per cycle, strobe at
+  phase 1 of the slot, and the reconstruction's `viden = ~vidb` reading has `vidb`'s polarity inverted.
+  Recorded as a closure, not an unknown, in the study (§5.2).
+- **§4's owner equation is now drawn, not only derived.** Sheet 49's five successive cycles are `video`,
+  `cpu`, `sound`, `cpu`, `refresh`, and in the refresh cycle `DCYC`, `SLOAD` and `CAS` all stay high — the
+  blanking chain of §4 with a RAS-only cycle at the end of it, and `CAS` belonging to the external access
+  only.

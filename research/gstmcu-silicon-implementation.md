@@ -308,16 +308,22 @@ CAS0L = ~( TIME2 & LCYCSELB & ... )   (pad PM002, sheet 22)        [2]
 `documented` The write strobe is confined to the external half: `WE` is built from `TIME0B`, `ADDRSEL`, `CMPCYC`/`RAMCYCB` and the data-direction term `IRWB` (pads `PL014`/`PL012`, sheet 21), so the CPU's write window is bounded by phase 0 of the external slot at its start and by phase 1 at its end.[2]
 `documented` `LATCH` is not a phase decode at all: it is the output of an `LLR` latch clocked by `CLKB` (pads `P7046`–`P7049`, sheet 7), so it is a registered level one 8 MHz clock wide, and the chart draws exactly that.[2]
 
-`derived` Read off sheet 48's vector geometry rather than by eye (transitions located on a 16-step grid, ±0.5 % of a step), a window is:
+`derived` A window as sheet 48 draws it, in the sheet's own `MHZ16` state numbers, read off the drawing by its owner. An independent measurement of the same sheet's vector geometry (transition x-positions located on the 16-state grid to ±0.5 %) agrees with every row below except `LATCH`, where a band one point too wide merged its two pulses into one — the reading here is the owner's, and it is the one to trust.
 
 | row (sheet 48) | what the drawing shows |
 |---|---|
-| `RAS` | asserted (low) from step 1 to step 6, and again from step 9 to step 14 — **two DRAM accesses per window**, one per slot |
-| `COL/ROW` | changes one step after each `RAS` fall and returns before the matching `CAS` rise: the address latches as row first, column second |
-| `CAS` | falls at step 3 and step 11 — exactly two steps (one phase) after each `RAS` fall |
-| `LATCH` | a single pulse four steps long per window, i.e. one 8 MHz clock, once per cycle |
-| `DCYC`/`SLOAD` | one write/load strobe per slot, in the internal half |
-| `TIME0`–`TIME7` | eight levels each one slot wide, rising one master step apart, `TIME0` high over the internal slot and `TIME7` over the external one |
+| `RAS` | low from state 0 to 4 — asserted once per DRAM cycle, so twice in every 16-state window |
+| `COL/ROW` | high from state 1 to 5, low from 5 to 9: it switches one state after `RAS` falls and returns before the cycle ends |
+| `CAS` (external lanes) | low from state 10 to 14 in the `cpu` cycle, i.e. 2 to 6 relative to its own `RAS` — the same window as `LATCH` |
+| `DCYC` (video lane) | low from state 2 to 5; `SLOAD` on the `sound` lane, likewise 2 to 5 |
+| `LATCH` | high from state 10 to 14, and with a period of 8 the same window in **every** cycle: one CPU clock, once per DRAM cycle |
+| `TIME0`–`TIME7` | eight levels each a slot wide, rising one state apart, `TIME0` high over the internal slot and `TIME7` over the external one |
+
+`derived` The state numbers are the chart's own `MHZ16` labels, and one state is 31.25 ns — the ladder above, confirmed by the sheet rather than imposed on it.
+`derived` Two of these readings settle arguments. `COL/ROW` is **low** while `RAS` falls, and a DRAM cannot accept a column address at that edge, so low is the row address and the high stretch is the column address — the polarity a transitions-only reading cannot fix. And `LATCH`'s period of 8 states puts it *after* `RAS`, inside the access, coincident with that lane's own strobe; an address latch for the cycle would have to close before `RAS` falls, so `LATCH` is a capture at the end of an access, not a latch of the address at its start.
+
+`documented` Sheet 49 is read the same way and answers a different question: it draws **five successive cycles**, and the lane labels are what the equations only imply. In the owner's reading of the sheet: `video` (`RAS` low 0–4, `DCYC` low 2–5), `cpu` (`RAS` low 8–12, `CAS` low 10–14), `sound` (`RAS` low 0–4 of the next window, `SLOAD` low 2–5), `cpu` again, then `refresh` (`RAS` low 0–4, with `DCYC`, `SLOAD` **and** `CAS` all held high).[2]
+`derived` Three facts follow from that one line of the chart, and each of them was an assumption before: `CAS` belongs to the **external** access and the internal lanes use `DCYC` or `SLOAD` instead; refresh is RAS-only *as drawn*, not merely as inferred from the memo; and the internal slot alternates with an external partner cycle for cycle, with video, sound and refresh taking it in turn — the owner equation of `design/system-control-unit.md` §4, drawn out.
 
 `unknown` The chart draws each `TIME` level a full slot wide and staggers them by a sixteenth of the window, which cannot be a literal one-hot decode: it is the designer drawing *ordering*, not pulse width. Whether the ring's phases are one-hot 62.5 ns pulses (the reconstruction's reading) or slot-wide levels is not settled by any drawing in the archive, and it is the one structural question a scope on `RAS0` against `CLK4` answers in a minute (`§7`, and the closing note of this section).
 
@@ -352,9 +358,11 @@ CAS0L = ~( TIME2 & LCYCSELB & ... )   (pad PM002, sheet 22)        [2]
 `derived` Two consequences fall out of the table and are worth stating because emulators get them wrong: the vertical blanking interval is **not** a special case (the window closes and its slots become blanket sound and refresh, per the memo), and the window's fetches are consecutive in the *cycle* stream with no slot skipped, so an external access is never more than 250 ns behind a `RAS` assertion.
 
 `documented` The two strobes that mark a word's arrival are both phase-1 latches of the *granted* slot, built identically: `DCYC` from `NA2(RESB, NA3(TIME1, ADDRSELB, VIDEN))` and `SLOAD` from `NA3(ADDRSELB, TIME1, SNDEN)`, each through a macro latch clocked by `CLK` (pads `PL030`/`PL025`/`PL029` and `PL032`/`PL031`/`PL035`, sheet 21).[2]
-`derived` So the word is on the bus for the whole slot and its strobe is asserted at phase 1 of it — 62.5 ns after `RAS` falls, 62.5 ns before `CAS` — which is early enough for a DRAM access and late enough that the address has settled.
-`documented` `DCYC`'s third input is `VIDEN`, the *inverse* of the video enable (`PK011`, sheet 20), so the design asserts `DCYC` when the internal slot is **not** video's.[2]
-`unknown` What that means for the Shifter's word load is the one genuinely open semantic in this block: the reconstruction wires `DCYC` to the Shifter's `LOAD`, which would leave video words without a strobe during the window. Either `viden` is inverted somewhere between the two chips, or the Shifter takes its load from another net. No drawing settles it; it is recorded in the closing note below and testable with a scope on `DCYC` and `DE` together.
+`derived` So the word is on the bus for the whole slot and its strobe is asserted at phase 1 — two `MHZ16` states, 62.5 ns, after `RAS` falls, in the same window as `CAS` rather than before it — early enough for a DRAM access and late enough that the address has settled.
+`documented` `DCYC`'s third input is `VIDEN` taken **directly** (pad `PL030`, sheet 21), while `SNDEN`'s chain takes the inverted form of the same net through an `I2` (pad `PK011`, sheet 20) — so `DCYC` is gated on the video enable and `SNDEN` on its absence, which is the blanking rule expressed in two gates.[2]
+`documented` Sheet 49 says the same thing in lane form: the `DCYC` pulse sits in the cycle labelled `video` and the `SLOAD` pulse in the cycle labelled `sound`.[2]
+`derived` That closes the seam this section first opened: `DCYC` **is** the video word-load strobe — the net the STE Shifter takes as `LOAD` — and the reconstruction's `viden = ~vidb` reading has `vidb`'s polarity inverted, which is a model bug and not a hardware fact.[9]
+`derived` Read with `§5.1`, the two-chip video path is therefore one wire and one gate deep: the Shifter asserts `DE`, the GLUE samples it into `vidb`, opens the internal slot while it is high, and returns each word with `DCYC` at state 2 of that slot.
 
 `documented` Sound and refresh are placed by the memo and confirmed by the enable terms: they run only in horizontal blanking, and the whole vertical blanking interval is memory-idle when horizontal blanking is not active.[2]
 `documented` `XSRQ` is drawn on sheet 49 as a level across the three cycles the chart samples, and the memo's warning — refresh happens only while it is high — is the only statement of its use.[2]
@@ -434,16 +442,14 @@ CAS0L = ~( TIME2 & LCYCSELB & ... )   (pad PM002, sheet 22)        [2]
 
 `derived` What this section changes in our model, kept to the three places where it does:
 
-1. **`DCYC`'s `VIDEN` term** (§5.2) means the internal slot's load strobe is asserted when video is *not* enabled; `design/system-control-unit.md` §6's "fill one word per cycle" needs an explicit answer for the word-load strobe during the window, and the answer is a measurement, not a reading.
+1. **`DCYC` is the video word-load strobe** (§5.2), drawn in the video lane and gated directly on `VIDEN`; `design/system-control-unit.md` §6's "fill one word per cycle" now has its strobe and its gate, and the reconstruction's inverted-`viden` reading is recorded as a model bug.
 2. **The internal slot precedes the external one** (§5.1) is now a documented fact of the `RAS` equations rather than an assumption, and `design/system-control-unit.md` §3 can date it.
 3. **`DTACK` is a flip-flop on `ICLK8B`** (§5.4) fixes the CPU's answering instant to a whole 8 MHz edge in *hardware*, not merely as ADR 0009's choice — the same rule, now sourced.
 
-`unknown` Four questions the drawings refuse and only an owner's eye or a scope settles, in the order they cost us most:
+`unknown` Two questions are left, and the owner's reading of the two charts closed the other two — `COL/ROW`'s polarity is settled by where `RAS` falls, `DCYC`'s seam by the lane the pulse is drawn in, and the lane order of sheet 49 is now part of §5.1.
 
-- **The `DCYC`/word-load seam** (§5.2): who strobes a video word into the Shifter while `DE` is high. Two chips, one net, no drawing that joins them.
-- **`COL/ROW`'s polarity** (§5.1): the chart gives the transitions and not the sense, so which level is the row address is a question for the sheet, not for prose.
-- **`LATCH`'s job**: the drawing and the netlist alike show a one-clock register pulse and neither says whether it latches the `MAD` muxes or marks a cycle boundary.
-- **The lane order on sheet 49**: the `RAS` equations put the internal slot first (§5.1) and the chart's `VIDEO/REFRESH`/`CPU` caption order is not readable from the text layer, so the two are stated here as agreeing rather than as one confirming the other.
+- **The phases' width** (§5.1): the chart draws each `TIME` level a whole slot wide, which cannot be a one-hot decode; whether the ring's phases are 62.5 ns pulses (the reconstruction's reading) or slot-wide levels is a scope question, not a drawing question.
+- **`LATCH`'s payload**: the sheet fixes where and how wide the pulse is, and rules out an address latch for its own cycle, but not what it captures — the read-data latch and the latch that arms the *next* cycle's mux remain both open.
 
 ---
 
