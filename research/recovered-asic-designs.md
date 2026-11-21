@@ -28,6 +28,16 @@ second source agrees — the archive's own README groups them by design number o
 **So: the GSTMCU is recovered and searchable. The Blitter is present but fragmented and image-only. The
 STE's Shifter, DMA controller, MFP and YM2149 designs are not in this archive.**
 
+> **Update — 2026-11-21.** The GSTMCU study this note feeds is
+> [`gstmcu-silicon-implementation.md`](gstmcu-silicon-implementation.md): it works through the same archive
+> quantitatively (cell census, gate count, the two netlists and what each can and cannot support, the
+> printed address-mux decode table, the sound-DMA memo `TXL/DWG/SMOD.TXT`) and carries the labelled claims
+> and the six hardware tests. Two corrections it establishes against this note: the archive holds **three**
+> revision directories (`4081`, `4081.ORG`, `TXL` with `4081NEW.PDF`) under two code numbers, not two
+> revisions; and the gate list's 15,394
+> transistors is a *different revision* from the `TA4081.PIN` census (68 flip-flops there, 73 in the gate
+> list) — never mix the two counts.
+
 ## What the recovered GSTMCU design confirms
 
 The text layer exposes the chip's own net names, and they corroborate the behavioural sources at the

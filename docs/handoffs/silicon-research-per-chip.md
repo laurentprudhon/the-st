@@ -88,7 +88,26 @@ is** — snap to printed lines or don't draw boxes.
 Each is a session or two. The bullet list is the *question set*; the deliverable is a study with labelled
 claims, not answers in a chat.
 
-### U400 GSTMCU (C300589-001) — do this first
+### U400 GSTMCU (C300589-001) — **done, 2026-11-21**, `research/gstmcu-silicon-implementation.md`
+
+What the session established, in the form later chips can reuse:
+
+* **No decap exists and none is needed.** The recovered design (`TA-4081`/`ST-4081`/`TXL`, from Zietz's
+  archive) is machine-readable: a gate-count list (15,394 transistors, 50 cell types), two netlists, 33 + 14
+  sheets with a text layer, the cell-library macros, and a **design memo** that specifies the sound channel.
+  The public decap archives hold five Atari parts and all are Lynx or 7800.
+* **Two findings change the later plans.** (a) `TXL/DWG/SMOD.TXT` — the April 1988 memo — states the sound
+  DMA's register semantics, slot policy and pin timings (`SINT` is a 480 ns pulse; the frame boundary is
+  `count == top`; refresh only when `XSRQ` is high). Read it before the DMA chip's study, because the same
+  wire is specified from both ends. (b) The archive contains the Blitter as `TA-4021`/`ST-4051`/`ST-4082`
+  (image-only, plus `4082.LST` a gate list) and **no drawing at all of the STE Shifter, the DMA controller,
+  MFP or YM2149** — so U401 and U300 are emulator-and-hardware studies, and the Shifter's published
+  schematics are ijor's, not the archive's.
+* No figure was drawn: the design gives no die geometry and a gate-count floorplan would be invented.
+* Six hardware tests, with pass criteria, are specified in §7 of the study; they settle the refresh/sound
+  ordering questions that no document can.
+
+### U400 — original question set (kept for reference)
 * **What it is:** the STE's combined GLUE + MMU, plus DMA arbitration, video timing, DRAM control, the
   blitter's control side and the pad/pen ADC. Two dies' worth of function in one package.
 * **Questions:** the register map and its aliasing (`$FF8000`–`$FF82FF` region); DRAM refresh and RAS/CAS
