@@ -23,7 +23,6 @@ public sealed partial class M68000 : Chip
 {
     // ---- clock ---------------------------------------------------------------------------
     /// <summary>One CPU clock is four ticks of the 32 MHz oscillator: the 8 MHz bus.</summary>
-    public const int TicksPerCpuClock = 4;
 
     readonly uint[] _d = new uint[8];
     readonly uint[] _a = new uint[8];        // A0–A6; A7 is the active stack pointer
@@ -132,53 +131,16 @@ public sealed partial class M68000 : Chip
 
     bool _frameInstructionWordDeclared;
 
-    // ---- reported, never gated -----------------------------------------------------------
-    public long Instructions { get; private set; }
-    public long BusCycles { get; private set; }
-    public long InterruptsTaken { get; private set; }
-    public long Exceptions { get; private set; }
-    public long InternalClocks { get; private set; }
-
-    /// <summary>A debug-build instruction hook: instant, opcode and the address it was read from.</summary>
-    public Action<long, ushort, uint>? Observer { get; set; }
-
-#if DEBUG
-    /// <summary>
-    /// A debug instrument: every bus cycle the core performs, as the corpus's own <c>transactions</c>
-    /// records it — write?, function code, address, data. It exists so the core's cycle list can be
-    /// printed beside a record's reference trace (ADR 0009 §4's revision: that trace is the bar).
-    /// </summary>
-    public Action<bool, int, uint, ushort>? CycleObserver { get; set; }
-
-    /// <summary>
-    /// A debug instrument: every internal clock the core charges, in order with its bus cycles. The
-    /// corpus states the same thing as its <c>["n", cycles]</c> transactions, so this is what makes the
-    /// *placement* of the internal work comparable, not only its total.
-    /// </summary>
-    public Action<int>? ClockObserver { get; set; }
-#endif
+    // The counters, the observers and the per-record instruments are the emulator's interface, not
+    // the part's: they live in M68000.Emulator.cs behind `Instruments` (ADR 0015 §6, #85).
 
     public M68000(Engine engine, int id)
         : base(engine, id, "CPU")
     {
+        Emulator = new Instruments(this);
     }
 
     // ---- registers -----------------------------------------------------------------------
-
-    public bool Halted
-    {
-        get
-        {
-            if (_halted && HaltReason is null)
-            {
-                HaltReason = $"halted at pc={_pc:x6} sp={_ssp:x8} t={Clock}";
-            }
-
-            return _halted;
-        }
-    }
-
-    public string? HaltReason { get; private set; }
 
     // ---- the programmer's model (ADR 0015 §1) ---------------------------------------------
     // Every member below is a *view* over the machine underneath and none owns a field of its own, so
@@ -305,11 +267,11 @@ public sealed partial class M68000 : Chip
             await PrefetchAsync();
         }
 
-        InternalClocks += cpuClocks;
+        Emulator.InternalClocks += cpuClocks;
 #if DEBUG
-        ClockObserver?.Invoke(cpuClocks);
+        Emulator.ClockObserver?.Invoke(cpuClocks);
 #endif
-        await WaitFor(Clock + cpuClocks * TicksPerCpuClock, Wires.Answer, _answerSeq);
+        await WaitFor(Clock + cpuClocks * Instruments.TicksPerCpuClock, Wires.Answer, _answerSeq);
     }
 
     // ---- flags ---------------------------------------------------------------------------
@@ -561,7 +523,7 @@ public sealed partial class M68000 : Chip
         Write(asserted, Wires.Bus, 0xFFFF, control);
         Write(asserted, Wires.Bus, 0xFFFF, isWrite ? writeData : (ushort)0);
 
-        BusCycles++;
+        Emulator.BusCycles++;
         await WaitFor(long.MaxValue, Wires.Answer, _answerSeq);
 
         long answerInstant = Clock;
@@ -578,7 +540,7 @@ public sealed partial class M68000 : Chip
         ushort data = isWrite ? (ushort)0 : Engine.ValueAt(Wires.Md, answerInstant);
 
 #if DEBUG
-        CycleObserver?.Invoke(isWrite, isCpuSpace ? 7 : isProgram ? (Supervisor ? 6 : 2) : (Supervisor ? 5 : 1), address, isWrite ? writeData : data);
+        Emulator.CycleObserver?.Invoke(isWrite, isCpuSpace ? 7 : isProgram ? (Supervisor ? 6 : 2) : (Supervisor ? 5 : 1), address, isWrite ? writeData : data);
 #endif
 
         // the release: AS high, and Z on the data lanes — a record of its own, and the lane that
@@ -1049,9 +1011,9 @@ public sealed partial class M68000 : Chip
                 continue;
             }
 
-            Instructions++;
+            Emulator.Instructions++;
             _opcode = opcode;
-            Observer?.Invoke(Clock, opcode, _pc - 2);
+            Emulator.Observer?.Invoke(Clock, opcode, _pc - 2);
             await ExecuteAsync(opcode);
 
             // the closing steps: an instruction that fell through fetches its last word here. A
@@ -1096,7 +1058,7 @@ public sealed partial class M68000 : Chip
             long seq = Engine.Log(Wires.Ipl).Count > 0 ? Engine.Log(Wires.Ipl)[^1].Seq : long.MinValue;
             int level = Engine.ValueAt(Wires.Ipl, Clock) & 0x7;
             bool takeable = level != 0 && (level > InterruptMask || level == 7);
-            await WaitFor(takeable ? Clock + 4 * TicksPerCpuClock : long.MaxValue, Wires.Ipl, seq);
+            await WaitFor(takeable ? Clock + 4 * Instruments.TicksPerCpuClock : long.MaxValue, Wires.Ipl, seq);
 
             _stopped = false;
             if (await CheckInterruptAsync())
@@ -1128,12 +1090,12 @@ public sealed partial class M68000 : Chip
         }
 
         long changedAt = LastIplChangeAt(Clock);
-        if (Clock - changedAt < 4 * TicksPerCpuClock)
+        if (Clock - changedAt < 4 * Instruments.TicksPerCpuClock)
         {
             return false;   // the pin changed too late: taken one instruction later, by the rule
         }
 
-        InterruptsTaken++;
+        Emulator.InterruptsTaken++;
 
         // the acknowledge is a CPU-space cycle: FC=111, A3–A1 = level
         int vector = 24 + level;
@@ -1164,7 +1126,7 @@ public sealed partial class M68000 : Chip
     /// </summary>
     async ValueTask EnterExceptionAsync(int vector, int level)
     {
-        Exceptions++;
+        Emulator.Exceptions++;
 
         // the entry's own clocks, before the frame is written: every entry in the corpus's traces is an
         // `n 4` there, then the frame, the vector, `n 2`, the handler's two fetches (M68000.Timing.cs)
@@ -1195,13 +1157,13 @@ public sealed partial class M68000 : Chip
 #if DEBUG
         // the frame's program counter, measured rather than assumed (#76): the MAME corpus decides it,
         // and these three quantities are the candidates a session tests it against — see cpu-tests --clocks
-        LastFramePc = returnPc;
-        LastFrameFetchPointer = _fetchPointer;
-        LastFramePcCounter = _pc;
-        LastFrameIrAddress = _irAddress;
-        LastFrameRefetched = _fetchPointer != _streamStart;
-        LastFrameTrailing = _trailingFetched;
-        LastFrameVector = vector;
+        Emulator.LastFramePc = returnPc;
+        Emulator.LastFrameFetchPointer = _fetchPointer;
+        Emulator.LastFramePcCounter = _pc;
+        Emulator.LastFrameIrAddress = _irAddress;
+        Emulator.LastFrameRefetched = _fetchPointer != _streamStart;
+        Emulator.LastFrameTrailing = _trailingFetched;
+        Emulator.LastFrameVector = vector;
 #endif
 
         if (group0)

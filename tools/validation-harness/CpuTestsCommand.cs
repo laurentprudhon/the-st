@@ -401,8 +401,8 @@ internal static class CpuTestsCommand
 
             cpu.Load(state);
 
-            long cyclesBefore = cpu.BusCycles;
-            long internalBefore = cpu.InternalClocks;
+            long cyclesBefore = cpu.Emulator.BusCycles;
+            long internalBefore = cpu.Emulator.InternalClocks;
             string? mismatch;
             try
             {
@@ -413,12 +413,12 @@ internal static class CpuTestsCommand
                 mismatch = $"harness: {failure.GetType().Name}: {failure.Message}";
             }
 
-            long ourBus = cpu.BusCycles - cyclesBefore;
-            long ourInternal = cpu.InternalClocks - internalBefore;
+            long ourBus = cpu.Emulator.BusCycles - cyclesBefore;
+            long ourInternal = cpu.Emulator.InternalClocks - internalBefore;
             string frame = string.Empty;
 #if DEBUG
-            frame = $"\t{cpu.LastFramePc:x6}\t{cpu.LastFrameFetchPointer:x6}\t{cpu.LastFramePcCounter:x6}\t{cpu.LastFrameIrAddress:x6}" +
-                $"\t{(cpu.LastFrameRefetched ? 1 : 0)}\t{(cpu.LastFrameTrailing ? 1 : 0)}\t{cpu.LastFrameVector}";
+            frame = $"\t{cpu.Emulator.LastFramePc:x6}\t{cpu.Emulator.LastFrameFetchPointer:x6}\t{cpu.Emulator.LastFramePcCounter:x6}\t{cpu.Emulator.LastFrameIrAddress:x6}" +
+                $"\t{(cpu.Emulator.LastFrameRefetched ? 1 : 0)}\t{(cpu.Emulator.LastFrameTrailing ? 1 : 0)}\t{cpu.Emulator.LastFrameVector}";
 #endif
             ClockDump?.WriteLine($"{OpcodeName(path)}\t{name}\t{length}\t{ourBus}\t{ourInternal}\t{ourBus * 4 + ourInternal}{frame}");
             busCycles += ourBus;
@@ -498,7 +498,7 @@ internal static class CpuTestsCommand
 
             var ours = new List<string>();
 #if DEBUG
-            cpu.CycleObserver = (write, code, address, data) =>
+            cpu.Emulator.CycleObserver = (write, code, address, data) =>
             {
                 if (!write && code == 6)
                 {
@@ -587,7 +587,7 @@ internal static class CpuTestsCommand
 
         var ours = new List<string>();
 #if DEBUG
-        cpu.CycleObserver = (write, code, address, data) =>
+        cpu.Emulator.CycleObserver = (write, code, address, data) =>
             ours.Add($"{(write ? "w" : "r")} fc{code} {address:x6} {data:x4}");
 #else
         Console.Error.WriteLine("cpu-tests --trace needs a Debug build: the cycle observer is a debug instrument");

@@ -131,7 +131,7 @@ internal static class BootCommand
         string? tracePath = trace ? Path.Combine(directory, "cpu.trace") : null;
         using var traceWriter = tracePath is null ? null : new StreamWriter(tracePath);
 
-        machine.Cpu.Observer = (instant, opcode, pc) =>
+        machine.Cpu.Emulator.Observer = (instant, opcode, pc) =>
         {
             if (traceWriter is not null)
             {
@@ -286,13 +286,13 @@ internal static class BootCommand
                         $"isrb {machine.Timers.Register(0x11, 0, false, machine.Engine.MachineTime):x2}  iprb {machine.Timers.Register(0x0D, 0, false, machine.Engine.MachineTime):x2}  " +
                         $"mfpw {machine.Timers.RegisterWrites,5}  tc {machine.Timers.TimerCExpiries,5}  irq {machine.Timers.IrqAssertions,4}  " +
                         $"sr {machine.Cpu.SR:x4}  ipl {machine.SystemControlUnit.ResolvedLevelAt(machine.Engine.MachineTime)}  " +
-                        $"inkernel={machine.Cpu.Instructions,10}  " +
+                        $"inkernel={machine.Cpu.Emulator.Instructions,10}  " +
                         $"stack={string.Join(",", Enumerable.Range(0, 6).Select(k => machine.PeekLong(machine.Cpu.A7 + (uint)(k * 4)).ToString("x6")))}");
                 }
 
-                if (machine.Cpu.Halted)
+                if (machine.Cpu.Emulator.Halted)
                 {
-                    probes.Add($"frame {frame,5}  HALTED  {machine.Cpu.HaltReason}");
+                    probes.Add($"frame {frame,5}  HALTED  {machine.Cpu.Emulator.HaltReason}");
                     break;
                 }
 
@@ -382,7 +382,7 @@ internal static class BootCommand
         double fastShare = readTotal == 0 ? 0 : 100.0 * machine.Engine.FastPathReads / readTotal;
         double allocatedPerFrame = framesTimed == 0 ? 0 : allocatedTotal / 1048576.0 / framesTimed;
         double gcMsPerFrame = framesTimed == 0 ? 0 : gcPaused.TotalMilliseconds / framesTimed;
-        double popsPerBusCycle = machine.Cpu.BusCycles == 0 ? 0 : (double)machine.Engine.Pops / machine.Cpu.BusCycles;
+        double popsPerBusCycle = machine.Cpu.Emulator.BusCycles == 0 ? 0 : (double)machine.Engine.Pops / machine.Cpu.Emulator.BusCycles;
         string cpuName = CpuName();
 
         uint glApid = machine.PeekLong(symbols.TryGetValue("_gl_apid", out uint apid) ? apid : 0xE32A);
@@ -461,10 +461,10 @@ internal static class BootCommand
             $"frames_asked={frames.ToString(CultureInfo.InvariantCulture)}",
             $"frames_to_desktop={(desktopFrames < 0 ? "never" : desktopFrames.ToString(CultureInfo.InvariantCulture))}",
             $"machine_time={machine.Engine.MachineTime.ToString(CultureInfo.InvariantCulture)}",
-            $"instructions={machine.Cpu.Instructions.ToString(CultureInfo.InvariantCulture)}",
-            $"interrupts={machine.Cpu.InterruptsTaken.ToString(CultureInfo.InvariantCulture)}",
-            $"exceptions={machine.Cpu.Exceptions.ToString(CultureInfo.InvariantCulture)}",
-            $"bus_cycles={machine.Cpu.BusCycles.ToString(CultureInfo.InvariantCulture)}",
+            $"instructions={machine.Cpu.Emulator.Instructions.ToString(CultureInfo.InvariantCulture)}",
+            $"interrupts={machine.Cpu.Emulator.InterruptsTaken.ToString(CultureInfo.InvariantCulture)}",
+            $"exceptions={machine.Cpu.Emulator.Exceptions.ToString(CultureInfo.InvariantCulture)}",
+            $"bus_cycles={machine.Cpu.Emulator.BusCycles.ToString(CultureInfo.InvariantCulture)}",
             $"bus_answers={machine.SystemControlUnit.BusAnswers.ToString(CultureInfo.InvariantCulture)}",
             $"bus_faults={machine.SystemControlUnit.BusFaults.ToString(CultureInfo.InvariantCulture)}",
             $"groups={machine.SystemControlUnit.GroupDeliveries.ToString(CultureInfo.InvariantCulture)}",
@@ -595,7 +595,7 @@ internal static class BootCommand
         report.Add($"  cpu                     {cpuName} × {Environment.ProcessorCount} cores");
         report.Add($"  configuration           {configuration}");
         report.Add($"  crossings               pops {Program.Number(machine.Engine.Pops)} ({popsPerFrame:N1}/frame) — subscriptions {Program.Number(machine.Engine.Subscriptions)} ({subscriptionsPerFrame:N1}), date suspensions {Program.Number(machine.Engine.ReadSuspensions)} ({suspensionsPerFrame:N1}), stale wakes {Program.Number(machine.Engine.StaleWakes)} ({stalePerFrame:N1})");
-        report.Add($"  bus cycles              {Program.Number(machine.Cpu.BusCycles)} ({Program.Number(machine.Cpu.BusCycles / Math.Max(lastFrame, 1))}/frame) — {popsPerBusCycle:F2} pops a cycle, against ADR 0006's ~4");
+        report.Add($"  bus cycles              {Program.Number(machine.Cpu.Emulator.BusCycles)} ({Program.Number(machine.Cpu.Emulator.BusCycles / Math.Max(lastFrame, 1))}/frame) — {popsPerBusCycle:F2} pops a cycle, against ADR 0006's ~4");
         report.Add($"  catalogue               ≈ 4 734 class-1 wakes a frame at the desktop's idle workload (design/crossings.md §10)");
         report.Add(string.Empty);
         report.Add("reported, never gated (design/validation.md §4), per frame:");
@@ -606,7 +606,7 @@ internal static class BootCommand
         report.Add($"  GC pause / frame        {gcMsPerFrame:F2} ms — {Program.Number(GC.CollectionCount(0))} gen-0, {Program.Number(GC.CollectionCount(1))} gen-1, {Program.Number(GC.CollectionCount(2))} gen-2 collections, {Program.Number(allocatedTotal / 1048576)} MB allocated in all");
         report.Add($"  subscriptions / frame   {subscriptionsPerFrame:N1} registered against the catalogue's ≈ 4 734 class-1 wakes at the desktop's idle workload — the excess is the bus's class-2 exchanges, which the catalogue counts separately (design/crossings.md §10)");
         report.Add($"  _frclock advance        {machine.PeekLong(Frclock) - frclockAtDesktop} over {framesOnDesktop} frames on the desktop (G6 gates it); _nvbls {lastNvbls} is the vbl queue's slot count, never a counter");
-        report.Add($"  instructions / frame    {Program.Number(machine.Cpu.Instructions / Math.Max(lastFrame, 1))} ({Program.Number(machine.Cpu.Instructions)} in all, {Program.Number(machine.Cpu.InterruptsTaken)} interrupts, {Program.Number(machine.Cpu.Exceptions)} exceptions)");
+        report.Add($"  instructions / frame    {Program.Number(machine.Cpu.Emulator.Instructions / Math.Max(lastFrame, 1))} ({Program.Number(machine.Cpu.Emulator.Instructions)} in all, {Program.Number(machine.Cpu.Emulator.InterruptsTaken)} interrupts, {Program.Number(machine.Cpu.Emulator.Exceptions)} exceptions)");
         report.Add($"  records                 {Program.Number(machine.SystemControlUnit.GroupDeliveries)} group deliveries, {Program.Number(machine.SystemControlUnit.DeRecords)} DE, {Program.Number(machine.SystemControlUnit.HblRecords)} HBL / {Program.Number(machine.SystemControlUnit.VblRecords)} VBL, {Program.Number(machine.Video.ChunkWrites)} chunk writes");
         report.Add($"  windows                 {Program.Number(machine.Engine.RetainedRecords)} records held of {Program.Number(machine.Engine.RetainedRecords + machine.Engine.OverwrittenRecords)} appended, across {machine.Engine.Logs.Count} logs ({Engine.WindowSummary()}) — no retention pass, no trim");
 #if DEBUG

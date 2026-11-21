@@ -104,14 +104,19 @@ internal static class Program
     readonly struct CpuCounters
     {
         readonly Chip _cpu;
+        readonly object? _instruments;
         readonly PropertyInfo? _instructions, _busCycles, _pc, _sr, _d0, _a7;
 
         CpuCounters(Chip cpu)
         {
             _cpu = cpu;
             Type type = cpu.GetType();
-            _instructions = type.GetProperty("Instructions");
-            _busCycles = type.GetProperty("BusCycles");
+            // the counters are the emulator's interface since #85: `cpu.Instruments.BusCycles`
+            PropertyInfo? instruments = type.GetProperty("Emulator");
+            _instruments = instruments?.GetValue(cpu);
+            Type counters = instruments?.PropertyType ?? type;
+            _instructions = counters.GetProperty("Instructions");
+            _busCycles = counters.GetProperty("BusCycles");
             _pc = type.GetProperty("PC");
             _sr = type.GetProperty("SR");
             // the manual's own names since #85: D0 and A7 are views, and the probes that were
@@ -122,8 +127,8 @@ internal static class Program
 
         public static CpuCounters Of(Chip cpu) => new(cpu);
 
-        public long Instructions => (long)(_instructions!.GetValue(_cpu) ?? 0L);
-        public long BusCycles => (long)(_busCycles!.GetValue(_cpu) ?? 0L);
+        public long Instructions => (long)(_instructions!.GetValue(_instruments) ?? 0L);
+        public long BusCycles => (long)(_busCycles!.GetValue(_instruments) ?? 0L);
         public uint Pc => (uint)(_pc!.GetValue(_cpu) ?? 0u);
         public ushort Sr => (ushort)(_sr!.GetValue(_cpu) ?? (ushort)0);
         public uint D0 => (uint)(_d0!.GetValue(_cpu) ?? 0u);
@@ -260,7 +265,7 @@ internal static class Program
 
         var engine = new Engine(trace) { Attr = true };
         var cpu = new CpuA(engine, 10);
-        cpu.Observer = (_, opcode, _) =>
+        cpu.Emulator.Observer = (_, opcode, _) =>
         {
             engine.CurrentLine = opcode >> 12;
             engine.LineInstructions[opcode >> 12]++;

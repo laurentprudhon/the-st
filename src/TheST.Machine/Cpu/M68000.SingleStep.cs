@@ -97,30 +97,8 @@ public sealed partial class M68000
         return new SingleStepResult(d, a, _usp, _ssp, _sr, _pc);
     }
 
-#if DEBUG
-    /// <summary>
-    /// The frame's saved program counter and the three quantities a corpus can be used to choose between
-    /// (#76): the counter past the last consumed word, the fetch pointer, and the queue's own address.
-    /// The MAME corpus's exception frames are the oracle for which one a group-0 frame saves, so the
-    /// harness prints all four per record in <c>--clocks</c> and the rule is read off the table instead
-    /// of assumed. Debug builds only: this is an instrument, not state.
-    /// </summary>
-    public uint LastFramePc { get; private set; }
-
-    public uint LastFrameFetchPointer { get; private set; }
-
-    public uint LastFramePcCounter { get; private set; }
-
-    public uint LastFrameIrAddress { get; private set; }
-
-    /// <summary>Whether the instruction had fetched a word of its own, and whether its trailing fetch ran.</summary>
-    public bool LastFrameRefetched { get; private set; }
-
-    public bool LastFrameTrailing { get; private set; }
-
-    /// <summary>The vector whose frame was written (2/3 are the group-0 frames).</summary>
-    public int LastFrameVector { get; private set; }
-#endif
+// The seven LastFrame* columns are the emulator's instruments now: they live in M68000.Emulator.cs
+// behind `Instruments` (ADR 0015 §6, #85), written by the exception entry and read by --clocks.
 
     // The corpus's two stack pointers are the chip's own USP / SSP now (ADR 0015 §1's retired list):
     // the state the seam loads and captures is the programmer's model, and the chip's views are its
@@ -152,9 +130,9 @@ public sealed partial class M68000
             return;
         }
 
-        Instructions++;
+        Emulator.Instructions++;
         _opcode = opcode;
-        Observer?.Invoke(Clock, opcode, _pc - 2);
+        Emulator.Observer?.Invoke(Clock, opcode, _pc - 2);
         await ExecuteAsync(opcode);
 
         if (!_flowTransferred)
