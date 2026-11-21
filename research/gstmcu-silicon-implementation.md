@@ -26,7 +26,7 @@ our model takes).*
 | Do die photographs exist? | **No.** Not for the GSTMCU, not for any STE custom. The public decap archives hold five Atari parts and every one of them is Lynx or 7800 silicon. What exists instead is the design itself, which is better for structure and worse for proof. | 2.1 |
 | What is it made of? | `documented` **15,394 transistors** in a 50-cell standard-cell library, dominated by 553 inverters, 339 NANDs of two to nine inputs and 168 tristate buffers. The netlist of the TA revision lists 1,615 components over 1,508 nets. | 3.1 |
 | Microcode, PLA or random logic? | **Random logic.** No ROM, no PLA, no RAM array, no programmable cell of any kind: the largest cell is a 90-transistor register latch and the total storage is 68–73 flip-flops and ~90 latches. | 3.2 |
-| What counts? | **Real counters, unlike the 68000.** Five dedicated ones — refresh row, video address, sound address, DMA address, paddle — each with its own clock net. The chip has no datapath that can be made to count. | 3.4 |
+| What counts? | **Real counters, unlike the 68000.** Seven counting structures, each with its own clock net: the refresh row chain, the video address counter, the sound address counter, the DMA address counter, the paddle divider, and the pen's horizontal and vertical pair on sheet 33, read since this section was written. The chip has no datapath that can be made to count. | 3.4 |
 | Clocking? | One 8-phase timing generator, drawn as a **single macro cell (`TGEN`)** from `TIME0`–`TIME7`, fed by a 16 MHz clock divided to 8/4/2 MHz and 500 kHz on sheet 7. Every slot decision in the chip is a decode of those phases. | 3.3 |
 | How does the address mux arbitrate? | Ten 4:1 muxes (`MX41`), one per `MAD` line, with the designer's own decode table printed on the sheet: refresh → sound → video inside a slot, CPU → DMA outside it. | 3.6 |
 | What does the emulator still not know? | The refresh *period* and row mapping, the ADC's conversion law, and the exact enabling of the sound/refresh scheduling. §7 ranks them; §8 gives the six tests that settle them. | 6, 7 |
@@ -128,7 +128,7 @@ This is the sharpest structural difference from the reference case, and it is se
 |---|---|---|
 | control | two control stores, 32,096 bits | none — gates only |
 | instruction decode | three PLAs on the instruction register | none — address decode gates |
-| "counters" | the address adder under microcode control | five dedicated counters |
+| "counters" | the address adder under microcode control | seven counting structures |
 | storage | 21 × 32-bit registers + 10 × 16-bit latches | 68–73 FFs + ~90 latches, all single-bit |
 | size | ~68,000 transistors | 15,394 |
 
@@ -156,7 +156,7 @@ That is structurally important: the phase ring is hand-designed and hard-macroed
 
 ### 3.4 What counts, and on which clock
 
-`documented` The sheet titles are the inventory, with the usual caveat that two of them lie: `DRAM REFRESH COUNTER` (sheets 11, 31, 33), `DMA ADDRESS COUNTER` (16), `SOUND ADDRESS COUNTER` (17), `Paddle Registers` (32), and the video base/counter registers (4, 12, 15)[2].
+`documented` The sheet titles are the inventory, with the usual caveat that two of them lie: `DRAM REFRESH COUNTER` (sheets 11, 31, 33), `DMA ADDRESS COUNTER` (16), `SOUND ADDRESS COUNTER` (17), `Paddle Registers` (32), the pen's two position counters (33), and the video base/counter registers (4, 12, 15)[2].
 `documented` The lie is worth naming because it misled this study for a day: **sheet 31's block is the paddle scan divider**, and the row counter the title promises is on sheet 11 (§3.4 below).[2]
 The netlist supplies the clocks: `REFCLK` and `VIDCLK` each drive only a handful of gates and are *enables*, `M2CLOCK` drives 28 storage cells (the largest single clock domain, 15 × `FF1` + 9 × `FF2` + 3 × `FF4` + 1 × `LT2`), and `ICLK8`/`/ICLK8` drive another 10[2].
 
@@ -167,14 +167,21 @@ The netlist supplies the clocks: `REFCLK` and `VIDCLK` each drive only a handful
 | sound address | `SNDCLK` = the granted slot | 21 bits (`SFTH/SFTM/SFTL`) | `documented` (sheet 17 + memo §4) |
 | disk DMA address | `DMADIR`/`RDY` handshake with U300 | 24 bits (`DMAH/DMAM/DMAL`) | `documented` (sheet 16) |
 | paddle | `PADC` — the 500 kHz timebase through sheet 31's own divider, whose reset `PADRST` is the chip's power-on reset | four registers (`PAD0X/PAD0Y/PAD1X/PAD1Y`), one byte each at `$FF9211/13/15/17` in the emulator map | `documented` structure and clock source, `inferred` width, `unknown` law (§7.6) |
+| pen position | horizontal from `M2CLOCK` through `PX033`/`PX031`/`PX032`, vertical from `IHSYNC`+`VDE` through `PX064`–`PX066`; cleared from `IHSYNC` and `IVSYNC` respectively | two `NCBMS`/`NLCB` chains (`PX021`–`PX026`, `PX052`–`PX059`) captured into `MF2` banks (`PX010`–`PX017`, `PX038`–`PX046`) | `documented` (sheet 33, read cell by cell) |
 
 `documented` The paddle block is worth a sentence because it is the one place where the chip is *analog*: four registers built from `LLR` latches and `TB2` tristate cells, read out through a 32-bit input port on sheet 32, and a `PADC` clock that sheet 31 generates[2].
 `documented` Sheet 32 read by its owner is that port and nothing more: **32 bits of input register** feeding the data bus through four selectable 8-bit groups. `PADR` enters at the top left through an inverter (`PW003`), and the inverted form drives four `M03X2` gates (`PW002`, `PW005`, `PW009`, `PW012`) that also take `IA` and `IAB`; their outputs are the nets `SHR01`, `SHR03`, `SHR05` and `SHR12`, each inverted before it reaches the `TB2` selection, so one of the four bytes is enabled onto `TDB` at a time (pads `PW002`–`PW012`).[2]
 `derived` Two corrections follow. `SHR01/03/05/12` are **select** signals, not shift registers — this study called them shift registers on the strength of the name alone, and they are gate outputs. And the register select touches the *read* path only: nothing on sheet 32 starts, stops or clears a conversion.
 `documented` What sheet 31 actually draws, read off the sheet by its owner: `K500CLK` into the `C` pin of `DPR` `PV009`, then a chain of `NLCB1` and six `NLCBN` carry cells, giving eight taps printed 0–7, reset by `PADRST`, with one tap leaving the sheet as `PADC` towards sheet 32 (pads `PV001`–`PV017`).[2]
-`derived` That is the paddle/pen **scan divider**, not a row counter — and `PADC` is therefore the 500 kHz timebase divided down by it and nothing else, which is exactly what the owner reported as "directly derived from `K500CLK`".
+`derived` That is the **paddle** divider and nothing else — the pen has its own clocks on sheet 33 and does not see `PADC` at all — so `PADC` is the 500 kHz timebase divided down by these eight taps, which is what the owner reported as "directly derived from `K500CLK`".
 `derived` The ten-tap chain that can be a row counter is on **sheet 11** instead: `NCBMS`, seven `NLCBN` and an `NLCB1`, with `CI`/`CO` carried stage to stage and the `Q` outputs printed 1…10, drawn beside the `WLOC*` line-offset registers and their `MX21` muxes (pads `PB001`–`PB010`).[2]
 `derived` Ten taps is 1 024 states, and 512 rows per bank is half of that — the first reading in this study that makes ten `MAL` lines fit the row count instead of contradicting it. Which tap reaches which pin is still `unknown`: no `MAL` net appears anywhere in the archive's text layer, and the owner's read of sheet 31 found none either.
+
+`documented` Sheet 33 is the **pen**, and it is the same shape twice: a horizontal section (`NCBMS`/`NLCB` chain `PX021`–`PX026` with `DPR` `PX027`, capture bank `MF2` `PX010`–`PX017`) clocked from `M2CLOCK` through `PX033`/`PX031`/`PX032` and cleared from `IHSYNC` through `PX029`/`PX030`/`PX028`; and a vertical section (chain `PX052`–`PX059`, `DPR` `PX060`, capture bank `MF2` `PX038`–`PX046`) clocked from the `IHSYNC`/`VDE` logic at `PX064`–`PX066` and cleared from `IVSYNC` at `PX061`–`PX063`.[2]
+`documented` The `MF2` stages are capture latches, not counters: their `D` inputs take the counters' bits and their clock comes from the pen signal's own conditioning chain — `PAD` … `PEN` → `PX036` → `PX034` → `PX035` → `PX037` → capture.[2]
+`derived` So the pen is a device that **latches the beam**: both counters free-run against the beam position, and the pen's own edge freezes them at the instant it arrives — which is why a second read without a second event returns the same value, and why our model must treat the pen as an event that samples video position rather than as a converter.
+`documented` Read-out is the same pattern as the paddles: `PENR` and `IAB` into an `NA2X2` (`PX020`) whose output gates `PX019` to produce `SHS09`, selecting the stored group for the bus.[2]
+`unknown` Five `DPR` stages sit at the top of sheet 33 (`PX001`–`PX005`) with a `TB2` pair and an output group numbered 8…1 and 0; they belong to neither pen counter and nothing on the sheet says what they hold.
 It is a counting ADC — the input charges something, the counter runs, and the caught value is the reading — not a successive-approximation converter, which is why its conversion time depends on the analog value and why emulators approximate it[2].
 
 ### 3.5 The register bank, and how it is read
@@ -432,12 +439,13 @@ CAS0L = ~( TIME2 & LCYCSELB & ... )   (pad PM002, sheet 22)        [2]
 `documented` `HINT` and `VINTB` are latches in the sync block, `HINT` derived from the horizontal compare and `VINTB` from the vertical, with `INTERLACE` an `XO` (XOR) output in the same block driven by `MDE0B` (pads `PS066`/`PS067`, sheet 28).[2]
 `unknown` What `INTERLACE` drives is still not readable from the text layer, and the reconstruction hard-ties it off — §6.5 and §3.7 stand.
 
-`documented` The controller side is three scanners, not one ADC: `PADR`/`PADRB` and `PENR`/`PENRB` (sheets 8, 10, 32, 33) plus the joypad selects; sheet 32 is the 32-bit input port those selects read through (§3.4), and `PADC` is generated next to the refresh counter on sheet 31.[2]
-`derived` That is a counting converter clocked from the same 500 kHz timebase as refresh — which is exactly why the paddle reading depends on the video mode: the count is a number of `PADC` ticks inside a fixed number of lines, and the line rate changes with the mode.
+`documented` The controller side is three different things behind three selects, and the sheets are explicit about which is which: `PADR`/`PADRB` for the paddles, `PENR`/`PENRB` for the pen, `JOYSEL` for the joypads, all read through the 32-bit port of sheet 32 (§3.4).[2]
+`documented` The pen is not a converter at all: sheet 33's two position counters free-run against the beam (horizontal from `M2CLOCK`, vertical from `IHSYNC`+`VDE`) and the pen's own edge latches both into the `MF2` banks — a **sampling of video position by an external event**, and the one place on this chip where a signal outside it captures state inside it (§3.4).[2]
+`derived` The paddle is the converter: a divider on the 500 kHz timebase whose value is what a read returns, which is why its reading depends on the video mode — the count is a number of `PADC` ticks inside a fixed number of lines, and the line rate changes with the mode.
 `documented` `PADC` is the 500 kHz timebase through sheet 31's own eight-tap divider, and `PADRST` clears that divider.[2]
 `documented` And `PADRST` is not a start of anything: it is built from `RESB` and `PORB` through an `AA2` (`PV017`) whose output drives the `XR` pin of `DPR` `PV010`, whose `XQ` runs out through an `I3`, an `I4` and an `OB4` (pads `PV011`–`PV013`) and leaves as `PADRST`, active low (the owner's read; the sheet's text layer carries the same cells).[2]
 `derived` So the paddle divider is cleared only at reset, never per read and never per line: the `PADRST`-is-the-start hypothesis is dead, and sheet 32 closes the other door as well — its `PADR` reaches select logic and `TB2` enables only, so a read cannot start a count either (§3.4).
-`unknown` What is left is capture, not start: something must freeze the divider's value into one of the four registers, and the only candidate the sheets offer is the analog side's own edge — the end of the input's discharge, on sheet 33 — which nothing in the text layer names. That is §7's question 6 and §8's test 6, now a question about a latch clock rather than about a start signal.
+`unknown` What is left is capture, not start, and sheet 33 has now been ruled out as its home: that sheet is the pen's pair of position counters and carries no `PADC` net at all. So the paddle's value is frozen either inside sheet 32's own registers (transparent latches, so a read samples the divider live) or by an edge off the pad pin that no sheet in the archive names. That is §7's question 6 and §8's test 6 — and the two candidates give different readings for a fixed resistor, which is what makes the test decisive.
 
 ### 5.7 Reset, test, and the clocks out
 
@@ -512,7 +520,7 @@ Tiers per the handoff: T1 hardware-captured, T2 hardware-corrected, T3 emulator-
 | 3 | Is `SINT` a slot-wide level or a 480 ns pulse? | 480 ns pulse, and the next frame's first fetch may overlap it | T2 (memo) | Sound's frame-end event |
 | 4 | Does a mid-frame `top` write move the current boundary? | no — the boundary is `count == top`, evaluated continuously | T2 (memo) | Sound |
 | 5 | What is the refresh period and row order? | `derived` 7.8 µs for 512 rows in 4 ms; the row counter is a ten-tap gate chain on sheet 11 (1 024 states), so ten `MAL` lines now fit 512 rows; which tap goes to which pin is unread | T3 | SCU §11.1 |
-| 6 | Is the paddle a counting ADC, and what is its law? | counting, clocked from the 500 kHz timebase through sheet 31's divider; cleared only by `PADRST` (power-on) and not started by the register select (sheet 32 is a select-and-buffer port), so what remains unknown is the *capture* edge that freezes the count | unknown | Controllers |
+| 6 | Is the paddle a counting ADC, and what is its law? | counting, clocked from the 500 kHz timebase through sheet 31's divider; cleared only by `PADRST`, not started by the register select, and with no `PADC` path into sheet 33 — so what remains unknown is the *capture* of the count, in sheet 32's registers or at the pad pin | unknown | Controllers |
 | 7 | Are 313 lines × 512 clocks right, and where is the `DE` edge? | design has `HDE/LPHDE/VDE/HBLANK`, `SYNCSEL`, `MDE0/MDE1`; the reconstruction gives `ivsync_set` 508/510 | T3 | Video |
 | 8 | Does the CPU really get every second slot? | yes — `ADDRSELB` is a phase, and CPU-outranks-DMA only *inside* the external slot | T2 (design table) | SCU §3 |
 | 9 | Is `$FF8001` write-only, mirrored, or aliased? | the design carries separate read and write nets for these registers; Hatari models readback, and `$FF8000`/`$FF8002-0F` are harmless | T3 | SCU registers |
@@ -553,7 +561,7 @@ None of the six needs a die, and all six are cheaper than one decap attempt by o
   in C300589-001. A decap answers this and the two revisions differ in cell count (68 vs 73 FFs), so the
   question is not academic[2].
 - **The join from the refresh counter's taps to `MAL0–MAL9`.** The ten-tap chain is on sheet 11, the ten `MAL` lines leave the chip, and nothing in the archive draws the connection — no `MAL` net appears in any sheet's text layer.
-- **The ADC's conversion law and its timing.**
+- **The paddle's capture edge and conversion law** — the pen's counterpart is now closed: sheet 33 latches two free-running position counters on the pen's own edge, so the pen needs no law, only two counters and one event.
 - **`BINT`'s function inside the GSTMCU**, and whether the C302183 variant's blitter logic reuses it.
 - **The test mode** (`TEST` pin 74, `ITEST` gating dozens of cells) — undocumented here, unlike the 68000's VPA
   mode which at least has a 1985 paper[2].

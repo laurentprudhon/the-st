@@ -338,6 +338,11 @@ one opens a question that this document had assumed away.
   with `Q` outputs printed 1…10 sits on sheet 11 beside the `WLOC*` registers. Ten taps is 1 024 states
   against 512 rows per bank, so §11.1's "10 bits against 512 rows" is no longer a contradiction — what
   remains open is only which tap reaches which `MAL` pin.
+- **The pen is a crossing this document did not have.** Sheet 33 (read 2026-11-21) is two free-running
+  position counters — horizontal from `M2CLOCK`, vertical from `IHSYNC`+`VDE` — whose values are latched
+  into `MF2` banks by the pen input's own edge. So a pen event is an external signal that captures *video*
+  state inside the chip: a wake on the pen pin belongs to the same list as the bus answers, and it is the
+  one place where the thing that starts the capture is outside the machine's clocks.
 - **§4's owner equation is now drawn, not only derived.** Sheet 49's five successive cycles are `video`,
   `cpu`, `sound`, `cpu`, `refresh`, and in the refresh cycle `DCYC`, `SLOAD` and `CAS` all stay high — the
   blanking chain of §4 with the refresh cycle as the one CAS-less access at the end of it — `CAS` is
