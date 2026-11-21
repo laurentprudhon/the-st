@@ -1,117 +1,168 @@
-# The core's shape: the silicon's blocks, as partial files
+# The core's shape: the die's blocks, as partial files
 
-**Skeleton.** Ticket #83 fixes the map, the dependency direction and the state table; the tickets that
-follow (#84–#94) fill the sections marked *to be filled*. The authority for every name is
-[ADR 0015](../docs/adr/0015-the-core-is-the-silicon.md); this file is the *operational* view of it — which
-block lives in which file, in which order they may call each other, and what each latch is called.
+**Second draft, on the owner's grouping.** Ticket #83 fixes the map, the dependency direction and the state
+table; #84–#94 fill the sections marked *to be filled*. The authority for every name is
+[ADR 0015](../docs/adr/0015-the-core-is-the-silicon.md); this file is the *operational* view of it.
+
+**What this draft changes.** The first draft grouped files by *kind of thing* — registers, datapath,
+counters, bus, sequencer, decode — and ordered them by call dependency. The owner's reading is the better
+one and is what follows: **a file is a block of the die, and the die's own bands order the files.** The
+floorplan's own summary is the map's table of contents:
+
+> · top — clocks, bus control, opcode decode
+> · middle — the two control stores
+> · bottom — the execution unit
+
+So the map is the floorplan, top to bottom, with the pads at the edge. It is not a taxonomy of C# types; it
+is the chip.
 
 Sources, by sheet (`research/68000-silicon/schematics/`):
 
 | sheet | what it is | what it settles here |
 |---|---|---|
-| `00-floorplan.svg` | where everything is on the die | the block list and the file split |
-| `01-datapath.svg` | three sections, two buses, six lanes | `Datapath`, `Registers` |
-| `02-control.svg` | opcode → ~200 control lines | `Decode`, `Sequencer`, `Exception` |
-| `03-timing.svg` | clock, microcycle, bus cycle, wait state | `Bus` |
-| `04-word-formats.svg` | a 17-bit microword, a 68-bit nanoword | `Sequencer`, `Scripts` |
+| `00-floorplan.svg` | where everything is on the die | **the block list and the file split** — every block named below is that sheet's own label |
+| `01-datapath.svg` | three sections, two buses, six lanes | `Registers`, `Address`, `Data` |
+| `02-control.svg` | opcode → ~200 control lines | `InstructionRegisters`, `Decode`, `Sequencer`, `Exception`, `Bus` |
+| `03-timing.svg` | clock, microcycle, bus cycle, wait state | `Clock`, `Bus` |
+| `04-word-formats.svg` | a 17-bit microword, a 68-bit nanoword | `Sequencer`, `Scripts`, `NanoStore` |
 
 The colour rule is the README's: blue address, green data, amber control, violet clocking and exception
 entry, grey storage.
 
-## 1. The partial-file map
+## 1. The partial-file map — the floorplan, block by block
 
-Nine files, three of which exist today and change character; three today's files disappear. Every file
-states its block, its sheet and its sources in its header (#94 makes that a `grep`-able rule).
+Every row is a block `00-floorplan.svg` names (or two the die draws as one region), and the file *is* that
+block. Fourteen files, four of which exist today.
 
-| level | file | block | sheet | what it owns | ticket |
-|---|---|---|---|---|---|
-| 0 | `M68000.Registers.cs` | the register file and every latch | 01, grey | `D0–D7`, `A0–A6`, `USP`, `SSP`, `AU` (+`AUH`/`AUL` accessors), `AT`, `DT`, `AOB`, `DBIN`, `DOB`, `ALUO`, `ALUB`, `ALUE`, `ISR`, `ALUWidth`, `IRC`/`IR`/`IRD`, `PSW`, `SSW`, `INL`, `TPEND`, `PREN`, `FTU` — **storage only, no behaviour** | #86, #87 |
-| 1 | `M68000.Datapath.cs` | the three sections, two lanes each, the couplers | 01 | the named transfers (`TransferAbhToAth`, `LatchAluOutput`, `Set16H`, `Set16L`, `CopyAuToPc`, …), the ALU's 15 × 5 matrix, the constants ROM | #91 |
-| 1 | `M68000.Counters.cs` | the things that count | 01, 02 | `AU`'s six low bits as a loop counter, `PREN`'s mask walk, `DCR`'s one-hot line, `FTU`'s constant 15 | #92 |
-| 2 | `M68000.Bus.cs` | the pins and the bus state machine | 03 | `Pins` (§8.1, one member per signal), `S0–S7` (and the `"S0"`…`"S7"` string `Instruments.BusState` reads), the strobes, `DTACK`/`BERR` sampling, the access class | #88 |
-| 3 | `M68000.Sequencer.cs` | the microcode address path and the microcycle | 02, 04 | the word formats I/II, the next-address sources, the four-way conditional branch, `A0`/`A0S`, the 2-clocks-a-state / 4-clocks-an-access charge, and the bus state's and entry step's position (`BusState`, `EntryStep`) — **the only place a duration may live**, named `…Clocks`/`…Ticks` (ADR 0015 §5.1) | #90 |
-| 4 | `M68000.Scripts.cs` | the script states | 02, state lists | one `async` method per microword state, one method per shape (`IsScripted<Family>` is the ledger) | — |
-| 4 | `M68000.Exception.cs` | the exception scripts and `SSW`'s two lives | 02, violet | the two frame orders, the group-0 word order, the vector keying, the double fault as a documented gap | #93 |
-| 5 | `M68000.Decode.cs` | `A1`/`A2`/`A3` and the `IRD` PLA bank | 02, amber | the 149 `A1` terms, the 20 EA-keyed ones, `IOC`/`PRIV`, the `IRD`-keyed bank (~130 of ~200 control lines) — **and the public face**: `Decode`'s one function per instruction family and the `Family` enum, both named from the manual's §5 tables and appendix (ADR 0015 §1, §1.1) | #89 |
-| 6 | `M68000.SingleStep.cs` | the corpus seam | — | `Load`/`Capture`/`StepAsync`, `SingleStepState`/`SingleStepResult` | #34, unchanged |
-| 7 | `M68000.cs` | the chip | 00, 03 | the members, the constructor, `Launch`, the drive loop, reset, interrupt sampling, `Pins`/`Instruments`/`SingleStep` as nested types | #85 |
+### The edge — pads and buffers (sheet 00, grey)
 
-**Occupied, then empty** — three of today's files have no place in the map, and saying so now is what
-stops a later reader thinking the map is incomplete:
+| file | die block(s) | what it owns | ticket |
+|---|---|---|---|
+| `M68000.Pins.cs` | `ADDRESS BUFFERS → A1–A23`, `DATA BUFFER → D0–D15`, `BUF INPUTS` | the nested type `Pins` (one `bool` per §8.1 signal), the buffers between the pads and `AOB`/`DOB`/`DBIN` | #85, #88 |
+| `M68000.Clock.cs` | `CLOCK GENERATORS · TIMER & E`, `DECODE DRIVERS` | the microcycle's names (φ1/φ2; two clocks a microword, four an access), the phase fan-out, the E divider | #90, #94 |
+
+### The bottom band — the execution unit (sheet 01)
+
+| file | die block(s) | what it owns | ticket |
+|---|---|---|---|
+| `M68000.Registers.cs` | the register file, drawn across `HIGH` / `LOW` / `DATA` | `D0–D7`, `A0–A6`, `USP`, `SSP`, `PC` (`AU`), `AT`, `DT`, `AOB`, `DBIN`, `DOB`, `ALUO`, `ALUB`, `ALUE`, `ISR`, `ALUWidth`, `IRC`/`IR`/`IRD`, `PSW`, `SSW`, `INL`, `TPEND`, `PREN`, `FTU` — **storage only**, one 32-bit field per register with `Set16H`/`Set16L` as the section accessors (ADR 0015 §3) | #86, #87 |
+| `M68000.Address.cs` | `ADDRESS HIGH` (high words + `AUH`), `ADDRESS LOW` (low words + `AUL`), the address bus `AB(h)`/`AB(l)`/`AB(d)` and its couplers | the 32-bit adder as two 16-bit halves, the constants ROM (0, ±1, ±2, +4, +8, size), the lanes of `AT`/`AOB`, the named transfers (`AuEqualsAt`, `AuPlusTwo`, `CopyAuToPc`, `LatchAob`) | #87, #91 |
+| `M68000.Data.cs` | `DATA` (low words + the ALU), the data bus `DB(h)`/`DB(l)`/`DB(d)` | the ALU's 15 × 5 matrix (row from the `IRD` PLA, column from three nanocode bits, the initiate/finish bit, `INHCC`), `ALUB`, `ALUE`, `DCR`'s one-hot line, `PREN`'s walk, `FTU`'s fields, `DBIN`/`DOB` | #91, #92 |
+
+### The middle band — the two control stores (sheets 02 and 04)
+
+| file | die block(s) | what it owns | ticket |
+|---|---|---|---|
+| `M68000.Scripts.cs` | `µROM 544 × 17` — its words, unrolled | one `async` method per microword state, one method per shape, and the dispatcher that turns a microcode address into a state (`IsScripted<Family>` is the ledger) | — |
+| `M68000.NanoStore.cs` | `NROM 336 × 68` (66 driven) — its fields | the atoms the nanoword names: transfers and destinations, the `AU` constant select, the mid-state field, the ALU mode, the flag masks — today's `M68000.Micro.cs`, re-scoped and renamed | #91 |
+
+### The top band — clocks, bus control, opcode decode (sheet 02)
+
+| file | die block(s) | what it owns | ticket |
+|---|---|---|---|
+| `M68000.InstructionRegisters.cs` | `IRC` / `IR` / `IRD`, with the `load IR` / `load IRD` strobes | the three-deep pipeline: the next word, the word being decoded, the word being executed, and the two strobes that shift it | #87 |
+| `M68000.Decode.cs` | `A1 DECODE` (PLA, 149 terms), `A2 / A3 DECODE` (shared AND plane), `ILLEGAL · PRIV`, `IRD REG`, `IRD BUS` (the decode PLA bank) | an entry point per `A1` term, the 20 EA-keyed terms, `IOC`/`PRIV`, the `IRD`-keyed bank (~130 of the ~200 control lines) — **and the public face**: `Decode`'s one function per instruction family and the `Family` enum (ADR 0015 §1) | #89 |
+| `M68000.Sequencer.cs` | `MICROCODE ADDRESS SELECTOR` (`NMA · A1 · A2 · A3 · A0 · A0S`), `BRANCH PLA` / `BRANCH UNIT` | the two word formats, the next-address sources, the four-way branch (`C1`/`C0` replacing bits 7:6), the 10-bit registered address, and the charge that lives in a state (ADR 0015 §5) | #90 |
+| `M68000.Exception.cs` | `A0 MUX CONTROL` / `EXCEPTION LOGIC`, `TRAP & ILL. PLA` | the two override addresses (`A0` at a boundary, `A0S` now), the vector selection, `SSW`'s two lives, the two frame orders, `INL`/`TPEND`'s latching, and `Instruments.EntryStep`/`Interrupt` | #93 |
+| `M68000.Bus.cs` | `µP CONTROL LOGIC`, `BUS CONTROL` (bus state machine `S0–S7`, `DTACK · BERR · arbitration`), `INT LOGIC`, `FC LOGIC` | the eight states and the wait rule, the strobes and the byte lane, the access class, `DTACK`/`BERR` sampling, `FC0–FC2` from the class, the `IPL` sampling, and `Instruments.BusState` | #88 |
+
+### The chip, and the seam
+
+| file | what it owns | ticket |
+|---|---|---|
+| `M68000.cs` | the chip: the constructor, `Launch`, the drive loop, reset, and the boundary (interrupt sampling, trace, the decode step) | #85 |
+| `M68000.SingleStep.cs` | the corpus seam: `Load`/`Capture`/`StepAsync`, `SingleStepState`/`SingleStepResult` | #34, unchanged |
+
+**Occupied, then empty** — what the map does not keep, and why, so a later reader does not think it is
+incomplete:
 
 | file | today | end state |
 |---|---|---|
-| `M68000.Micro.cs` | the elementary operations, `IdleAsync`, the queue helpers, six latches | its latches go to `Registers`, its atoms to `Datapath`/`Counters`, its charge to `Sequencer`; the file survives only if the atoms have no better home (#91 decides) |
-| `M68000.Timing.cs` | the shape table's `_own` charges | **empty by #90** — the file's last row is `RESET`'s, kept until #93 |
+| `M68000.Micro.cs` | the elementary operations, `IdleAsync`, the queue helpers, six latches | becomes `M68000.NanoStore.cs` (the atoms); its latches go to `Registers`, its charge to `Sequencer` (#91) |
+| `M68000.Timing.cs` | the shape table's `_own` charges | **empty by #90**; its last row (`RESET`'s) goes under #93 |
 | `M68000.Instructions.cs` | the line handlers | **dissolved by #89** into `Decode` (the terms) and `Scripts` (the bodies) |
+| `M68000.Counters.cs` (draft 1) | — | does not exist: the four things that count *are* die blocks — `AU` in `Address`, `DCR`/`PREN`/`FTU` in `Data` — and a "counters" file would group by function the die does not draw |
+| `M68000.Datapath.cs` (draft 1) | — | does not exist: the datapath *is* the three sections, so it is `Registers` + `Address` + `Data` |
+| three section files (draft 1's alternative) | — | refused by the storage ruling: one 32-bit field per register, so the three sections are accessors inside one file (ADR 0015 §3) — see question 1 |
 
 ## 2. The dependency direction
 
-**A file may use only files at a *lower* level, never its own level or above. No cycles, ever** — a
-cycle in this map means a block that the hardware does not have.
+**A file may use only files at a *lower* band, never its own band or above, with one ordered chain inside the
+top band. No cycles, ever.** The bands and their order are the die's: control flows down from the decode to
+the stores to the execution unit; the pads are the edge.
 
 ```
-7  M68000.cs            the chip: the loop, reset, interrupt sampling
-6  M68000.SingleStep.cs the seam (drives the chip; enters at the boundary)
-5  M68000.Decode.cs     A1/A2/A3 + the IRD PLA bank -> an entry point
-4  M68000.Scripts.cs    the states     M68000.Exception.cs  the exception states
-3  M68000.Sequencer.cs  next address, branch, charge
-2  M68000.Bus.cs        the pins, S0-S7
-1  M68000.Datapath.cs   transfers, ALU matrix     M68000.Counters.cs  the loops
-0  M68000.Registers.cs  the latches
+4  M68000.cs            the chip: the loop, reset, the boundary
+3  SingleStep.cs        the seam (enters at the boundary)
+2  the top band         InstructionRegisters -> Decode -> Sequencer -> Exception
+                        Bus    the bus state machine: driven by the class, reports DTACK/BERR
+                        Clock  nobody calls it: it names time and fans phases out
+1  the middle band      Scripts (the µROM's words) -> NanoStore (the NROM's fields)
+0  the bottom band      Data / Address -> Registers
+-  the edge             Pins (the buffers and the pads; nothing below them)
 ```
 
-The two edges worth stating, because they are the ones a reader will expect to be cycles and are not:
+Four edges worth stating, because each looks like a cycle and is not:
 
-- **The sequencer never calls a script.** It *computes an address* — from the next-address field, or `A1`,
-  `A2`, `A3`, or the two overrides `A0`/`A0S`. Selecting `trap1` is a value; the state that runs there is
-  the dispatcher's business. That is exactly the hardware's shape
-  (`research/m68000-silicon-implementation.md` §7) and it is what keeps level 3 below level 4.
-- **The bus never calls upward.** A cycle starts, waits, is answered, and returns; the fault it reports is
-  `SSW` and `AOB`, both latches at level 0. `BERR`'s double fault and the rerun protocol stay out
-  (adr 0015 §"Considered options", #72 §3).
+- **The sequencer never calls a script.** It *computes an address* — from `NMA`, or `A1`/`A2`/`A3`, or the
+  overrides `A0`/`A0S` — and the dispatcher in `Scripts` turns that address into a state. That is the
+  hardware's shape (`m68000-silicon-implementation.md` §7), and it is why the top band sits *above* the
+  stores: an address is a value that travels down, not a call that travels up.
+- **The decode produces an address, not a call.** A term's arm names the microcode address it selects
+  (`EnterMoveByte` → `0x0d8`); the body it reaches is a script state, reached through the dispatcher. So
+  `Decode` sits above `Scripts` and does not reach into it.
+- **The bus never calls upward.** A cycle starts, waits, is answered, returns; the fault it reports is `SSW`
+  and `AOB`, both latches in `Registers`. `BERR`'s rerun and the double fault stay out of scope.
+- **`Clock` is a leaf nobody calls**, exactly as `DECODE DRIVERS` fans phases out without knowing what they
+  drive. Its members are the microcycle's names and the E divider; the charge itself is in a state
+  (`Sequencer`), because a microword's cost is a property of the state (ADR 0015 §5).
 
-## 3. The state table — latch → patent name → section → field
+## 3. The state table — latch → patent name → section → field → file
 
-The inventory is ADR 0015 §4 (adopt / derive / delete / plumbing). This is the same inventory keyed by
-**where it lives**, which is what a reader standing in a file needs. Section numbers are
-`research/m68000-silicon-implementation.md`; the name column is
-`research/68000-silicon/nomenclature.md` §3's "recommended" one.
+The inventory is ADR 0015 §4 (adopt / derive / delete / time / plumbing). This is the same inventory keyed
+by **where it lives**, which is what a reader standing in a file needs. Section numbers are
+`m68000-silicon-implementation.md`; the name column is `research/68000-silicon/nomenclature.md` §3's
+"recommended" one.
 
 | field | name | section | file | note |
 |---|---|---|---|---|
 | `_d[8]` | `D0–D7` (High + Data halves) | §5.2 | Registers | one 32-bit cell; `Set16H`/`Set16L` are the manual's §1.1 rule |
 | `_a[7]` | `A0–A6` (High + Low) | §5.2 | Registers | `A7` is the live `USP`/`SSP`, never an entry |
 | `_usp`, `_ssp` | `USP`, `SSP` | §5.2 | Registers | the hidden one is reached by `MOVE USP` and by an exception entry |
-| `_au` | `AU`, `AUH`, `AUL` | §5.2, §10.1 | Registers | **the hardware's program counter**; `PC` is a view |
-| `_at` | `AT` | §5.2 | Registers | the address of the word in `IR`; a jump's target |
+| `_au` | `AU`, `AUH`, `AUL` | §5.2, §10.1 | Registers (`AU`) / Address (the halves and the adder) | **the hardware's program counter**; `PC` is a view |
+| `_at` | `AT` | §5.2 | Registers (`AT`) / Address (its lane) | the address of the word in `IR`; a jump's target |
 | `_dt` | `DT` | §5.2 | Registers | the last accessed address/operand |
-| `_aob` | `AOB` | §5.2 | Registers | what goes out on `A1–A23`; a fault's address |
-| `_dbin`, `_dob` | `DBIN`, `DOB` | §5.2 | Registers | the read's latch, the write's buffer |
-| `_aluo`, `_alub`, `_alue` | `ALUO`, `ALUB`, `ALUE` | §5.2, §10.1 | Registers | 16 bits each; the shift pair is `ALUO`:`ALUE` |
-| `_isr` | `ISR` (the ALU's flag latch) | §5.2, §5.3 | Registers | a *stage* of `PSW`'s flags, not `PSW` |
-| `_aluWidth` | the nanocode's `i=` field | §9, §10.2 | Registers | the ALU's width select, held across states |
-| `_irc`, `_ir`, `_ird` | `IRC` → `IR` → `IRD` | §5.3 | Registers | the three-deep pipeline; `IRD` is the word being executed |
+| `_aob` | `AOB` | §5.2 | Registers (`AOB`) / Address (its lane) / Pins (`A1–A23`) | what goes out on the pads; a fault's address |
+| `_dbin`, `_dob` | `DBIN`, `DOB` | §5.2 | Registers / Data (their lanes) / Pins (`D0–D15`) | the read's latch, the write's buffer |
+| `_aluo`, `_alub`, `_alue` | `ALUO`, `ALUB`, `ALUE` | §5.2, §10.1 | Registers (`ALUO`/`ALUB`/`ALUE`) / Data (the ALU and the shift pair) | 16 bits each; the shift pair is `ALUO`:`ALUE` |
+| `_isr` | `ISR` (the ALU's flag latch) | §5.2, §5.3 | Registers / Data (the matrix writes it) | a *stage* of `PSW`'s flags, not `PSW` |
+| `_aluWidth` | the nanocode's `i=` field | §9, §10.2 | Registers (`ALUWidth`) / Data (the mode field) | the ALU's width select, held across states |
+| `_irc`, `_ir`, `_ird` | `IRC` → `IR` → `IRD` | §5.3 | Registers (the cells) / InstructionRegisters (the pipeline and its strobes) | `IRD` is the word being executed |
 | `_sr` | `PSW` (`SR` architecturally) | §5.3 | Registers | the status word |
-| `_ssw` | `SSW` | §5.3 | Registers | the bus-status word a fault frames — **not** `PSW` |
-| `_inl`, `_tpend` | `INL`, `TPEND` | §5.2, §5.3 | Registers | pending interrupt level; trace pending |
-| `_pren` | `PREN` | §5.2, §6.2 | Registers | the `MOVEM` walk's position |
-| `_ftu` | `FTU` | §5.2 | Registers | the instruction field being translated |
+| `_ssw` | `SSW` | §5.3 | Registers / Exception (its composition) | the bus-status word a fault frames — **not** `PSW` |
+| `_inl`, `_tpend` | `INL`, `TPEND` | §5.2, §5.3 | Registers / Exception (their latching) | pending interrupt level; trace pending |
+| `_pren` | `PREN` | §5.2, §6.2 | Registers / Data (the walk) | the `MOVEM` mask's position |
+| `_ftu` | `FTU` | §5.2 | Registers / Data (the fields) | the instruction field being translated |
+
+**Why a latch can appear in two columns**: the *cell* is the register file's (one 32-bit or 16-bit field, the
+bottom band), and the *unit that drives it* is its section's (`Address`, `Data`) or its block's (`Pins`,
+`Exception`). That is the die's own split — `AOB` is drawn in the register file, in the address lane *and* at
+the pads — and it is why "one file per block" does not mean "one file per latch".
 
 **Derived, and therefore not in that table**: the effective address, `CCR` over `PSW`, `A7` over
 `USP`/`SSP`, `DCR`'s one-hot line, the frame's saved counter (whichever latch the script left), and every
-`_frame*` memo field (ADR 0015 §4's derive column, which lists each one's replacement).
+`_frame*` memo field (ADR 0015 §4's derive column lists each one's replacement).
 
-**Instruments, and therefore not in that table**: `Instruments`' seven `LastFrame*` columns are `#if
-DEBUG` readings of `AU`/`AT`/`IRD`/`SSW`; they are written where the frame is written and back no latch
-of their own. *To be filled by #86*: the exact write sites, one per column.
+**Instruments, and therefore not in that table**: `Instruments`' seven `LastFrame*` columns are `#if DEBUG`
+readings of `AU`/`AT`/`IRD`/`SSW`; they back no latch of their own. *To be filled by #86*: the exact write
+sites, one per column.
 
 **Time, and therefore not in that table either**: a field that exists to make the clock behave is not
-storage, and its name carries its unit — `…Clocks` (CPU clocks) or `…Ticks` (oscillator ticks) — per
-ADR 0015 §5.1. It may live in `Sequencer` or in `Instruments`, **never in `Registers`**; while the shape
-table is still being emptied by #90 its one surviving time value is `OwnClocks` (today's `_own`), and it
-goes when the table's last row does. `_eaCharged` is not time: it is a "has happened" bit, and the states'
-own position replaces it.
+storage, and its name carries its unit — `…Clocks` (CPU clocks) or `…Ticks` (oscillator ticks) — per ADR
+0015 §5.1. It may live in `Sequencer` or in `Instruments`, **never in `Registers`**; while the shape table
+is still being emptied by #90 its one surviving time value is `OwnClocks` (today's `_own`), and it goes when
+the table's last row does. `_eaCharged` is not time: it is a "has happened" bit, and the states' own
+position replaces it.
 
 **The manual's concepts as display** (ADR 0015 §1.1), all reads, none stored:
 
@@ -119,9 +170,9 @@ own position replaces it.
 |---|---|---|
 | `Instruments.Instruction` | the manual's syntax, e.g. `"MOVE.W D0,(A1)+"`; `"—"` at a boundary | composed **on read** from `IRD` and `Decode` — never per instruction (G8) |
 | `Instruments.Family` | a `Family` member, or `null` at a boundary | `Decode`'s answer at the boundary |
-| `Instruments.BusState` | `"S0"` … `"S7"` | `Bus`'s state machine |
-| `Instruments.EntryStep` | `"1 vector"` … `"5 load PC"`, empty outside an entry | `Exception`'s entry script |
-| `Instruments.Interrupt` | `"masked"`, `"taken"`, `"edge-triggered"`, `"autovector"`, `"spurious"`, `"none"` | the boundary's sampling |
+| `Instruments.BusState` | `"S0"` … `"S7"` | `Bus` |
+| `Instruments.EntryStep` | `"1 vector"` … `"5 load PC"`, empty outside an entry | `Exception` |
+| `Instruments.Interrupt` | `"masked"`, `"taken"`, `"edge-triggered"`, `"autovector"`, `"spurious"`, `"none"` | `Bus` and `Exception` at the boundary |
 
 ## 4. The seam's vocabulary
 
@@ -136,14 +187,13 @@ own position replaces it.
 
 **Who may see what.** `CpuTestsCommand.cs` (state, clocks, the frame columns), `BootCommand.cs` (the
 programmer's model, the counters, `Halted`), `tools/cpu-dissection/Program.cs` (by reflection:
-`Instructions`, `BusCycles`, `PC`, `SR`, `PeekD`→`D0`, `PeekA`→`A7`, from all four generated variants)
-and `gen.py`'s two variants (which link `src/TheST.Machine/Cpu/*.cs` unchanged). A restructure that breaks
-the dissection tool has broken the sources of record.
+`Instructions`, `BusCycles`, `PC`, `SR`, `PeekD`→`D0`, `PeekA`→`A7`, from all four generated variants) and
+`gen.py`'s two variants (which link `src/TheST.Machine/Cpu/*.cs` unchanged). A restructure that breaks the
+dissection tool has broken the sources of record.
 
 *To be filled by #85*: the freeze test — `tools/validation-harness/SurfaceCommand.cs`, run as
-`validation-harness cpu-surface`, a row of `scripts/validate.sh` beside ADR 0014's falsifier row. Its
-allow-list is ADR 0015 §1's list, one comment per entry citing the tutorial's §, and it must fail when a
-member is added by hand (the ticket demonstrates both directions).
+`validation-harness cpu-surface`, a row of `scripts/validate.sh` beside ADR 0014's falsifier row, with ADR
+0015 §1's list as its allow-list and §1.1's rows as its display set.
 
 ## 5. What the corpus cannot see
 
@@ -156,15 +206,14 @@ The list grows as the campaign finds things; each entry says what *would* witnes
 | where inside a state a charge sits | a record's `length` is a total; the transactions carry the bus accesses only | `--trace N` against a record's `transactions`; `--clocks`' grouping by shape |
 | whether `AU` or `AT` wrote the frame's saved `pc` | the corpus sees the *value*, not the primitive | #87's sub-steps, one field at a time, corpus after each |
 | a decode term's inhibit order | no record is illegal-and-executed | #89's 65 536-opcode golden |
-| the display strings (`Instruction`, `BusState`, `EntryStep`, `Interrupt`) | nothing grades a string | each producer's ticket asserts one worked case (§88 the byte-lane cycle's `S0`…`S7`, §89 a `MOVE.W` text, §93 a `TRAP`'s five steps); the boot's `--trace` is the second witness |
-| the family decode's names | the corpus names instructions in its own records, not in the core's members | #89's golden table (entry point per opcode) plus the freeze test's equality of `Decode` and `Family` |
+| the display strings (`Instruction`, `BusState`, `EntryStep`, `Interrupt`) | nothing grades a string | each producer's ticket asserts one worked case (#88 the byte lane's `S0`…`S7`, #89 a `MOVE.W`'s text, #93 a `TRAP`'s five steps); the boot's `--trace` is the second witness |
+| the family decode's names | the corpus names instructions in its records, not in the core's members | #89's golden table plus the freeze test's equality of `Decode` and `Family` |
+| which block drives a latch (`AOB`'s three homes) | the corpus sees values, not the wiring | the block a file belongs to, and #94's comments pass |
 
 *To be filled by #86–#94*: one row per divergence found — mechanical (a rename) versus a finding (a
 bookkeeping field that turned out to be a latch).
 
 ## 6. The bar every landing holds
-
-From ADR 0015's falsifier, restated where the person landing a ticket will look for it:
 
 - `--corpus mame`: **317 500 / 317 500** state **and** exact-clock `317 500`.
 - `--corpus clk --dir tests/680x0/full`: state **863 265**, the red-file set identical record for record.
