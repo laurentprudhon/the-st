@@ -335,5 +335,5 @@ one opens a question that this document had assumed away.
   Recorded as a closure, not an unknown, in the study (§5.2).
 - **§4's owner equation is now drawn, not only derived.** Sheet 49's five successive cycles are `video`,
   `cpu`, `sound`, `cpu`, `refresh`, and in the refresh cycle `DCYC`, `SLOAD` and `CAS` all stay high — the
-  blanking chain of §4 with a RAS-only cycle at the end of it, and `CAS` belonging to the external access
-  only.
+  blanking chain of §4 with the refresh cycle as the one CAS-less access at the end of it — `CAS` is
+  asserted in every cycle but that one, which is the memo's "RAS only" drawn rather than argued.

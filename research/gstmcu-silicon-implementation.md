@@ -294,7 +294,7 @@ RAS0 = ~(  TIME0  & ADDRSELB & (~REFB | (RAM1A & VOS))
 `documented` The same reading holds for `RAS1` with `RAM2A` in place of `RAM1A`, and it fixes three things at once: the internal access is strobed by `TIME0` **high** and the external one by `TIME0` **low**; the two bank strobes are selected by the DRAM decode (`RAM1A`, `RAM2A`, sheet 18) rather than by the slot; and inside the internal half the address source is chosen by `REFB` and `VOS` before the mux routine of the table below is even consulted.[2]
 `derived` So the internal slot precedes the external one in every window — the order is a property of `TIME0`'s polarity, and the chart's `VIDEO/REF` and `CPU` lanes are drawn in that order because the equations are.[2]
 
-`documented` The column strobe trails the row strobe by exactly one phase:
+`documented` The column strobe trails the row strobe by exactly one phase, and unlike every other strobe on this chip it is not gated by the slot class:
 
 ```
 CAS0L = ~( TIME2 & LCYCSELB & ... )   (pad PM002, sheet 22)        [2]
@@ -314,7 +314,7 @@ CAS0L = ~( TIME2 & LCYCSELB & ... )   (pad PM002, sheet 22)        [2]
 |---|---|
 | `RAS` | low from state 0 to 4 — asserted once per DRAM cycle, so twice in every 16-state window |
 | `COL/ROW` | high from state 1 to 5, low from 5 to 9: it switches one state after `RAS` falls and returns before the cycle ends |
-| `CAS` (external lanes) | low from state 10 to 14 in the `cpu` cycle, i.e. 2 to 6 relative to its own `RAS` — the same window as `LATCH` |
+| `CAS` | low from state 10 to 14 in the `cpu` cycle, i.e. 2 to 6 relative to each `RAS`, and by period 8 in **every** cycle but the refresh one — the same window as `LATCH` |
 | `DCYC` (video lane) | low from state 2 to 5; `SLOAD` on the `sound` lane, likewise 2 to 5 |
 | `LATCH` | high from state 10 to 14, and with a period of 8 the same window in **every** cycle: one CPU clock, once per DRAM cycle |
 | `TIME0`–`TIME7` | eight levels each a slot wide, rising one state apart, `TIME0` high over the internal slot and `TIME7` over the external one |
@@ -323,7 +323,8 @@ CAS0L = ~( TIME2 & LCYCSELB & ... )   (pad PM002, sheet 22)        [2]
 `derived` Two of these readings settle arguments. `COL/ROW` is **low** while `RAS` falls, and a DRAM cannot accept a column address at that edge, so low is the row address and the high stretch is the column address — the polarity a transitions-only reading cannot fix. And `LATCH`'s period of 8 states puts it *after* `RAS`, inside the access, coincident with that lane's own strobe; an address latch for the cycle would have to close before `RAS` falls, so `LATCH` is a capture at the end of an access, not a latch of the address at its start.
 
 `documented` Sheet 49 is read the same way and answers a different question: it draws **five successive cycles**, and the lane labels are what the equations only imply. In the owner's reading of the sheet: `video` (`RAS` low 0–4, `DCYC` low 2–5), `cpu` (`RAS` low 8–12, `CAS` low 10–14), `sound` (`RAS` low 0–4 of the next window, `SLOAD` low 2–5), `cpu` again, then `refresh` (`RAS` low 0–4, with `DCYC`, `SLOAD` **and** `CAS` all held high).[2]
-`derived` Three facts follow from that one line of the chart, and each of them was an assumption before: `CAS` belongs to the **external** access and the internal lanes use `DCYC` or `SLOAD` instead; refresh is RAS-only *as drawn*, not merely as inferred from the memo; and the internal slot alternates with an external partner cycle for cycle, with video, sound and refresh taking it in turn — the owner equation of `design/system-control-unit.md` §4, drawn out.
+`derived` Three facts follow from that one line of the chart, and each of them was an assumption before: `CAS` is asserted in **every** cycle but the refresh one — the refresh cycle is the only CAS-less access, which is the memo's "RAS only" drawn rather than argued; `DCYC` and `SLOAD` are *additional* strobes belonging to the video and sound lanes, they do not replace `CAS`; and the internal slot alternates with an external partner cycle for cycle, with video, sound and refresh taking it in turn — the owner equation of `design/system-control-unit.md` §4, drawn out.
+`derived` The equations said as much before the chart did: `CAS0L` has no `ADDRSEL` term in it (§5.1), which is exactly why it appears in every lane, while `DCYC` and `SLOAD` each carry `ADDRSELB` and so cannot appear in the external half.
 
 `unknown` The chart draws each `TIME` level a full slot wide and staggers them by a sixteenth of the window, which cannot be a literal one-hot decode: it is the designer drawing *ordering*, not pulse width. Whether the ring's phases are one-hot 62.5 ns pulses (the reconstruction's reading) or slot-wide levels is not settled by any drawing in the archive, and it is the one structural question a scope on `RAS0` against `CLK4` answers in a minute (`§7`, and the closing note of this section).
 
