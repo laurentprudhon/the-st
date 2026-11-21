@@ -625,7 +625,9 @@ Boot: desktop **666 → 602**, `_frclock_at_desktop` 659 → **596**, pops 33 69
 4 213 332 → **4 110 085** instructions, `validate.sh` **PASS** on every row but G8, which read 15.23 ms at
 n 751 on a host whose A/B (3 interleaved Release pairs, same session) is **old 14.60 / 14.64 / 14.49 ms
 against new 14.78 / 14.85 / 14.77** — +1.2 %, the +1.25 % pops a frame the batch's reads cost, and a host
-60 % slower than the day row 79 was measured on. **Both folds moved** and are **awaiting the owner's
-blessing**: `run.digest` `4eac06dc31e69fc5146400afffc7cc8832ac1697e5a9034137bd642899d6423a`, `run.stream`
-`1693218ad9360cdbfe253a064e011488463d4b2e9bd88c38c44957add687dc28` (reproduced twice) — row 79's
-`5c7d1312…` / `b452114a…` is the pair they replace.
+60 % slower than the day row 79 was measured on. **Both folds moved and are the owner's blessing of
+2026-11-21** (`main`'s since `7181a0a`): `run.digest`
+`4eac06dc31e69fc5146400afffc7cc8832ac1697e5a9034137bd642899d6423a`, `run.stream`
+`1693218ad9360cdbfe253a064e011488463d4b2e9bd88c38c44957add687dc28` (Debug `boot --frames 800`,
+reproduced three times on the committed tree) — row 79's `5c7d1312…` / `b452114a…` is the pair they
+replace.
