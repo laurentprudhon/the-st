@@ -163,10 +163,10 @@ Consequences the code must honour:
    phase's RAS term requires a pending CPU access); the CPU cannot take the internal one.
 2. **Refresh is filler, never a preemptor.** Its 7.8 µs expiry may fall inside a display window; it is
    *deferred to the next blanking slot*, never served mid-window.
-3. **Sound lives in blanking**: 48 internal slots per line against ≤3.2 needed, and refresh's share — which
-   the recovered design has now made *contingent*: the counter is ten stages clocked by `REFCLKB`, so its
-   demand is 32 slots per line at 500 kHz and 4 at 62.5 kHz, and the 7.8 µs this line used to quote matches
-   neither pending a reading of `REFCLK`'s rate (study §5.2, §7.5).
+3. **Sound lives in blanking**: 48 internal slots per line against ≤3.2 needed, and refresh's share — now a
+   bound rather than the old 8.2: `REFCLK` is a sheet-6 flop on the 500 kHz timebase, decoded from the line
+   structure, so a line owes at most 32 blanking slots for refresh and the exact figure waits on that
+   decode's duty (study §3.4, §5.2, §7.5).
 4. **A wider window costs refresh and sound their slots, not the CPU.** There is no overscan stretch in
    the reconstruction or in either vendored emulator; recorded as a fidelity gap, not modelled as a rule.
 5. **Border lines do not hand their window slots over.** `hde` is horizontal, so the window exists on

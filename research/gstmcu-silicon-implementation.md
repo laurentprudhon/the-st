@@ -162,7 +162,7 @@ The netlist supplies the clocks: `REFCLKB` clocks the refresh chain's ten stages
 
 | counter | clock / enable | width | evidence |
 |---|---|---|---|
-| refresh row | ten stages on **sheet 11** carrying `REFCLKB`, taps printed 1…10 reaching the address muxes as `RA9`…`RA0` | ten taps = 1 024 states against 512 rows per bank; **tap 1 is `RA9`**, tap 10 is `RA0` | `documented` (chain, clock and order read at sheet 11; `RA9` read into the `MAD9` mux) |
+| refresh row | ten stages on **sheet 11** carrying `REFCLKB`, itself a flop on sheet 6 clocked by `K500CLK` with `D = NAND(HCTR, LC)` — so 2 µs granularity | ten taps = 1 024 states against 512 rows per bank; **tap 1 is `RA9`**, tap 10 is `RA0` | `documented` (sheets 11 and 6 read; `RA9` read into the `MAD9` mux) |
 | video address | advances once per 500 ns cycle while the display window is open | 24 bits across `VIDBH/VIDBM/VIDBL` + `VCOUNT` | `documented` (sheets 4, 12, 15) |
 | sound address | `SNDCLK` = the granted slot | 21 bits (`SFTH/SFTM/SFTL`) | `documented` (sheet 17 + memo §4) |
 | disk DMA address | `DMADIR`/`RDY` handshake with U300 | 24 bits (`DMAH/DMAM/DMAL`) | `documented` (sheet 16) |
@@ -178,6 +178,9 @@ The netlist supplies the clocks: `REFCLKB` clocks the refresh chain's ten stages
 `derived` Ten taps is 1 024 states, and 512 rows per bank is half of that — the first reading in this study that makes ten address bits fit the row count instead of contradicting it.
 `documented` The chain read at 600 dpi by its owner: **tap 1 is `RA9`** down to **tap 10 is `RA0`**, so the address register's least significant bit is the *last* stage (`PB010`) and the row count advances from there; every tap leaves the sheet as a bare `RA` wire with no inverter, `NA2` or `MX21` in the way, and no tap is gated differently from its neighbours.[2]
 `documented` All ten stages carry `REFCLKB` — the net sheet 6 also brings in — and the only reset is `PORB`: no load, no preset, no per-line clear, so the counter free-runs from its power-on state.[2]
+`documented` And sheet 6 shows where that clock comes from, which retires the "it is a divider off the video clock" assumption: `K500CLK` is made locally by an inverter (`PR026`), a `NAND` (`PR027`) combines the counter signals `HCTR` and `LC` into `XY2`, a second `NAND` (`PR028`) mixes `XY2` with `K500CLK`, and the result clocks a `DPR` (`PR032`) whose output carries `REFCLK`.[2]
+`derived` That flop has no feedback path into its own `D`, so it is not a toggle divider: `REFCLK` is a **registered decode**, transitioning only on `K500CLK` edges, which puts every refresh step on a 2 µs grid and ties the refresh request to the line structure (`HCTR`, `LC`) rather than to a free-running counter.
+`derived` The ceiling is therefore fixed and the rate is not: at most 32 steps per 64 µs line, a full 1 024-step walk in 2.05 ms, and 512 rows in half of that — but how many `REFCLK` edges a line actually carries depends on the duty of `NAND(HCTR, LC)`, which no sheet read so far states.
 `unknown` One of the owner's reading passes gave the ascending order instead, and the balance of two careful passes wins only because it agrees with the input end of a carry chain; a second eyeball on the physical sheet, or a scope on `RA0` against the line clock, is what would make the order beyond argument.
 `documented` And there is no `MAL` net anywhere in the archive: the chip's symbol carries `MAD0`–`MAD9` (the multiplexed DRAM address, §3.6), and the refresh counter reaches them as `RA0`–`RA9` through the ten `MX41` muxes (read at `RA9`, sheet 25).[2]
 `derived` So `design/board-inventory.md`'s "`MAL0–MAL9`, refresh counter" pins are almost certainly the same ten lines under another name — the archive has no refresh pin at all — and the inventory's open item can be re-checked against the service manual's symbol rather than searched for in the design.
@@ -366,8 +369,9 @@ CAS0L = ~( TIME2 & LCYCSELB & ... )   (pad PM002, sheet 22)        [2]
 | mono (640 px) | 40 | 640/16 = 40 × 1 plane | 88 |
 
 `derived` Against those 48 (or 88) spare slots a line must place ≈8.2 refreshes (512 rows in 4 ms is 7.81 µs apart, and a line is 64 µs) and at most 3.2 sound words (the channel's 50 kHz top rate is one word per 20 µs).[2]
-`derived` The budget is comfortable in low res, which is why no emulator has ever had to model refresh starvation and why the memo could call refresh "unused time slots" without qualification — but the refresh term is the one number in this section that is contingent, because the counter's clock is now known (`REFCLKB`, §3.4) and its *rate* is not: at 500 kHz the ten stages demand one blanking slot every 4 cycles, i.e. 32 of the 48; at 62.5 kHz, 4 of the 48; and the 7.8 µs this study has been quoting matches neither.
-`unknown` Until `REFCLK`'s rate is read — sheet 6 generates it and sheet 20 uses it — the refresh line budget is quoted as a range rather than a number, and §7's question 5 is the period alone.
+`derived` The budget is comfortable in low res, which is why no emulator has ever had to model refresh starvation and why the memo could call refresh "unused time slots" without qualification — but the refresh term has to be re-derived, because the counter's clock is now known: `REFCLK` is a flop on sheet 6 clocked by the 500 kHz timebase and decoded from the line structure (§3.4), so a line can owe at most 32 blanking slots, not the 8.2 this section has been quoting since its first draft.
+`derived` At the ceiling the ten stages walk 1 024 states in 2.05 ms, which is the right order for a 512-row DRAM's 4 ms budget with room to spare; at any sparse duty the walk stretches proportionally, and one pulse per line would give 33 ms — too slow for the part, which is itself an argument that `HCTR`·`LC` is true for most of a line.
+`unknown` So the budget is a bound, not a value: `≤32 of 48` blanking slots for refresh, `≤3.2` for sound, and the exact split is §7's question 5.
 
 `derived` The same line as a timetable, which is the form to read it in — one row per block of the 128 internal slots, and the external slots interleaved one for one:
 
@@ -527,7 +531,7 @@ Tiers per the handoff: T1 hardware-captured, T2 hardware-corrected, T3 emulator-
 | 2 | Does the sound counter increment on grant or on load? | RTL: on grant; memo: `SLOADB` rising edge latches data. Unresolved ordering | T3 | `design/crossings.md` (§2 refills) |
 | 3 | Is `SINT` a slot-wide level or a 480 ns pulse? | 480 ns pulse, and the next frame's first fetch may overlap it | T2 (memo) | Sound's frame-end event |
 | 4 | Does a mid-frame `top` write move the current boundary? | no — the boundary is `count == top`, evaluated continuously | T2 (memo) | Sound |
-| 5 | What is the refresh period? | the counter is ten stages on sheet 11, `REFCLKB`-clocked, `PORB`-reset, tap 1 = `RA9` down to tap 10 = `RA0`, feeding the muxes as `RA0`–`RA9`; what remains is `REFCLK`'s rate, which moves the blanking budget between 4 and 32 slots per line | T3 | SCU §11.1 |
+| 5 | What is the refresh period? | ten stages on sheet 11 clocked by `REFCLKB`, a sheet-6 flop on `K500CLK` with `D = NAND(HCTR, LC)`: 2 µs granularity, `PORB`-reset, tap 1 = `RA9` … tap 10 = `RA0`, feeding the muxes as `RA0`–`RA9`. What remains is the decode's duty — how many `REFCLK` edges a line carries, hence whether refresh costs 1 slot or 32 | T3 | SCU §11.1 |
 | 6 | Is the paddle a counting ADC, and what is its law? | counting, clocked from the 500 kHz timebase through sheet 31's divider; cleared only by `PADRST`, not started by the register select, and with no `PADC` path into sheet 33 — so what remains unknown is the *capture* of the count, in sheet 32's registers or at the pad pin | unknown | Controllers |
 | 7 | Are 313 lines × 512 clocks right, and where is the `DE` edge? | design has `HDE/LPHDE/VDE/HBLANK`, `SYNCSEL`, `MDE0/MDE1`; the reconstruction gives `ivsync_set` 508/510 | T3 | Video |
 | 8 | Does the CPU really get every second slot? | yes — `ADDRSELB` is a phase, and CPU-outranks-DMA only *inside* the external slot | T2 (design table) | SCU §3 |
@@ -568,7 +572,7 @@ None of the six needs a die, and all six are cheaper than one decap attempt by o
   our board is `ST-4081` or the `TXL` variant is not established; nothing in the design fixes which one shipped
   in C300589-001. A decap answers this and the two revisions differ in cell count (68 vs 73 FFs), so the
   question is not academic[2].
-- **`REFCLK`'s rate.** The refresh counter is `REFCLKB`-clocked and free-running (sheet 11), and the net that feeds it is generated on sheet 6 — but nothing read so far says how often it ticks, and that one number moves the refresh share of a line from 4 blanking slots to 32.
+- **The duty of `NAND(HCTR, LC)`.** `REFCLK` is a sheet-6 flop clocked by the 500 kHz timebase with that decode on its `D` (so its granularity is 2 µs and its ceiling 32 steps per line), and nothing read yet says how much of a line the decode stays true for — the number that turns the refresh budget from `≤32` into a figure.
 - **The paddle's capture edge and conversion law** — the pen's counterpart is now closed: sheet 33 latches two free-running position counters on the pen's own edge, so the pen needs no law, only two counters and one event.
 - **`BINT`'s function inside the GSTMCU**, and whether the C302183 variant's blitter logic reuses it.
 - **The test mode** (`TEST` pin 74, `ITEST` gating dozens of cells) — undocumented here, unlike the 68000's VPA
