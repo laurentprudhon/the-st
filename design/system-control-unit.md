@@ -97,10 +97,10 @@ machine's 1 MB agree. `MAD0–MAD8` carry the nine bits a row or a column needs;
 not use `MAD9`.
 
 **`Refresh(row)` is one row, not one row per bank.** The controller keeps a single 512-row counter
-and strobes one row address on both `RAS` lines — the only reading under which its 7.8 µs period
-(512 rows ÷ 4 ms) and its ≈8.2 slots per PAL line are both true; a per-bank refresh would halve the
-period to 3.9 µs and double the slot budget (ADR 0011 §5). `derived` from those two figures, not
-read off a schematic.
+and strobes one row address on both `RAS` lines; the counter advances one row per 2 µs, so a bank is
+walked every 1.02 ms and a per-bank refresh would halve that — it does not (ADR 0011 §5, corrected
+2026-11-21 against the design; the old 7.8 µs / 8.2-slot arithmetic is retired). `documented` in the
+study's §3.4 from the design's own chain, not read off a schematic.
 
 **`MachineBytes` is the host's, and only the host's.** It is a `Span<byte>` over the store in
 **machine byte order** — big-endian pairs, index `2n` the high byte of word `n` — which is why the
@@ -161,14 +161,13 @@ Consequences the code must honour:
 
 1. **No client can enter a window it does not own.** Video cannot take the external slot (the external
    phase's RAS term requires a pending CPU access); the CPU cannot take the internal one.
-2. **Refresh is filler, never a preemptor.** Its 7.8 µs expiry may fall inside a display window; it is
-   *deferred to the next blanking slot*, never served mid-window.
-3. **Sound lives in blanking**: 48 internal slots per line against ≤3.2 needed, and refresh's share — now a
-   bound rather than the old 8.2: `REFCLK` is a sheet-27 flop on the 500 kHz timebase gated by `HCTR`
-   (`M2CLOCK ÷ 64`, 16 µs) and `LC`, so a line owes at most **32** of its 48 blanking slots for refresh: the refresh address advances one row
-   per 2 µs on the 500 kHz tap, and only the cycles wait for blanking. A ten-stage walk is 2.05 ms against
-   the 41256's 8 ms — deliberate over-refreshing, which is what the machine's analysis reports (study §3.4,
-   §5.2).
+2. **Refresh is filler, never a preemptor.** The address advances every 2 µs but a row is only *strobed*
+   in blanking; a row whose turn fell inside the display window waits for the next blanking slot, which is
+   why the memo calls refresh "unused time slots".
+3. **Sound lives in blanking**: 48 internal slots per line against ≤3.2 needed, and refresh's share is
+   at most **32** of those 48 slots: the refresh address advances one row per 2 µs on the 500 kHz
+   tap, and only the *cycles* wait for blanking, so a ten-stage walk is 2.05 ms against the 41256's 8 ms —
+   deliberate over-refreshing, which is what the machine's own analysis reports (study §3.4, §5.2).
 4. **A wider window costs refresh and sound their slots, not the CPU.** There is no overscan stretch in
    the reconstruction or in either vendored emulator; recorded as a fidelity gap, not modelled as a rule.
 5. **Border lines do not hand their window slots over.** `hde` is horizontal, so the window exists on
@@ -298,8 +297,8 @@ call neither is the leaf nor makes it cheaper to justify (ADR 0014, consequences
    pulse per 2 µs while `NAND(HCTR, LC)` permits — `LC` removes one pulse a cycle and nothing more. Ten stages
    therefore walk 1 024 addresses in **2.05 ms**, a 512-row bank in 1.02 ms, four to eight times inside the
    41256's 8 ms, which is the over-refreshing the forum analysis describes (study §3.4, score [13]). What is
-   unmeasured is only how many of a line's 32 opportunities are spent, and no instant depends on it. The 7.8 µs = 512 rows ÷ 4 ms figure this point used to
-   carry has no supporting clock at all. The old arithmetic read: 7.8 µs = 512 rows ÷ 4 ms; the
+   unmeasured is only how many of a line's 32 opportunities are spent, and no instant depends on it.
+   The 7.8 µs = 512 rows ÷ 4 ms figure this point used to carry had no supporting clock; the
    reconstruction hard-wires the refresh address to 0 and proves the slot, never the row. With refresh
    off the deadline list (owner's ruling, 2026-11-09, §12), the period only shapes the *budget* — how
    many of a line's blanking slots refresh consumes — and no instant depends on it. A scope on `RAS0`

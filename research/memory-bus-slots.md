@@ -227,6 +227,16 @@ a 41256 within 4 ms → one RAS-only refresh every **7.8 µs**
 (4 ms ÷ 512). `derived`. A 256-row 414616 then gets each row refreshed twice per
 4 ms, which is harmless.
 
+> **Correction — 2026-11-21, from the recovered design.** The 7.8 µs figure above is
+> the *part's floor*, not the machine's cadence. `research/gstmcu-silicon-implementation.md`
+> §3.4 reads the GSTMCU's own refresh chain: the address counter advances one row per
+> **2 µs** on the 500 kHz tap, so a 512-row bank is walked every **1.02 ms** — four times
+> inside the 41256's requirement, and outside evidence (Atari-Forum, journal [13] there)
+> confirms the machine refreshes on every free MMU phase rather than on a schedule. The
+> **8.2 slots per line** derived below therefore becomes **≤32** slots, and the old figure
+> should not be quoted again. Everything below about placement (`documented` in the memo,
+> refresh only in blanking) stands.
+
 **Conflict to record:** `atari-st-hardware/memory/02-memory-controller.md:44-55`
 states "414616 has 1024 rows (10-bit row address)" and derives a 3.9 µs refresh
 period. That is inconsistent with the repo's own chip note (256 rows) and with
@@ -238,8 +248,9 @@ Even if 3.9 µs were right, the bandwidth consequence is small (see below).
 250 ns. Cwik's classification explicitly puts refresh in the internal class
 (`documented`), so it competes with video and sound, not with the CPU directly.
 
-**Per line (`derived`):** 64 µs ÷ 7.8 µs = **8.2 refresh slots per PAL line**
-(≈ 16 if the 3.9 µs figure were used). The 48 internal slots of each active
+**Per line (`derived`, corrected 2026-11-21):** 64 µs ÷ 2 µs = **≤32 refresh cycles per PAL line**,
+of which the 48 blanking slots can absorb all of them; the 8.2 figure this line used to carry came
+from the part's 7.8 µs floor and is retired. The 48 internal slots of each active
 line's blanking interval absorb ~8 of them. On the 320-clock display window
 itself, video leaves nothing — per §2 it holds every internal slot. This is the
 tension that makes the placement question real rather than academic.
@@ -328,10 +339,11 @@ A 512-clock line is 256 slots: 128 `I` + 128 `E`, one slot every 2 clocks
 | 0–3 | 2 (1 I) | 1 I free |
 | 4–163 | 80 (40 I) | DE ≈ 20 µs: 40 I video (1 word per 8 clocks) + 40 E |
 | 164–223 | 30 (15 I) | 15 I free for refresh/sound |
-| **total** | **112 (56 I)** | 40 video words; refresh gets 28 µs ÷ 7.8 µs = **3.6 slots**, sound ≤1.4 |
+| **total** | **112 (56 I)** | 40 video words; refresh gets 28 µs ÷ 2 µs = **≤14 slots** (corrected 2026-11-21), sound ≤1.4 |
 
-Mono is the tight case: only 56 internal slots per line, 40 to video, ~3.6 to
-refresh. The *fraction* is the same as colour (3.6/56 = 6.4%, 8.2/128 = 6.4%)
+Mono is the tight case: only 56 internal slots per line, 40 to video, up to 14 to
+refresh. The *fraction* is no longer the same as colour (14/56 = 25 %, 32/128 = 25 %), because the
+corrected pace is 2 µs a row throughout rather than a 7.8 µs average.
 because the line and the frame both shrink together; what changes is that the
 absolute slack per line falls from 37 slots to 12.
 
@@ -374,9 +386,9 @@ absolute slack per line falls from 37 slots to 12.
 2. **Whether refresh preempts video.** Cwik's "no priority of any kind" implies
    it cannot; arithmetic implies it must sometimes. *Measurement:* count `RAS`-
    only cycles within a DE window.
-3. **Exact refresh period.** 7.8 µs is derived from the 41256's 512 rows and a
-   4 ms budget; the repo's own 3.9 µs figure contradicts it. *Measurement:*
-   scope `RAS0` with `CAS` suppressed and time consecutive refresh pulses.
+3. **How many of a line's 32 refresh opportunities are spent** (closed 2026-11-21 as to the
+   *period*: 2 µs per row from the design's chain, 2.05 ms per walk). *Measurement:*
+   scope `RAS0` with `CAS` suppressed and count CAS-less cycles in one blanking interval.
 4. **Sound fetch placement and FIFO depth.** Steem's 4-word FIFO is a modelling
    convenience with no documentary support. *Measurement:* the `*SLOAD` burst
    length at 6.25 kHz, where fetches are 160 µs apart and should be isolated.

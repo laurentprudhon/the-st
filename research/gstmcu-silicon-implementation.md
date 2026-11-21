@@ -29,7 +29,7 @@ our model takes).*
 | What counts? | **Real counters, unlike the 68000.** Seven counting structures, each with its own clock net: the refresh row chain, the video address counter, the sound address counter, the DMA address counter, the paddle divider, and the pen's horizontal and vertical pair on sheet 33, read since this section was written. The chip has no datapath that can be made to count. | 3.4 |
 | Clocking? | One 8-phase timing generator, drawn as a **single macro cell (`TGEN`)** from `TIME0`–`TIME7`, fed by a 16 MHz clock divided to 8/4/2 MHz and 500 kHz on sheet 7. Every slot decision in the chip is a decode of those phases. | 3.3 |
 | How does the address mux arbitrate? | Ten 4:1 muxes (`MX41`), one per `MAD` line, with the designer's own decode table printed on the sheet: refresh → sound → video inside a slot, CPU → DMA outside it. | 3.6 |
-| What does the emulator still not know? | The refresh *period* and row mapping, the ADC's conversion law, and the exact enabling of the sound/refresh scheduling. §7 ranks them; §8 gives the six tests that settle them. | 6, 7 |
+| What does the emulator still not know? | The paddle's **capture edge** (its clock and reset are read; what freezes a count is not), `INTERLACE`'s destination, the phases' width, and `LATCH`'s payload. §7 ranks them; §8 gives the six tests that settle them. | 7, 8 |
 
 `derived` The one-sentence machine: *a 16 MHz clock is divided into eight phases by a single macro cell; every 250 ns one phase picks an address from ten 4:1 muxes — video while the display window is open, sound DMA if a request is outstanding outside it, otherwise a RAS-only refresh — and the CPU or the DMA controller gets the other slot of the pair, while 68 flip-flops and ~90 latches hold the register state and no table of any kind is consulted.*
 
@@ -184,7 +184,7 @@ The netlist supplies the clocks: `REFCLKB` clocks the refresh chain's ten stages
 `documented` And `M2CLOCK` is the **4 MHz** node, buffered out of the divider rather than divided again: sheet 7's chain is a plain `Q̄→D` toggle ladder (`P7001` → `MHZ8`, `P7002` → `MHZ4`, `P7003` → `MHZ2`, two more stages to `KHZ500`), and `M2CLOCK` reads the same 4 MHz node as `MHZ4` through its own buffer, with `M2CLOCKB` its inversion one cell later.[2]
 `derived` So `HCTR` is 62.5 kHz with a 16 µs period and no duty skew — the clock tree is one ÷2 ladder, 4 MHz → 2 → 1 → 500 kHz, with `M2CLOCK` and `K500CLK` as two taps of the same oscillator.
 `derived` Because `PR027` is a bare two-input `NAND` with no decode chain in front of it, the decode's duty is structural rather than designed: whatever `LC` turns out to be, the gate suppresses windows only while `LC` is high.
-`derived` At a 16 µs `HCTR` period a line holds **four** of those windows on the 2 µs sampling grid, and four on every line would walk 512 rows in 128 lines — **8.19 ms**, the interval a 512-row 41256 asks for. That coincidence is what makes the part, rather than the sheet, the arbiter: 4 MHz fits it, a 2 MHz `M2CLOCK` would double the walk and miss it.
+`derived` The 2 µs grid is therefore the address clock's granularity, and the whole ten-stage walk is paced by it: 1 024 states at one per 2 µs, whatever `HCTR`'s own period turns out to be — which is why `M2CLOCK`'s frequency stopped being load-bearing the moment the gate's role was read correctly.
 `documented` And `LC` is not a counter bit at all: sheet 7's `P7044`–`P7055` column is a **twelve-stage shift register** — `TIME0B`…`TIME8B`, then `LCYCLEL`, `LCYCLESB`, `LC` — each `Q` feeding the next `D`, no feedback and no clear, so its tail emits three consecutive one-clock strobes ending in `LC`.[2]
 `derived` That makes `LC` a **marker** with no binary weight: `NAND(HCTR, LC)` is false for at most the single clock in which the strobe is high and true the rest of the time, so read literally `REFCLK` is an almost-static level rather than a burst.
 `documented` And the row count is now sourced from the board rather than from our inventory: a stock 1040STE carries no motherboard DRAM at all — it has four 30-pin SIMM sockets (`U600`–`U603`) holding 4 × 256 KB, each SIMM built from **eight 256K×1 devices of the 41256 family** (`HYB41256-12`, `M5M4256P`, `TMS4256`, `HM50256`…), nine address bits split 9/9, so **512 rows per bank** (`design/board-inventory.md` §3.4b, now sourced).
@@ -385,7 +385,7 @@ CAS0L = ~( TIME2 & LCYCSELB & ... )   (pad PM002, sheet 22)        [2]
 | mid res (640 px) | 80 | 640/16 = 40 × 2 planes | 48 |
 | mono (640 px) | 40 | 640/16 = 40 × 1 plane | 88 |
 
-`derived` Against those 48 (or 88) spare slots a line must place ≈8.2 refreshes (512 rows in 4 ms is 7.81 µs apart, and a line is 64 µs) and at most 3.2 sound words (the channel's 50 kHz top rate is one word per 20 µs).[2]
+`derived` Against those 48 (or 88) spare slots a line places the refresh cycles its address clock offers — up to 32, one per 2 µs — and at most 3.2 sound words (the channel's 50 kHz top rate is one word per 20 µs).[2]
 `derived` The budget is comfortable in low res, which is why no emulator has ever had to model refresh starvation and why the memo could call refresh "unused time slots" without qualification — but the refresh term has to be re-derived, because the counter's clock is now known: `REFCLK` is a flop on sheet 27 clocked by the 500 kHz timebase and decoded from the line structure (§3.4), so a line can owe at most 32 blanking slots, not the 8.2 this section has been quoting since its first draft.
 `derived` The address clock paces those cycles at one per 2 µs (§3.4), so refresh can consume at most **32 of a line's 48** blanking slots, and sound ≤3.2 — the memo's "unused time slots" reads as written, with roughly a third of blanking left idle.
 `derived` The section's original "≈8.2 slots at 7.8 µs" was right in spirit and wrong twice: the pace is 2 µs and the ceiling 32 slots, not 7.8 µs and 8.2, because the address counter free-runs at the 500 kHz tap while only the cycles wait for blanking.
@@ -495,10 +495,11 @@ CAS0L = ~( TIME2 & LCYCSELB & ... )   (pad PM002, sheet 22)        [2]
 2. **The internal slot precedes the external one** (§5.1) is now a documented fact of the `RAS` equations rather than an assumption, and `design/system-control-unit.md` §3 can date it.
 3. **`DTACK` is a flip-flop on `ICLK8B`** (§5.4) fixes the CPU's answering instant to a whole 8 MHz edge in *hardware*, not merely as ADR 0009's choice — the same rule, now sourced.
 
-`unknown` Two questions are left, and the owner's reading of the two charts closed the other two — `COL/ROW`'s polarity is settled by where `RAS` falls, `DCYC`'s seam by the lane the pulse is drawn in, and the lane order of sheet 49 is now part of §5.1.
+`unknown` Three questions are left in this section, and the owner's readings of four chips' worth of sheets closed the rest — `COL/ROW`'s polarity by where `RAS` falls, `DCYC`'s seam by the lane its pulse is drawn in, the sheet-49 lane order into §5.1, and the whole refresh chain (§3.4).
 
 - **The phases' width** (§5.1): the chart draws each `TIME` level a whole slot wide, which cannot be a one-hot decode; whether the ring's phases are 62.5 ns pulses (the reconstruction's reading) or slot-wide levels is a scope question, not a drawing question.
-- **`LATCH`'s payload**: the sheet fixes where and how wide the pulse is, and rules out an address latch for its own cycle, but not what it captures — the read-data latch and the latch that arms the *next* cycle's mux remain both open.
+- **`LATCH`'s payload**: the sheet fixes where and how wide the pulse is, and rules out an address latch for its own cycle, but not what it captures — a read-data latch and the latch that arms the *next* cycle's mux remain both open.
+- **The paddle's capture edge** (§5.6): `PADC`'s clock and `PADRST`'s power-on clear are read, sheet 32 is a select-and-buffer port, and sheet 33 is the pen — so what freezes a count into the four registers is the last piece, and §8's test 6 separates the candidates.
 
 ---
 

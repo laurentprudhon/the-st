@@ -112,7 +112,10 @@ What the session established, in the form later chips can reuse:
   follow-up handoff) — the study now walks the chip through a slot (`RAS` at `TIME0`, `CAS` at `TIME2`, `WE`
   in the external half, `LATCH` one clock wide), a line (128 internal slots, 80 to video in low/mid res), a
   frame (313 × 512 clocks = 20.03 ms), a bus cycle (`DTACK` clocked on `ICLK8B`) and a register write (decode
-  on sheet 3, separate read/write nets). Its four remaining `unknown`s are at the end of §5.
+  on sheet 3, separate read/write nets). **Refresh is closed the same day** (§3.4): the address counter
+  takes one row per 2 µs off the 500 kHz tap, walks a 512-row bank in 1.02 ms, and the cycles wait for
+  blanking — a budget of ≤32 of a line's 48 slots. What is left of §5's unknowns is two: the phases' width
+  and `LATCH`'s payload.
 
 ### U400 — original question set (kept for reference)
 * **What it is:** the STE's combined GLUE + MMU, plus DMA arbitration, video timing, DRAM control, the

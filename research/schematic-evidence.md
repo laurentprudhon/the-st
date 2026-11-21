@@ -99,7 +99,10 @@ So the manual names a 4-level priority for interrupts and an arbitration role fo
    manual paragraph describes it; neither Hatari nor Steem models it.
 2. **Whether refresh preempts video during DE or is deferred into blanking.** Same reason. §2.10.1 leans
    towards blanking for sound and says nothing about refresh.
-3. **The exact refresh period for the fitted 256K×1 parts** (7.8 µs derived, not stated).
+3. ~~**The exact refresh period for the fitted 256K×1 parts** (7.8 µs derived, not stated).~~
+   *Settled 2026-11-21 from the recovered design:* the refresh address advances one row per 2 µs, a
+   512-row bank every 1.02 ms — see `research/gstmcu-silicon-implementation.md` §3.4. What remains
+   unmeasured is only how many of a line's 32 blanking opportunities are spent.
 
 What would settle them, in order of cost:
 

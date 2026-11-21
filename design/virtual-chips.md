@@ -76,7 +76,10 @@ Agnus role.
 
 - `U400.MAD0–MAD9` (110–119), `RAS0` 127, `RAS1` 124, `CAS0H` 126, `CAS0L` 125, `CAS1H` 123,
   `CAS1L` 122, `WE` 121 — the multiplexed DRAM interface;
-- the refresh counter (`U400.MAL0–MAL9`), whose period no source states;
+- the refresh counter — in the recovered design it is a ten-stage address chain whose outputs reach the
+  DRAM muxes as `RA0`–`RA9`, one row per 2 µs (`research/gstmcu-silicon-implementation.md` §3.4). The
+  `MAL0–MAL9` name in the pin list is probably our own label for the same ten lines; the archive carries no
+  `MAL` net at all;
 - `U400.A1–A23` (41–65), `D0–D15` (75–91), `AS` 67, `LDS` 68, `UDS` 69, `R/W` 70, `FC0–FC2` — the
   CPU-bus side it decodes, answered with `DTACK` 71 or `BERR` 23;
 - `U400.BR` 29, `BGI` 28, `BGO` 27, `BGACK` 26 — the arbitration relays;

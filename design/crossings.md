@@ -216,7 +216,8 @@ exist at all (class 3, internal state) nothing can subscribe.
 - **Completions**: `DTACK`, `BERR`, `VPA`, `VMA`, `IACK`, `*SLOAD`, `DCYC`. Class 2: they answer an
   exchange the subscriber itself opened.
 - **Clocks**: `CLK`, `CLK8`, `CLK4`, `CLK2`, `FCLK`, `SCLK`, `KHZ500`. Class 3: not wires.
-- **Inside a chip**: the video beam counter, the DRAM refresh counter and its `MAL0–MAL9` outputs, the
+- **Inside a chip**: the video beam counter, the DRAM refresh counter (its address advances every 2 µs and
+  reaches the DRAM muxes as `RA0`–`RA9` — `MAL0–MAL9` in our pin list is the same ten lines), the
   sound address counter and frame pointers, the slot scheduler, the decode PLA, the MFP's four timer
   counters and its event selector, the PSG tone counters, the Blitter's address pointers,
   the FDC's MFM shift register and CRC, the keyboard ACIA's framing counters.

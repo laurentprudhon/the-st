@@ -433,7 +433,14 @@ Read precisely, this settles both questions left open by `research/memory-bus-sl
 
 **Caveat that limits claim 2:** the refresh *address* is hard-wired to `0` in the model
 (`4'b1??0: ADDR = 0; // REFRESH_ADDR`) — the row counter is not implemented. So the RTL proves refresh's
-*priority*, not its *period*. The 7.8 µs figure stays derived, not implemented.
+*priority*, not its *period*.
+
+> **Update — 2026-11-21: the design supplies what the model omits.** `research/gstmcu-silicon-implementation.md`
+> §3.4 reads the real chain: a ten-stage address counter on sheet 11, clocked from a sheet-27 flop whose
+> input is `NAND(HCTR, LC)` sampled on the 500 kHz tap — one row per 2 µs, a 512-row bank every 1.02 ms.
+> Two further corrections to this note follow from the same reading: `viden` is *not* the inverse of the
+> video enable (the design takes `VIDEN` directly into `DCYC` and its inverse into `SNDEN`), and the
+> `interlace = 0` tie-off is a model limitation, unchanged.
 
 > ### Correction — 2026-11-09, ticket #20: claim 2 over-read the mux
 >
