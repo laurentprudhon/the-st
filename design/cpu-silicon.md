@@ -221,3 +221,66 @@ bookkeeping field that turned out to be a latch).
 - `scripts/validate.sh` **PASS**; `G8` from 3 interleaved Release pairs against the parent commit,
   `parent + 0.3 ms` and never above 10 ms (8.94 ms at n 751 is the number to return to, not to beat).
 - `python3 tools/cpu-dissection/gen.py` still generates variants that build.
+
+All five are **one command**: `scripts/cpu-shape-check.sh <parent-commit>`, §7.
+
+## 7. The verdict — one command
+
+Every landing of this campaign is graded with one command and no hand runs:
+
+```sh
+scripts/cpu-shape-check.sh <parent-commit> [clk-baseline-file]
+```
+
+It prints one table, and it exits 0 only if all five rows hold. This session's own smoke run
+(`HEAD~1`, a docs-only parent — the pair must be identical) reads:
+
+```
+| verdict        | measured
+| corpus mame    | 317 500 / 317 500 state, 317 500 exact-clock, 127 files                      PASS
+| corpus clk     | 863 265 state, 819 372 exact-clock, 136 795 red records in 66 files
+|                |   (0 new, 0 fixed vs parent); per-file table vs the baseline: 0 rows differ PASS
+| folds          | digest 4eac06dc… / stream 1693218a…, desktop 602 (596), 34 122.2 pops      PASS
+| G8             | parent 9.63 / 9.19 / 8.94 vs child 9.01 / 8.89 / 8.88 ms at n 751,
+|                |   worst pair −0.06 ms                                                       PASS
+| interface      | cpu-surface absent (#85, documented skip); gen.py Sync+Folded, build ok     PASS
+```
+
+**What each row is.**
+
+1. **corpus mame** — the gate, both columns: `--corpus mame` state 317 500 of 317 500 *and*
+   exact-clock 317 500. A ticket that cannot hold both does not land.
+2. **corpus clk** — `--corpus clk --dir tests/680x0/full`: state 863 265, its red set identical to the
+   parent **record for record** (the failure dump's `file`/`record` keys, not the pass count — a
+   restructure may not trade one class for another behind an unchanged total), and the per-file table
+   identical to the committed baseline `tests/680x0/baseline/clk.out.txt` (row 81's, taken from
+   `82b5580`). CLK's clock column is conventions and is quoted, never chased.
+3. **folds** — a Debug `boot --frames 800` **from the repo root**: `run.digest` `4eac06dc…` /
+   `run.stream` `1693218a…` with the desktop frame (602) and the pops a frame (34 122.2) quoted. This
+   campaign is a re-expression, so a moved pair is a bug it introduced, not a re-bless to ask for.
+4. **G8** — two Release builds (the parent's in a `git worktree`) and **three interleaved pairs** of
+   `boot --frames 800`, compared only at equal `frame_n`, ruled by `parent + 0.3 ms` (FINDINGS §4's
+   noise floor) and never above 10 ms. A failed Release build fails this row rather than reporting the
+   previous binary's number, which is the one trap the row exists for.
+5. **interface** — `validation-harness cpu-surface` (the freeze test of §4) if it exists, else a
+   documented skip until #85 lands; and always `python3 tools/cpu-dissection/gen.py` plus a Release
+   build of the two generated variants. The row is not decorative: at the time of writing the
+   dissection bench still linked **two of the core's six files** (the split of #78) and its `Folded`
+   variant still replaced a bus block the fold of #62 had already landed in the sources of record, so
+   the bench priced another core and did not build at all. It links `src/TheST.Machine/Cpu/*.cs` as a
+   glob now, and `Folded` is the sources unchanged in its own namespace (A − D is spent; the README
+   says so). A restructure that breaks the tool has broken the sources of record — that is the row.
+
+**What it is not.** It is not the gate: `scripts/validate.sh` stays the gate, and the corpus stays out
+of it (194 MB, ~35 s). This script is the campaign's instrument, run by hand, beside validate.sh's
+stamps and never instead of them. And its G8 numbers are comparable only to another run of *this*
+script at the same `frame_n` — a `validate.sh` G8 row sits ~0.9 ms above a standalone boot on this host.
+
+**Where it writes.** `runs/<stamp>/shape/` — builds, the two corpora with their `--out` tables and
+`--failures` dumps, the baseline diff, the fold's `run.state`, six G8 states and their logs, and
+`gen.log`/`build-dissection.log`. The parent worktree is removed at the end; every number in the table
+is a file read in that run.
+
+**Where the bar lives.** The five constants at the top of the script (`EXPECT_MAME_*`, `EXPECT_CLK_*`,
+`EXPECT_DIGEST`, `EXPECT_STREAM`, `EXPECT_DESKTOP`, `G8_SLACK`, `G8_BUDGET`) are §6 in code: a re-bless
+edits them there and nowhere else.
