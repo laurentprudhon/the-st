@@ -165,9 +165,10 @@ Consequences the code must honour:
    *deferred to the next blanking slot*, never served mid-window.
 3. **Sound lives in blanking**: 48 internal slots per line against ≤3.2 needed, and refresh's share — now a
    bound rather than the old 8.2: `REFCLK` is a sheet-27 flop on the 500 kHz timebase gated by `HCTR`
-   (`M2CLOCK ÷ 64`, 16 µs) and `LC`, so a line owes at most **4** blanking slots for refresh — 512 rows of 41256 want 15.6 µs a row and four
-   a line is exactly that. How `REFCLK` itself clocks the counter is the one thing the sheets now contradict
-   (study §3.4), so this document models the *budget* and not the clock, and the answer moves to a scope.
+   (`M2CLOCK ÷ 64`, 16 µs) and `LC`, so a line owes at most **32** of its 48 blanking slots for refresh: the refresh address advances one row
+   per 2 µs on the 500 kHz tap, and only the cycles wait for blanking. A ten-stage walk is 2.05 ms against
+   the 41256's 8 ms — deliberate over-refreshing, which is what the machine's analysis reports (study §3.4,
+   §5.2).
 4. **A wider window costs refresh and sound their slots, not the CPU.** There is no overscan stretch in
    the reconstruction or in either vendored emulator; recorded as a fidelity gap, not modelled as a rule.
 5. **Border lines do not hand their window slots over.** `hde` is horizontal, so the window exists on
@@ -292,12 +293,12 @@ call neither is the leaf nor makes it cheaper to justify (ADR 0014, consequences
 
 ## 11. Open points
 
-1. **The refresh period is the one number this document does not have, and the sheets no longer pretend
-   otherwise.** The counter is ten stages on sheet 11 on one shared clock fed from `REFCLKB`; that clock is a
-   sheet-27 flop on the 500 kHz timebase whose `D` is a bare `NAND(HCTR, LC)`, with `REFCLKB` itself
-   `NAND(SNDEN, REFCLK)`; the board is 512 rows of 41256 wanting 15.6 µs a row, and `HCTR` offers exactly the
-   four windows a line that gives it. But `LC` turned out to be a strobe at the tail of a shift register, not
-   a counter bit, so a near-constant decode cannot clock the walk the part needs. Only §8.1's scope settles it. The 7.8 µs = 512 rows ÷ 4 ms figure this point used to
+1. **The refresh period is derived and now has a source.** The counter is ten stages on sheet 11 on one
+   shared clock fed from `REFCLKB`; that clock is a sheet-27 flop clocked by the 500 kHz tap, so it emits one
+   pulse per 2 µs while `NAND(HCTR, LC)` permits — `LC` removes one pulse a cycle and nothing more. Ten stages
+   therefore walk 1 024 addresses in **2.05 ms**, a 512-row bank in 1.02 ms, four to eight times inside the
+   41256's 8 ms, which is the over-refreshing the forum analysis describes (study §3.4, score [13]). What is
+   unmeasured is only how many of a line's 32 opportunities are spent, and no instant depends on it. The 7.8 µs = 512 rows ÷ 4 ms figure this point used to
    carry has no supporting clock at all. The old arithmetic read: 7.8 µs = 512 rows ÷ 4 ms; the
    reconstruction hard-wires the refresh address to 0 and proves the slot, never the row. With refresh
    off the deadline list (owner's ruling, 2026-11-09, §12), the period only shapes the *budget* — how
