@@ -203,7 +203,17 @@ emulation is already T1-verified.
 
 ---
 
-## 7. Decisions needed from the owner
+## 7. Decisions needed from the owner — **answered 2026-11-21**
+
+* **Do we want die-level research at all for parts with no public decap?** → **Answered: schematic + behaviour
+  + test-ROM plan for all parts; die-level only where a decap actually exists.** So U401/U300 are design-and
+  hardware studies by construction, and the "no decap" paragraph is the deliverable, not an apology.
+* **Is photographing a decap in scope?** → **Answered: no** — we buy and photograph nothing; record what a die
+  would settle and move on (the GSTMCU study does this in §2.1 and §8).
+* **Do the studies publish?** → **Answered: repo/private research** — the 68000 study's 1983 *Byte* figure stays;
+  every new study states its licence position explicitly (the GSTMCU study's §9).
+
+*Original wording of the three questions, kept for context:*
 
 * **Do we want die-level research at all for parts with no public decap?** If not, the GSTMCU and Shifter
   studies become "schematic + behaviour" documents and the effort drops by half.
