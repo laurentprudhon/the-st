@@ -639,7 +639,15 @@ than by evidence, and the decision is that our core does not implement them:
   claims are about different sides of the same wire and both are currently unmeasured[2].
 
 `inferred` What a decap would not settle: any of §7's timing questions except indirectly.
-The right next buy for this machine, if anything is ever bought, is not a die but a logic analyser session — and §8 is the shopping list for it. No figure is drawn with this study: the design gives no die geometry, and a floorplan inferred from gate counts would be exactly the outrun-the-evidence failure the 68000 study warns about.
+The right next buy for this machine, if anything is ever bought, is not a die but a logic analyser session — and §8 is the shopping list for it.
+
+## 9a. The sheets drawn for this study
+
+Two different things were ruled out and allowed, and the distinction matters:
+
+`inferred` **No floorplan.** The design gives no die geometry, and a floorplan inferred from gate counts would be exactly the outrun-the-evidence failure the 68000 study warns about — there is no die photograph for this part to check one against.
+
+`documented` **Five functional sheets, with this study.** `research/gstmcu-silicon/schematics/` holds `00-blocks`, `01-cycle`, `02-line`, `03-address` and `04-counters`: the *structure* the netlist and the charts give, at four levels — the chip's blocks, one 500 ns cycle's strobes, one line's slot budget, the address path's four owners, and the clocks with the seven counting structures. They are redrawn from the design's own connectivity, carry their provenance on each sheet, and claim nothing about layout or scale. Regenerate them with `python3 build_schematics.py` in that directory.
 
 ---
 

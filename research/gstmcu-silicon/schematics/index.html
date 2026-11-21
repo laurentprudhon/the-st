@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>GSTMCU — five sheets, one chip</title>
+<style>
+  :root { --ink:#22232a; --mut:#63666f; --paper:#fbfaf6; --rule:#e8e5db; }
+  html { background:#efece3; }
+  body { margin:0 auto; max-width:1500px; padding:32px 24px 80px;
+         font-family:'Inter','Helvetica Neue',Arial,sans-serif; color:var(--ink); background:var(--paper); }
+  header { border-bottom:2px solid var(--ink); padding-bottom:14px; margin-bottom:8px; }
+  h1 { font-size:30px; margin:0 0 6px; letter-spacing:-.01em; }
+  .sub { color:var(--mut); font-size:15px; }
+  .note { background:#fdf1de; border-left:4px solid #b4761a; padding:12px 16px; margin:18px 0 26px; font-size:14px; }
+  section { margin:34px 0 46px; page-break-inside:avoid; }
+  h2 { font-size:19px; margin:0 0 2px; }
+  .lede { color:var(--mut); font-size:13.5px; margin:0 0 12px; }
+  object, img { width:100%; height:auto; border:1px solid var(--rule); background:#fff; }
+  footer { border-top:1px solid var(--rule); padding-top:12px; color:var(--mut); font-size:12.5px; }
+  @media print {
+    @page { size:A3 landscape; margin:10mm; }
+    html, body { background:#fff; }
+    body { padding:0; max-width:none; }
+    .note, footer { display:none; }
+    section { margin:0; page-break-after:always; }
+    section:last-of-type { page-break-after:auto; }
+    h2, .lede { margin-bottom:4mm; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>GSTMCU — five sheets, one chip</h1>
+  <div class="sub">C300589-001, seen at four levels: the blocks, one cycle, one line, and the counters behind both.</div>
+</header>
+
+<div class="note">
+  Educational schematics, drawn from the design's own netlist and charts. Functional, not to scale, and
+  <strong>not a floorplan</strong> — this part has no die photograph, so no layout is claimed. Every sheet
+  carries its provenance; the study behind them is <code>../research/gstmcu-silicon-implementation.md</code>.
+</div>
+
+<section>
+  <h2>00 · The chip as blocks</h2>
+  <p class="lede">The parts and what feeds what. Start here.</p>
+  <img src="00-blocks.svg" alt="Block diagram of the GSTMCU">
+</section>
+
+<section>
+  <h2>01 · One cycle — 500 ns, sixteen phases</h2>
+  <p class="lede">The slot grid with the strobes the netlist names: RAS, CAS, COL/ROW, LATCH, DCYC, SLOAD.</p>
+  <img src="01-cycle.svg" alt="Timing diagram of one 500 ns cycle">
+</section>
+
+<section>
+  <h2>02 · One line — 512 clocks, 128 internal slots</h2>
+  <p class="lede">How a line spends its slots: video's 80, blanking's 48, and what fits in the 48.</p>
+  <img src="02-line.svg" alt="Slot budget of one line">
+</section>
+
+<section>
+  <h2>03 · The address path — four owners, ten muxes</h2>
+  <p class="lede">Every MAD line is a 4:1 choice, and the printed table says which arm wins.</p>
+  <img src="03-address.svg" alt="Address multiplexer path">
+</section>
+
+<section>
+  <h2>04 · Clocks and counters</h2>
+  <p class="lede">One oscillator, one divider ladder, seven counting structures — each with its clock.</p>
+  <img src="04-counters.svg" alt="Clock ladder and counters">
+</section>
+
+<footer>
+  Regenerate with <code>python3 build_schematics.py</code>. Colour rule shared with the 68000 set:
+  blue address, green data, amber control, violet clocking. Licence position: <code>../../research/gstmcu-silicon-implementation.md</code> §10.
+</footer>
+</body>
+</html>

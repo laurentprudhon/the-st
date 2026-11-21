@@ -122,6 +122,13 @@ schematic for structure, and only then read an emulator.
    and this file's items ticked.
 3. The U400 study's Shifter-facing claims either confirmed or corrected in place (`§3.4`'s sound-DMA split,
    `§6.7`'s duplicated `$FF8260`), with a date.
-4. Commits: one for the study, one for the index and the corrections; pushed to `origin main`.
-5. Anything that changes our model lands as a dated correction in `design/video.md` or as a ticket — never as
+4. **The sheet set**, `research/gst-shifter-silicon/schematics/`, on the GSTMCU pattern
+   (`research/gstmcu-silicon/schematics/`): a `build_schematics.py` that emits numbered SVGs and audits its own
+   label overflow, a `README.md` stating what each sheet is evidence *for*, and an `index.html` for reading in
+   order. Five levels are the series standard — the chip as blocks, its datapath, its control, its timing, and
+   one worked example (for U401: a word at 16 colours). **No floorplan** — same ruling as U400: no die
+   photograph exists for this part either, so no layout is claimed. Where the evidence is thinner than U400's,
+   say so *on the sheet*: a block whose boundary is a guess gets a dashed outline and a `T3`-grade note.
+5. Commits: one for the study, one for the sheets, one for the index and the corrections; pushed to `origin main`.
+6. Anything that changes our model lands as a dated correction in `design/video.md` or as a ticket — never as
    prose inside a ranking table.
