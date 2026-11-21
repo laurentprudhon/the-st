@@ -29,7 +29,7 @@ our model takes).*
 | What counts? | **Real counters, unlike the 68000.** Seven counting structures, each with its own clock net: the refresh row chain, the video address counter, the sound address counter, the DMA address counter, the paddle divider, and the pen's horizontal and vertical pair on sheet 33, read since this section was written. The chip has no datapath that can be made to count. | 3.4 |
 | Clocking? | One 8-phase timing generator, drawn as a **single macro cell (`TGEN`)** from `TIME0`–`TIME7`, fed by a 16 MHz clock divided to 8/4/2 MHz and 500 kHz on sheet 7. Every slot decision in the chip is a decode of those phases. | 3.3 |
 | How does the address mux arbitrate? | Ten 4:1 muxes (`MX41`), one per `MAD` line, with the designer's own decode table printed on the sheet: refresh → sound → video inside a slot, CPU → DMA outside it. | 3.6 |
-| What does the emulator still not know? | which cells `LATCH` clocks, and two micro-facts (`LE` polarity, `VOS`'s mask in the `CAS` path) that move nothing by more than a phase. Interlace, the test mode and `BINT` are closed by ruling: not modelled. | 5, 9 |
+| What does the emulator still not know? | which cells `LATCH` clocks, and one micro-fact (the enable polarity of the `DCYC` latch) that moves nothing by more than a phase. Interlace, the test mode and `BINT` are closed by ruling: not modelled. | 5, 9 |
 
 `derived` The one-sentence machine: *a 16 MHz clock is divided into eight phases by a single macro cell; every 250 ns one phase picks an address from ten 4:1 muxes — video while the display window is open, sound DMA if a request is outstanding outside it, otherwise a RAS-only refresh — and the CPU or the DMA controller gets the other slot of the pair, while 68 flip-flops and ~90 latches hold the register state and no table of any kind is consulted.*
 
@@ -338,16 +338,18 @@ RAS0 = ~(  TIME0  & ADDRSELB & (~REFB | (RAM1A & VOS))
 `documented` The same reading holds for `RAS1` with `RAM2A` in place of `RAM1A`, and it fixes three things at once: the internal access is strobed by `TIME0` **high** and the external one by `TIME0` **low**; the two bank strobes are selected by the DRAM decode (`RAM1A`, `RAM2A`, sheet 18) rather than by the slot; and inside the internal half the address source is chosen by `REFB` and `VOS` before the mux routine of the table below is even consulted.[2]
 `derived` So the internal slot precedes the external one in every window — the order is a property of `TIME0`'s polarity, and the chart's `VIDEO/REF` and `CPU` lanes are drawn in that order because the equations are.[2]
 
-`documented` The column strobe trails the row strobe by exactly one phase, and unlike every other strobe on this chip it is not gated by the slot class:
+`documented` The column strobe trails the row strobe by exactly one phase, and unlike `DCYC`/`SLOAD` it carries no `ADDRSELB` term — it is gated per bank and by `VOS`, not by the slot's owner:
 
 ```
-CAS0L = ~( TIME2 & LCYCSELB & ... )   (pad PM002, sheet 22)        [2]
+CAS0L = ~( TIME2 & LCYCSELB & RAM1A & VOS )    (pads PM002/PM019/PM024, sheet 22)   [2]
+CAS1L = ~( TIME2 & LCYCSELB & RAM2A & VOS )    (same, with RAM2A)
 ```
 
-`documented` And that path was traced end to end at 700 dpi: `PM002` (`AA2`, taking `TIME2` and `LCYCSELB`) → `PM019` (a two-input qualifier) → `PM022` and `PM020` (a pair of inverters, cancelled logic, present for drive and skew) → `PM023` (the output driver) → the `CAS0L` pin, with **no flip-flop or latch anywhere in it**.[2]
-`derived` So `CAS` is a pure decode of `TIME2`, delayed by gate propagation only — no resynchronisation, no pulse stretching, nothing clocked: the two-number gap between `RAS` and `CAS` on the chart *is* the two-phase gap between `TIME0` and `TIME2`, which fixes a phase at **31.25 ns** and the window at sixteen of them.
-`documented` The trace also found a qualifier this study's transcription had missed: `PM019` takes a second input, `VOS`, so the column strobe is steered by the video-side select rather than a bare re-drive of `PM002`.[2]
-`inferred` That is consistent with the reconstruction's `vos = ~(vidb & ~snden)` — video-not-sound — which selects the DRAM bank a cycle serves; what `VOS` masks in the `CAS` path itself is open, and one crop of `VOS`'s source would close it.
+`documented` That path is traced end to end: `PM002` (`AA2`) ANDs `TIME2` with `LCYCSELB`; `PM024` (an `AA2`) ANDs the bank select with `VOS`; `PM019` (an `NA2`) NANDs the two; the result runs through an inverter pair into the output driver `PM023` and the `CAS0L` pin — with **no flip-flop or latch anywhere in it**.[2]
+`documented` The `CAS1L` chain repeats it with `RAM2A` in place of `RAM1A`, so the qualifier is **per-bank video select**, not a single steering term.[2]
+`derived` So `CAS` is a pure decode, delayed by gate propagation only — no resynchronisation, no pulse stretching, nothing clocked: the two-number gap between `RAS` and `CAS` on the chart *is* the two-phase gap between `TIME0` and `TIME2`, which fixes a phase at **31.25 ns** and the window at sixteen of them.
+`derived` And the qualifier turns out to be the answer to a question this study had left dangling: a refresh cycle asserts `RAS0` through the `~REFB` term of its equation while `VOS` is what gates `CAS`, so a refresh is CAS-less **by construction**, not by a special case.
+`inferred` `VOS` itself is a registered video-active term built on sheet 20 beside the `DE` sampling (`PK007`/`PK010`/`PK013`), consistent with the reconstruction's `vos = ~(vidb & ~snden)` — video-not-sound — which selects the bank a video cycle serves.[9]
 
 `documented` `LCYCSEL` is the line-cycle select: a latch in the clock generator (sheet 7) built from the phase chain, with `LCYCSELB` its complement and `CYCSEL` the cycle select beside it.[2]
 `inferred` The reconstruction gives `lcycsel` as the `TIME7` pulse and `cycsel_en` as `time6 & ~time7`, i.e. the two selects that bracket a cycle's end.[9]
@@ -523,7 +525,7 @@ CAS0L = ~( TIME2 & LCYCSELB & ... )   (pad PM002, sheet 22)        [2]
 `unknown` One question is left in this section, and the owner's readings plus the outside record closed the rest — `COL/ROW`'s polarity by where `RAS` falls, `DCYC`'s seam by the lane its pulse is drawn in, the sheet-49 lane order into §5.1, the refresh chain (§3.4), the paddle's capture (§5.6), `INTERLACE` (§5.6) and the test pin (§5.7).
 
 - **Which cells `LATCH` clocks** (§5.1): its payload is `inferred` — the CPU-read data latch the outside analysis describes[13] — and both netlist exports stop short of its consumers, so the remaining step is naming the cells, not deciding what the signal is for.
-- **Two micro-facts, neither load-bearing**: `LE`'s polarity on `PL025` (a bubble or not — it decides whether `DCYC` lands on the decode's phase or one later, 31.25 ns either way), and what `VOS` masks in the `CAS` path (§5.1).
+- **One micro-fact, not load-bearing**: the latch that produces `DCYC`/`SLOAD` shows no legible enable-pin polarity on the sheet (`PL025` reads as a cell with `D` and outputs only), so whether its output lands on the decode's phase or one later is undecided — **31.25 ns either way**, inside a slot.
 
 ---
 
