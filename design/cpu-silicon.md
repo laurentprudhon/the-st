@@ -192,9 +192,26 @@ programmer's model, the counters, `Halted`), `tools/cpu-dissection/Program.cs` (
 `gen.py`'s two variants (which link `src/TheST.Machine/Cpu/*.cs` unchanged). A restructure that breaks the
 dissection tool has broken the sources of record.
 
-*To be filled by #85*: the freeze test — `tools/validation-harness/SurfaceCommand.cs`, run as
-`validation-harness cpu-surface`, a row of `scripts/validate.sh` beside ADR 0014's falsifier row, with ADR
-0015 §1's list as its allow-list and §1.1's rows as its display set.
+**The freeze test (#85, in progress)** — `tools/validation-harness/SurfaceCommand.cs`, run as
+`validation-harness cpu-surface`. ADR 0015 §1 is transcribed into it as the allow-list (the 31 register
+views, §8.1's 60 signal levels with no `A0`, `Instruments`' 23 members, the manual's 78 families, the seam's
+three verbs), and it checks **both directions**: a member the ADR names and the type lacks is *missing*, a
+public member the type declares and the ADR does not name is *extra* — the second is how a surface fails.
+It also asserts `Decode`'s functions and `Family`'s members are the same list.
+
+Two modes, because the test must exist before the surface it freezes. The default is the **freeze**: any
+divergence exits non-zero, and that is the row `scripts/validate.sh` gets when #85 lands. `--audit` prints
+the same report and exits 0, and `scripts/cpu-shape-check.sh` runs the freeze first, falls back to the audit
+while its `SURFACE_MODE` constant reads `audit`, and reports the count in its row. Measured on 2026-11-21,
+before any conversion: **62 divergences** — 29 register views missing, `PC`/`SR` read-only, `Pins`/
+`Instruments`/`Decode`/`SingleStep` absent, and **27 public members the ADR does not name** (`PeekD`,
+`PeekA`, `Supervisor`, `InterruptMask`, `Usp`, `Ssp`, the five counters, the nine per-record instruments,
+`TicksPerCpuClock`, and the seam's `Load`/`Capture`/`StepAsync`, which belong inside `SingleStep`). The
+commit that converts the surface flips `SURFACE_MODE` to `freeze`, so a later rename can never pass as
+"mid-conversion".
+
+What it cannot see: that a member is a *view* rather than a copy (the `grep`s of §3's state table), and what
+a member computes (the corpus, the boot's probes, `--trace`).
 
 ## 5. What the corpus cannot see
 

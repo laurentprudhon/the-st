@@ -49,6 +49,10 @@ EXPECT_STREAM=1693218a
 EXPECT_DESKTOP=602
 G8_SLACK=0.3
 G8_BUDGET=10.0
+# The freeze test's mode: `audit` while the surface is still the pre-#85 one (a divergence list is
+# reported and the row passes), `freeze` once #85 lands — and the commit that makes the surface ADR
+# 0015 §1's flips this word, so a later rename can never pass as "mid-conversion".
+SURFACE_MODE=audit
 G8_FRAMES=800
 FOLD_FRAMES=800
 
@@ -335,10 +339,18 @@ interface_verdict=FAIL
 if [ "$build_child_debug" -ne 0 ]; then
     bad "interface: no Debug build"
 else
+    # The freeze first: green means the surface is ADR 0015 §1's, and the row says so. A non-zero exit
+    # means either "#85 is mid-conversion" (audit mode reports the divergences and exits 0) or a real
+    # divergence list the surface no longer matches — the row tells which, so it can never lie.
     harness_in "$root" Debug cpu-surface >"$out/cpu-surface.log" 2>"$out/cpu-surface.err"
     surface_exit=$?
     if [ "$surface_exit" -eq 0 ]; then
-        surface_row="cpu-surface PASS"
+        surface_row="cpu-surface PASS (frozen)"
+        surface_ok=1
+    elif [ "$SURFACE_MODE" = "audit" ] \
+         && harness_in "$root" Debug cpu-surface --audit >"$out/cpu-surface.audit.log" 2>/dev/null; then
+        surface_divergences=$(grep -oE '^cpu-surface: [0-9]+ divergence' "$out/cpu-surface.audit.log" | grep -oE '[0-9]+')
+        surface_row="cpu-surface audit: ${surface_divergences} divergences (#85 mid-conversion)"
         surface_ok=1
     elif grep -q "unknown command 'cpu-surface'" "$out/cpu-surface.err"; then
         # #85 has not landed: the freeze test does not exist yet, and that is the documented skip
