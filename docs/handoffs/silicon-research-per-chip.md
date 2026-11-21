@@ -106,6 +106,9 @@ What the session established, in the form later chips can reuse:
 * No figure was drawn: the design gives no die geometry and a gate-count floorplan would be invented.
 * Six hardware tests, with pass criteria, are specified in §7 of the study; they settle the refresh/sound
   ordering questions that no document can.
+* **Follow-up handoff: [`gstmcu-operating-description.md`](gstmcu-operating-description.md)** — the study
+  describes the chip and adjudicates the record but never walks it through a slot, a line or a frame; that is
+  the next session's job, with the acceptance criteria and the sheet map it needs.
 
 ### U400 — original question set (kept for reference)
 * **What it is:** the STE's combined GLUE + MMU, plus DMA arbitration, video timing, DRAM control, the
