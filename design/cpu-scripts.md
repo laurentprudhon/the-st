@@ -126,6 +126,11 @@ size (`IsScriptedSingleOperandLong`, `IsScriptedSingleOperandWord` and `IsScript
 | `MOVE` / `MOVEA`, `.w` and `.l` (nine destination classes, four `MoveLongFlags` placements) | 2 × 9 blocks, **one** method | ~430 (`MoveScriptAsync`, `MoveStoreAsync`, `WriteMoveAsync`) | 2 500 a file, four files | **2 500 / 2 500** each (were 1 767 / 1 468 / 2 247 / 1 984), **every record exact-clock** (10 000) |
 | `MOVEM` `.l` / `.w`, both directions — **not ported, and it did not need to be** | the two old loops stay | +48 (`MovemToRegistersAsync`: the commit, the class, the read-ahead) | 2 500 a file, two files | **2 500 / 2 500** each (were 2 331 / 2 347), **every record exact-clock** (was 1 836 / 1 802) |
 
+| `CMPM` `.b` / `.w` / `.l` (one source shape: `(Ay)+,(Ax)+`) — a script after all | 1 block, two readings (2 and 4 words) | ~120 (`CompareMemoryAsync`) | 162 in `CMP.w`, 165 in `CMP.l` | **2 500 / 2 500** both files, **every record exact-clock** (5 000) |
+| the memory shifts, all eight kinds (`ASR`/`ASL`/`LSR`/`LSL`/`ROXR`/`ROXL`/`ROR`/`ROL .w` on `(An)`, `(An)+`, `-(An)`, `(d16,An)`, `(d8,An,Xn)`, `(xxx).w`, `(xxx).l`) | 4 classes, **not** rewritten | the existing block + the frame class and the abort charge (`MemoryShiftAsync`) | 2 500 a file, ten files | **2 500 / 2 500** each (were 2 415 … 2 435), **every record exact-clock** — the frame class alone greened the eight that were only `ram`-red |
+| `ASR`'s C and X past the width (all three sizes) | the `lastOut` rule in `Shift` | 6 lines | 534 (`ASR.b`), 292 (`ASR.l`), 465 (`ASR.w`) | the two small files 2 500 / 2 500 (they were already exact-clock: this was flags alone), `ASR.w` 2 500 |
+| `MOVEfromSR` / `MOVEtoCCR` / `MOVEtoSR` — two scripts, one method | 8 EA shapes × 3 blocks | ~150 (`MoveToStatusAsync`, `StatusWriteRefillAsync`, `FrameCounterForExtensionShape`) | 2 500 a file, three files | **2 500 / 2 500** each (were 2 251 / 2 211 / 2 377), **every record exact-clock** (was 163 / 159 / 1 360) |
+| `Bcc`'s odd-target frame (one record, a rel16 branch to an odd address) | `bbci3` | 1 line (`FrameSavesOnFetch(_opcodeAddress + 2)`) | 1 | **5 000 / 5 000** (`Bcc` and `DBcc`), and its clock column is untouched: 3 715 exact both sides — the branch shapes are still the table's, not a script's |
 `MOVEM` is the one row of this table that is **not a script**, and it is the honest counter-example to the
 recipe: the family's loop was already the right shape and every clock of it is a bus read, so what the
 corpus caught was three *placements*. (1) The load direction's `(An)+` increment is `popm6`'s
@@ -141,6 +146,21 @@ last register — `fc 5`, 4 clocks — and 1 331 clean records were exactly that
 one was already exact. No charge was added to `M68000.Timing.cs`: the table's `MOVEM` row was right all
 along, and `movem_*_list` has **zero idle states** (`10 bus accesses, 0 idle`), which is what the class
 listing says before any clock is measured.
+
+Row 79 completed the table — MAME's corpus is now 317 500 / 317 500 — and three of its five findings are
+about the *frame's saved counter*, which is the one thing a shape table cannot express. `CMPM` moves
+`m_pc` before its first read (`cmmw1`), so the frame's depth is the queue's word and not the trailing
+fetch's; a memory shift's depth is **per addressing class** (`asr_adr16`/`adr32` move it, `asr_dais`'s
+`aixl1` does not, the predecrement block moves it its own way) — one switch, three values, 83 records;
+and the status moves' read direction **refills the queue after the status write** (`n 4`, then two
+program reads at the instruction's own next word), which is the only place in this file where a script
+*pays for* a refill instead of a closing fetch: `RefillAsync(_pc)` is that pair, and marking the flow
+transferred is what keeps the closing steps from fetching a third word behind it. The batch's other two
+findings are its own kind of lesson: `ASR`'s C and X are **not** zero past the width for the *arithmetic*
+shift (MAME's `alu_asr8` in a loop keeps propagating the sign, and CLK's 2 673 records that disagree are
+the documented convention split, not a regression), and `MOVE from SR` **reads** its operand before it
+stores it — a write-direction instruction the handler had been storing without the read, which is also
+why its fault frames say "read".
 
 The control transfers are the first family whose **frame's saved counter** the script decides, and they
 are also where the queue's lookahead shows: a transfer never refills the slot behind the word it took, so
