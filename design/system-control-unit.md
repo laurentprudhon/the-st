@@ -165,9 +165,9 @@ Consequences the code must honour:
    *deferred to the next blanking slot*, never served mid-window.
 3. **Sound lives in blanking**: 48 internal slots per line against ≤3.2 needed, and refresh's share — now a
    bound rather than the old 8.2: `REFCLK` is a sheet-27 flop on the 500 kHz timebase gated by `HCTR`
-   (`M2CLOCK ÷ 64`, 16 µs) and `LC`, so a line owes about **2** blanking slots for refresh (four on the lines where `LC` is high), and the walk
-   is 8.19 ms per 256 rows or 16.4 ms per 512 — the difference being a DRAM part marking, not a sheet
-   (study §3.4, §5.2, §7.5).
+   (`M2CLOCK ÷ 64`, 16 µs) and `LC`, so a line owes at most **4** blanking slots for refresh, and the walk is bounded 8.19 ms to 131 ms:
+   512 rows of 41256 want 15.6 µs a row, only `LC`-permissive reaches it, and `LC`'s duty is the one open
+   conflict left in the chain (study §3.4, §5.2, §7.5).
 4. **A wider window costs refresh and sound their slots, not the CPU.** There is no overscan stretch in
    the reconstruction or in either vendored emulator; recorded as a fidelity gap, not modelled as a rule.
 5. **Border lines do not hand their window slots over.** `hde` is horizontal, so the window exists on

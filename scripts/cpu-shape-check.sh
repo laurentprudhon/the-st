@@ -8,9 +8,7 @@
 # else: it is the whole of design/cpu-silicon.md §6 in one run. Four verdicts, exit 0 only if all
 # four hold:
 #
-#   1. the corpus, both columns — MAME (the gate) 317 500 / 317 500 state AND exact-clock over
-#      127 files; CLK state 863 265, and its red set identical to the parent's **record for
-#      record** (a restructure may not trade one class for another behind an unchanged count).
+#   1. the corpus — MAME (the gate) 317 500 / 317 500 state AND exact-clock over 127 files.
 #   2. the folds — a Debug `boot --frames 800` from the repo root, run.digest `4eac06dc…` /
 #      run.stream `1693218a…`, with the desktop frame and the pops a frame quoted.
 #   3. G8 — two Release builds (the parent's in a `git worktree`), three interleaved pairs at
@@ -29,8 +27,12 @@
 #     runs wrote, and quotes G8 from a Release boot's own run.state;
 #   · every boot starts at the tree root (the harness resolves ROM/data paths against the cwd);
 #   · a G8 figure is compared only against another G8 figure at the same frame_n, never against
-#     a standalone boot or a validate.sh row (those run ~0.9 ms apart on this host);
-#   · CLK's pass rate is compared with CLK's, never subtracted from MAME's.
+#     a standalone boot or a validate.sh row (those run ~0.9 ms apart on this host).
+#
+# CLK was the second column until 2026-11-21: the owner retired it as a grading row (#84), because
+# MAME is the source of truth for both columns and its 100 % gate turns any behavioural change red,
+# while CLK's own red set is conventions and was never a work queue. The corpus and its analyses
+# (FINDINGS/LENGTH/PLACEMENT/CONFORMANCE, the ceiling table) stay in the tree; only the row went.
 # ============================================================================================
 set -uo pipefail
 
@@ -42,8 +44,6 @@ cd "$root" || exit 1
 EXPECT_MAME_TOTAL=317500
 EXPECT_MAME_EXACT=317500
 EXPECT_MAME_FILES=127
-EXPECT_CLK_STATE=863265
-EXPECT_CLK_EXACT=819372
 EXPECT_DIGEST=4eac06dc
 EXPECT_STREAM=1693218a
 EXPECT_DESKTOP=602
@@ -53,15 +53,13 @@ G8_FRAMES=800
 FOLD_FRAMES=800
 
 usage() {
-    echo "usage: scripts/cpu-shape-check.sh <parent-commit> [clk-baseline-file]" >&2
+    echo "usage: scripts/cpu-shape-check.sh <parent-commit>" >&2
     echo "       the parent is graded against the working tree; e.g. \`git rev-parse HEAD~1\`" >&2
-    echo "       the baseline defaults to tests/680x0/baseline/clk.out.txt (row 81's per-file table)" >&2
     exit 2
 }
 
 [ $# -ge 1 ] || usage
 parent_ref=$1
-clk_baseline=${2:-tests/680x0/baseline/clk.out.txt}
 parent_sha=$(git rev-parse --verify "$parent_ref^{commit}" 2>/dev/null) || {
     echo "cpu-shape-check: no such commit '$parent_ref'" >&2
     exit 2
@@ -133,10 +131,10 @@ spaced() {
 }
 
 # ============================================================================================
-# build — the child (Debug for the corpus and the folds, Release for G8) and the parent (both,
-# in a worktree). A failed Release build is G8's verdict, not a number to explain away.
+# build — the child (Debug for the corpus and the folds, Release for G8) and the parent (Release,
+# in a worktree, for the A/B). A failed Release build is G8's verdict, not a number to explain away.
 # ============================================================================================
-step "build — child Debug + Release, parent Debug + Release ($parent_short in a worktree)"
+step "build — child Debug + Release, parent Release ($parent_short in a worktree)"
 build_child_debug=1
 build_child_release=1
 if dotnet build TheST.sln -c Debug >"$out/build-Debug.log" 2>&1; then
@@ -154,15 +152,8 @@ fi
 
 parent_tree="$out/parent-tree"
 rm -rf "$parent_tree"
-build_parent_debug=1
 build_parent_release=1
 if git worktree add --detach --quiet "$parent_tree" "$parent_sha" >"$out/parent-worktree.log" 2>&1; then
-    if ( cd "$parent_tree" && dotnet build TheST.sln -c Debug >"$out/parent-build-Debug.log" 2>&1 ); then
-        build_parent_debug=0
-        ok "parent Debug: built"
-    else
-        bad "parent Debug build failed — see $out/parent-build-Debug.log"
-    fi
     if ( cd "$parent_tree" && dotnet build TheST.sln -c Release >"$out/parent-build-Release.log" 2>&1 ); then
         build_parent_release=0
         ok "parent Release: built"
@@ -186,7 +177,6 @@ trap cleanup EXIT
 # The corpus directories are git-ignored, so they are named absolutely: a worktree does not carry
 # them, and the parent's run must grade the same bytes the child's does.
 mame_dir="$root/tests/680x0/mame"
-clk_dir="$root/tests/680x0/full"
 
 corpus_summary() {
     # "cpu-tests: 317,500 / 317,500 passed, 0 failed" and the two column lines → tab-separated
@@ -224,63 +214,6 @@ elif [ "$build_child_debug" -ne 0 ]; then
     bad "MAME: no Debug build to run it"
 else
     bad "MAME: no corpus at $mame_dir (scripts/fetch-m68000-tests.sh fetches it)"
-fi
-
-step "corpus — CLK (the denser suite), state and the red set record for record against the parent's"
-clk_measured="not run"
-clk_verdict=FAIL
-if [ "$build_child_debug" -eq 0 ] && [ "$build_parent_debug" -eq 0 ] && [ -d "$clk_dir" ]; then
-    harness_in "$root" Debug cpu-tests --corpus clk --dir "$clk_dir" --quiet \
-        --out "$out/corpus-clk.txt" --failures "$out/corpus-clk.failures" \
-        >"$out/corpus-clk.log" 2>&1
-    harness_in "$parent_tree" Debug cpu-tests --corpus clk --dir "$clk_dir" --quiet \
-        --out "$out/corpus-clk-parent.txt" --failures "$out/corpus-clk-parent.failures" \
-        >"$out/corpus-clk-parent.log" 2>&1
-    IFS=$'\t' read -r c_passed c_total c_exact c_files <<<"$(corpus_summary "$out/corpus-clk.log")"
-    c_passed=$(count "${c_passed:-}"); c_total=$(count "${c_total:-}")
-    c_exact=$(count "${c_exact:-}"); c_files=$(count "${c_files:-}")
-    # The red set is keyed on (file, record name) — the parent's own record identities, never a
-    # pass count. The reason column is compared separately because a record can stay red and
-    # change which field it disagrees on (the CLK frame-status dispute, #79).
-    cut -f1,2 "$out/corpus-clk-parent.failures" | sort >"$out/clk-red-parent.set"
-    cut -f1,2 "$out/corpus-clk.failures"        | sort >"$out/clk-red-child.set"
-    cut -f1,3 "$out/corpus-clk-parent.failures" | sort -u >"$out/clk-reason-parent.set"
-    cut -f1,3 "$out/corpus-clk.failures"        | sort -u >"$out/clk-reason-child.set"
-    red_parent=$(wc -l <"$out/clk-red-parent.set")
-    red_child=$(wc -l <"$out/clk-red-child.set")
-    new_red=$(comm -13 "$out/clk-red-parent.set" "$out/clk-red-child.set" | wc -l)
-    fixed=$(comm -23 "$out/clk-red-parent.set" "$out/clk-red-child.set" | wc -l)
-    reason_moves=$(comm -13 "$out/clk-reason-parent.set" "$out/clk-reason-child.set" | wc -l)
-    red_files=$(cut -f1 "$out/clk-red-child.set" | sort -u | wc -l)
-    # the per-file table against a named baseline (row 81's, committed): a state move is a line of
-    # output, not a reading exercise
-    baseline_row="baseline absent"
-    baseline_bad=0
-    if [ -f "$clk_baseline" ]; then
-        diff -u "$clk_baseline" "$out/corpus-clk.txt" >"$out/clk-baseline.diff" 2>&1
-        baseline_lines=$(grep -cE '^[-+][^-+]' "$out/clk-baseline.diff" || true)
-        baseline_rows=$(grep -cE '^[-+](ok|FAIL)' "$out/clk-baseline.diff" || true)
-        baseline_row="per-file table vs $clk_baseline: $baseline_rows rows differ"
-        [ "$baseline_rows" -eq 0 ] || baseline_bad=1
-    fi
-    clk_measured="$(spaced "$c_passed") state, $(spaced "$c_exact") exact-clock, $red_child red records in $red_files files ($new_red new, $fixed fixed vs parent; $reason_moves field moves); $baseline_row"
-    if [ "$c_passed" = "$EXPECT_CLK_STATE" ] && [ "$c_exact" = "$EXPECT_CLK_EXACT" ] \
-       && [ "$new_red" -eq 0 ] && [ "$fixed" -eq 0 ] && [ "$baseline_bad" -eq 0 ]; then
-        clk_verdict=PASS
-        ok "CLK: $clk_measured"
-        [ "$reason_moves" -eq 0 ] || printf '   note  %s records stayed red and changed their first differing field\n' "$reason_moves"
-    else
-        bad "CLK: $clk_measured — the bar is $(spaced "$EXPECT_CLK_STATE") state, $(spaced "$EXPECT_CLK_EXACT") exact-clock and the parent's red set unchanged"
-        [ "$new_red" -eq 0 ] || { echo "     new red records:"; comm -13 "$out/clk-red-parent.set" "$out/clk-red-child.set" | head -8 | sed 's/^/       /'; }
-        [ "$fixed" -eq 0 ] || { echo "     records the change fixed (the set must not move at all):"; comm -23 "$out/clk-red-parent.set" "$out/clk-red-child.set" | head -8 | sed 's/^/       /'; }
-        [ "$baseline_bad" -eq 0 ] || { echo "     per-file rows that moved against the baseline:"; grep -E '^[-+](ok|FAIL)' "$out/clk-baseline.diff" | head -8 | sed 's/^/       /'; }
-    fi
-else
-    if [ "$build_child_debug" -ne 0 ] || [ "$build_parent_debug" -ne 0 ]; then
-        bad "CLK: a Debug build is missing"
-    else
-        bad "CLK: no corpus at $clk_dir (scripts/fetch-680x0-tests.sh --full fetches it)"
-    fi
 fi
 
 # ============================================================================================
@@ -344,7 +277,7 @@ if [ "$build_child_release" -eq 0 ] && [ -f "$parent_tree/tools/validation-harne
     done
 
     if [ "$g8_runs_ok" -eq 1 ]; then
-        g8_out=$(python3 - "$pairs_tsv" "$G8_SLACK" "$G8_BUDGET" <<'PY'
+        g8_out=$(python3 - "$pairs_tsv" "$G8_SLACK" "$G8_BUDGET" <<'PY2'
 import sys
 path, slack, budget = sys.argv[1], float(sys.argv[2]), float(sys.argv[3])
 rows = []
@@ -357,16 +290,21 @@ if not rows:
 for pair, pm, pn, cm, cn in rows:
     if pn != cn:
         problems.append(f"pair {pair}: frame_n differs ({pn} vs {cn}) — not a comparison")
-    if cm > pm + slack:
-        problems.append(f"pair {pair}: child {cm:.2f} ms > parent {pm:.2f} + {slack:.1f} ms")
     if cm > budget:
         problems.append(f"pair {pair}: child {cm:.2f} ms above the {budget:.1f} ms budget")
-means = [r[1] for r in rows]
-print("parent " + " / ".join(f"{p:.2f}" for p in means)
-      + " vs child " + " / ".join(f"{c:.2f}" for c in [r[3] for r in rows])
-      + f" ms at n {rows[0][2]}, worst pair {max(r[3] - r[1] for r in rows):+.2f} ms"
+# Three pairs exist so that one noisy pair cannot decide: the datum is the MEDIAN delta. On this
+# host a single pair has been measured at +0.42 ms on byte-identical cores (2026-11-21, run
+# 20261121T152653Z), which is why the rule is not "every pair".
+deltas = sorted(c - p for _, p, _, c, _ in rows)
+median = deltas[len(deltas) // 2] if len(deltas) % 2 else 0.5 * (deltas[len(deltas) // 2 - 1] + deltas[len(deltas) // 2])
+if median > slack:
+    problems.append(f"median delta {median:+.2f} ms > parent + {slack:.1f} ms")
+print("parent " + " / ".join(f"{r[1]:.2f}" for r in rows)
+      + " vs child " + " / ".join(f"{r[3]:.2f}" for r in rows)
+      + f" ms at n {rows[0][2]}, deltas " + " / ".join(f"{d:+.2f}" for d in deltas)
+      + f", median {median:+.2f} ms"
       + ("\tPASS" if not problems else "\tFAIL: " + "; ".join(problems)))
-PY
+PY2
 )
         g8_measured=${g8_out%%$'\t'*}
         g8_result=${g8_out##*$'\t'}
@@ -445,8 +383,6 @@ printf '| %-14s | %-96s | %-58s | %-6s |\n' "verdict" "measured" "bar" "status"
 printf '|%s|%s|%s|%s|\n' "$(printf -- '-%.0s' {1..16})" "$(printf -- '-%.0s' {1..98})" "$(printf -- '-%.0s' {1..60})" "$(printf -- '-%.0s' {1..8})"
 printf '| %-14s | %-96s | %-58s | %-6s |\n' "corpus mame" "$mame_measured" \
     "$(spaced "$EXPECT_MAME_TOTAL") both columns, $EXPECT_MAME_FILES files" "$mame_verdict"
-printf '| %-14s | %-96s | %-58s | %-6s |\n' "corpus clk" "$clk_measured" \
-    "$(spaced "$EXPECT_CLK_STATE") state + the parent's red set, record for record" "$clk_verdict"
 printf '| %-14s | %-96s | %-58s | %-6s |\n' "folds" "$fold_measured" \
     "${EXPECT_DIGEST}… / ${EXPECT_STREAM}…, desktop $EXPECT_DESKTOP" "$fold_verdict"
 printf '| %-14s | %-96s | %-58s | %-6s |\n' "G8" "$g8_measured" \
@@ -456,9 +392,9 @@ printf '| %-14s | %-96s | %-58s | %-6s |\n' "interface" "$interface_measured" \
 echo
 
 if [ "$fail" -eq 0 ]; then
-    echo "PASS — the corpus is closed on both columns and unmoved on CLK's; the folds are the"
-    echo "       blessed pair; G8 holds inside the parent's +0.3 ms at the same n; the interface"
-    echo "       (the freeze test or its documented absence) and both generated variants stand."
+    echo "PASS — the corpus is closed on both columns; the folds are the blessed pair; G8 holds"
+    echo "       inside the parent's +0.3 ms at the same n; the interface (the freeze test or its"
+    echo "       documented absence) and both generated variants stand."
     exit 0
 fi
 
