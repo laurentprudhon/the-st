@@ -68,6 +68,14 @@ in order to be intelligible.
 | pending interrupt level | — | `inl` | — | `iplb`/`inl` | — | — | **INL** |
 | trace pending | — | `tpend` | — | `trace` | — | — | **TPEND** |
 | decimal correction | — | `corf` | — | — | — | — | **corf** |
+| ALU output latch | — | — (named by role only: "the latched ALU output") | — | `aluo` | `m_aluo` | "register C" | **ALUO** |
+| ALU flag latch | — | — | — | `isr` | `m_isr` | — | **ISR** |
+
+The last two rows are the table's only **admitted aliases** (the owner's ruling, ADR 0015 §8.5, 2026-11-21):
+neither patent abbreviates them — §5.2 of the silicon record names the ALU's result only by role ("the
+latched ALU output"), and the flag latch not at all — so the name is taken from the microcode listing itself
+(`aluo`, `isr`) rather than invented, and the provenance column is the table's own. `ALUO` is 16 bits and
+`ISR` is a *stage* of `PSW`'s flags (`PSW`'s bits are "latched in several places", §5.3), not `PSW`.
 
 `derived` Every entry in the last column is a patent name. Nothing in this table had to be invented, and no modern
 implementation invented one either: the two code bases that carry the full machine (MAME's generator, and the

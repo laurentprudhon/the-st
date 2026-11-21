@@ -1,20 +1,17 @@
 # The core's shape: the die's blocks, as partial files
 
-**Second draft, on the owner's grouping.** Ticket #83 fixes the map, the dependency direction and the state
-table; #84–#94 fill the sections marked *to be filled*. The authority for every name is
-[ADR 0015](../docs/adr/0015-the-core-is-the-silicon.md); this file is the *operational* view of it.
+**Accepted** with [ADR 0015](../docs/adr/0015-the-core-is-the-silicon.md) (2026-11-21). #84–#94 fill the
+sections marked *to be filled*; this file is the operational view of the ADR — which block lives in which
+file, in which order they may call each other, and what each latch is called.
 
-**What this draft changes.** The first draft grouped files by *kind of thing* — registers, datapath,
-counters, bus, sequencer, decode — and ordered them by call dependency. The owner's reading is the better
-one and is what follows: **a file is a block of the die, and the die's own bands order the files.** The
-floorplan's own summary is the map's table of contents:
+**The grouping is the owner's.** A file is a block of the die, and the die's own bands order the files. The
+floorplan's summary is this map's table of contents:
 
 > · top — clocks, bus control, opcode decode
 > · middle — the two control stores
 > · bottom — the execution unit
 
-So the map is the floorplan, top to bottom, with the pads at the edge. It is not a taxonomy of C# types; it
-is the chip.
+plus the pads at the edge, and one file that is not the part at all: the emulator's interface.
 
 Sources, by sheet (`research/68000-silicon/schematics/`):
 
@@ -22,30 +19,34 @@ Sources, by sheet (`research/68000-silicon/schematics/`):
 |---|---|---|
 | `00-floorplan.svg` | where everything is on the die | **the block list and the file split** — every block named below is that sheet's own label |
 | `01-datapath.svg` | three sections, two buses, six lanes | `Registers`, `Address`, `Data` |
-| `02-control.svg` | opcode → ~200 control lines | `InstructionRegisters`, `Decode`, `Sequencer`, `Exception`, `Bus` |
+| `02-control.svg` | opcode → ~200 control lines | `InstructionRegisters`, `Decode`, `Sequencer`, `Exception`, `Bus`, `ControlStores` |
 | `03-timing.svg` | clock, microcycle, bus cycle, wait state | `Clock`, `Bus` |
-| `04-word-formats.svg` | a 17-bit microword, a 68-bit nanoword | `Sequencer`, `Scripts`, `NanoStore` |
+| `04-word-formats.svg` | a 17-bit microword, a 68-bit nanoword | `Sequencer`, `ControlStores` |
 
 The colour rule is the README's: blue address, green data, amber control, violet clocking and exception
 entry, grey storage.
 
 ## 1. The partial-file map — the floorplan, block by block
 
-Every row is a block `00-floorplan.svg` names (or two the die draws as one region), and the file *is* that
-block. Fourteen files, four of which exist today.
+Fourteen files, four of which exist today. Every row is a block `00-floorplan.svg` names (or two the die
+draws as one region), and the file *is* that block.
 
 ### The edge — pads and buffers (sheet 00, grey)
 
 | file | die block(s) | what it owns | ticket |
 |---|---|---|---|
 | `M68000.Pins.cs` | `ADDRESS BUFFERS → A1–A23`, `DATA BUFFER → D0–D15`, `BUF INPUTS` | the nested type `Pins` (one `bool` per §8.1 signal), the buffers between the pads and `AOB`/`DOB`/`DBIN` | #85, #88 |
-| `M68000.Clock.cs` | `CLOCK GENERATORS · TIMER & E`, `DECODE DRIVERS` | the microcycle's names (φ1/φ2; two clocks a microword, four an access), the phase fan-out, the E divider | #90, #94 |
+| `M68000.Clock.cs` | `CLOCK GENERATORS`, `DECODE DRIVERS` | the microcycle's names (φ1/φ2; two clocks a microword, four an access) and the phase fan-out | #90, #94 |
+
+**`E` and the 6800 group are a level and nothing else** (the owner's ruling): no divider, no ten-state
+counter, no "TIMER & E" block. The ST does not use them (tutorial §8.1), so `Pins.E`/`VPA`/`VMA` exist
+because §8.1's list does, read false, and nothing drives them.
 
 ### The bottom band — the execution unit (sheet 01)
 
 | file | die block(s) | what it owns | ticket |
 |---|---|---|---|
-| `M68000.Registers.cs` | the register file, drawn across `HIGH` / `LOW` / `DATA` | `D0–D7`, `A0–A6`, `USP`, `SSP`, `PC` (`AU`), `AT`, `DT`, `AOB`, `DBIN`, `DOB`, `ALUO`, `ALUB`, `ALUE`, `ISR`, `ALUWidth`, `IRC`/`IR`/`IRD`, `PSW`, `SSW`, `INL`, `TPEND`, `PREN`, `FTU` — **storage only**, one 32-bit field per register with `Set16H`/`Set16L` as the section accessors (ADR 0015 §3) | #86, #87 |
+| `M68000.Registers.cs` | the register file, drawn across `HIGH` / `LOW` / `DATA` | `D0–D7`, `A0–A6`, `USP`, `SSP`, `PC` (`AU`), `AT`, `DT`, `AOB`, `DBIN`, `DOB`, `ALUO`, `ALUB`, `ALUE`, `ISR`, `ALUWidth`, `IRC`/`IR`/`IRD`, `PSW`, `SSW`, `INL`, `TPEND`, `PREN`, `FTU` — **one file, storage only**, one 32-bit field per register with `Set16H`/`Set16L` as the section accessors (ADR 0015 §3) | #86, #87 |
 | `M68000.Address.cs` | `ADDRESS HIGH` (high words + `AUH`), `ADDRESS LOW` (low words + `AUL`), the address bus `AB(h)`/`AB(l)`/`AB(d)` and its couplers | the 32-bit adder as two 16-bit halves, the constants ROM (0, ±1, ±2, +4, +8, size), the lanes of `AT`/`AOB`, the named transfers (`AuEqualsAt`, `AuPlusTwo`, `CopyAuToPc`, `LatchAob`) | #87, #91 |
 | `M68000.Data.cs` | `DATA` (low words + the ALU), the data bus `DB(h)`/`DB(l)`/`DB(d)` | the ALU's 15 × 5 matrix (row from the `IRD` PLA, column from three nanocode bits, the initiate/finish bit, `INHCC`), `ALUB`, `ALUE`, `DCR`'s one-hot line, `PREN`'s walk, `FTU`'s fields, `DBIN`/`DOB` | #91, #92 |
 
@@ -53,8 +54,12 @@ block. Fourteen files, four of which exist today.
 
 | file | die block(s) | what it owns | ticket |
 |---|---|---|---|
-| `M68000.Scripts.cs` | `µROM 544 × 17` — its words, unrolled | one `async` method per microword state, one method per shape, and the dispatcher that turns a microcode address into a state (`IsScripted<Family>` is the ledger) | — |
-| `M68000.NanoStore.cs` | `NROM 336 × 68` (66 driven) — its fields | the atoms the nanoword names: transfers and destinations, the `AU` constant select, the mid-state field, the ALU mode, the flag masks — today's `M68000.Micro.cs`, re-scoped and renamed | #91 |
+| `M68000.ControlStores.cs` | `µROM 544 × 17`, `NROM 336 × 68` (66 driven) | **two classes, elementary methods only, no data**: `MicroStore` — the 17-bit word's fields as operations (`NextByNma`, `NextByA1/A2/A3/A0/A0S`, `LoadIr`, `LoadIrd`, the access class's `i`/`f`/`n`/`t` × mode × type) and the two word formats (`FormatI`, `FormatII`); `NanoStore` — the 68 bits as operations (the transfers and destinations, the `AU` constant select, the mid-state field, the ALU mode, the flag masks — today's `M68000.Micro.cs`) | #90, #91 |
+| `M68000.Scripts.cs` | `µROM` — its words, unrolled | one `async` method per microword state, one method per shape, the dispatcher that turns a microcode address into a state (`IsScripted<Family>` is the ledger), and **the comments**: every microcode line's section prefixed by its ROM address and state with the running clock total (`// 0da morw1   2 clocks`), every group of statements prefixed by the nanoword line it decodes | — |
+
+`MicroStore` and `NanoStore` are the two stores' *vocabularies* — the methods the scripts are written in. The
+content of the ROMs is the code itself (ADR 0015 §10): a `ushort[]` of control words, a `switch` over 544 arm
+numbers or any data-driven dispatch is the interpreter returning, and #78 refused it.
 
 ### The top band — clocks, bus control, opcode decode (sheet 02)
 
@@ -62,28 +67,26 @@ block. Fourteen files, four of which exist today.
 |---|---|---|---|
 | `M68000.InstructionRegisters.cs` | `IRC` / `IR` / `IRD`, with the `load IR` / `load IRD` strobes | the three-deep pipeline: the next word, the word being decoded, the word being executed, and the two strobes that shift it | #87 |
 | `M68000.Decode.cs` | `A1 DECODE` (PLA, 149 terms), `A2 / A3 DECODE` (shared AND plane), `ILLEGAL · PRIV`, `IRD REG`, `IRD BUS` (the decode PLA bank) | an entry point per `A1` term, the 20 EA-keyed terms, `IOC`/`PRIV`, the `IRD`-keyed bank (~130 of the ~200 control lines) — **and the public face**: `Decode`'s one function per instruction family and the `Family` enum (ADR 0015 §1) | #89 |
-| `M68000.Sequencer.cs` | `MICROCODE ADDRESS SELECTOR` (`NMA · A1 · A2 · A3 · A0 · A0S`), `BRANCH PLA` / `BRANCH UNIT` | the two word formats, the next-address sources, the four-way branch (`C1`/`C0` replacing bits 7:6), the 10-bit registered address, and the charge that lives in a state (ADR 0015 §5) | #90 |
+| `M68000.Sequencer.cs` | `MICROCODE ADDRESS SELECTOR` (`NMA · A1 · A2 · A3 · A0 · A0S`), `BRANCH PLA` / `BRANCH UNIT` | the address selection among the sources, the four-way branch (`C1`/`C0` replacing bits 7:6), the 10-bit registered address, and the charge that lives in a state (ADR 0015 §5) | #90 |
 | `M68000.Exception.cs` | `A0 MUX CONTROL` / `EXCEPTION LOGIC`, `TRAP & ILL. PLA` | the two override addresses (`A0` at a boundary, `A0S` now), the vector selection, `SSW`'s two lives, the two frame orders, `INL`/`TPEND`'s latching, and `Instruments.EntryStep`/`Interrupt` | #93 |
 | `M68000.Bus.cs` | `µP CONTROL LOGIC`, `BUS CONTROL` (bus state machine `S0–S7`, `DTACK · BERR · arbitration`), `INT LOGIC`, `FC LOGIC` | the eight states and the wait rule, the strobes and the byte lane, the access class, `DTACK`/`BERR` sampling, `FC0–FC2` from the class, the `IPL` sampling, and `Instruments.BusState` | #88 |
 
-### The chip, and the seam
+### The chip, the seam, and the emulator's own face
 
 | file | what it owns | ticket |
 |---|---|---|
 | `M68000.cs` | the chip: the constructor, `Launch`, the drive loop, reset, and the boundary (interrupt sampling, trace, the decode step) | #85 |
 | `M68000.SingleStep.cs` | the corpus seam: `Load`/`Capture`/`StepAsync`, `SingleStepState`/`SingleStepResult` | #34, unchanged |
+| `M68000.Emulator.cs` | **the emulator interface — not the part**: the nested `Instruments` (the five counters, `TicksPerCpuClock`, `Halted`/`HaltReason`, `Observer`, and the `#if DEBUG` `CycleObserver`/`ClockObserver`/`LastFrame*` columns) and the chip time the simulation advances. ADR 0015 §6's file, and the **only** place a time field may live (§5.1) | #85 |
 
-**Occupied, then empty** — what the map does not keep, and why, so a later reader does not think it is
-incomplete:
+**Occupied, then empty** — what the map does not keep, and why:
 
 | file | today | end state |
 |---|---|---|
-| `M68000.Micro.cs` | the elementary operations, `IdleAsync`, the queue helpers, six latches | becomes `M68000.NanoStore.cs` (the atoms); its latches go to `Registers`, its charge to `Sequencer` (#91) |
+| `M68000.Micro.cs` | the elementary operations, `IdleAsync`, the queue helpers, six latches | becomes `NanoStore` in `M68000.ControlStores.cs` (the atoms); its latches go to `Registers`, its charge to a script's local (#91) |
 | `M68000.Timing.cs` | the shape table's `_own` charges | **empty by #90**; its last row (`RESET`'s) goes under #93 |
 | `M68000.Instructions.cs` | the line handlers | **dissolved by #89** into `Decode` (the terms) and `Scripts` (the bodies) |
-| `M68000.Counters.cs` (draft 1) | — | does not exist: the four things that count *are* die blocks — `AU` in `Address`, `DCR`/`PREN`/`FTU` in `Data` — and a "counters" file would group by function the die does not draw |
-| `M68000.Datapath.cs` (draft 1) | — | does not exist: the datapath *is* the three sections, so it is `Registers` + `Address` + `Data` |
-| three section files (draft 1's alternative) | — | refused by the storage ruling: one 32-bit field per register, so the three sections are accessors inside one file (ADR 0015 §3) — see question 1 |
+| `M68000.Datapath.cs`, `M68000.Counters.cs` (draft 1) | — | do not exist: the datapath *is* the three sections, and the four things that count are die blocks — `AU` in `Address`, `DCR`/`PREN`/`FTU` in `Data` |
 
 ## 2. The dependency direction
 
@@ -96,10 +99,11 @@ the stores to the execution unit; the pads are the edge.
 3  SingleStep.cs        the seam (enters at the boundary)
 2  the top band         InstructionRegisters -> Decode -> Sequencer -> Exception
                         Bus    the bus state machine: driven by the class, reports DTACK/BERR
-                        Clock  nobody calls it: it names time and fans phases out
-1  the middle band      Scripts (the µROM's words) -> NanoStore (the NROM's fields)
+                        Clock  nobody calls it: it names the phases and fans them out
+1  the middle band      Scripts (the µROM's words) -> ControlStores (MicroStore / NanoStore)
 0  the bottom band      Data / Address -> Registers
 -  the edge             Pins (the buffers and the pads; nothing below them)
+*  M68000.Emulator.cs   nothing in the core calls it: it reads the core, and it owns time
 ```
 
 Four edges worth stating, because each looks like a cycle and is not:
@@ -109,20 +113,18 @@ Four edges worth stating, because each looks like a cycle and is not:
   hardware's shape (`m68000-silicon-implementation.md` §7), and it is why the top band sits *above* the
   stores: an address is a value that travels down, not a call that travels up.
 - **The decode produces an address, not a call.** A term's arm names the microcode address it selects
-  (`EnterMoveByte` → `0x0d8`); the body it reaches is a script state, reached through the dispatcher. So
-  `Decode` sits above `Scripts` and does not reach into it.
+  (`EnterMoveByte` → `0x0d8`); the body it reaches is a script state, reached through the dispatcher.
 - **The bus never calls upward.** A cycle starts, waits, is answered, returns; the fault it reports is `SSW`
   and `AOB`, both latches in `Registers`. `BERR`'s rerun and the double fault stay out of scope.
 - **`Clock` is a leaf nobody calls**, exactly as `DECODE DRIVERS` fans phases out without knowing what they
-  drive. Its members are the microcycle's names and the E divider; the charge itself is in a state
-  (`Sequencer`), because a microword's cost is a property of the state (ADR 0015 §5).
+  drive; and `M68000.Emulator.cs` is called by nothing in the core — the harness reads it, and it is the one
+  file allowed to hold time and report.
 
 ## 3. The state table — latch → patent name → section → field → file
 
-The inventory is ADR 0015 §4 (adopt / derive / delete / time / plumbing). This is the same inventory keyed
-by **where it lives**, which is what a reader standing in a file needs. Section numbers are
-`m68000-silicon-implementation.md`; the name column is `research/68000-silicon/nomenclature.md` §3's
-"recommended" one.
+The inventory is ADR 0015 §4 (adopt / derive / delete / time / plumbing); this is the same inventory keyed by
+**where it lives**. Section numbers are `m68000-silicon-implementation.md`; the name column is
+`research/68000-silicon/nomenclature.md` §3's "recommended" one.
 
 | field | name | section | file | note |
 |---|---|---|---|---|
@@ -144,27 +146,26 @@ by **where it lives**, which is what a reader standing in a file needs. Section 
 | `_pren` | `PREN` | §5.2, §6.2 | Registers / Data (the walk) | the `MOVEM` mask's position |
 | `_ftu` | `FTU` | §5.2 | Registers / Data (the fields) | the instruction field being translated |
 
-**Why a latch can appear in two columns**: the *cell* is the register file's (one 32-bit or 16-bit field, the
-bottom band), and the *unit that drives it* is its section's (`Address`, `Data`) or its block's (`Pins`,
-`Exception`). That is the die's own split — `AOB` is drawn in the register file, in the address lane *and* at
-the pads — and it is why "one file per block" does not mean "one file per latch".
+**Why a latch can appear in two columns**: the *cell* is the register file's (one 32-bit or 16-bit field), and
+the *unit that drives it* is its section's (`Address`, `Data`) or its block's (`Pins`, `Exception`). That is
+the die's own split — `AOB` is drawn in the register file, in the address lane *and* at the pads — and it is
+why "one file per block" does not mean "one file per latch".
 
 **Derived, and therefore not in that table**: the effective address, `CCR` over `PSW`, `A7` over
 `USP`/`SSP`, `DCR`'s one-hot line, the frame's saved counter (whichever latch the script left), and every
 `_frame*` memo field (ADR 0015 §4's derive column lists each one's replacement).
 
-**Instruments, and therefore not in that table**: `Instruments`' seven `LastFrame*` columns are `#if DEBUG`
-readings of `AU`/`AT`/`IRD`/`SSW`; they back no latch of their own. *To be filled by #86*: the exact write
-sites, one per column.
+**Instruments, and therefore not in that table**: the seven `LastFrame*` columns are `#if DEBUG` readings of
+`AU`/`AT`/`IRD`/`SSW`, living in `M68000.Emulator.cs`, and they back no latch of their own. *To be filled by
+#86*: the exact write sites, one per column.
 
-**Time, and therefore not in that table either**: a field that exists to make the clock behave is not
-storage, and its name carries its unit — `…Clocks` (CPU clocks) or `…Ticks` (oscillator ticks) — per ADR
-0015 §5.1. It may live in `Sequencer` or in `Instruments`, **never in `Registers`**; while the shape table
-is still being emptied by #90 its one surviving time value is `OwnClocks` (today's `_own`), and it goes when
-the table's last row does. `_eaCharged` is not time: it is a "has happened" bit, and the states' own
-position replaces it.
+**Time, and therefore not in that table either**: a duration is not storage, its name carries its unit
+(`…Clocks`, `…Ticks`), and it may live **only in `M68000.Emulator.cs`** (ADR 0015 §5.1). A script's charge is
+a local in the script's own frame, so the common case has no field at all; if #90 finds one that must cross a
+helper it is a `…Clocks` parameter first and a field in the emulator interface only if threading is worse.
+`_eaCharged` is not time: it is a "has happened" bit, and the states' own position replaces it.
 
-**The manual's concepts as display** (ADR 0015 §1.1), all reads, none stored:
+**The manual's concepts as display** (ADR 0015 §1.1), all reads, none stored, all on `Instruments`:
 
 | member | values | produced by |
 |---|---|---|
@@ -197,17 +198,15 @@ dissection tool has broken the sources of record.
 
 ## 5. What the corpus cannot see
 
-The list grows as the campaign finds things; each entry says what *would* witness it.
-
 | what | why the corpus is blind | the witness |
 |---|---|---|
 | the public surface's names | it grades registers, status, memory, clocks — never members | #85's freeze test; the boot's probes (a rename breaks them as an exception, not a red record) |
 | a pin's level | nothing grades `Pins` | #88's byte-lane test, the boot's screen, and `M1` (the owner's eyes) |
-| where inside a state a charge sits | a record's `length` is a total; the transactions carry the bus accesses only | `--trace N` against a record's `transactions`; `--clocks`' grouping by shape |
+| where a charge is flushed | a record's `length` is a total; the transactions carry the bus accesses only | `--trace N` against a record's `transactions`; `--clocks` grouped by shape. The local counter's **flush point** is exactly this: the corpus sees the total, so the flush is witnessed by the order of the reads, not by a number |
 | whether `AU` or `AT` wrote the frame's saved `pc` | the corpus sees the *value*, not the primitive | #87's sub-steps, one field at a time, corpus after each |
 | a decode term's inhibit order | no record is illegal-and-executed | #89's 65 536-opcode golden |
-| the display strings (`Instruction`, `BusState`, `EntryStep`, `Interrupt`) | nothing grades a string | each producer's ticket asserts one worked case (#88 the byte lane's `S0`…`S7`, #89 a `MOVE.W`'s text, #93 a `TRAP`'s five steps); the boot's `--trace` is the second witness |
-| the family decode's names | the corpus names instructions in its records, not in the core's members | #89's golden table plus the freeze test's equality of `Decode` and `Family` |
+| the display strings | nothing grades a string | each producer's ticket asserts one worked case (#88 the byte lane's `S0`…`S7`, #89 a `MOVE.W`'s text, #93 a `TRAP`'s five steps); the boot's `--trace` is the second witness |
+| a comment matching its ROM line | no instrument reads a comment | #94's comments pass compares each script's comments against `microcode-walk.py`'s output for its opcode |
 | which block drives a latch (`AOB`'s three homes) | the corpus sees values, not the wiring | the block a file belongs to, and #94's comments pass |
 
 *To be filled by #86–#94*: one row per divergence found — mechanical (a rename) versus a finding (a
@@ -220,5 +219,5 @@ bookkeeping field that turned out to be a latch).
 - `boot --frames 800` from the repo root: `run.digest` `4eac06dc…` / `run.stream` `1693218a…`, desktop 602,
   34 122.2 pops a frame.
 - `scripts/validate.sh` **PASS**; `G8` from 3 interleaved Release pairs against the parent commit,
-  `parent + 0.3 ms` and never above 10 ms (`8.94 ms at n 751` is the number to return to, not to beat).
+  `parent + 0.3 ms` and never above 10 ms (8.94 ms at n 751 is the number to return to, not to beat).
 - `python3 tools/cpu-dissection/gen.py` still generates variants that build.

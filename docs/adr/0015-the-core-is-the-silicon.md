@@ -11,13 +11,13 @@ bookkeeping — the five overlapping address counters, the "was it charged" flag
 fields — is deleted. The code stays the coroutine it is (ADR 0009, #78's ruling): one named `async`
 state method per microword state, one named arm per decode term, never a microcode interpreter.
 
-**Status**: proposed (2026-11-21), ticket [#83](https://github.com/laurentprudhon/the-st/issues/83), the
-first ticket of the campaign *CPU: the core is the silicon* ([#82](https://github.com/laurentprudhon/the-st/issues/82)).
-Shape: [`design/cpu-silicon.md`](../design/cpu-silicon.md). **Five answers below are recommendations
-awaiting the owner's word** — §5's charge, §6's instrument boundary, §8.5's two aliases, §1's decode
-contract and §1.1's display set; see [Open questions](#open-questions-for-the-owners-word). Every other
-statement is a consequence of the two authorities, of the three rulings recorded in Context, or of the
-owner's two additions of the same day, and does not wait on him.
+**Status**: accepted (2026-11-21), on the owner's answers during ticket #83's grilling session — *"ok for
+these names"*, *"one Registers file"*, *"pins as its own file"*, *"you can omit everything related to E"*,
+*"one file"*, and the two mechanism rulings quoted in §5 and §10. Section
+[The owner's answers](#the-owners-answers) records every one of them with his words. Ticket
+[#83](https://github.com/laurentprudhon/the-st/issues/83), the first of the campaign *CPU: the core is the
+silicon* ([#82](https://github.com/laurentprudhon/the-st/issues/82)). Shape:
+[`design/cpu-silicon.md`](../design/cpu-silicon.md).
 
 ## Context
 
@@ -106,6 +106,11 @@ the buses are their bits.
 | interrupt | `IPL0`, `IPL1`, `IPL2` |
 | arbitration | `BR`, `BG`, `BGACK` |
 | 6800 | `E`, `VPA`, `VMA` |
+
+**`E` is a level and nothing else.** The owner's ruling (2026-11-21): *"you can omit everything related to E
+in this emulator."* The ST does not use the 6800 peripheral group (tutorial §8.1), so there is no E divider,
+no ten-state counter and no block for it — `Pins.E` exists because §8.1's list does, it reads false, and
+nothing drives it. The same holds for `VPA`/`VMA`: a pin in the list, no protocol behind it.
 
 **`Instruments`** — the members the manual has no word for, in one place, each documented as *not the
 part*:
@@ -292,18 +297,44 @@ part has no opinion about them, and ADR 0009 §1 named them before this ticket e
 **The decision: a microword state charges its own 2 clocks, and a bus access costs its 4** — the faithful
 reading of `m68000-silicon-implementation.md` §6.1 ("a microcycle is two clock periods … a microword
 occupies one microcycle, so a microinstruction costs two clocks. One that must complete a bus operation
-costs four"). The charge is a property of *being in a state*, so it belongs where the state is:
-`IdleAsync()` is that charge, and there is no `_own`, no `Charge` on the sequencer, and no per-access-class
-table of charges.
+costs four"). The charge is a property of *being in a state*, so there is no `_own`, no `Charge` on the
+sequencer and no per-access-class table of charges.
 
+**The mechanism is the owner's (2026-11-21), and it is what a script looks like**: *"when generating the C#
+functions from the microcode scripts … insert a comment at each microcode line boundary; add 2 to a local
+variable counter as a suffix to each of these sections, then use this local variable counter when calling an
+engine async function to sync the chip time."*
+
+```csharp
+async ValueTask MoveWordToMemoryAsync(…)          // the µROM's words, unrolled
+{
+    int clocks = 0;                               // the instruction's own time, and it never leaves this frame
+    clocks += 2;  // 0d8 adrw1   (two clocks: an idle microword)
+    clocks += 2;  // 0da morw1   the ALU and its flags, no bus
+    await ClocksAsync(clocks); clocks = 0;        // the engine's clock, once, before the access it precedes
+    await WriteAsync(…);                          // a bus access: its 4 clocks are the bus cycle's own
+    clocks += 2;  // 0dc nnml1   the closing prefetch rides inside this idle run
+    await ClocksAsync(clocks); clocks = 0;
+}
+```
+
+- **The charge is a local, never a field.** Three consequences, each mechanical: no `_own`, no `_eaCharged`
+  (its once-ness is the position of the states), and nothing to reset at the three boundaries (`Run`,
+  `SingleStep.Load`, `SingleStep.StepAsync`) — the flag that had to be reset is gone.
+- **The flush points are the bus accesses.** A charge is a wait with nothing on the wire (skill §7), so
+  consecutive idle microwords are one longer wait — but the *placement* is load-bearing: the prefetch sits
+  inside an idle run, so the counter is handed to the engine at the beginning of every bus access, and once
+  at the end of the script. A flush moved one state later changes which access the clocks precede, and
+  `--clocks` sees it.
+- **The comment is the citation and the arithmetic.** Each microcode line's comment names its ROM address and
+  state (`// 0da morw1`) and carries the running total, so a reader — and #94's comments pass — can check
+  every script against `--clocks` without opening the dump. This is the campaign's fourth artifact made
+  compulsive rather than remembered.
 - **`M68000.Timing.cs` becomes a bridge with a deadline, not a home.** Its rows charge families whose
-  scripts are still MAME's tables; each row dies as the family's script carries its own states, and the
-  file is empty at the end of #90. The exact-clock column (317 500 today) is the witness for every
-  deletion — a family whose row is removed before its script charges goes short by 2/4/6 and the class is
-  visible in `--clocks` grouped by shape.
-- **`_own` and `_eaCharged` are therefore deletions with no successor.** The EA's "2 clocks once per
-  instruction" (`_eaCharged`) is a fact about the *address-calculator state* the script runs, and once the
-  shape's states are transcribed the once-ness is written where the state is, not remembered in a flag.
+  scripts are still MAME's tables; the value it produces is a *parameter or a local* of the instruction's own
+  frame, and each row dies as the family's script carries its own lines, so the file is empty at the end of
+  #90. The exact-clock column (317 500 today) is the witness for every deletion — a family whose row is
+  removed before its script charges goes short by 2/4/6 and the class is visible in `--clocks` by shape.
 - The alternatives were refused for the reason this campaign exists: (b) "the access class the script
   declares" puts a clock count on a bus *label*, and the label's job is to say which bus access to start
   (§8), not how long the instruction takes; (c) "a named `Charge` on the sequencer" is this decision with
@@ -319,24 +350,30 @@ behave is allowed, provided it is named so a reader sees an artifact rather than
   for a count of CPU clocks (one clock = four oscillator ticks, ADR 0001), `…Ticks` for oscillator ticks.
   `TicksPerCpuClock` and `InternalClocks` already comply; a bare noun may not hold a duration
   (`_own`, `Charge`, `_eaCharged` are the shapes the rule forbids).
-- **Time never lives in the register file.** `M68000.Registers.cs` is level 0 and holds storage only; a
-  time value lives in `M68000.Sequencer.cs` (the microcycle's charge) or in `Instruments` (a reported
-  counter). This is the check "not storage on the chip" made mechanical: a `…Clocks` field found in the
-  register file fails the rule.
+- **Time lives in one file, and it is not the part's.** `M68000.Emulator.cs` — the emulator interface of §6 —
+  is the only place a time field may exist: the reported counters, the chip time the simulation advances, and
+  any surviving duration while #90 empties the table. A `…Clocks` field in `M68000.Registers.cs` or
+  `M68000.Sequencer.cs` fails the rule, and so does one in any other block. That is the check "not storage
+  on the chip" made mechanical: one file, named for what it is, and nothing about time anywhere else.
 - **Time is cited differently.** A latch is cited to a patent section; a time value is cited to
   `m68000-silicon-implementation.md` §6.1 (the microcycle) or to the manual's own timing table (§9), and
   its doc comment opens with *"time, not storage"*.
-- **This ADR's §5 answer needs no such value**, and that is a result, not an omission: once a state charges
-  its own 2 clocks the duration *is* the state, and there is nothing left to remember. The rule exists
-  because #90 keeps the table's `_own` alive family by family while it empties: `_own` is a time constant,
-  so while it lives it is renamed **`OwnClocks`** and sits in the sequencer — and the day the table is
-  empty the field goes with it. `_eaCharged` is not time at all: it is a "has happened" bit, and its
-  replacement is the position of the states, so it is deleted rather than renamed.
+- **This ADR's §5 answer needs no such value**, and that is a result, not an omission: a script's charge is
+  a local in the script's own frame (`int clocks`), so the duration is the state's and there is nothing left
+  to remember. If #90 finds a charge that cannot stay local — because it must cross a helper — it becomes a
+  `…Clocks` parameter first and a field in `M68000.Emulator.cs` only if threading it is worse. `_eaCharged`
+  is not time at all: it is a "has happened" bit, and its replacement is the position of the states.
 
 ### 6. What an instrument is allowed to be
 
 An instrument is a member that exists for the harness, the boot or a reader, and is documented as not the
-part. Two boundaries, and the difference is a *consumer*, not a taste:
+part. **All of them live in one file, `M68000.Emulator.cs`, the emulator's interface** — the owner's
+placement (2026-11-21): *"put it in a separate 'emulator interface' file, with the chip time simulation
+field."* That file is the only home of `Instruments` (counters, `Halted`/`HaltReason`, the observers, the
+frame columns, `TicksPerCpuClock`) and of the chip time the simulation advances; a member that reports or
+simulates is in it or does not exist, and no other block may hold a duration (§5.1).
+
+Two boundaries inside it, and the difference is a *consumer*, not a taste:
 
 - **Behind `#if DEBUG`**: everything that is per-record — the three observers and the seven `LastFrame*`
   columns. They are the instruments `--trace`, `--reads` and `--clocks` print, and a per-cycle observer in
@@ -405,6 +442,34 @@ quoted beside it, never subtracted.
 The code stays named `async` C#: a state is a method named after its microword state, an arm is named
 after its decode term, a transfer is a named primitive over the lanes. A state list is a *transcription*,
 never a table the machine reads.
+
+### 10. The two control stores are functions, not tables
+
+The owner's rule for what the generated code looks like (2026-11-21), and it is the campaign's shape in one
+paragraph: *"the initial PLA instruction decodes are a switch on C# functions names and/or linked to the
+programming manual instruction families, then the script/loop/branches inside the C# function is an
+unrolling of the Micro store, and each individual statement in the function is a decode of the Nano store
+(+ other PLAs) … Micro store and Nano store classes would only contain the elementary methods called by the
+microprograms, not the data tables themselves."*
+
+Three layers, three kinds of code, and none of them a table:
+
+| layer | the hardware | the C# | where |
+|---|---|---|---|
+| first level | `A1`/`A2`/`A3` PLAs, the `IRD` PLA bank | `Decode`'s family functions, one per manual family, returning a microcode entry point (§1) | `M68000.Decode.cs` |
+| the µROM | 544 × 17, the sequencing words | the script: one `async` method per microcode line's state, its branches and loops the line's `TY`/`CBC` fields, its `clocks += 2` the line's microcycle | `M68000.Scripts.cs` |
+| the NROM | 336 × 68, the datapath atoms | the elementary methods a statement calls — transfers, the `AU` constant select, the ALU mode, the flag masks — **and no data** | `M68000.NanoStore.cs` (the NROM) and the µROM's own field methods |
+
+- **Every microcode line's section carries a comment naming it**, with the running clock total beside it
+  (`// 0da morw1   2 clocks`), and every group of statements decoded from one nanoword carries a comment
+  naming that nanoword's line. The store classes hold *methods* — `AluAnd16`, `Set16L`, `LatchAob`,
+  `NextByNma` — never an array of words to interpret.
+- **This is what "unrolled as C# switch and scripts, never an interpreter" means concretely** (§9, #78): the
+  ROM's *content* is the code, so the code can be read beside `microcode-walk.py`'s output line for line,
+  and the two stores' files are the vocabulary the scripts are written in.
+- **A table would be the interpreter returning**: a `ushort[]` of control words, a `switch` over 544 arm
+  numbers, or a data-driven dispatch is refused by #78's ruling, and the comment-per-line rule is what makes
+  the refusal cheap to check in review.
 
 ## Invariants
 
@@ -487,25 +552,33 @@ never a table the machine reads.
   the re-expression cost more than the machine can pay.
 - **A field that cannot be cited** to a patent section, the silicon record, the instrument boundary of §6,
   or the time rule of §5.1 — the inventory grew a name back.
-- **A duration under a bare noun, or a `…Clocks` field in `M68000.Registers.cs`** — time has become storage.
+- **A duration under a bare noun, or a `…Clocks` field anywhere but `M68000.Emulator.cs`** — time has
+  become storage.
+- **A data table in the two stores' classes** — a `ushort[]` of control words, a `switch` over 544 arm
+  numbers, or any dispatch the ROM content drives — the interpreter is back (§10, #78).
+- **A script section without its line's comment**, or a comment whose address does not match
+  `microcode-walk.py` — the unrolled code has stopped being readable beside the dump (§10).
 - **A display member that is not a row of §1.1's table**, or a `Decode` family with no `Family` member (or
   the reverse) — the surface has grown a synonym the manual does not have.
 
 
-## Open questions for the owner's word
+## The owner's answers
 
-Five, and only five. Each is answered above in the form this ADR will keep if he agrees with it; a
-different word changes the paragraph named, not the document.
+Every open question was answered in the grilling session (2026-11-21). His words are the decision; the
+section named is where the document keeps it.
 
-| # | question | this ADR's answer | what changes if it goes the other way |
+| # | question | his answer | kept in |
 |---|---|---|---|
-| 1 | where the internal clocks live once `_own` is gone | **in the state** (§5): a microword state charges 2, an access 4; `_own`/`_eaCharged` are deleted with no successor, and `M68000.Timing.cs` empties family by family. The owner's rule that time constants are allowed but must be named as artifacts is §5.1, and it is what lets the bridge live as `OwnClocks` while it empties | (c) a named `Charge` on the sequencer keeps a counter-shaped object; (b) the access class carries a clock count, which is not what §8 says the label is for. Either way #90's scope stands, only its shape moves |
-| 2 | what an instrument is allowed to be, and where | **two boundaries by consumer** (§6): per-record instruments behind `#if DEBUG`, the five counters and `Halted`/`HaltReason` unconditional because the Release `boot` and `cpu-dissection` read them | keeping all of them behind `#if DEBUG` requires the Release boot to stop printing its counters — a change to the gate's own report, and then #84's verdict loses a column |
-| 3 | `ALUO` and `ISR`, which the patents name only by role | **admitted into `nomenclature.md` §3 as aliases**, with their provenance (the microcode listing and the die analysis), because inventing a role-name would break §8's rule 3 | refusing them leaves the ALU's result and flag latches with made-up names, which is the one thing §8 forbids |
-| 4 | the decode functions' contract | **one `public static` function per family, `bool <Family>(ushort, out Decoded)`, false rather than an exception; `Decoded` carries §4's fields** | a single `FamilyOf(opcode)` composed over them is allowed and cheap; the reverse — the functions existing only to feed one aggregator — is not, because the point is that the manual's first level is readable |
-| 5 | the display set of §1.1 | **five members** (`Instruction`, `Family`, `BusState`, `EntryStep`, `Interrupt`), and four concepts refused with reasons | adding a concept means a line in §1.1's table and a freeze-test entry; refusing one of these five means an instrument a reader cannot see the machine through |
+| 1 | where the internal clocks live | the charge is a **local counter in the script**: "add 2 to a local variable counter as a suffix to each of these sections, then use this local variable counter when calling an engine async function to sync the chip time" | §5 |
+| 2 | what an instrument is allowed to be | keep them in the Release build, but "put it in a separate 'emulator interface' file, with the chip time simulation field" | §6, §5.1 |
+| 3 | `ALUO` and `ISR`, named by role only in the patents | "ok for these names" | §8.5 |
+| 4 | the decode functions' contract | "ok" — one public static function per manual family, `bool <Family>(ushort, out Decoded)` | §1 |
+| 5 | the display set of the manual's concepts | "ok" — five members, four concepts refused | §1.1 |
+| 6 | the file split | "one Registers file"; "Pins as its own file"; "you can omit everything related to E in this emulator"; "one file" for the exception; the two stores are **functions, not tables**; `Scripts` splits or not by #89's evidence | §10, `design/cpu-silicon.md` §1 |
 
-The corpus seam (§7), the nested-type rule (§2), the storage decision (§3), the inventory (§4) and the
-two additions of 2026-11-21 (the time rule of §5.1, the manual's concepts of §1.1) are not open: the
-first three are the owner's own rulings, the fourth is the inventory he asked #83 to freeze, and the last
-two are his words.
+Two of his answers changed more than a paragraph, and both are now rules rather than placements:
+
+- **§5's local counter** retires the last two bookkeeping fields (`_own`, `_eaCharged`) *and* the reset
+  discipline they needed: nothing is carried across a boundary, so nothing has to be cleared at one.
+- **§10's two stores** make the ROM content the code: the store files hold the elementary methods, the
+  scripts hold the lines with their comments, and a data table anywhere is the interpreter returning.
