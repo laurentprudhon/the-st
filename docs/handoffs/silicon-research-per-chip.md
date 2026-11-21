@@ -32,7 +32,7 @@ CA400329-101). Designators are the board's; do not invent new ones.
 | U100 | C398061-001, **68000** @ 8 MHz | 68-pin PLCC | CPU | **done** — reference case |
 | U400 | C300589-001, **GSTMCU** | 144-pin PGA/PLCC | glue + MMU + DMA arbitration + video timing + DRAM control + pad/pen ADC + blitter control | **highest** — everything the STE does that an ST cannot |
 | U401 | C300588-001, **GST Shifter** | 84-pin PLCC | bitplane shift, palette, DE/BLANK, hardware scrolling, Microwire | **highest** — video is where the STE differs most |
-| U300 | C398739-001, **DMA controller** | 40-pin DIP | bus arbitration, disk DMA, STE sound DMA, ACSI | high — sound DMA timing is still rough in emulators |
+| U300 | C398739-001, **DMA controller** | 40-pin DIP | disk DMA and ACSI, plus the bus arbitration the GSTMCU relays; **no sound DMA** — corrected 2026-11-21 from the Shifter study (§5.7), it is a two-chip mechanism between U401 and U400 | high — the sound question is closed from both ends; the disk/ACSI path is unread |
 | U101 | C101643, **Blitter** | 68-pin PLCC | blitter (discrete on this board; merged into GSTMCU later) | high — masks/skew/line mode are fiddly |
 | U203 | C025984, **68901 MFP** | 48-pin DIP | timers, USART, interrupt controller, GPIO | medium — datasheet-rich, but timer quirks matter |
 | U301 | C026028-002, **WD1772** | 28-pin DIP | floppy controller | medium — command/step timing |
@@ -178,13 +178,17 @@ What the session established:
   ladder (manual pin list → ijor's schematic → Hatari), the six acceptance criteria, the arithmetic seeds
   (80 words a line, 20 groups, 16-word palette), and the method rules this week's GSTMCU work earned.
 
-### U300 DMA controller (C398739-001)
+### U300 DMA controller (C398739-001) — **next**, brief: [`u300-dma-study.md`](u300-dma-study.md)
 * **Questions:** the arbitration request/grant protocol with the GSTMCU; disk sector DMA (ACSI) address
   and counter registers; **STE sound DMA** — buffer addressing, the loop/reload behaviour, sample-rate
   dividers, and the exact moment the FIFO refills; what happens on a mid-transfer mode change.
 * **Evidence:** MAME `atarist` DMA, Hatari `dmaSnd.c` (sound) and the floppy path, and the service
   manual's nets. Sound DMA is the one place where a test ROM against real hardware would be worth the
   effort — it is where our own core is most likely to be subtly wrong.
+* **Correction — 2026-11-21** (U401 study, §5.7): the sound-DMA question above is already answered from
+  both ends, and the answer is that **U300 is not in that path**. The counters are the GSTMCU's, the
+  requester, FIFO and byte split the Shifter's, and the board article says so in as many words. What
+  remains for this chip is the disk/ACSI path and the grant relay — read the brief before re-litigating.
 
 ### U101 Blitter (C101643)
 * **Questions:** register semantics (source/dest/X-count/Y-count/hop/op/skew/mask), the three passes and
@@ -239,8 +243,10 @@ nomenclature section (only if the part has internal names worth fixing), drawing
 ## 6. Ordering, effort, stopping rule
 
 1. **GSTMCU** — two sessions. It gates video, DMA, blitter and memory mapping.
-2. **GST Shifter** — **done, 2026-11-21**; one session sufficed for the study, the video-path sheet is still owed.
-3. **DMA** — one session; the sound-DMA section is the valuable half.
+2. **GST Shifter** — **done, 2026-11-21**; one session for the study and one for the five sheets
+   (`research/gstshifter-silicon/schematics/`).
+3. **DMA** — **next**; one session, and it starts from a closed question rather than an open one: the sound
+   path is not in this chip, so the session's work is the disk/ACSI path and the grant relay. Brief written.
 4. **Blitter** — one session.
 5. **MFP / WD1772 / ACIA / PSG** — one combined session.
 6. **IKBD** — half a session, behavioural only.
