@@ -139,6 +139,9 @@ What the session established, in the form later chips can reuse:
   shifter model, service-manual pin list (§3.5), and photographs of the board for the DAC path.
 * **Deliverable worth having:** a sheet like `schematics/01-datapath.svg` but for the video path —
   bitplanes → shift → palette → DE/BLANK → monitor.
+* **Handoff: [`u401-gst-shifter-study.md`](u401-gst-shifter-study.md)** — the exact brief, the evidence
+  ladder (manual pin list → ijor's schematic → Hatari), the six acceptance criteria, the arithmetic seeds
+  (80 words a line, 20 groups, 16-word palette), and the method rules this week's GSTMCU work earned.
 
 ### U300 DMA controller (C398739-001)
 * **Questions:** the arbitration request/grant protocol with the GSTMCU; disk sector DMA (ACSI) address
