@@ -29,7 +29,7 @@ our model takes).*
 | What counts? | **Real counters, unlike the 68000.** Five dedicated ones — refresh row, video address, sound address, DMA address, paddle — each with its own clock net. The chip has no datapath that can be made to count. | 3.4 |
 | Clocking? | One 8-phase timing generator, drawn as a **single macro cell (`TGEN`)** from `TIME0`–`TIME7`, fed by a 16 MHz clock divided to 8/4/2 MHz and 500 kHz on sheet 7. Every slot decision in the chip is a decode of those phases. | 3.3 |
 | How does the address mux arbitrate? | Ten 4:1 muxes (`MX41`), one per `MAD` line, with the designer's own decode table printed on the sheet: refresh → sound → video inside a slot, CPU → DMA outside it. | 3.6 |
-| What does the emulator still not know? | The refresh *period* and row mapping, the ADC's conversion law, and the exact enabling of the sound/refresh scheduling. §6 ranks them; §7 gives the six tests that settle them. | 6, 7 |
+| What does the emulator still not know? | The refresh *period* and row mapping, the ADC's conversion law, and the exact enabling of the sound/refresh scheduling. §7 ranks them; §8 gives the six tests that settle them. | 6, 7 |
 
 `derived` The one-sentence machine: *a 16 MHz clock is divided into eight phases by a single macro cell; every 250 ns one phase picks an address from ten 4:1 muxes — video while the display window is open, sound DMA if a request is outstanding outside it, otherwise a RAS-only refresh — and the CPU or the DMA controller gets the other slot of the pair, while 68 flip-flops and ~90 latches hold the register state and no table of any kind is consulted.*
 
@@ -52,7 +52,7 @@ our model takes).*
 | per-block area, to check the layout the sheets imply | anything about the two other part numbers (C302183, Mega STE) unless they too were decapped |
 
 `inferred` For this part the trade is poor.
-The design is already machine-readable and complete enough to give area, cell census and connectivity; a decap would cost about the same as one Falcon chip in the 2025 initiative (≈$1,000 per part at the lab's estimate, $8,021 raised for three)[3] and would answer almost none of §6's open questions, all of which are *timing* questions that a board with a scope answers for free.
+The design is already machine-readable and complete enough to give area, cell census and connectivity; a decap would cost about the same as one Falcon chip in the 2025 initiative (≈$1,000 per part at the lab's estimate, $8,021 raised for three)[3] and would answer almost none of §7's open questions, all of which are *timing* questions that a board with a scope answers for free.
 That is why the owner's ruling for this campaign is die-level work only where a decap exists.
 
 ### 2.2 The recovered design is the primary source
@@ -78,7 +78,7 @@ It is a census, not a complete connectivity model, and nothing below claims a co
 
 `inferred` `gyurco/gstmcu` states in its header that it is a model "based on the schematics recovered by Christian Zietz", and the MiSTer core's `rtl/gstmcu/` is the same author's code in another packaging.[9] Where the RTL and the PDF agree, that is a transcription agreeing with its source.
 The genuinely independent evidence for behaviour is: the memo (intent), our own board (measurement), and the two vendored emulators (models)[1].
-The RTL remains the most convenient *reading* of the design, and §5 uses it as such[1].
+The RTL remains the most convenient *reading* of the design, and §6 uses it as such[1].
 
 ### 2.4 Emulators answer a different question
 
@@ -165,7 +165,7 @@ The netlist supplies the clocks: `REFCLK` and `VIDCLK` each drive only a handful
 | video address | advances once per 500 ns cycle while the display window is open | 24 bits across `VIDBH/VIDBM/VIDBL` + `VCOUNT` | `documented` (sheets 4, 12, 15) |
 | sound address | `SNDCLK` = the granted slot | 21 bits (`SFTH/SFTM/SFTL`) | `documented` (sheet 17 + memo §4) |
 | disk DMA address | `DMADIR`/`RDY` handshake with U300 | 24 bits (`DMAH/DMAM/DMAL`) | `documented` (sheet 16) |
-| paddle | `PADC`, generated on the refresh sheet and used on the paddle sheet | four registers (`PAD0X/PAD0Y/PAD1X/PAD1Y`), one byte each at `$FF9211/13/15/17` in the emulator map | `documented` structure, `inferred` width, `unknown` law (§6.4) |
+| paddle | `PADC`, generated on the refresh sheet and used on the paddle sheet | four registers (`PAD0X/PAD0Y/PAD1X/PAD1Y`), one byte each at `$FF9211/13/15/17` in the emulator map | `documented` structure, `inferred` width, `unknown` law (§7.6) |
 
 `documented` The paddle block is worth a sentence because it is the one place where the chip is *analog*: four registers built from `LLR` latches and `TB2` cells with shift registers `SHR01/03/05/12`, and a `PADC` clock that sheet 31 generates next to the refresh counter[2].
 It is a counting ADC — the input charges something, the counter runs, and the caught value is the reading — not a successive-approximation converter, which is why its conversion time depends on the analog value and why emulators approximate it[2].
@@ -260,18 +260,201 @@ A model that raises `SINT` for a whole slot already costs the difference on the 
 
 `unknown` What the memo does **not** say, and neither do the sheets in the text layer: the exact slot in which the sound address counter increments relative to `SLOADB`, and whether the counter increments on grant or on load[2].
 The RTL picks "clocked when the slot is granted"; the memo's `SLOADB` wording ("latch on the rising edge") is consistent with the fetched word arriving in the same slot[2].
-§7.3 is the test[2].
+§8.3 is the test[2].
 
 ---
 
-## 5. Conflicts in the record, adjudicated
+## 5. The chip in operation
+
+`documented` Five artefacts describe what this chip does with time, and this section uses them in this order: the two April 1988 timing charts (sheets 48–49), the strobe equations in the drawing-level netlist, the sound memo, the clock sheet (7) and the sync sheet (29).[2]
+`inferred` The Verilog reconstruction agrees with most of what follows and is quoted wherever it adds a *reading* the drawings do not print; it is never the evidence for a fact.[9]
+`derived` The ladder every number below uses, each rung checked against the one above it:
+
+| unit | duration | where it comes from |
+|---|---|---|
+| master step | 31.25 ns | half a 16 MHz clock; sheet 48's grid carries 16 of them per 500 ns window |
+| phase | 62.5 ns | one 16 MHz clock; the `TIME0`–`TIME7` decode's quantum |
+| slot | 250 ns = 4 phases = 2 CPU clocks | one DRAM access; sheet 48 draws two `RAS` assertions per window |
+| cycle | 500 ns = 2 slots = 8 phases = 4 CPU clocks | one 68000 bus cycle; sheet 48's whole width |
+| line | 64 µs = 512 CPU clocks = 128 cycles = 128 internal + 128 external slots | the line arithmetic of `design/system-control-unit.md` §3 |
+| frame | 313 lines = 160,256 clocks = 20.03 ms ≈ 49.9 Hz | 313 × 64 µs; PAL's 50 Hz less the line the counter eats |
+
+`derived` Every number in the ladder is forced: 64 µs is 512 clocks at 8 MHz, the window the 68000's four-clock cycle divides exactly twice, and 313 × 512 × 125 ns = 20.032 ms, which is the 49.9 Hz every STE runs at.[2]
+
+### 5.1 One slot (250 ns)
+
+`documented` A window is two DRAM accesses of opposite class, and the class is a *level*, not a decision: `ADDRSELB` is high for the internal slot and `ADDRSEL` for the external one, and the design's own `RAS` equations gate the two halves of the window on exactly those levels.
+The netlist gives `RAS0` as the OR of two four-input terms (pads `PM004`/`PM010`, sheet 22), transcribed here as it reads:
+
+```
+RAS0 = ~(  TIME0  & ADDRSELB & (~REFB | (RAM1A & VOS))
+        | ~TIME0  & ADDRSEL  &  RAM1A & ~RAMCYC )        [2]
+```
+
+`documented` The same reading holds for `RAS1` with `RAM2A` in place of `RAM1A`, and it fixes three things at once: the internal access is strobed by `TIME0` **high** and the external one by `TIME0` **low**; the two bank strobes are selected by the DRAM decode (`RAM1A`, `RAM2A`, sheet 18) rather than by the slot; and inside the internal half the address source is chosen by `REFB` and `VOS` before the mux routine of the table below is even consulted.[2]
+`derived` So the internal slot precedes the external one in every window — the order is a property of `TIME0`'s polarity, and the chart's `VIDEO/REF` and `CPU` lanes are drawn in that order because the equations are.[2]
+
+`documented` The column strobe trails the row strobe by exactly one phase:
+
+```
+CAS0L = ~( TIME2 & LCYCSELB & ... )   (pad PM002, sheet 22)        [2]
+```
+
+`documented` `LCYCSEL` is the line-cycle select: a latch in the clock generator (sheet 7) built from the phase chain, with `LCYCSELB` its complement and `CYCSEL` the cycle select beside it.[2]
+`inferred` The reconstruction gives `lcycsel` as the `TIME7` pulse and `cycsel_en` as `time6 & ~time7`, i.e. the two selects that bracket a cycle's end.[9]
+`derived` `RAS` at `TIME0` and `CAS` at `TIME2` is 62.5 ns of row-address time — one master clock, the DRAM's `tRCD` — and it is the single most load-bearing timing number in the design, because everything a program can measure about STE RAM waits on it.
+
+`documented` The row/column select is `ROWB`: a macro `LLR` latch whose clock term carries `TIME0B` (pads `PL039`/`PL036`, sheet 21), i.e. a register that flips once per DRAM cycle, not a combinational decode of the phase.[2]
+`documented` The write strobe is confined to the external half: `WE` is built from `TIME0B`, `ADDRSEL`, `CMPCYC`/`RAMCYCB` and the data-direction term `IRWB` (pads `PL014`/`PL012`, sheet 21), so the CPU's write window is bounded by phase 0 of the external slot at its start and by phase 1 at its end.[2]
+`documented` `LATCH` is not a phase decode at all: it is the output of an `LLR` latch clocked by `CLKB` (pads `P7046`–`P7049`, sheet 7), so it is a registered level one 8 MHz clock wide, and the chart draws exactly that.[2]
+
+`derived` Read off sheet 48's vector geometry rather than by eye (transitions located on a 16-step grid, ±0.5 % of a step), a window is:
+
+| row (sheet 48) | what the drawing shows |
+|---|---|
+| `RAS` | asserted (low) from step 1 to step 6, and again from step 9 to step 14 — **two DRAM accesses per window**, one per slot |
+| `COL/ROW` | changes one step after each `RAS` fall and returns before the matching `CAS` rise: the address latches as row first, column second |
+| `CAS` | falls at step 3 and step 11 — exactly two steps (one phase) after each `RAS` fall |
+| `LATCH` | a single pulse four steps long per window, i.e. one 8 MHz clock, once per cycle |
+| `DCYC`/`SLOAD` | one write/load strobe per slot, in the internal half |
+| `TIME0`–`TIME7` | eight levels each one slot wide, rising one master step apart, `TIME0` high over the internal slot and `TIME7` over the external one |
+
+`unknown` The chart draws each `TIME` level a full slot wide and staggers them by a sixteenth of the window, which cannot be a literal one-hot decode: it is the designer drawing *ordering*, not pulse width. Whether the ring's phases are one-hot 62.5 ns pulses (the reconstruction's reading) or slot-wide levels is not settled by any drawing in the archive, and it is the one structural question a scope on `RAS0` against `CLK4` answers in a minute (`§7`, and the closing note of this section).
+
+`documented` And this is where the mux table of §3.6 is finally resolved: the printed order refresh → sound → video is a **decode**, not a priority, because the design derives the two request terms from one gate group — `REFB` is the output of a `NO2` whose inputs are the `ADDRSELB`-gated horizontal-window term and the sound-request term (`PK020`/`PK023`/`PK030`, sheet 20), and `SNDEN` is an `AA2` gated by the same `ADDRSELB` (`PK015`/`PK017`).[2]
+`derived` Two complementary terms cannot both be true, so the table's first two arms are mutually exclusive and the third is what remains: an internal slot is video's while the display window is open, sound's while a request is pending outside it, and a RAS-only refresh otherwise. Nothing in the hardware ranks them, exactly as `design/system-control-unit.md` §4 assumes.
+
+### 5.2 One line (512 clocks)
+
+`documented` The line is not generated by this chip: the display window arrives as the `DE` input from the Shifter, the chip registers it (`IDEB` → `vidb`, pad `PK010` on sheet 20) and its own copy of the horizontal window is `HDE1`, a flip-flop (`PK016`) clocked from the sync chain, not from `DE` itself.[2]
+`documented` Sheet 29 is the block that names the four window terms — `HDE`, `HBLANK`, `VBLANK`, `VDE`, with `LPHDE` and `HDECB` for the latched and the edge form — and `SYNCSEL` (sheet 3) is the register bit that chooses their polarity.[2]
+
+`derived` The line's slot budget, which is the whole of the video timing argument:
+
+| mode | words per line | arithmetic | internal slots left for sound and refresh |
+|---|---|---|---|
+| low res (320 px) | 80 | 320/16 = 20 per plane-set × 4 planes | 48 |
+| mid res (640 px) | 80 | 640/16 = 40 × 2 planes | 48 |
+| mono (640 px) | 40 | 640/16 = 40 × 1 plane | 88 |
+
+`derived` Against those 48 (or 88) spare slots a line must place ≈8.2 refreshes (512 rows in 4 ms is 7.81 µs apart, and a line is 64 µs) and at most 3.2 sound words (the channel's 50 kHz top rate is one word per 20 µs).[2]
+`derived` The budget is therefore comfortable by a factor of four even in low res, which is why no emulator has ever had to model refresh starvation and why the memo could call refresh "unused time slots" without qualification.
+
+`derived` The same line as a timetable, which is the form to read it in — one row per block of the 128 internal slots, and the external slots interleaved one for one:
+
+| internal slots | owner | strobe that marks it | DRAM action |
+|---|---|---|---|
+| the first 80 cycles (40 in mono), one slot each while `DE` is high | video | `DCYC` at phase 1 | normal read, `CAS` at `TIME2`; the four-word group is the Shifter's business |
+| the 48 after them (88 in mono), while sound is pending and `XSRQ` is high | sound | `SLOAD` at phase 1 | one word per granted slot, up to 4 back to back |
+| the same 48 (or 88), whenever sound is idle | refresh | none — no `CAS` follows | RAS-only, row counter advanced on `K500CLK` |
+| one external slot partner per cycle | CPU, or the DMA controller holding the bus | `DTACK` on the next `ICLK8B` edge | normal read or write; `WE` only in this half |
+
+`derived` Two consequences fall out of the table and are worth stating because emulators get them wrong: the vertical blanking interval is **not** a special case (the window closes and its slots become blanket sound and refresh, per the memo), and the window's fetches are consecutive in the *cycle* stream with no slot skipped, so an external access is never more than 250 ns behind a `RAS` assertion.
+
+`documented` The two strobes that mark a word's arrival are both phase-1 latches of the *granted* slot, built identically: `DCYC` from `NA2(RESB, NA3(TIME1, ADDRSELB, VIDEN))` and `SLOAD` from `NA3(ADDRSELB, TIME1, SNDEN)`, each through a macro latch clocked by `CLK` (pads `PL030`/`PL025`/`PL029` and `PL032`/`PL031`/`PL035`, sheet 21).[2]
+`derived` So the word is on the bus for the whole slot and its strobe is asserted at phase 1 of it — 62.5 ns after `RAS` falls, 62.5 ns before `CAS` — which is early enough for a DRAM access and late enough that the address has settled.
+`documented` `DCYC`'s third input is `VIDEN`, the *inverse* of the video enable (`PK011`, sheet 20), so the design asserts `DCYC` when the internal slot is **not** video's.[2]
+`unknown` What that means for the Shifter's word load is the one genuinely open semantic in this block: the reconstruction wires `DCYC` to the Shifter's `LOAD`, which would leave video words without a strobe during the window. Either `viden` is inverted somewhere between the two chips, or the Shifter takes its load from another net. No drawing settles it; it is recorded in the closing note below and testable with a scope on `DCYC` and `DE` together.
+
+`documented` Sound and refresh are placed by the memo and confirmed by the enable terms: they run only in horizontal blanking, and the whole vertical blanking interval is memory-idle when horizontal blanking is not active.[2]
+`documented` `XSRQ` is drawn on sheet 49 as a level across the three cycles the chart samples, and the memo's warning — refresh happens only while it is high — is the only statement of its use.[2]
+`derived` With `SREQ` held low the internal slot falls through to refresh on every blanking slot, which is the memo's "normal refresh takes place only when `XSRQ` is high" read as hardware rather than as advice.
+
+### 5.3 One frame
+
+`derived` 313 lines of 512 clocks is 160,256 × 125 ns = 20.032 ms, 49.92 Hz; the 60 Hz mode differs only in the count the vertical counter is reloaded with, because the counter and the line clock are the same.[2]
+`documented` The frame machinery is the vertical-sync block of sheets 26–30: `IVSYNC`/`IIVSYNC` are the latched and inverted forms, `VDE`/`VBLANK` the vertical window terms, and `FRAME` (sheet 20, feeding sheets 11 and 15) is the pulse that tells the video address counter to reload.[2]
+`derived` The video address counter is 24 bits across `VIDBH/VIDBM/VIDBL` plus `VCOUNT` (sheets 4, 12, 15); a reload therefore rewrites the top of the frame from software's last write, and every derivation of the visible window starts from that one wire.
+
+`inferred` The reconstruction asserts `VSYNC` at `vsc == 508` in colour and `510` in mono, and reloads the counter twice when the mode registers are written inside the VBL handler — the Level 16 finding, hardware-confirmed and the study's one T1-class behavioural fact (§2.5).[9]
+`unknown` Which of those two numbers the drawings intend is not readable: the vertical counter and its compare live in the sync block of sheets 26–30, whose text layer carries the nets but not the constant.
+
+`documented` Line width and fine scroll are registers, not wiring: `WLOCH/WLOCM/WLOCL` and `WHOFF` are write nets with their read twins `RLOCH/RLOCM/RLOCL`/`RHOFF` (sheets 10, 15), and `NOSCROLL` (sheet 29) is the one-bit mode that disables the whole mechanism.[2]
+`derived` Because both are *read-back* pairs, the address the counter starts a line from is software-visible, which is what makes the STE's hard-scroll registers cheap to emulate as an offset added at reload rather than as a per-word computation.
+
+### 5.4 The bus and its grants
+
+`documented` The 68000's answer is clocked, not combinational: `DTACK` is the output of a flip-flop (pads `P8012`/`P8006`, sheet 8) clocked on `ICLK8B`, and its set term is an `NA3` gate fed by the cycle comparator and the device `XACK` terms.[2]
+`derived` That is why `DTACK` can never arrive mid-slot: the fastest answer is the next 8 MHz edge, so the CPU's cycle quantises to whole clocks at 125 ns and a slot's worth of waiting costs 250 ns = two clocks, which is exactly ADR 0009's "round up to 4".
+`documented` The decode itself is a comparison chain, not a table: `BERR` is generated from a chain of `NLCB1`/`NLCBN` cells (pads `PB016`–`PB022`, sheet 11) fed by the address-compare terms, so a bus error is the *decode's* output and not a timeout.[2]
+`derived` A cycle that loses its slot is therefore cheap and bounded: the external half recurs every 500 ns, the CPU sees `DTACK` one 8 MHz edge later per slot lost, and the cost of a steal is a multiple of 250 ns, never a stall of unknown length.
+
+`documented` The grant relay is the classic 68000 set and it is all on the bus-interface sheets: `BR` (request in), `BGI`/`BGO` (grant in and out, for a second master), `BGACK` (acknowledge, sheet 9), `RDY`/`READY` (the DMA controller's handshake, sheet 8) and `DMADIRB` (direction, sheet 3).[2]
+`inferred` The reconstruction makes the acknowledge a function of the address select — `BGACK = ixdmab` — so a granted master only sees acknowledge when the current cycle has finished, and a steal is cycle-granular by construction rather than by courtesy.[9]
+`derived` If that holds, no DMA or blitter access can split a 4-clock 68000 cycle, which is the property every emulator's blitter timing assumes without proof.
+
+`documented` `VMA`/`VPA` are the 6800-peripheral pair, and the design carries a separate `VPAEN` and `PVPAEN` alongside `IACK`, `IIACK`, `FC0–FC2` and the `FFFXXX` decode — the interrupt-acknowledge cycle is decoded on-chip rather than left to the peripherals.[2]
+`unknown` Nothing in the archive times the `VMA`/`VPA` cycle against the slot grid; the drawing shows the decode, not the sequence.
+
+### 5.5 The register block
+
+`documented` The address decode is one sheet (3) and it is hierarchical: `FFFXXX` for the interrupt-acknowledge and RTC space, `FF9XXX` for the controller registers, `FF8XXX` for video, sound, MMU and the selects that leave the chip, with `MIXED*` (`MIXD3CD`, `MIXED320`, `MIXED364`…) as the decoded combinations the discrete gates actually match.[2]
+`documented` The selects it produces are named for their destinations: `PADSEL`, `PENSEL`, `BUTSEL`, `JOYSEL`, `CARTSEL`, `SCRLSEL`, `SYNCSEL`, `MDESEL`, `SNDCS`/`ISNDCS`, `SNDIR`, `MFPCS`, `FCS`, `RTCCS`/`RTCRD`/`RTCWR`, `DMADIRB` and `REGXACK`/`REGXACKB` — the last the acknowledge a *register* write returns to the bus.[2]
+`derived` Read as a net list this is the whole of the "peripheral" side of the chip: every device the STE addresses is a select line out of this sheet, and the chip itself keeps only video, sound, refresh, DMA and the pads.
+
+`documented` The state is held in `RLC` cells and read through `SAB` sense bits (§3.5), and every software-visible register has a *write* net and a *read* net drawn separately — `WVIDBHB/RVIDBHB`, `WCONFIGB/RCONFIGB`, `WSFB*/RSFB*`, `WSFT*/RSFT*` — which is what makes readback a property of the design rather than of an emulator's guess.[2]
+`derived` Two storage sites for `$FF8260` (§6.7) is the same pattern taken one step further: the Shifter and the GLUE each decode the address, so the register is not mirrored, it is duplicated, and a write must reach both.
+
+`derived` Follow one write end to end, because the chain is the same for all of them and the design draws every link of it. A store to the video-base middle byte goes:
+
+1. **Bus.** `AS` falls with the address on `A1–A23` and data on `D0–D15`; the decode sheet (3) matches `FF8XXX` and raises the region select, and the combination gates raise `MDESEL` for the video block.
+2. **Acknowledge.** `REGXACK` (sheet 3) is the register's own acknowledge and feeds the `DTACK` gate of §5.4, so the cycle ends on the next 8 MHz edge with no peripheral wait — a register write is always a two-clock answer.
+3. **Latch.** The data bits are clocked into `WVIDBMB`, the write net of the video-base middle byte, which is an `RLC` cell of the video block (sheets 4, 12). There is no other storage: the write net and the read net `RVIDBMB` are separate wires, which is why the register reads back at all.
+4. **Reader.** What consumes it is the video address counter's reload path (§5.3), gated by `FRAME` — so the value written is invisible until the next frame boundary, exactly as the sound memo says of its own base registers.
+5. **Readback.** A load from the same address drives `RVIDBMB` through the data-bus `TS` cells (sheet 6) and returns the latched byte, not the counter's running value; the counter is the separate read-only pair beside it.
+
+`inferred` Aliasing is then a property of the decoder's width and nothing else: Hatari's finding that `$FF8000` and `$FF8002–0F` are harmless, while `$FF8001` sets the bank sizes, is what a decode that compares only the bits the `MIXED*` terms carry would produce — but no drawing states which bits those are, so the alias map stays `T3`.[9]
+
+`documented` What the design does **not** define is as important as what it does: there is no register map in the archive — no table of bit fields, no reset values, and no statement of which bits of `$FF8001`'s bank-size field are decoded.[2]
+`inferred` The two vendored emulators carry that knowledge as behaviour: Hatari's `$FF8001` bank table, its readback of the video counters, and the observation that `$FF8000` and `$FF8002–0F` are harmless are model facts, T3 by definition, and none of them is confirmed by any drawing.[9]
+
+### 5.6 Interrupts and the controller side
+
+`documented` The priority encoder is integrated, and sheet 28 lists its inputs: `EINT3`, `EINT5`, `EINT7`, `MFPINT`, `FDINT`, `DISKINT`, `HDINT`, `VINTB`, `HINT` and `EXTS`, combining into the three outputs `IPL0`–`IPL2`.[2]
+`derived` That is the 74LS148 the ST needed on the board, and its presence on-chip is why the STE's interrupt latency does not include an external encoder's propagation delay — the same argument the service manual makes about the discrete board.
+
+`documented` `HINT` and `VINTB` are latches in the sync block, `HINT` derived from the horizontal compare and `VINTB` from the vertical, with `INTERLACE` an `XO` (XOR) output in the same block driven by `MDE0B` (pads `PS066`/`PS067`, sheet 28).[2]
+`unknown` What `INTERLACE` drives is still not readable from the text layer, and the reconstruction hard-ties it off — §6.5 and §3.7 stand.
+
+`documented` The controller side is three scanners, not one ADC: `PADR`/`PADRB` and `PENR`/`PENRB` (sheets 8, 10, 32, 33) plus the joypad selects, with the `SHR01/03/05/12` shift registers and `TB2` cells of sheet 32 as the sampling machinery and `PADC` generated next to the refresh counter on sheet 31.[2]
+`derived` That is a counting converter clocked from the same 500 kHz timebase as refresh — which is exactly why the paddle reading depends on the video mode: the count is a number of `PADC` ticks inside a fixed number of lines, and the line rate changes with the mode.
+
+### 5.7 Reset, test, and the clocks out
+
+`documented` Reset is one net fanned out, and the sheets count the fanout: "3 loads on `PORB`" on sheet 20 and "10 loads on `PORB`" on sheet 21 — the power-on reset is a distributed level, with `POR3BO` the clock sheet's own reset form and `LRESB` the local reset from the board.[2]
+`derived` A reset that is a level rather than a strobe means every latch in the chip is held transparent while it is low, which is why the design can afford 90 latches and no reset tree.
+
+`documented` The clocks that leave the chip are the pads the board inventory already knows: `CLK8`, `CLK4`, `CLK2` and `KHZ500` on pins 3–6, generated on sheet 7 from `MHZ16` through `ICLK8`/`ICLK8B`, `CLK4`/`CLK4B` and `M2CLOCK`/`M2CLOCKB`, with `K500CLK` and `KHZ500` the two 500 kHz forms.[2]
+`derived` `CLK8` is the CPU's clock and `CLK4` the one the 6800 peripherals use, so a board-level user of this chip sees four clocks and no phase information at all — the phases stay inside.
+
+`documented` `TEST` (pin 74) and `ITESTB` are the test pair, and the netlist shows `ITESTB` reaching cells in the clock generator (sheet 7) and the interrupt combiner (sheet 28) as well as the pads.[2]
+`unknown` What the mode does is undocumented in the archive — no memo, no note, no test pattern that names it — and it stays `unknown` here; unlike the 68000's `VPA` mode there is not even a 1985 paper to reason from (§9).
+
+---
+
+`derived` What this section changes in our model, kept to the three places where it does:
+
+1. **`DCYC`'s `VIDEN` term** (§5.2) means the internal slot's load strobe is asserted when video is *not* enabled; `design/system-control-unit.md` §6's "fill one word per cycle" needs an explicit answer for the word-load strobe during the window, and the answer is a measurement, not a reading.
+2. **The internal slot precedes the external one** (§5.1) is now a documented fact of the `RAS` equations rather than an assumption, and `design/system-control-unit.md` §3 can date it.
+3. **`DTACK` is a flip-flop on `ICLK8B`** (§5.4) fixes the CPU's answering instant to a whole 8 MHz edge in *hardware*, not merely as ADR 0009's choice — the same rule, now sourced.
+
+`unknown` Four questions the drawings refuse and only an owner's eye or a scope settles, in the order they cost us most:
+
+- **The `DCYC`/word-load seam** (§5.2): who strobes a video word into the Shifter while `DE` is high. Two chips, one net, no drawing that joins them.
+- **`COL/ROW`'s polarity** (§5.1): the chart gives the transitions and not the sense, so which level is the row address is a question for the sheet, not for prose.
+- **`LATCH`'s job**: the drawing and the netlist alike show a one-clock register pulse and neither says whether it latches the `MAD` muxes or marks a cycle boundary.
+- **The lane order on sheet 49**: the `RAS` equations put the internal slot first (§5.1) and the chart's `VIDEO/REFRESH`/`CPU` caption order is not readable from the text layer, so the two are stated here as agreeing rather than as one confirming the other.
+
+---
+
+## 6. Conflicts in the record, adjudicated
 
 **1. "Refresh preempts video" vs "the arms cannot meet".** Both readings exist in our own notes, ten days apart, and both are defensible from the same sheet.
 `documented` The mux table says `REF = 1` selects refresh whatever `SADSEL` and whatever the video state; the memo says refresh uses *unused* blanking slots and that "during the active portion of the horizontal line, video refreshes will occur as in the present design"[2].
 The resolution is that the table is a **decode** and the memo is a **scheduling rule**: precedence in a mux is not a priority between clients, because the refresh request itself is only generated in horizontal blanking.
 The correction of 2026-11-09 (that `REF`/`SNDEN`/`hde1` are derived from one another so exactly one arm is live) and the correction of 2026-11-01 (that the table encodes precedence) are therefore both right about their own artefact[2].
 What would falsify this: a scope trace showing a CAS-less RAS cycle inside the display window.
-That is §7.1.
+That is §8.1.
 
 **2. 15,394 or 15,074 transistors?** `derived` Both are from Atari[2].
 The gate list totals 15,394 for 1,615 cells; multiplying the *netlist's* quantities by the gate list's per-cell transistor counts gives 15,074, and the difference is not an error but a revision: the netlist has 37 `L1` against the list's 50, 35 `FF2` against 39, 300 `I1` against 298, and it contains cells the list does not (`OB*` output pads, `LHR`, `TGEN`)[2].
@@ -299,14 +482,14 @@ Any claim of fine-grained MMU behaviour is an STF-with-non-IMP-MMU story, not th
 
 ---
 
-## 6. What the emulator needs
+## 7. What the emulator needs
 
 The open questions that survive, mapped to our own documents and ranked by what they cost us when wrong.
 Tiers per the handoff: T1 hardware-captured, T2 hardware-corrected, T3 emulator-derived.
 
 | # | question in our core | the claim that answers it | tier | home |
 |---|---|---|---|---|
-| 1 | Is refresh really "filler, never preemptor"? (`design/system-control-unit.md` §4) | yes — memo §4.1 + the mux decode; refresh requires blanking **and** `XSRQ` high | T2 (memo, intent) → T1 by §7.1 | SCU §4 |
+| 1 | Is refresh really "filler, never preemptor"? (`design/system-control-unit.md` §4) | yes — memo §4.1 + the mux decode; refresh requires blanking **and** `XSRQ` high | T2 (memo, intent) → T1 by §8.1 | SCU §4 |
 | 2 | Does the sound counter increment on grant or on load? | RTL: on grant; memo: `SLOADB` rising edge latches data. Unresolved ordering | T3 | `design/crossings.md` (§2 refills) |
 | 3 | Is `SINT` a slot-wide level or a 480 ns pulse? | 480 ns pulse, and the next frame's first fetch may overlap it | T2 (memo) | Sound's frame-end event |
 | 4 | Does a mid-frame `top` write move the current boundary? | no — the boundary is `count == top`, evaluated continuously | T2 (memo) | Sound |
@@ -321,17 +504,17 @@ Two of these (2 and 10) are candidates for a labelled `unknown` in the model rat
 
 ---
 
-## 7. The experiments that would settle the rest
+## 8. The experiments that would settle the rest
 
 Six tests, in the order that buys the most certainty per evening.
 Each is a TOS program (or a bootable `$4E71`-filler ROM) run on the real 1040STE, with a scope on the named pin or a read-back through a named register; each has a pass criterion that decides between the two candidate models in this document.
 
 1. **Refresh during the display window.** Scope `RAS0` and `CAS0L` for one full line while `DE` is high and sound is off, with the video base set so that the fetch never idles.
-*Pass:* no CAS-less RAS cycle while `DE` is high → §5.1 resolved in favour of the memo's scheduling rule; any CAS-less RAS inside the window falsifies it and makes the mux table a true priority.
+*Pass:* no CAS-less RAS cycle while `DE` is high → §6.1 resolved in favour of the memo's scheduling rule; any CAS-less RAS inside the window falsifies it and makes the mux table a true priority.
 2. **Refresh versus `XSRQ`.** Drive `XSRQ` low indefinitely (a modified board, or a paddle port that holds the line) and scope `RAS0`.
 *Pass:* refresh stops — the memo's warning, and the only direct evidence for the owner equation's third arm.
 3. **Sound counter ordering.** Play a single frame with a known base/top; poll `$FF8909/0B/0D` in a tight loop and, in a second run, scope `SLOAD`.
-*Pass:* the counter value sampled between two refills advances by exactly one fetch, and the increment is visible before or after the `SLOAD` edge — which settles §6.2 either way.
+*Pass:* the counter value sampled between two refills advances by exactly one fetch, and the increment is visible before or after the `SLOAD` edge — which settles §7.2 either way.
 4. **`SINT` width.** Scope pin 105 with a frame of one word.
 *Pass:* a pulse under two clocks; measure it.
 A model that holds the line for a slot fails this by inspection[2].
@@ -345,7 +528,7 @@ None of the six needs a die, and all six are cheaper than one decap attempt by o
 
 ---
 
-## 8. What is still unknown
+## 9. What is still unknown
 
 - **The shipped mask.** These are *designs*, and the archive holds three revisions of them. Whether the part on
   our board is `ST-4081` or the `TXL` variant is not established; nothing in the design fixes which one shipped
@@ -360,14 +543,14 @@ None of the six needs a die, and all six are cheaper than one decap attempt by o
   `inferred` from Steem, and the reconstruction puts the word pipeline in the *Shifter*, not here — the two
   claims are about different sides of the same wire and both are currently unmeasured[2].
 
-`inferred` What a decap would not settle: any of §6's timing questions except indirectly.
-The right next buy for this machine, if anything is ever bought, is not a die but a logic analyser session — and §7 is the shopping list for it. No figure is drawn with this study: the design gives no die geometry, and a floorplan inferred from gate counts would be exactly the outrun-the-evidence failure the 68000 study warns about.
+`inferred` What a decap would not settle: any of §7's timing questions except indirectly.
+The right next buy for this machine, if anything is ever bought, is not a die but a logic analyser session — and §8 is the shopping list for it. No figure is drawn with this study: the design gives no die geometry, and a floorplan inferred from gate counts would be exactly the outrun-the-evidence failure the 68000 study warns about.
 
 ---
 
-## 9. Licence position
+## 10. Licence position
 
-The design documents are Atari's proprietary CAD, recovered and published by Christian Zietz; the archive's own terms are research use.[1][2] **Nothing from the archive is vendored into this repository** — the tables above are transcriptions of small excerpts (a gate-count list and a printed decode table), cited to the archive URL.
+The design documents are Atari's proprietary CAD, recovered and published by Christian Zietz; the archive's own terms are research use.[1][2] **Nothing from the archive is vendored into this repository** — what is above is two kinds of excerpt and no more: transcriptions (the gate-count list, the printed decode table, four strobe equations read off the netlist) and measurements (sheet 48's transitions, located on its own printed grid) — each cited to the archive URL rather than reproduced.
 Following the owner's ruling of this session, these studies are repo/private research and each new study states its position; the 68000 study's 1983 *Byte* figure stays where it is on the same basis.
 If any of this publishes, the tables must be redrawn from first principles or replaced with a citation-only reference to Zietz's site.
 
