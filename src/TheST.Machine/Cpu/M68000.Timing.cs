@@ -142,10 +142,12 @@ public sealed partial class M68000
                     return 0;                                       // SWAP, EXT.W, EXT.L
                 }
 
-                if ((op & 0xFF00) == 0x4AC0)
-                {
-                    return 10;                                      // TAS: the reference's `t` cycle
-                }
+                // TAS: its own 2 clocks are the memory form's `tasm1`, and the handler charges them
+                // between the read and the write. This row was `return 10` behind a mask that can never
+                // match (`(op & 0xFF00) == 0x4AC0` masks off the byte it tests for), so it fired on
+                // nothing — and the value was wrong anyway: the register form is 4 clocks and needs no
+                // charge at all, so the table keeps nothing for TAS — and the row that stood here could
+                // never fire anyway.
 
                 if ((op & 0xFFF8) == 0x4180 || (op & 0xFFF8) == 0x4100)
                 {

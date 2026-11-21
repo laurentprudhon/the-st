@@ -923,7 +923,17 @@ public sealed partial class M68000
 
             case 0xA:   // TST / TAS
             {
-                if ((op & 0x00C0) == 0x00C0)   // TAS: a read-modify-write, in a register or in memory
+                // TAS: a read-modify-write, in a register or in memory. Both corpora time the *memory*
+                // form with one 2-clock state between its read and its write — MAME's `tas_ais` runs
+                // `tasm1` (`alu_or8` on the byte just read, then `m_icount -= 2`) with `tasm2`'s write
+                // after it, and the record says so: `['r',4,…] ['n',2] ['w',4,…] ['r',4]`, so a byte
+                // `TAS (An)` is 14 clocks, not 12. 2 108 MAME records and 6 828 CLK records were exactly
+                // 2 short, on every memory shape alike, while the register form (4 clocks: one read and
+                // the closing fetch, `tasr1`/`tasr2`) was exact on both. The table row that was meant to
+                // carry this could never fire — `(op & 0xFF00) == 0x4AC0` has the low byte masked off —
+                // so the charge lives here, where the microcode puts it: between the two accesses, and
+                // never on the fault path (a read that faults returns above and spends nothing).
+                if ((op & 0x00C0) == 0x00C0)
                 {
                     if (mode == 0)
                     {
@@ -937,6 +947,7 @@ public sealed partial class M68000
                         if (_busFaulted) return;
                         uint tasValue = await ReadByteAsync(tasAddress);
                         if (_busFaulted) return;
+                        await IdleAsync();                       // `tasm1`: the state between read and write
                         SetLogicFlags(tasValue, 0);
                         await WriteByteAsync(tasAddress, (byte)(tasValue | 0x80));
                     }
@@ -1003,15 +1014,20 @@ public sealed partial class M68000
         int bytes = size == 2 ? 4 : 2;
         int mode = (op >> 3) & 0x7;
         int reg = op & 0x7;
-        ushort mask = await FetchAsync();
-        if (_busFaulted) return;
 
-        // register-direct, and the predecrement form, do not exist for this direction
+        // register-direct, and the predecrement form, do not exist for this direction. The test comes
+        // **before** the mask's fetch because the part decodes the opcode first: an illegal form raises
+        // the exception with no extension word read, so a phantom read here would be 4 clocks and one
+        // bus cycle the hardware never spends (and MAME's decode table has no entry to grade it — see
+        // the ticket; both corpora are silent on every illegal form).
         if (mode is 0 or 1 or 4)
         {
             await EnterExceptionAsync(4, 0);
             return;
         }
+
+        ushort mask = await FetchAsync();
+        if (_busFaulted) return;
 
         // (An)+ is the one form whose base register moves, and it moves by the transfer's total, which
         // the helper would get wrong (it advances by a single operand's width), so it is kept here.
@@ -1123,12 +1139,12 @@ public sealed partial class M68000
     /// `r ^ 0xf`), storing the low word first at the higher address and `m_at` trailing each write.
     /// </para>
     /// <para>
-    /// <b>This direction needed no corpus fix in row 78, and its `An` handling differs on purpose.</b>
-    /// `stmr4`/`push4` write their own `m_at`, and the store direction's `(An)+` branch keeps a
-    /// per-store step (a faulting store keeps the step) — but MAME's decode table has **no entry at all**
-    /// for `movem <list>,(An)+` (`0x48D8`) or for the load's `-(An)` form, so both are illegal on the
-    /// part and this branch is ungraded by either corpus. Do not "unify" it with the load's single
-    /// commit without deciding that first (see the handoff).
+    /// <b>This direction needed no corpus fix in row 78, and mode 3 does not exist here.</b>
+    /// `stmr4`/`push4` write their own `m_at`, and the store direction's `(An)+` branch used to keep a
+    /// per-store step — but MAME's decode table has **no entry at all** for `movem <list>,(An)+`
+    /// (`0x48D8`/`0x48F8`), so it is illegal on the part and the core now raises the illegal-instruction
+    /// exception instead of inventing a semantics for it. The step went with it: it was this core's
+    /// guess, graded by neither corpus.
     /// </para>
     /// </summary>
     async ValueTask MovemToMemoryAsync(ushort op)
@@ -1137,18 +1153,23 @@ public sealed partial class M68000
         int bytes = size == 2 ? 4 : 2;
         int mode = (op >> 3) & 0x7;
         int reg = op & 0x7;
-        ushort mask = await FetchAsync();
-        if (_busFaulted) return;
 
-        // register-direct, and the PC-relative and immediate forms, are not in this direction
-        if (mode is 0 or 1 || (mode == 7 && reg >= 2))
+        // register-direct, the postincrement form and the PC-relative/immediate forms are not in this
+        // direction — `movem <list>,(An)+` (0x48D8/0x48F8) is illegal on the part, and MAME's decode
+        // table has no entry for it, which is why this core used to execute it. The test comes before
+        // the mask's fetch: the part decodes the opcode first, so an illegal form raises the exception
+        // with no extension word read.
+        if (mode is 0 or 1 or 3 || (mode == 7 && reg >= 2))
         {
             await EnterExceptionAsync(4, 0);
             return;
         }
 
+        ushort mask = await FetchAsync();
+        if (_busFaulted) return;
+
         bool predecrement = mode == 4;
-        uint address = mode is 3 or 4 ? GetA(reg) : await EaAddressAsync(mode, reg, size);
+        uint address = mode == 4 ? GetA(reg) : await EaAddressAsync(mode, reg, size);
         if (_busFaulted) return;
 
         // `stmr2`/`push2`'s prefetch: the one program read before the loop, and it comes before any
@@ -1194,16 +1215,12 @@ public sealed partial class M68000
             for (int bit = 0; bit < 16; bit++)
             {
                 if ((mask & (1 << bit)) == 0) continue;
-                if (mode == 3) SetA(reg, address + 2);
 
                 await StoreMovemAsync(address, bit, size);
                 if (_busFaulted) return;
-                if (mode == 3 && size == 2) SetA(reg, address + 4);
 
                 address += (uint)bytes;
             }
-
-            if (mode == 3) SetA(reg, address);
         }
 
     }
