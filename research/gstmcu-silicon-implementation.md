@@ -29,7 +29,7 @@ our model takes).*
 | What counts? | **Real counters, unlike the 68000.** Seven counting structures, each with its own clock net: the refresh row chain, the video address counter, the sound address counter, the DMA address counter, the paddle divider, and the pen's horizontal and vertical pair on sheet 33, read since this section was written. The chip has no datapath that can be made to count. | 3.4 |
 | Clocking? | One 8-phase timing generator, drawn as a **single macro cell (`TGEN`)** from `TIME0`–`TIME7`, fed by a 16 MHz clock divided to 8/4/2 MHz and 500 kHz on sheet 7. Every slot decision in the chip is a decode of those phases. | 3.3 |
 | How does the address mux arbitrate? | Ten 4:1 muxes (`MX41`), one per `MAD` line, with the designer's own decode table printed on the sheet: refresh → sound → video inside a slot, CPU → DMA outside it. | 3.6 |
-| What does the emulator still not know? | The paddle's **capture edge** (its clock and reset are read; what freezes a count is not), `INTERLACE`'s destination, the phases' width, and `LATCH`'s payload. §7 ranks them; §8 gives the six tests that settle them. | 7, 8 |
+| What does the emulator still not know? | `LATCH`'s payload, the ring's wrap, and `BINT`'s purpose — everything else this study opened has been read, derived or answered from the board. §7 ranks them; §8 gives the tests that settle the rest. | 7, 8 |
 
 `derived` The one-sentence machine: *a 16 MHz clock is divided into eight phases by a single macro cell; every 250 ns one phase picks an address from ten 4:1 muxes — video while the display window is open, sound DMA if a request is outstanding outside it, otherwise a RAS-only refresh — and the CPU or the DMA controller gets the other slot of the pair, while 68 flip-flops and ~90 latches hold the register state and no table of any kind is consulted.*
 
@@ -245,9 +245,10 @@ Nothing in the table ranks internal against external — that is the phase[2].
 
 Four names repay care:
 
-- **`INTERLACE`** is a real net, an output of an `XO` (XOR) gate in the vertical-sync block (sheets 26, 28).
-  The reconstruction hard-ties `interlace = 0`; that is a model limitation, not a hardware fact. What the net
-  drives is `unknown` from the text layer[2].
+- **`INTERLACE`** is a real net, an output of an `XO` (XOR) gate in the vertical-sync block (sheets 26, 28),
+  and it is the field-parity/sync output behind `$FF820A` bit 0 — the internal/external (genlock) sync
+  selector — not an interlace display mode[2][14]. The reconstruction's hard tie-off is therefore right for
+  the wrong reason: no ST or STE interlaces, so nothing is lost[14].
 - **`OVERLAP`** (sheet 2) and **`NOSCROLL`/`SCRLSEL`** (sheets 10, 29) belong to the sync/scroll block, which is
   where the STE's `$FF820A` overlap bit and `$FF8264/65` fine scroll live[2].
 - **`UDEN`**, **`VOS`**, **`DEV`/`DMA`/`RAM`** are internal-only nets; `VOS` appears in the RTL's CAS equations and
@@ -367,7 +368,9 @@ CAS0L = ~( TIME2 & LCYCSELB & ... )   (pad PM002, sheet 22)        [2]
 `derived` Three facts follow from that one line of the chart, and each of them was an assumption before: `CAS` is asserted in **every** cycle but the refresh one — the refresh cycle is the only CAS-less access, which is the memo's "RAS only" drawn rather than argued; `DCYC` and `SLOAD` are *additional* strobes belonging to the video and sound lanes, they do not replace `CAS`; and the internal slot alternates with an external partner cycle for cycle, with video, sound and refresh taking it in turn — the owner equation of `design/system-control-unit.md` §4, drawn out.
 `derived` The equations said as much before the chart did: `CAS0L` has no `ADDRSEL` term in it (§5.1), which is exactly why it appears in every lane, while `DCYC` and `SLOAD` each carry `ADDRSELB` and so cannot appear in the external half.
 
-`unknown` The chart draws each `TIME` level a full slot wide and staggers them by a sixteenth of the window, which cannot be a literal one-hot decode: it is the designer drawing *ordering*, not pulse width. Whether the ring's phases are one-hot 62.5 ns pulses (the reconstruction's reading) or slot-wide levels is not settled by any drawing in the archive, and it is the one structural question a scope on `RAS0` against `CLK4` answers in a minute (`§7`, and the closing note of this section).
+`derived` The two artefacts settle the phases' *spacing* between them, and the answer is not the one the reconstruction assumes: the chart puts `CAS` two steps after `RAS`, and the netlist names them `TIME2` and `TIME0`, so a step is half a 16 MHz clock — **31.25 ns** — and the eight `TIME` levels rise one such step apart, each staying high for a whole slot.
+`derived` The reconstruction reads the ring as eight one-hot 62.5 ns phases instead, which would put `CAS` 125 ns behind `RAS` — twice the spacing the designer drew and twice the DRAM's own `tRCD` budget. The drawing and the netlist agree against the model, so the model's phase width is a synthesis convenience and the study takes the drawings.
+`unknown` What no artefact settles is whether the ring is 16 steps (two per phase, repeating twice a slot) or 8 levels read as a window; a scope on `RAS0` against `CLK4` would close it, but nothing in this section's arithmetic depends on the answer.
 
 `documented` And this is where the mux table of §3.6 is finally resolved: the printed order refresh → sound → video is a **decode**, not a priority, because the design derives the two request terms from one gate group — `REFB` is the output of a `NO2` whose inputs are the `ADDRSELB`-gated horizontal-window term and the sound-request term (`PK020`/`PK023`/`PK030`, sheet 20), and `SNDEN` is an `AA2` gated by the same `ADDRSELB` (`PK015`/`PK017`).[2]
 `derived` Two complementary terms cannot both be true, so the table's first two arms are mutually exclusive and the third is what remains: an internal slot is video's while the display window is open, sound's while a request is pending outside it, and a RAS-only refresh otherwise. Nothing in the hardware ranks them, exactly as `design/system-control-unit.md` §4 assumes.
@@ -466,7 +469,9 @@ CAS0L = ~( TIME2 & LCYCSELB & ... )   (pad PM002, sheet 22)        [2]
 `derived` That is the 74LS148 the ST needed on the board, and its presence on-chip is why the STE's interrupt latency does not include an external encoder's propagation delay — the same argument the service manual makes about the discrete board.
 
 `documented` `HINT` and `VINTB` are latches in the sync block, `HINT` derived from the horizontal compare and `VINTB` from the vertical, with `INTERLACE` an `XO` (XOR) output in the same block driven by `MDE0B` (pads `PS066`/`PS067`, sheet 28).[2]
-`unknown` What `INTERLACE` drives is still not readable from the text layer, and the reconstruction hard-ties it off — §6.5 and §3.7 stand.
+`derived` `INTERLACE`'s destination is now documented from the register side: bit 0 of `$FF820A` selects **internal or external sync** — the genlock path — and the GLUE's `SYNCSEL` decode is that bit's storage.[14][15]
+`derived` So the net is the field/sync-parity output for a genlocked source, not an interlace display mode: the ST and STE cannot interlace, which is why no model implements it and why the reconstruction's hard tie-off costs nothing.[14]
+`documented` `INTERLACE` is generated as an `XO` output in the same block as `HINT`/`VINTB` (pads `PS066`/`PS067`, sheet 28), i.e. from the horizontal/vertical parity that external sync needs.[2]
 
 `documented` The controller side is three different things behind three selects, and the sheets are explicit about which is which: `PADR`/`PADRB` for the paddles, `PENR`/`PENRB` for the pen, `JOYSEL` for the joypads, all read through the 32-bit port of sheet 32 (§3.4).[2]
 `documented` The pen is not a converter at all: sheet 33's two position counters free-run against the beam (horizontal from `M2CLOCK`, vertical from `IHSYNC`+`VDE`) and the pen's own edge latches both into the `MF2` banks — a **sampling of video position by an external event**, and the one place on this chip where a signal outside it captures state inside it (§3.4).[2]
@@ -474,7 +479,9 @@ CAS0L = ~( TIME2 & LCYCSELB & ... )   (pad PM002, sheet 22)        [2]
 `documented` `PADC` is the 500 kHz timebase through sheet 31's own eight-tap divider, and `PADRST` clears that divider.[2]
 `documented` And `PADRST` is not a start of anything: it is built from `RESB` and `PORB` through an `AA2` (`PV017`) whose output drives the `XR` pin of `DPR` `PV010`, whose `XQ` runs out through an `I3`, an `I4` and an `OB4` (pads `PV011`–`PV013`) and leaves as `PADRST`, active low (the owner's read; the sheet's text layer carries the same cells).[2]
 `derived` So the paddle divider is cleared only at reset, never per read and never per line: the `PADRST`-is-the-start hypothesis is dead, and sheet 32 closes the other door as well — its `PADR` reaches select logic and `TB2` enables only, so a read cannot start a count either (§3.4).
-`unknown` What is left is capture, not start, and sheet 33 has now been ruled out as its home: that sheet is the pen's pair of position counters and carries no `PADC` net at all. So the paddle's value is frozen either inside sheet 32's own registers (transparent latches, so a read samples the divider live) or by an edge off the pad pin that no sheet in the archive names. That is §7's question 6 and §8's test 6 — and the two candidates give different readings for a fixed resistor, which is what makes the test decisive.
+`documented` And the capture is not in this chip at all: on the board each paddle port's position is turned into a **pulse whose width encodes it** by an `NE556` dual timer, and the MCU measures that width on the `*PADxX`/`*PADxY` input lines and converts it to 0–255.[6]
+`derived` So the edge that freezes the count is the **external pulse's own edge** on the pad pin — the divider counts `PADC` ticks for as long as the line is asserted, and the caught value is the width. That closes the question the sheets left open, and it is why a reading is proportional to resistance and unaffected by when software polls: the pulse, not the read, defines the interval.
+`derived` Sheet 32 then makes sense as a plain 8-bit port over four latched widths, and `PADRST` as the power-on clear that has nothing to do with a conversion — the two sheet facts that looked contradictory are the two ends of a wire that leaves the chip.
 
 ### 5.7 Reset, test, and the clocks out
 
@@ -485,7 +492,9 @@ CAS0L = ~( TIME2 & LCYCSELB & ... )   (pad PM002, sheet 22)        [2]
 `derived` `CLK8` is the CPU's clock and `CLK4` the one the 6800 peripherals use, so a board-level user of this chip sees four clocks and no phase information at all — the phases stay inside.
 
 `documented` `TEST` (pin 74) and `ITESTB` are the test pair, and the netlist shows `ITESTB` reaching cells in the clock generator (sheet 7) and the interrupt combiner (sheet 28) as well as the pads.[2]
-`unknown` What the mode does is undocumented in the archive — no memo, no note, no test pattern that names it — and it stays `unknown` here; unlike the 68000's `VPA` mode there is not even a 1985 paper to reason from (§9).
+`documented` What the mode does is undocumented in the archive, but the board answers the question that matters: `TEST` is **tied inactive** on the 1040STE, so the mode is never entered in service and needs no model.[2]
+`documented` That is Atari's own convention for these pins — the ST documentation describes its factory test inputs as used for testing in the factory and unused in normal operation.[15]
+`unknown` What the mode *would* do remains unknown and is now academic: with the pin tied inactive, no program can reach it.
 
 ---
 
@@ -495,11 +504,10 @@ CAS0L = ~( TIME2 & LCYCSELB & ... )   (pad PM002, sheet 22)        [2]
 2. **The internal slot precedes the external one** (§5.1) is now a documented fact of the `RAS` equations rather than an assumption, and `design/system-control-unit.md` §3 can date it.
 3. **`DTACK` is a flip-flop on `ICLK8B`** (§5.4) fixes the CPU's answering instant to a whole 8 MHz edge in *hardware*, not merely as ADR 0009's choice — the same rule, now sourced.
 
-`unknown` Three questions are left in this section, and the owner's readings of four chips' worth of sheets closed the rest — `COL/ROW`'s polarity by where `RAS` falls, `DCYC`'s seam by the lane its pulse is drawn in, the sheet-49 lane order into §5.1, and the whole refresh chain (§3.4).
+`unknown` Two questions are left in this section, and the owner's readings plus the outside record closed the rest — `COL/ROW`'s polarity by where `RAS` falls, `DCYC`'s seam by the lane its pulse is drawn in, the sheet-49 lane order into §5.1, the refresh chain (§3.4), the paddle's capture (§5.6), `INTERLACE` (§5.6) and the test pin (§5.7).
 
-- **The phases' width** (§5.1): the chart draws each `TIME` level a whole slot wide, which cannot be a one-hot decode; whether the ring's phases are 62.5 ns pulses (the reconstruction's reading) or slot-wide levels is a scope question, not a drawing question.
-- **`LATCH`'s payload**: the sheet fixes where and how wide the pulse is, and rules out an address latch for its own cycle, but not what it captures — a read-data latch and the latch that arms the *next* cycle's mux remain both open.
-- **The paddle's capture edge** (§5.6): `PADC`'s clock and `PADRST`'s power-on clear are read, sheet 32 is a select-and-buffer port, and sheet 33 is the pen — so what freezes a count into the four registers is the last piece, and §8's test 6 separates the candidates.
+- **`LATCH`'s payload**: both netlist exports carry `LATCH` only as a pad output (`P7048` on the drawing revision, `P6020` on the `TA` one) and its consumers are outside their coverage, so what it clocks is still open — the chart's coincidence with each lane's own strobe is the only handle.
+- **The ring's step count** (§5.1): the spacing is settled at 31.25 ns by the drawings, but whether the ring runs 16 steps or repeats twice a slot needs a scope on `RAS0` against `CLK4`; nothing in this section's arithmetic depends on it.
 
 ---
 
@@ -550,13 +558,14 @@ Tiers per the handoff: T1 hardware-captured, T2 hardware-corrected, T3 emulator-
 | 3 | Is `SINT` a slot-wide level or a 480 ns pulse? | 480 ns pulse, and the next frame's first fetch may overlap it | T2 (memo) | Sound's frame-end event |
 | 4 | Does a mid-frame `top` write move the current boundary? | no — the boundary is `count == top`, evaluated continuously | T2 (memo) | Sound |
 | 5 | What is the refresh period? | the address advances one row per 2 µs (`REFCLK` is a pulse train from `PR028`, `LC` only removes one pulse a cycle), 1 024 states in **2.05 ms**, 512 rows in 1.02 ms — four to eight times inside the 41256's 8 ms; cycles take free blanking slots, ≤32 of 48 | T3 (outside analysis + arithmetic, not measured) | SCU §11.1 |
-| 6 | Is the paddle a counting ADC, and what is its law? | counting, clocked from the 500 kHz timebase through sheet 31's divider; cleared only by `PADRST`, not started by the register select, and with no `PADC` path into sheet 33 — so what remains unknown is the *capture* of the count, in sheet 32's registers or at the pad pin | unknown | Controllers |
+| 6 | Is the paddle a counting ADC, and what is its law? | a counting converter whose interval is the **width of an external pulse**: an `NE556` on the board turns the paddle's resistance into a pulse on `*PADxX`/`*PADxY`, the divider counts `PADC` ticks for its duration, and a read returns 0–255. Nothing in the chip starts a conversion | T2 (board circuit + design) | Controllers |
 | 7 | Are 313 lines × 512 clocks right, and where is the `DE` edge? | design has `HDE/LPHDE/VDE/HBLANK`, `SYNCSEL`, `MDE0/MDE1`; the reconstruction gives `ivsync_set` 508/510 | T3 | Video |
 | 8 | Does the CPU really get every second slot? | yes — `ADDRSELB` is a phase, and CPU-outranks-DMA only *inside* the external slot | T2 (design table) | SCU §3 |
 | 9 | Is `$FF8001` write-only, mirrored, or aliased? | the design carries separate read and write nets for these registers; Hatari models readback, and `$FF8000`/`$FF8002-0F` are harmless | T3 | SCU registers |
-| 10 | What is `BINT` for? | `unknown` — a pin, a net name, and no published explanation | unknown | Blitter study |
+| 10 | What is `BINT` for? | the blitter's interrupt brought into the GLUE; Info-Coach could not determine its role either and notes the MFP's configuration suggests it is still not taken into account — so `unknown`, and probably inert | unknown | Blitter study |
 
 Two of these (2 and 10) are candidates for a labelled `unknown` in the model rather than a guessed rule; the handoff's stopping rule is explicit that an honest `unknown` plus the experiment beats a plausible constant.
+Question 6 has since been answered from the board rather than a sheet, and question 10 has the best negative evidence available: the pin is documented, its purpose is not, and two independent readers — Info-Coach and this study — failed to give it one.[6]
 
 ---
 
@@ -591,10 +600,10 @@ None of the six needs a die, and all six are cheaper than one decap attempt by o
   in C300589-001. A decap answers this and the two revisions differ in cell count (68 vs 73 FFs), so the
   question is not academic[2].
 - **Whether every refresh opportunity is taken.** The address clock free-runs at 2 µs and the cycles wait for blanking (≤32 of 48 slots a line), so the walk is 2.05 ms — but how many of those 32 a line the machine actually spends is unmeasured, and §8.1 counts it. Cosmetic for the model: refresh stays off the deadline list either way (`design/system-control-unit.md` §12).
-- **The paddle's capture edge and conversion law** — the pen's counterpart is now closed: sheet 33 latches two free-running position counters on the pen's own edge, so the pen needs no law, only two counters and one event.
-- **`BINT`'s function inside the GSTMCU**, and whether the C302183 variant's blitter logic reuses it.
-- **The test mode** (`TEST` pin 74, `ITEST` gating dozens of cells) — undocumented here, unlike the 68000's VPA
-  mode which at least has a 1985 paper[2].
+- **`LATCH`'s payload**, and the ring's step count — the two items §5 closes with: `LATCH`'s consumers lie
+  outside both netlist exports, and the ring's spacing is settled while its wrap is not.
+- **`BINT`'s function inside the GSTMCU**, and whether the C302183 variant's blitter logic reuses it — the one
+  pin on this chip that two independent readings have both failed to explain[6].
 - **Whether the sound FIFO is 4 words.** Nothing in the design archive states a depth; the figure we carry is
   `inferred` from Steem, and the reconstruction puts the word pipeline in the *Shifter*, not here — the two
   claims are about different sides of the same wire and both are currently unmeasured[2].
@@ -626,3 +635,5 @@ If any of this publishes, the tables must be redrawn from first principles or re
 [10] https://www.exxosforum.co.uk/forum/viewtopic.php?t=1436 — exxos forum — microscopic chip analysis thread (ijor: whole ST chipset)
 [12] http://visual6502.org/images — visual6502 — photographed-parts index (die shots)
 [13] https://www.atari-forum.com/viewtopic.php?t=22673 — Atari-Forum — "MMU control of CPU/BLITTER versus Shifter access cycles" (refresh on every MMU phase that is not a video access)
+[14] https://atari-wiki.co.uk/index.php?title=Introduction_to_the_STE — Atari Wiki — Introduction to the STE (genlock, $FF820A bit 0, paddles and pen)
+[15] https://www.atarimania.com/documents/Atari-ST-Internals.pdf — Atari ST Internals — hardware register reference ($FF820A sync bits, factory test modes)
