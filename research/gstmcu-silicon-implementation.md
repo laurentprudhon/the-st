@@ -172,7 +172,7 @@ It is a counting ADC — the input charges something, the counter runs, and the 
 
 ### 3.5 The register bank, and how it is read
 
-`documented` The state registers are `RLC` cells (60–90 transistors, 21 instances) read through `SAB` sense amplifiers (87 instances, pins `Q XQ U XU` — two differential bit-line pairs, i.e. a **two-port** read)[2].
+`documented` The state registers are `RLC` cells (60–90 transistors, 21 instances) read through `SAB` cells (87 instances); `inferred` the `SAB` is a sense amplifier bit — the library macro file in the same archive gives it the pins `Q XQ U XU`, two differential bit-line pairs, i.e. a two-port read.[2]
 That is the same organising idea as the 68000's register file: bits sit on a pair of vertical lines and a sense amp picks one off[2].
 `derived` A two-port register bank is what makes the design's characteristic move possible — the CPU writes a register through one port while the fetch machinery reads it through the other in the same slot[2].
 
