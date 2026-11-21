@@ -10,6 +10,22 @@ the build's.
 Flux (`.ipf`, `.scp`, `.hfe`) is a **declared defer**, not a silent gap, with the reversal condition *"a title in
 the validation ladder needs it"*.
 
+**Correction — 2026-11-21 (owner: "if .stt is similar to .st we want to add it to the emulate set").** `.stt`
+is **added to the emulate set**, but the premise is corrected: it is **not** similar to `.st`, it is in the
+**`.stx` family**, and it rides on the STX reader rather than the sector path. Evidence (`counted`, read from the
+vendored Steem SSE v4.2.0 R10, not from memory):
+
+- `diskman.cpp:6691–6731` — magic `"STEM"`, version 1, `AllTrackFlags`, `NumTracks`, `NumSides`, then a
+  **per-track (4-byte offset, 2-byte length) table**; the loader sets `SectorsPerTrack = 0xff; // Variable`.
+  A flat sector dump has none of that.
+- `fdc.cpp:1570–1571` — the FDC consumes it as a **per-track byte stream** through the same call as STX:
+  `int TrackBytes = disk.GetRawTrackData(side, track); if (TrackBytes) // STT, STX with track image`.
+
+So `.stt` belongs on §2's block-stream track model, next to `.stx`, and costs the STX reader plus a header
+parse — **not** the flux/MFM work. It is a small slice of the corpus: 37 PlanetEmu game entries and 11.5 MiB in
+TOSEC's `[STT]` bracket, and no host treats it as a first-class format.
+
+
 The census that bounds it (counted, `research/st-host-registry.md` §2.2): protected containers are **2,104 of
 14,001** PlanetEmu game entries (15.0 %); sector-only loses **2,129 (15.2 %)** and the only surviving image of
 some titles; `.stx` alone covers **1,444** entries and every preserved-original case in the twenty-title sample,
