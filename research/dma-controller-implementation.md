@@ -238,16 +238,18 @@ At the floppy's 32 µs a byte there are 512 µs between requests and the arbitra
   U300            U400 (GSTMCU)   68000
   │               │               │
   │──────────────▶│               │     RDY (38, L): a level per block
-  │               │──────────────▶│     BR (29, wired-OR): the relayed request
-  │               │               │◀    BG (28): the CPU finished its cycle
+  │               │──────────────▶│     BR (29, wired-OR), relayed
+  │               │               │◀    BG (28): the CPU's cycle is done
   │               │──────────────▶│     BGACK (26): a function of ADDRSEL
   │               │               │
-  │               •               │     DTACK: a flop on ICLK8B, so whole 8 MHz edges
-  │               •               │     MAD0-MAD9 + RAS/CAS: the DRAM cycle, one per word
-  │               •               │     DMAH/DMAM/DMAL: the address, +1 per word
+  │               •               │     DTACK: a flop on ICLK8B, 8 MHz edges
+  │               •               │     MAD0-MAD9 + RAS/CAS: the DRAM cycle
+  │               •               │     DMAH/DMAM/DMAL: the address, +1/word
   │◀──────────────│               │     D8-D15: the eight words, from U300
   │               │               │
   │──────────────▶│               │     RDY released, then BGACK, BR
+  │               │               │
+  │               │               │
 ```
 
 `documented` `DTACK` is "the output of a flip-flop clocked on `ICLK8B`", so a cycle quantises to whole clocks [2].
