@@ -83,6 +83,8 @@ The RTL remains the most convenient *reading* of the design, and §6 uses it as 
 ### 2.4 Emulators answer a different question
 
 `inferred` Hatari, Steem SSE and MAME model this chip well enough to run software, which makes them a checklist of what must be explained — never evidence of silicon[1].
+`documented` For this study's hard questions the checklist came back empty, and that is a result worth recording: **no vendored model implements DRAM refresh at all** (Hatari has no refresh cycle and no row counter; the reconstruction hard-wires the refresh address to `0`), **none implements interlace on the ST/STE side** (Hatari's interlace handling belongs to the Falcon's VIDEL), and **none implements the paddle's law** — Hatari's `Joy_GetStickAnalogData` returns a host-joystick-derived constant, with no counting interval behind it.[9] `BINT` and the test mode appear in no model at all.
+`derived` Where the models are silent, an emulator cannot be a checklist — which is why the answers to this study's last questions came from the sheets, the netlist and the board's own parts, and why a behaviour that agrees with Hatari proves nothing about any of them.
 Where an emulator encodes a number nobody can source (Hatari's 63-bus-cycle non-HOG blitter window, its `$FF8001` bank-size table, Steem's 4-word sound FIFO) it is recording behaviour that a test can confirm and a drawing cannot[1].
 
 ### 2.5 One quirk is hardware-confirmed
