@@ -56,5 +56,7 @@ python3 build_schematics.py
 
 The script emits the five SVGs and then audits its own output: it estimates every string's width at a
 conservative 0.60 em per character and reports any label that would overflow its box. A clean run prints
-`0 layout warnings`. To make PNGs (for a slide or a mail), `cairosvg.svg2png(url=..., write_to=...)` on
+`0 layout warnings`. `check_overlaps.py` is the second pass — it builds text bounding boxes from the emitted
+SVGs and reports any pair that collides or any label that leaves the canvas; both should print zero before
+a commit. To make PNGs (for a slide or a mail), `cairosvg.svg2png(url=..., write_to=...)` on
 each file is enough; the sheets are 1440 units wide by design.

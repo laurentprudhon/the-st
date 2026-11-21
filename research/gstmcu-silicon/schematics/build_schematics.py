@@ -173,7 +173,7 @@ X0, X1 = 300, 1380
 PW = (X1 - X0) / PHASES
 
 
-def wave(y, runs, color=CTRL, width=2.2):
+def wave(y, runs, color=CTRL, width=2.2, dashes=None):
     """runs: list of (level, from_phase, to_phase); level 1 high, 0 low. Phases are integers."""
     pts = []
     for lvl, a, b in runs:
@@ -184,7 +184,7 @@ def wave(y, runs, color=CTRL, width=2.2):
             pts.append((X0 + a * PW, yy))
         pts.append((X0 + b * PW, yy))
     d = "M " + " L ".join(f"{x:.1f},{yy:.1f}" for x, yy in pts)
-    return path(d, color, width)
+    return path(d, color, width, dashes=dashes)
 
 
 def sheet_cycle():
@@ -212,13 +212,15 @@ def sheet_cycle():
         ("CAS0", [(1, 0, 2), (0, 2, 7), (1, 7, 10), (0, 10, 15), (1, 15, 16)], CTRL, 286),
         ("COL/ROW", [(0, 0, 1), (1, 1, 5), (0, 5, 9), (1, 9, 13), (0, 13, 16)], ADDR, 346),
         ("LATCH", [(0, 0, 10), (1, 10, 14), (0, 14, 16)], STORE, 406),
-        ("DCYC", [(1, 0, 2), (0, 2, 6), (1, 6, 16)], DATA, 466),
-        ("SLOAD", [(1, 0, 2), (0, 2, 6), (1, 6, 16)], DATA, 526),
+        ("DCYC", [(1, 0, 2), (0, 2, 6), (1, 6, 8)], DATA, 466),
+        ("SLOAD", [(1, 0, 2), (0, 2, 6), (1, 6, 8)], GREY, 526),
     ]
     for name, runs, color, y in rows:
         o.append(text(X0 - 16, y - 2, name, 12.5, INK, anchor="end", bold=True))
         o.append(line(X0, y + 6, X1, y + 6, GRID, 1, dashes="3 5"))
-        o.append(wave(y, runs, color))
+        o.append(wave(y, runs, color, dashes="5 4") if color == GREY else wave(y, runs, color))
+    o.append(text(X0 + 12 * PW, 470, "neither strobe belongs to the external half", 10.5, MUT, anchor="middle", italic=True))
+    o.append(text(X0 + 12 * PW, 530, "SLOAD is the sound lane's: this window is video's", 10.5, MUT, anchor="middle", italic=True))
 
     # annotations
     o.append(line(X0 + 5 * PW, 600, X0 + 7 * PW, 600, INK, 1.2, arrow=True))
@@ -298,7 +300,9 @@ def sheet_address():
     o.append(box(44, 436, 250, 84, "RA0–RA9 — refresh row", "sheet 11 · ten stages on REFCLKB", CLK, F_CLK))
 
     # mux column
-    o.append(box(360, 130, 250, 390, "ten MX41 muxes", "one per MAD line", ADDR, F_ADDR, tsize=15))
+    o.append(f'<rect x="360" y="130" width="250" height="390" rx="8" fill="{F_ADDR}" stroke="{ADDR}" stroke-width="1.6"/>')
+    o.append(text(485, 158, "ten MX41 muxes", 15, INK, anchor="middle", bold=True))
+    o.append(text(485, 176, "one per MAD line", 11, MUT, anchor="middle"))
     o.append(text(485, 300, "A  ▸  MADn", 12, INK, anchor="middle"))
     o.append(text(485, 324, "VA ▸", 12, INK, anchor="middle"))
     o.append(text(485, 348, "MA ▸", 12, INK, anchor="middle"))
@@ -318,7 +322,9 @@ def sheet_address():
     o.append(line(610, 300, 660, 376, CTRL, 1.6, arrow=True, dashes="4 4"))
 
     # the printed table, redrawn
-    o.append(box(946, 130, 450, 200, "the designer's table, sheet 23", "read: ADDRSELB=1 is the internal slot", CTRL, F_CTRL, tsize=13))
+    o.append(f'<rect x="946" y="130" width="450" height="196" rx="8" fill="{F_CTRL}" stroke="{CTRL}" stroke-width="1.6"/>')
+    o.append(text(966, 154, "the designer's table, sheet 23", 13, INK, bold=True))
+    o.append(text(966, 172, "read: ADDRSELB = 1 is the internal slot", 10.5, MUT))
     tbl = [("IXDMAB", "SADSEL", "REF", "ADDRSELB", "owner"),
            ("X", "X", "1", "1", "REFRESH"),
            ("X", "1", "0", "1", "SOUND"),
@@ -326,18 +332,23 @@ def sheet_address():
            ("1", "X", "X", "0", "CPU"),
            ("0", "X", "X", "0", "DMA")]
     for i, row in enumerate(tbl):
-        y = 176 + i * 24
+        y = 198 + i * 22
         for j, cell in enumerate(row):
-            o.append(text(1000 + j * 74, y, cell, 11.5 if i else 10.5, INK if i else MUT,
+            o.append(text(970 + j * 74, y, cell, 11.5 if i else 10.5, INK if i else MUT,
                           anchor="start", bold=(i == 0)))
+        if i:
+            o.append(line(966, y + 5, 1376, y + 5, GRID, 1))
 
-    o.append(box(946, 356, 450, 164, "where each input comes from", "the cross-reference tails on sheet 25", DATA, F_DATA, tsize=13))
-    o.append(text(966, 400, "RA9  ← sheet 11   the refresh chain's taps", 11.5, INK))
-    o.append(text(966, 422, "VA9  ← sheet 11   after the WLOC offset muxes", 11.5, INK))
-    o.append(text(966, 444, "MA9  ← sheet 17   the sound address counter", 11.5, INK))
-    o.append(text(966, 466, "A9   ← sheet 19   the CPU/DMA bus", 11.5, INK))
-    o.append(text(966, 496, "four inputs because two lanes share one: on an external slot the granted", 10.5, MUT, italic=True))
-    o.append(text(966, 510, "master is already driving the bus.", 10.5, MUT, italic=True))
+    o.append(f'<rect x="946" y="346" width="450" height="182" rx="8" fill="{F_DATA}" stroke="{DATA}" stroke-width="1.6"/>')
+    o.append(text(966, 370, "where each input comes from", 13, INK, bold=True))
+    o.append(text(966, 388, "the cross-reference tails on sheet 25", 10.5, MUT))
+    for i, row in enumerate(["RA9  ← sheet 11   the refresh chain's taps",
+                             "VA9  ← sheet 11   after the WLOC offset muxes",
+                             "MA9  ← sheet 17   the sound address counter",
+                             "A9   ← sheet 19   the CPU/DMA bus"]):
+        o.append(text(966, 416 + i * 22, row, 11.5, INK))
+    o.append(text(966, 508, "four inputs, because two lanes share one: on an external", 10.5, MUT, italic=True))
+    o.append(text(966, 522, "slot the granted master is already driving the bus.", 10.5, MUT, italic=True))
 
     o.append(text(44, 580, "The table is a decode, not a priority: REFB and SNDEN are produced by one gate group, so the first two arms",
                   12, INK))
@@ -390,11 +401,13 @@ def sheet_counters():
         o.append(text(520, y + 27, width, 10.5, MUT))
 
     # refresh clock chain
-    o.append(box(800, 368, 596, 118, "REFCLK — how the refresh clock is made", "sheet 27, with K500CLK buffered locally", CLK, F_CLK, tsize=13))
-    o.append(text(820, 412, "NAND(HCTR, LC) → XY2, mixed with K500CLK → a flop whose output is REFCLK", 11.5, INK))
-    o.append(text(820, 432, "HCTR = M2CLOCK ÷ 64 (16 µs); LC is a one-clock marker from the TIME pipeline", 11.5, INK))
-    o.append(text(820, 452, "REFCLKB = NAND(SNDEN, REFCLK) on sheet 20 — parked high while sound fetches", 11.5, INK))
-    o.append(text(820, 472, "Result: one row address per 2 µs; 1 024 states in 2.05 ms; a bank in 1.02 ms", 11.5, INK, bold=True))
+    o.append(f'<rect x="800" y="368" width="596" height="124" rx="8" fill="{F_CLK}" stroke="{CLK}" stroke-width="1.6"/>')
+    o.append(text(820, 390, "REFCLK — how the refresh clock is made", 13, INK, bold=True))
+    o.append(text(820, 406, "sheet 27, with K500CLK buffered locally", 10.5, MUT))
+    o.append(text(820, 426, "NAND(HCTR, LC) → XY2, mixed with K500CLK → a flop whose output is REFCLK", 11.5, INK))
+    o.append(text(820, 444, "HCTR = M2CLOCK ÷ 64 (16 µs); LC is a one-clock marker from the TIME pipeline", 11.5, INK))
+    o.append(text(820, 462, "REFCLKB = NAND(SNDEN, REFCLK) on sheet 20 — parked high while sound fetches", 11.5, INK))
+    o.append(text(820, 480, "Result: one row address per 2 µs; 1 024 states in 2.05 ms; a bank in 1.02 ms", 11.5, INK, bold=True))
 
     # not modelled
     o.append(f'<rect x="800" y="504" width="596" height="120" rx="8" fill="{F_GREY}" stroke="{GREY}" stroke-width="1.4"/>')
