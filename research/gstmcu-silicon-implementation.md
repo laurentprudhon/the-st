@@ -156,18 +156,23 @@ That is structurally important: the phase ring is hand-designed and hard-macroed
 
 ### 3.4 What counts, and on which clock
 
-`documented` The sheet titles are the inventory: `DRAM REFRESH COUNTER` (sheets 11, 31, 33), `DMA ADDRESS COUNTER` (16), `SOUND ADDRESS COUNTER` (17), `Paddle Registers` (32), and the video base/counter registers (4, 12, 15)[2].
+`documented` The sheet titles are the inventory, with the usual caveat that two of them lie: `DRAM REFRESH COUNTER` (sheets 11, 31, 33), `DMA ADDRESS COUNTER` (16), `SOUND ADDRESS COUNTER` (17), `Paddle Registers` (32), and the video base/counter registers (4, 12, 15)[2].
+`documented` The lie is worth naming because it misled this study for a day: **sheet 31's block is the paddle scan divider**, and the row counter the title promises is on sheet 11 (§3.4 below).[2]
 The netlist supplies the clocks: `REFCLK` and `VIDCLK` each drive only a handful of gates and are *enables*, `M2CLOCK` drives 28 storage cells (the largest single clock domain, 15 × `FF1` + 9 × `FF2` + 3 × `FF4` + 1 × `LT2`), and `ICLK8`/`/ICLK8` drive another 10[2].
 
 | counter | clock / enable | width | evidence |
 |---|---|---|---|
-| refresh row | `K500CLK` (500 kHz) into sheet 31's chain | 10 lines leave the chip as `MAL0`–`MAL9` per our own pin inventory; the STE population is 512 rows per bank | `documented` (design + `board-inventory.md` §3.4b); mapping of 10 bits onto 512 rows `unknown` |
+| refresh row | a carry-chained group of `NCBMS`/`NLCBN` gates on **sheet 11**, taps printed 1…10 | ten taps = 1 024 states against 512 rows per bank, and ten `MAL` lines leave the chip (`board-inventory.md` §3.4b) | `documented` (sheets 11, pins); which tap reaches which `MAL` pin `unknown` |
 | video address | advances once per 500 ns cycle while the display window is open | 24 bits across `VIDBH/VIDBM/VIDBL` + `VCOUNT` | `documented` (sheets 4, 12, 15) |
 | sound address | `SNDCLK` = the granted slot | 21 bits (`SFTH/SFTM/SFTL`) | `documented` (sheet 17 + memo §4) |
 | disk DMA address | `DMADIR`/`RDY` handshake with U300 | 24 bits (`DMAH/DMAM/DMAL`) | `documented` (sheet 16) |
-| paddle | `PADC`, generated on the refresh sheet and used on the paddle sheet | four registers (`PAD0X/PAD0Y/PAD1X/PAD1Y`), one byte each at `$FF9211/13/15/17` in the emulator map | `documented` structure, `inferred` width, `unknown` law (§7.6) |
+| paddle | `PADC` — the 500 kHz timebase through sheet 31's own divider, reset by `PADRST` | four registers (`PAD0X/PAD0Y/PAD1X/PAD1Y`), one byte each at `$FF9211/13/15/17` in the emulator map | `documented` structure and clock source, `inferred` width, `unknown` law (§7.6) |
 
-`documented` The paddle block is worth a sentence because it is the one place where the chip is *analog*: four registers built from `LLR` latches and `TB2` cells with shift registers `SHR01/03/05/12`, and a `PADC` clock that sheet 31 generates next to the refresh counter[2].
+`documented` The paddle block is worth a sentence because it is the one place where the chip is *analog*: four registers built from `LLR` latches and `TB2` cells with shift registers `SHR01/03/05/12`, and a `PADC` clock that sheet 31 generates[2].
+`documented` What sheet 31 actually draws, read off the sheet by its owner: `K500CLK` into the `C` pin of `DPR` `PV009`, then a chain of `NLCB1` and six `NLCBN` carry cells, giving eight taps printed 0–7, reset by `PADRST`, with one tap leaving the sheet as `PADC` towards sheet 32 (pads `PV001`–`PV017`).[2]
+`derived` That is the paddle/pen **scan divider**, not a row counter — and `PADC` is therefore the 500 kHz timebase divided down by it and nothing else, which is exactly what the owner reported as "directly derived from `K500CLK`".
+`derived` The ten-tap chain that can be a row counter is on **sheet 11** instead: `NCBMS`, seven `NLCBN` and an `NLCB1`, with `CI`/`CO` carried stage to stage and the `Q` outputs printed 1…10, drawn beside the `WLOC*` line-offset registers and their `MX21` muxes (pads `PB001`–`PB010`).[2]
+`derived` Ten taps is 1 024 states, and 512 rows per bank is half of that — the first reading in this study that makes ten `MAL` lines fit the row count instead of contradicting it. Which tap reaches which pin is still `unknown`: no `MAL` net appears anywhere in the archive's text layer, and the owner's read of sheet 31 found none either.
 It is a counting ADC — the input charges something, the counter runs, and the caught value is the reading — not a successive-approximation converter, which is why its conversion time depends on the analog value and why emulators approximate it[2].
 
 ### 3.5 The register bank, and how it is read
@@ -427,6 +432,8 @@ CAS0L = ~( TIME2 & LCYCSELB & ... )   (pad PM002, sheet 22)        [2]
 
 `documented` The controller side is three scanners, not one ADC: `PADR`/`PADRB` and `PENR`/`PENRB` (sheets 8, 10, 32, 33) plus the joypad selects, with the `SHR01/03/05/12` shift registers and `TB2` cells of sheet 32 as the sampling machinery and `PADC` generated next to the refresh counter on sheet 31.[2]
 `derived` That is a counting converter clocked from the same 500 kHz timebase as refresh — which is exactly why the paddle reading depends on the video mode: the count is a number of `PADC` ticks inside a fixed number of lines, and the line rate changes with the mode.
+`documented` `PADC` is the 500 kHz timebase through sheet 31's own eight-tap divider, and `PADRST` clears that divider.[2]
+`unknown` Whether `PADRST` is the paddle register select (a read starts the count) or the line start (the count free-runs and a read samples it) is the one piece of the law the sheet does not state; it is §7's question 6 and §8's test 6.
 
 ### 5.7 Reset, test, and the clocks out
 
@@ -500,7 +507,7 @@ Tiers per the handoff: T1 hardware-captured, T2 hardware-corrected, T3 emulator-
 | 2 | Does the sound counter increment on grant or on load? | RTL: on grant; memo: `SLOADB` rising edge latches data. Unresolved ordering | T3 | `design/crossings.md` (§2 refills) |
 | 3 | Is `SINT` a slot-wide level or a 480 ns pulse? | 480 ns pulse, and the next frame's first fetch may overlap it | T2 (memo) | Sound's frame-end event |
 | 4 | Does a mid-frame `top` write move the current boundary? | no — the boundary is `count == top`, evaluated continuously | T2 (memo) | Sound |
-| 5 | What is the refresh period and row order? | `derived` 7.8 µs for 512 rows in 4 ms; counter clocked at 500 kHz; 10 `MAL` lines vs 512 rows unexplained | T3 | SCU §11.1 |
+| 5 | What is the refresh period and row order? | `derived` 7.8 µs for 512 rows in 4 ms; the row counter is a ten-tap gate chain on sheet 11 (1 024 states), so ten `MAL` lines now fit 512 rows; which tap goes to which pin is unread | T3 | SCU §11.1 |
 | 6 | Is the paddle a counting ADC, and what is its law? | counting, clocked from the same 500 kHz timebase; law unknown | unknown | Controllers |
 | 7 | Are 313 lines × 512 clocks right, and where is the `DE` edge? | design has `HDE/LPHDE/VDE/HBLANK`, `SYNCSEL`, `MDE0/MDE1`; the reconstruction gives `ivsync_set` 508/510 | T3 | Video |
 | 8 | Does the CPU really get every second slot? | yes — `ADDRSELB` is a phase, and CPU-outranks-DMA only *inside* the external slot | T2 (design table) | SCU §3 |
@@ -541,7 +548,7 @@ None of the six needs a die, and all six are cheaper than one decap attempt by o
   our board is `ST-4081` or the `TXL` variant is not established; nothing in the design fixes which one shipped
   in C300589-001. A decap answers this and the two revisions differ in cell count (68 vs 73 FFs), so the
   question is not academic[2].
-- **The refresh counter's 10 bits against 512 rows**, and whether `MAL0–MAL9` are row addresses at all.
+- **The join from the refresh counter's taps to `MAL0–MAL9`.** The ten-tap chain is on sheet 11, the ten `MAL` lines leave the chip, and nothing in the archive draws the connection — no `MAL` net appears in any sheet's text layer.
 - **The ADC's conversion law and its timing.**
 - **`BINT`'s function inside the GSTMCU**, and whether the C302183 variant's blitter logic reuses it.
 - **The test mode** (`TEST` pin 74, `ITEST` gating dozens of cells) — undocumented here, unlike the 68000's VPA

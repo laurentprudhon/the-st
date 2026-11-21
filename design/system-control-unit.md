@@ -333,6 +333,11 @@ one opens a question that this document had assumed away.
   pulse in the cycle labelled `video`. So the fill rule stands as written, one word per cycle, strobe at
   phase 1 of the slot, and the reconstruction's `viden = ~vidb` reading has `vidb`'s polarity inverted.
   Recorded as a closure, not an unknown, in the study (§5.2).
+- **The refresh row counter is on sheet 11, not sheet 31** (owner's read of both). Sheet 31's block is
+  `K500CLK` through an eight-tap divider into `PADC`, i.e. the paddle scan clock; the ten-tap carry chain
+  with `Q` outputs printed 1…10 sits on sheet 11 beside the `WLOC*` registers. Ten taps is 1 024 states
+  against 512 rows per bank, so §11.1's "10 bits against 512 rows" is no longer a contradiction — what
+  remains open is only which tap reaches which `MAL` pin.
 - **§4's owner equation is now drawn, not only derived.** Sheet 49's five successive cycles are `video`,
   `cpu`, `sound`, `cpu`, `refresh`, and in the refresh cycle `DCYC`, `SLOAD` and `CAS` all stay high — the
   blanking chain of §4 with the refresh cycle as the one CAS-less access at the end of it — `CAS` is
