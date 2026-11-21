@@ -122,9 +122,9 @@ internal to `U400`'s decode and to the sockets beside it.
 ## 3. One cycle, two slots, one counter
 
 ```
-cycle  = 500 ns = 4 CPU clocks = 16 master clocks  (the 8-phase counter's period)
-slot   = 250 ns = 2 CPU clocks                     (one DRAM access)
-cycle  = 1 internal slot + 1 external slot          (2 of the 8 phases each)
+cycle  = 500 ns = 4 CPU clocks = 16 phases          (31.25 ns each; the ring's period)
+slot   = 250 ns = 2 CPU clocks = 8 phases           (one DRAM access)
+cycle  = 1 internal slot + 1 external slot          (8 of the 16 phases each)
 line   = 512 CPU clocks = 128 cycles = 128 I + 128 E slots = 64 µs
 ```
 
