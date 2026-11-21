@@ -28,11 +28,11 @@ states its block, its sheet and its sources in its header (#94 makes that a `gre
 | 0 | `M68000.Registers.cs` | the register file and every latch | 01, grey | `D0–D7`, `A0–A6`, `USP`, `SSP`, `AU` (+`AUH`/`AUL` accessors), `AT`, `DT`, `AOB`, `DBIN`, `DOB`, `ALUO`, `ALUB`, `ALUE`, `ISR`, `ALUWidth`, `IRC`/`IR`/`IRD`, `PSW`, `SSW`, `INL`, `TPEND`, `PREN`, `FTU` — **storage only, no behaviour** | #86, #87 |
 | 1 | `M68000.Datapath.cs` | the three sections, two lanes each, the couplers | 01 | the named transfers (`TransferAbhToAth`, `LatchAluOutput`, `Set16H`, `Set16L`, `CopyAuToPc`, …), the ALU's 15 × 5 matrix, the constants ROM | #91 |
 | 1 | `M68000.Counters.cs` | the things that count | 01, 02 | `AU`'s six low bits as a loop counter, `PREN`'s mask walk, `DCR`'s one-hot line, `FTU`'s constant 15 | #92 |
-| 2 | `M68000.Bus.cs` | the pins and the bus state machine | 03 | `Pins` (§8.1, one member per signal), `S0–S7`, the strobes, `DTACK`/`BERR` sampling, the access class | #88 |
-| 3 | `M68000.Sequencer.cs` | the microcode address path and the microcycle | 02, 04 | the word formats I/II, the next-address sources, the four-way conditional branch, `A0`/`A0S`, the 2-clocks-a-state / 4-clocks-an-access charge | #90 |
+| 2 | `M68000.Bus.cs` | the pins and the bus state machine | 03 | `Pins` (§8.1, one member per signal), `S0–S7` (and the `"S0"`…`"S7"` string `Instruments.BusState` reads), the strobes, `DTACK`/`BERR` sampling, the access class | #88 |
+| 3 | `M68000.Sequencer.cs` | the microcode address path and the microcycle | 02, 04 | the word formats I/II, the next-address sources, the four-way conditional branch, `A0`/`A0S`, the 2-clocks-a-state / 4-clocks-an-access charge, and the bus state's and entry step's position (`BusState`, `EntryStep`) — **the only place a duration may live**, named `…Clocks`/`…Ticks` (ADR 0015 §5.1) | #90 |
 | 4 | `M68000.Scripts.cs` | the script states | 02, state lists | one `async` method per microword state, one method per shape (`IsScripted<Family>` is the ledger) | — |
 | 4 | `M68000.Exception.cs` | the exception scripts and `SSW`'s two lives | 02, violet | the two frame orders, the group-0 word order, the vector keying, the double fault as a documented gap | #93 |
-| 5 | `M68000.Decode.cs` | `A1`/`A2`/`A3` and the `IRD` PLA bank | 02, amber | the 149 `A1` terms, the 20 EA-keyed ones, `IOC`/`PRIV`, the `IRD`-keyed bank (~130 of ~200 control lines) | #89 |
+| 5 | `M68000.Decode.cs` | `A1`/`A2`/`A3` and the `IRD` PLA bank | 02, amber | the 149 `A1` terms, the 20 EA-keyed ones, `IOC`/`PRIV`, the `IRD`-keyed bank (~130 of ~200 control lines) — **and the public face**: `Decode`'s one function per instruction family and the `Family` enum, both named from the manual's §5 tables and appendix (ADR 0015 §1, §1.1) | #89 |
 | 6 | `M68000.SingleStep.cs` | the corpus seam | — | `Load`/`Capture`/`StepAsync`, `SingleStepState`/`SingleStepResult` | #34, unchanged |
 | 7 | `M68000.cs` | the chip | 00, 03 | the members, the constructor, `Launch`, the drive loop, reset, interrupt sampling, `Pins`/`Instruments`/`SingleStep` as nested types | #85 |
 
@@ -106,6 +106,23 @@ The inventory is ADR 0015 §4 (adopt / derive / delete / plumbing). This is the 
 DEBUG` readings of `AU`/`AT`/`IRD`/`SSW`; they are written where the frame is written and back no latch
 of their own. *To be filled by #86*: the exact write sites, one per column.
 
+**Time, and therefore not in that table either**: a field that exists to make the clock behave is not
+storage, and its name carries its unit — `…Clocks` (CPU clocks) or `…Ticks` (oscillator ticks) — per
+ADR 0015 §5.1. It may live in `Sequencer` or in `Instruments`, **never in `Registers`**; while the shape
+table is still being emptied by #90 its one surviving time value is `OwnClocks` (today's `_own`), and it
+goes when the table's last row does. `_eaCharged` is not time: it is a "has happened" bit, and the states'
+own position replaces it.
+
+**The manual's concepts as display** (ADR 0015 §1.1), all reads, none stored:
+
+| member | values | produced by |
+|---|---|---|
+| `Instruments.Instruction` | the manual's syntax, e.g. `"MOVE.W D0,(A1)+"`; `"—"` at a boundary | composed **on read** from `IRD` and `Decode` — never per instruction (G8) |
+| `Instruments.Family` | a `Family` member, or `null` at a boundary | `Decode`'s answer at the boundary |
+| `Instruments.BusState` | `"S0"` … `"S7"` | `Bus`'s state machine |
+| `Instruments.EntryStep` | `"1 vector"` … `"5 load PC"`, empty outside an entry | `Exception`'s entry script |
+| `Instruments.Interrupt` | `"masked"`, `"taken"`, `"edge-triggered"`, `"autovector"`, `"spurious"`, `"none"` | the boundary's sampling |
+
 ## 4. The seam's vocabulary
 
 | the seam says | the silicon says | why they differ |
@@ -139,6 +156,8 @@ The list grows as the campaign finds things; each entry says what *would* witnes
 | where inside a state a charge sits | a record's `length` is a total; the transactions carry the bus accesses only | `--trace N` against a record's `transactions`; `--clocks`' grouping by shape |
 | whether `AU` or `AT` wrote the frame's saved `pc` | the corpus sees the *value*, not the primitive | #87's sub-steps, one field at a time, corpus after each |
 | a decode term's inhibit order | no record is illegal-and-executed | #89's 65 536-opcode golden |
+| the display strings (`Instruction`, `BusState`, `EntryStep`, `Interrupt`) | nothing grades a string | each producer's ticket asserts one worked case (§88 the byte-lane cycle's `S0`…`S7`, §89 a `MOVE.W` text, §93 a `TRAP`'s five steps); the boot's `--trace` is the second witness |
+| the family decode's names | the corpus names instructions in its own records, not in the core's members | #89's golden table (entry point per opcode) plus the freeze test's equality of `Decode` and `Family` |
 
 *To be filled by #86–#94*: one row per divergence found — mechanical (a rename) versus a finding (a
 bookkeeping field that turned out to be a latch).

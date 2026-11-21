@@ -1,9 +1,10 @@
 # The core is the silicon: the manual's names outside, the parts' names inside
 
 The 68000 core stops being a set of fields that happen to work and becomes the machine the two
-authorities describe. **Outside**, its public surface is the programmer's model and the §8.1 signals of
-`atari-st-hardware/cpu/02-mc68000-tutorial.md`, exactly and only, frozen by a reflection test — no invented member, no missing
-one. **Inside**, every field is a latch one of the two Motorola patents names (`AU`, `AT`, `AOB`,
+authorities describe. **Outside**, its public surface is the programmer's model, the §8.1 signals and the
+state concepts of `atari-st-hardware/cpu/02-mc68000-tutorial.md` — registers, flags, pins, the instruction
+families as decoders, and the bus cycle's, the entry's and the interrupt's states as displayable strings —
+exactly and only, frozen by a reflection test: no invented member, no missing one. **Inside**, every field is a latch one of the two Motorola patents names (`AU`, `AT`, `AOB`,
 `DBIN`, `DOB`, `ALUB`, `ALUE`, `ALUO`, `FTU`, `DCR`, `PREN`, `IRC`/`IR`/`IRD`, `PSW`, `SSW`, `INL`,
 `TPEND`), every value that is an expression on those latches is computed rather than stored, and today's
 bookkeeping — the five overlapping address counters, the "was it charged" flags, the frame's memo
@@ -12,10 +13,11 @@ state method per microword state, one named arm per decode term, never a microco
 
 **Status**: proposed (2026-11-21), ticket [#83](https://github.com/laurentprudhon/the-st/issues/83), the
 first ticket of the campaign *CPU: the core is the silicon* ([#82](https://github.com/laurentprudhon/the-st/issues/82)).
-Shape: [`design/cpu-silicon.md`](../design/cpu-silicon.md). **Three answers below are recommendations
-awaiting the owner's word** — §5, §1's instrument boundary, and §8.4's two aliases; see
-[Open questions](#open-questions-for-the-owners-word). Every other statement is a consequence of the two
-authorities or of the three rulings recorded in Context, and does not wait on him.
+Shape: [`design/cpu-silicon.md`](../design/cpu-silicon.md). **Five answers below are recommendations
+awaiting the owner's word** — §5's charge, §6's instrument boundary, §8.5's two aliases, §1's decode
+contract and §1.1's display set; see [Open questions](#open-questions-for-the-owners-word). Every other
+statement is a consequence of the two authorities, of the three rulings recorded in Context, or of the
+owner's two additions of the same day, and does not wait on him.
 
 ## Context
 
@@ -49,6 +51,16 @@ authorities or of the three rulings recorded in Context, and does not wait on hi
 - **The corpus cannot see the interface.** It grades registers, status, memory and clocks; a rename that
   breaks the boot's probes or the harness's state load shows up as an exception or a `frames_to_desktop=never`,
   not as a red record. The freeze test of #85 and the boot pair are the only witnesses this ADR can name.
+- **Two additions the owner made while this ADR was being written (2026-11-21), and they are
+  requirements, not preferences.** (a) *The state rule is about storage, not about time*: "when I said I
+  don't want to create additional state compared to what exists on silicon … of course, time is
+  simulated, so time constants are allowed as additional state, but they should be named in a specific
+  way so that we see them as what they are — not storage on the chip, but an emulator artifact to
+  simulate time." §5.1 is that naming rule. (b) *The surface carries the manual's own concepts, not only
+  its registers*: the first level of instruction decoding is part of the interface, its functions are
+  "named exactly like the instruction families in the programmer manual", the currently executing
+  instruction is a string in the public state, and every state-machine concept the manual names is a
+  displayable string there too. §1.1 is that inventory.
 - **Three rulings are the owner's, made when the map was charted (2026-11-21), and are not re-opened
   here.** (1) *A register is 32 bits of storage*; the High/Low/Data split becomes named accessors, because
   the physical split has no behavioural consequence on this machine and splitting storage costs G8 for
@@ -62,7 +74,7 @@ authorities or of the three rulings recorded in Context, and does not wait on hi
 
 ### 1. The public surface is the manual's, exactly and only
 
-`M68000`'s declared public members are **the programmer's model**, **three nested types**, and **one
+`M68000`'s declared public members are **the programmer's model**, **four nested types**, and **one
 verb** — nothing else. The freeze test of #85 asserts this list by reflection, entry by entry.
 
 **The programmer's model** — the registers of tutorial §1.1, §1.2 and §1.3 and nothing more. Every one
@@ -106,6 +118,43 @@ part*:
 | `Observer` | both | the debug instruction hook the boot's traces use |
 | `CycleObserver`, `ClockObserver`, `LastFramePc`, `LastFrameFetchPointer`, `LastFramePcCounter`, `LastFrameIrAddress`, `LastFrameRefetched`, `LastFrameTrailing`, `LastFrameVector` | `#if DEBUG` | the per-record instruments `--trace`/`--clocks` print |
 
+**`Instruments` also carries the manual's own state as text** — §1.1 below lists them, and they are
+*display*, not state: each is a string or an enum read off the machine at the instant it is asked for, so
+an instrument never makes a copy of the core (the same rule §3's views keep).
+
+**`Decode`** — the first level of the instruction decode, and the one place where a nested type's members
+*are* the manual's words: one `public static` function per instruction family, named exactly as the
+manual's §5 tables and appendix name it.
+
+```csharp
+public static class Decode
+{
+    public readonly record struct Decoded(Family Family, int Size, int Mode, int Register,
+                                          int SourceMode, int SourceRegister, int Condition);
+
+    public static bool Move  (ushort opcode, out Decoded instruction);
+    public static bool Movea (ushort opcode, out Decoded instruction);
+    …
+    public static bool Stop  (ushort opcode, out Decoded instruction);
+    public static bool Reset (ushort opcode, out Decoded instruction);
+    public static bool Illegal(ushort opcode, out Decoded instruction);
+}
+```
+
+One member per line of the manual's §5 tables — `Move`, `Movea`, `Moveq`, `Movem`, `Movep`, `Lea`, `Pea`,
+`Exg`, `Swap`, `Link`, `Unlk`, `MoveFromSr` (`MOVE SR,<ea>`), `MoveToSr` (`MOVE <ea>,SR`), `MoveToCcr`,
+`MoveUsp` (`MOVE USP`), `Andi`, `Ori`, `Eori` (each also carrying the to-`CCR`/to-`SR` targets), `Add`,
+`Adda`, `Addi`, `Addq`, `Addx`, `Sub`, `Suba`, `Subi`, `Subq`, `Subx`, `Cmp`, `Cmpa`, `Cmpi`, `Cmpm`,
+`Neg`, `Negx`, `Clr`, `Ext`, `Mulu`, `Muls`, `Divu`, `Divs`, `Abcd`, `Sbcd`, `Nbcd`, `And`, `Or`, `Eor`,
+`Not`, `Tst`, `Tas`, `Asl`, `Asr`, `Lsl`, `Lsr`, `Rol`, `Ror`, `Roxl`, `Roxr`, `Btst`, `Bchg`, `Bclr`,
+`Bset`, `Bcc`, `Bra`, `Bsr`, `Dbcc`, `Scc`, `Jmp`, `Jsr`, `Rts`, `Rtr`, `Rte`, `Trap`, `Trapv`, `Chk`,
+`Nop`, `Stop`, `Reset`, and `Illegal` (the encodings §12 says must trap as vector 4). A family function
+returns *false* rather than throwing: the first level's question is "does this opcode belong to this
+family", and the inhibit order between families is #89's business, not the surface's.
+
+The `Family` enum carries the same names (one member per function, `Decode.Move` ↔ `Family.Move`), and the
+freeze test asserts the two lists are equal, so a family that appears in one and not the other fails.
+
 **`SingleStep`** — the corpus seam (ticket #34): `Load(in SingleStepState)`, `Capture()`,
 `StepAsync()`. Its vocabulary is the seam's, and the seam *is* the programmer's model plus the two
 prefetch words (§7). It is public because `CpuTestsCommand` is a different assembly, and it is nested
@@ -118,13 +167,50 @@ verb — ADR 0006/0008's surface, not the 68000's.
 **Retired:** `PeekD`/`PeekA` (→ `D0`…/`A0`…), `Supervisor` (→ `S`), `InterruptMask` (→ `I2`,`I1`,`I0`),
 `Usp`/`Ssp` (→ `USP`/`SSP`).
 
+### 1.1 The manual's state concepts, and which of them are displayable
+
+The owner's addition (b): *scan the manual for every concept it uses as a state and represent them as
+displayable strings*. The scan is complete against
+`atari-st-hardware/cpu/02-mc68000-tutorial.md` §0.5, §1.4, §5, §6, §7, §8.2–§8.4, §11 — the places the
+manual describes execution as a sequence of named states or cases. One member per concept, the values
+being the manual's own words, and **a concept the manual only describes gets no member** (the rule's
+other half, so the surface cannot grow synonyms).
+
+| concept | manual | its states, in the manual's words | member |
+|---|---|---|---|
+| the instruction being executed | §1.4, §5 | the mnemonic and its operand syntax; the family it belongs to | `Instruments.Instruction` (string) and `Instruments.Family` (`Family`), fed by `Decode` |
+| the bus cycle | §0.5, §8.2 | `S0` "bus idle", `S1` "address, `FC` and `R/W` driven and valid", `S2` "`AS` and the data strobes asserted", `S3–S5` "the CPU waits here", `S6` "the transfer", `S7` "strobes negated, cycle over" | `Instruments.BusState` → `"S0"` … `"S7"` |
+| the exception entry | §6 | "1 the vector number n is determined", "2 the old SR is copied …", "3 PUSH PC", "4 PUSH SR", "5 PC ← long at 4 × n" | `Instruments.EntryStep` → `"1 vector"`, `"2 status"`, `"3 push PC"`, `"4 push SR"`, `"5 load PC"` |
+| the interrupt | §7 | its table's five cases: "masked", "taken", "edge-triggered", "autovector", "spurious" | `Instruments.Interrupt` → those words, or `"none"` |
+| reset | §11 | "RESET held low for at least 10 clocks", "S=1, T=0, I=7", "SSP ← long at $000000", "PC ← long at $000004", "first instruction fetch" | **no member**: reset is two vector reads and `BusState` shows both; the manual names no state of its own beyond the pin |
+| bus arbitration | §8.4 | "CPU owns the bus", "BR asserted", "BG granted", "BGACK negated" | **no member**: the campaign keeps arbitration out of scope (named pins, one modelled hand-over point) |
+| the prefetch queue | §1.4 | two words held; "`PC` always points at the **next word to be fetched**" | **no member**: it is the pipeline's contents (`IRC`/`IR`/`IRD`), displayed as `PC` and through the seam |
+| a read-modify-write pair, a long access | §8.2, §8.3 | "`AS` never released in between", "high word first" | **no member**: the manual names an *access class*, not a state — the class drives `Pins` and `BusState` |
+
+Three constraints on these members, and they are what keeps them instruments rather than state:
+
+- **They are read, never stored.** `Instruction` is composed *when it is asked for*, from `IRD`, `PSW` and
+  the decode's answer — never built per instruction, because a string per instruction in the Release boot
+  is a G8 cost with no owner. `BusState`, `EntryStep` and `Interrupt` are reads of the sequencer's own
+  position (`#89`, `#93`).
+- **They are noise-free at the boundary.** `Family` is `Family?`: it names the family of the instruction
+  *being executed* and is `null` at an instruction boundary; `Instruction` reads `"—"` there. `BusState`
+  reads `"S0"` when no cycle is in progress, and `EntryStep`/`Interrupt` read the empty string outside an
+  entry. A member that keeps the previous instruction's value is the `--clocks` frame-columns bug again and
+  is refused here by name.
+- **A new member here needs a line in this table**, and a concept that this table refuses cannot come
+  back as a string instrument under another name.
+
 ### 2. A nested type is a place, not a name
 
-`Pins`, `Instruments` and `SingleStep` are words the manual does not have, and that is allowed for one
-reason only: they name **where a thing lives**, never **what the part is**. The rule that follows is
+`Decode`, `Pins`, `Instruments` and `SingleStep` are words the manual does not have, and that is allowed
+for one reason only: they name **where a thing lives**, never **what the part is**. The rule that follows is
 mechanical, and it is what makes "exactly and only" enforceable: *every member inside a nested type is
 named by its own authority* — `Pins.A1` by §8.1, `Instruments.BusCycles` by nobody (it says so), and no
-nested type may ever be used to smuggle an alias in (`Pins.UDStrobe`, `Instruments.Supervisor`).
+nested type may ever be used to smuggle an alias in (`Pins.UDStrobe`, `Instruments.Supervisor`). A nested
+type's *own* name is a place and may be a word no source has; its *members* never are — which is why
+`Decode`'s members are the manual's family names, `Pins`' are §8.1's signals, and `Instruments`' are either
+counters that say they are counters or the concept strings of §1.1.
 
 Nesting is also forced, not chosen: `A1`–`A7` and `D0`–`D7` are *both* register names and pin names, so
 a flat surface cannot hold the manual's list twice. The register file is the part's face and stays on
@@ -223,6 +309,30 @@ table of charges.
   (§8), not how long the instruction takes; (c) "a named `Charge` on the sequencer" is this decision with
   an invented object in front of it — a counter the silicon does not have, which is what `_own` already was.
 
+### 5.1 Time is simulated, and it says so
+
+The owner's rule (a), and it is the general rule the inventory only needed once: *nothing may be state that
+the silicon does not store — but time is simulated, so a value that exists to make the emulator's clock
+behave is allowed, provided it is named so a reader sees an artifact rather than a latch.*
+
+- **The unit is in the name.** A value that is an interval or a deadline is named for its unit: `…Clocks`
+  for a count of CPU clocks (one clock = four oscillator ticks, ADR 0001), `…Ticks` for oscillator ticks.
+  `TicksPerCpuClock` and `InternalClocks` already comply; a bare noun may not hold a duration
+  (`_own`, `Charge`, `_eaCharged` are the shapes the rule forbids).
+- **Time never lives in the register file.** `M68000.Registers.cs` is level 0 and holds storage only; a
+  time value lives in `M68000.Sequencer.cs` (the microcycle's charge) or in `Instruments` (a reported
+  counter). This is the check "not storage on the chip" made mechanical: a `…Clocks` field found in the
+  register file fails the rule.
+- **Time is cited differently.** A latch is cited to a patent section; a time value is cited to
+  `m68000-silicon-implementation.md` §6.1 (the microcycle) or to the manual's own timing table (§9), and
+  its doc comment opens with *"time, not storage"*.
+- **This ADR's §5 answer needs no such value**, and that is a result, not an omission: once a state charges
+  its own 2 clocks the duration *is* the state, and there is nothing left to remember. The rule exists
+  because #90 keeps the table's `_own` alive family by family while it empties: `_own` is a time constant,
+  so while it lives it is renamed **`OwnClocks`** and sits in the sequencer — and the day the table is
+  empty the field goes with it. `_eaCharged` is not time at all: it is a "has happened" bit, and its
+  replacement is the position of the states, so it is deleted rather than renamed.
+
 ### 6. What an instrument is allowed to be
 
 An instrument is a member that exists for the harness, the boot or a reader, and is documented as not the
@@ -274,7 +384,12 @@ seam field.
 3. **Nothing from an emulator, and no net or bit position.** `m_pc`, `m_au`, `m_aluo` are T3 evidence and
    appear in comments only; PLA terms, ROM addresses (`rstp1`, `morw2`) and node numbers may be quoted in
    a state's comment, never used as an identifier.
-4. **`ALUO` and `ISR` are admitted as aliases, and the table says so.** The patent names the ALU's result
+4. **An instruction family is named by the manual's mnemonic, and a state concept by the manual's own
+   words** — `Decode.Move`/`Family.Move` for §5's tables and appendix, `Instruments.BusState`'s `"S0"`…
+   `"S7"` for §8.2's states, `Instruments.EntryStep`'s `"3 push PC"` for §6's steps. Where the manual has
+   only a phrase (`MOVE SR,<ea>`, "the vector number n is determined"), the phrase minus its punctuation is
+   the name (`MoveFromSr`, `"1 vector"`), and the doc comment quotes the phrase.
+5. **`ALUO` and `ISR` are admitted as aliases, and the table says so.** The patent names the ALU's result
    latch by role only (§5.2's "the latched ALU output") and the ALU's flag latch not at all; both are
    named `aluo` and `isr` in the microcode listing and in MAME, which is why they are the two entries
    `nomenclature.md` §3 must gain with their provenance — the alternative is to invent a name, and the
@@ -316,6 +431,12 @@ never a table the machine reads.
   inlining primitives on the fields — measured, not assumed). The budget is the noise floor, **parent +
   0.3 ms** at equal `frame_n` over 3 interleaved Release pairs, and never above 10 ms; #91 is the ticket
   most exposed to this.
+- **The surface grows by the manual's own concepts, and that is a cost as well as a gain.** `Decode` is
+  ~78 `public static` functions and `Family` the same number of members, so a reader meets the whole
+  instruction set at the type's edge — which is the point (the manual's first level, readable) and also
+  the reason the freeze test asserts the two lists are equal. The five display members cost one string
+  composition *when read* and nothing per instruction; a `string` built per instruction in the Release boot
+  would be a G8 regression with no owner, and §1.1 forbids it.
 - **Harder to read in two specific ways.** A frame rule stops being an expression and starts naming a
   latch (`AT` left by state `jsal2`), which is *less* obvious until the reader knows `AU`; and `--clocks`'
   frame columns will print latch values whose meaning lives in a script's state name. #94's comments pass
@@ -364,21 +485,27 @@ never a table the machine reads.
   spot, not a re-bless.
 - **G8 above `parent + 0.3 ms`** at equal `frame_n` over 3 interleaved Release pairs, or above 10 ms —
   the re-expression cost more than the machine can pay.
-- **A field that cannot be cited** to a patent section, the silicon record, or the instrument boundary of
-  §6 — the inventory grew a name back.
+- **A field that cannot be cited** to a patent section, the silicon record, the instrument boundary of §6,
+  or the time rule of §5.1 — the inventory grew a name back.
+- **A duration under a bare noun, or a `…Clocks` field in `M68000.Registers.cs`** — time has become storage.
+- **A display member that is not a row of §1.1's table**, or a `Decode` family with no `Family` member (or
+  the reverse) — the surface has grown a synonym the manual does not have.
 
 
 ## Open questions for the owner's word
 
-Three, and only three. Each is answered above in the form this ADR will keep if he agrees with it; a
+Five, and only five. Each is answered above in the form this ADR will keep if he agrees with it; a
 different word changes the paragraph named, not the document.
 
 | # | question | this ADR's answer | what changes if it goes the other way |
 |---|---|---|---|
-| 1 | where the internal clocks live once `_own` is gone | **in the state** (§5): a microword state charges 2, an access 4; `_own`/`_eaCharged` are deleted with no successor, and `M68000.Timing.cs` empties family by family | (c) a named `Charge` on the sequencer keeps a counter-shaped object; (b) the access class carries a clock count, which is not what §8 says the label is for. Either way #90's scope stands, only its shape moves |
+| 1 | where the internal clocks live once `_own` is gone | **in the state** (§5): a microword state charges 2, an access 4; `_own`/`_eaCharged` are deleted with no successor, and `M68000.Timing.cs` empties family by family. The owner's rule that time constants are allowed but must be named as artifacts is §5.1, and it is what lets the bridge live as `OwnClocks` while it empties | (c) a named `Charge` on the sequencer keeps a counter-shaped object; (b) the access class carries a clock count, which is not what §8 says the label is for. Either way #90's scope stands, only its shape moves |
 | 2 | what an instrument is allowed to be, and where | **two boundaries by consumer** (§6): per-record instruments behind `#if DEBUG`, the five counters and `Halted`/`HaltReason` unconditional because the Release `boot` and `cpu-dissection` read them | keeping all of them behind `#if DEBUG` requires the Release boot to stop printing its counters — a change to the gate's own report, and then #84's verdict loses a column |
 | 3 | `ALUO` and `ISR`, which the patents name only by role | **admitted into `nomenclature.md` §3 as aliases**, with their provenance (the microcode listing and the die analysis), because inventing a role-name would break §8's rule 3 | refusing them leaves the ALU's result and flag latches with made-up names, which is the one thing §8 forbids |
+| 4 | the decode functions' contract | **one `public static` function per family, `bool <Family>(ushort, out Decoded)`, false rather than an exception; `Decoded` carries §4's fields** | a single `FamilyOf(opcode)` composed over them is allowed and cheap; the reverse — the functions existing only to feed one aggregator — is not, because the point is that the manual's first level is readable |
+| 5 | the display set of §1.1 | **five members** (`Instruction`, `Family`, `BusState`, `EntryStep`, `Interrupt`), and four concepts refused with reasons | adding a concept means a line in §1.1's table and a freeze-test entry; refusing one of these five means an instrument a reader cannot see the machine through |
 
-The corpus seam (§7), the nested-type rule (§2), the storage decision (§3) and the inventory (§4) are
-not open: the first three are the owner's own rulings, and the fourth is the inventory he asked #83 to
-freeze.
+The corpus seam (§7), the nested-type rule (§2), the storage decision (§3), the inventory (§4) and the
+two additions of 2026-11-21 (the time rule of §5.1, the manual's concepts of §1.1) are not open: the
+first three are the owner's own rulings, the fourth is the inventory he asked #83 to freeze, and the last
+two are his words.
