@@ -39,9 +39,10 @@
     <Compile Include="../../src/TheST.Machine/Wires.cs" Link="Linked/Wires.cs" />
     <Compile Include="../../src/TheST.Machine/Record.cs" Link="Linked/Record.cs" />
     <Compile Include="../../src/TheST.Machine/ValueLog.cs" Link="Linked/ValueLog.cs" />
-    <!-- variants A and B: the CPU, unmodified -->
-    <Compile Include="../../src/TheST.Machine/Cpu/M68000.cs" Link="Linked/M68000.cs" />
-    <Compile Include="../../src/TheST.Machine/Cpu/M68000.Instructions.cs" Link="Linked/M68000.Instructions.cs" />
+    <!-- variants A and B: the CPU, unmodified. The core is six partial files of one class (#78 split
+         it into the die's blocks), so the glob is the link: a file added to the block list is a file
+         the bench compiles, and a bench that links a subset prices another core. -->
+    <Compile Include="../../src/TheST.Machine/Cpu/*.cs" Link="Linked/%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

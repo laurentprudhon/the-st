@@ -53,13 +53,15 @@ G8_FRAMES=800
 FOLD_FRAMES=800
 
 usage() {
-    echo "usage: scripts/cpu-shape-check.sh <parent-commit>" >&2
+    echo "usage: scripts/cpu-shape-check.sh <parent-commit> [clk-baseline-file]" >&2
     echo "       the parent is graded against the working tree; e.g. \`git rev-parse HEAD~1\`" >&2
+    echo "       the baseline defaults to tests/680x0/baseline/clk.out.txt (row 81's per-file table)" >&2
     exit 2
 }
 
 [ $# -ge 1 ] || usage
 parent_ref=$1
+clk_baseline=${2:-tests/680x0/baseline/clk.out.txt}
 parent_sha=$(git rev-parse --verify "$parent_ref^{commit}" 2>/dev/null) || {
     echo "cpu-shape-check: no such commit '$parent_ref'" >&2
     exit 2
@@ -250,9 +252,20 @@ if [ "$build_child_debug" -eq 0 ] && [ "$build_parent_debug" -eq 0 ] && [ -d "$c
     fixed=$(comm -23 "$out/clk-red-parent.set" "$out/clk-red-child.set" | wc -l)
     reason_moves=$(comm -13 "$out/clk-reason-parent.set" "$out/clk-reason-child.set" | wc -l)
     red_files=$(cut -f1 "$out/clk-red-child.set" | sort -u | wc -l)
-    clk_measured="$(spaced "$c_passed") state, $(spaced "$c_exact") exact-clock, $red_child red records in $red_files files ($new_red new, $fixed fixed vs parent; $reason_moves field moves)"
+    # the per-file table against a named baseline (row 81's, committed): a state move is a line of
+    # output, not a reading exercise
+    baseline_row="baseline absent"
+    baseline_bad=0
+    if [ -f "$clk_baseline" ]; then
+        diff -u "$clk_baseline" "$out/corpus-clk.txt" >"$out/clk-baseline.diff" 2>&1
+        baseline_lines=$(grep -cE '^[-+][^-+]' "$out/clk-baseline.diff" || true)
+        baseline_rows=$(grep -cE '^[-+](ok|FAIL)' "$out/clk-baseline.diff" || true)
+        baseline_row="per-file table vs $clk_baseline: $baseline_rows rows differ"
+        [ "$baseline_rows" -eq 0 ] || baseline_bad=1
+    fi
+    clk_measured="$(spaced "$c_passed") state, $(spaced "$c_exact") exact-clock, $red_child red records in $red_files files ($new_red new, $fixed fixed vs parent; $reason_moves field moves); $baseline_row"
     if [ "$c_passed" = "$EXPECT_CLK_STATE" ] && [ "$c_exact" = "$EXPECT_CLK_EXACT" ] \
-       && [ "$new_red" -eq 0 ] && [ "$fixed" -eq 0 ]; then
+       && [ "$new_red" -eq 0 ] && [ "$fixed" -eq 0 ] && [ "$baseline_bad" -eq 0 ]; then
         clk_verdict=PASS
         ok "CLK: $clk_measured"
         [ "$reason_moves" -eq 0 ] || printf '   note  %s records stayed red and changed their first differing field\n' "$reason_moves"
@@ -260,6 +273,7 @@ if [ "$build_child_debug" -eq 0 ] && [ "$build_parent_debug" -eq 0 ] && [ -d "$c
         bad "CLK: $clk_measured — the bar is $(spaced "$EXPECT_CLK_STATE") state, $(spaced "$EXPECT_CLK_EXACT") exact-clock and the parent's red set unchanged"
         [ "$new_red" -eq 0 ] || { echo "     new red records:"; comm -13 "$out/clk-red-parent.set" "$out/clk-red-child.set" | head -8 | sed 's/^/       /'; }
         [ "$fixed" -eq 0 ] || { echo "     records the change fixed (the set must not move at all):"; comm -23 "$out/clk-red-parent.set" "$out/clk-red-child.set" | head -8 | sed 's/^/       /'; }
+        [ "$baseline_bad" -eq 0 ] || { echo "     per-file rows that moved against the baseline:"; grep -E '^[-+](ok|FAIL)' "$out/clk-baseline.diff" | head -8 | sed 's/^/       /'; }
     fi
 else
     if [ "$build_child_debug" -ne 0 ] || [ "$build_parent_debug" -ne 0 ]; then
@@ -310,6 +324,7 @@ g8_measured="not run"
 g8_verdict=FAIL
 if [ "$build_child_release" -eq 0 ] && [ -f "$parent_tree/tools/validation-harness/bin/Release/net11.0/validation-harness" ]; then
     pairs_tsv="$out/g8-pairs.tsv"
+    mkdir -p "$out/g8"
     : >"$pairs_tsv"
     g8_runs_ok=1
     for pair in 1 2 3; do
