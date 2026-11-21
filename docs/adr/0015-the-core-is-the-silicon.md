@@ -107,6 +107,13 @@ the buses are their bits.
 | arbitration | `BR`, `BG`, `BGACK` |
 | 6800 | `E`, `VPA`, `VMA` |
 
+**The pins are the interface, not a view** (the owner's correction, 2026-11-21). Unlike the register
+table above, a pin is not a mirror of a latch: it **is** the chip's face to the world — the level the
+engine's wire carries — so `Pins` reads the wire records (the bus's assertion group and its release),
+and the core's own copies of those facts (`AOB`, `DOB`, `DBIN`, #86) sit *below* that layer and serve
+it rather than being duplicated by it. C# will not let a member and a nested type share a name
+(CS0102), so the accessor is `cpu.Pads.*` and the nested type keeps the name `Pins`.
+
 **`E` is a level and nothing else.** The owner's ruling (2026-11-21): *"you can omit everything related to E
 in this emulator."* The ST does not use the 6800 peripheral group (tutorial §8.1), so there is no E divider,
 no ten-state counter and no block for it — `Pins.E` exists because §8.1's list does, it reads false, and

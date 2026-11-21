@@ -35,7 +35,7 @@ draws as one region), and the file *is* that block.
 
 | file | die block(s) | what it owns | ticket |
 |---|---|---|---|
-| `M68000.Pins.cs` | `ADDRESS BUFFERS → A1–A23`, `DATA BUFFER → D0–D15`, `BUF INPUTS` | the nested type `Pins` (one `bool` per §8.1 signal), the buffers between the pads and `AOB`/`DOB`/`DBIN` | #85, #88 |
+| `M68000.Pins.cs` | `ADDRESS BUFFERS → A1–A23`, `DATA BUFFER → D0–D15`, `BUF INPUTS` | the nested type `Pins` (one `bool` per §8.1 signal), reached as `cpu.Pads.*`: **the chip's face to the world**, so it reads the bus wire's record group rather than the core's latches — those (`AOB`/`DOB`/`DBIN`) are the layer below and serve it | #85, #88 |
 | `M68000.Clock.cs` | `CLOCK GENERATORS`, `DECODE DRIVERS` | the microcycle's names (φ1/φ2; two clocks a microword, four an access) and the phase fan-out | #90, #94 |
 
 **`E` and the 6800 group are a level and nothing else** (the owner's ruling): no divider, no ten-state
