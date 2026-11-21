@@ -519,6 +519,21 @@ Sheet 4. Both edges resolved.
 > direction is `out`. The same page's §4.2 row carried the error with a "Super Hi-Res" purpose; **no
 > Super Hi-Res mode exists on this board** — the name is the TT Shifter's.
 
+> **Correction — 2026-11-21** (U401 study, `research/gst-shifter-implementation.md` §5.3–§5.5). The same
+> board article corrects three more rows of this table, and names one of the illegible pins:
+>
+> * **Pin 33 `SCLK` is an `in`, pin 34 `FCLK` an `out`.** The Shifter receives an 8 MHz clock from its own
+>   oscillator on `SCLK` — the article's "only necessary for the management of the sound DMA", verified by
+>   pulling it — and generates `FCLK` from it for the sound filters. §4's "`CLK8`/`CLK4`/`CLK2` → `U401.FCLK`"
+>   row inherits the same error.
+> * **Pins 19 `LD` and 20 `HD` are `out`.** They are the two latch strobes the Shifter drives to the `74F374`s
+>   that split its 8-bit sound bus into a channel each ("transmitted obviously by Shifter (pins 19 and 20)").
+> * **Pin 73 is `LOWP`, and unused** on this board; **pin 51 `COLOR` is a colour-clock output (NTSC) for the
+>   modulator stage**, not a colour/mono mode select, and not composite video.
+>
+> The rows above are left as transcribed; the article's readings are the ones the study used, and the
+> manual's sheet 4 settles them if anybody re-reads it at 600 dpi.
+
 ### 3.6 U300 — DMA controller, 40-pin DIP (C398739-001)
 
 Sheet 3 (printed p61). Complete.

@@ -136,14 +136,42 @@ What the session established, in the form later chips can reuse:
 * **Trap:** the same register block is documented differently by every emulator. Where three disagree,
   that is a §11-style conflict table, not a coin toss.
 
-### U401 GST Shifter (C300588-001)
+### U401 GST Shifter (C300588-001) — **done, 2026-11-21**, `research/gst-shifter-implementation.md`
+
+What the session established:
+
+* **This is the first part of the campaign with no primary source at all** — no decap of any STE custom,
+  and no sheet for this chip in the recovered CAD set. The study says so up front and builds on the service
+  manual's 84-pin symbol, **ijor's reverse engineering of the earlier ST Shifter** (the family's only real
+  documentation, and a *different* chip), Atari's register wording, the board article and the reconstruction.
+* **No figure was drawn.** No geometry exists to draw from; the block flow is prose and a table in §3–§4,
+  and a schematic sheet of the video path is left as the one deliverable still owed (§6 ordering).
+* **Three findings change the arithmetic or the model.** (a) The "sixteen-pixel group" is a **two-microsecond
+  grid**: the transfer is always four words into a 64-bit shift path, so a group is 16 low-res pixels, 32
+  mid, 64 mono — a mono line is **ten** groups, not forty. (b) The palette's four bits are weighted
+  **1-8-4-2**, so `$0777` is 14/15 and full red is `$0F00`; the "0321" comment in the RTL and Hatari's table
+  are both that arithmetic. (c) There is **no 9-bit DAC** on this board: twelve digital lines leave the chip
+  into four weighted resistors per channel and the MC1377 — the 9-bit figure belongs to the ST.
+* **The chip in operation** is §4: one group (four `LOAD`s, the reload control's two conditions, what a
+  non-multiple-of-16 offset does and does not move), one line as a timetable (320/640/640 against 512 clocks,
+  `DE` 56→376 colour and 4→164 mono, 80 words in 128 windows), colour end to end, one palette write (transparent
+  latches, so a write lands inside its own cycle), one DMA-sound word (rising edge of `\*SLOAD`, FIFO, byte
+  split), one Microwire transfer, one fine-scroll write — with the boundary between the chips stated, not split.
+* **Six tests with pass criteria** are specified in §7; the palette's bit weights is the cheapest and settles
+  the most.
+* **Repository corrections landed with it**: `design/video.md` (a dated block for the mono delivery count and
+  the palette weights), `design/board-inventory.md` §3.5 (a dated note for `SCLK`/`FCLK`, `LD`/`HD`, `LOWP`,
+  and `COLOR`), and the U400 study's §3.4 and §6.7 confirmed from this side.
+
+### U401 — original question set (kept for reference)
 * **Questions:** the shift register and how 1/2/4-bitplane modes differ; palette RAM width and the
-  9-bit colour path; hardware fine scroll and line offset registers; DE/BLANK generation and where the
+  colour path; hardware fine scroll and line offset registers; DE/BLANK generation and where the
   320/640-pixel boundary lives; the Microwire controller's frame timing (LMC1992 volume/bass/treble).
 * **Evidence:** our `research/ste-super-hires.md` (settles what this part does *not* have), Hatari's
   shifter model, service-manual pin list (§3.5), and photographs of the board for the DAC path.
 * **Deliverable worth having:** a sheet like `schematics/01-datapath.svg` but for the video path —
-  bitplanes → shift → palette → DE/BLANK → monitor.
+  bitplanes → shift → palette → DE/BLANK → monitor. **Still owed**: no drawing was earned from a die that
+  does not exist, but a block/flow sheet is drawable from §3–§4 and is the next session's obvious artefact.
 * **Handoff: [`u401-gst-shifter-study.md`](u401-gst-shifter-study.md)** — the exact brief, the evidence
   ladder (manual pin list → ijor's schematic → Hatari), the six acceptance criteria, the arithmetic seeds
   (80 words a line, 20 groups, 16-word palette), and the method rules this week's GSTMCU work earned.
@@ -209,7 +237,7 @@ nomenclature section (only if the part has internal names worth fixing), drawing
 ## 6. Ordering, effort, stopping rule
 
 1. **GSTMCU** — two sessions. It gates video, DMA, blitter and memory mapping.
-2. **GST Shifter** — one to two sessions, plus one sheet.
+2. **GST Shifter** — **done, 2026-11-21**; one session sufficed for the study, the video-path sheet is still owed.
 3. **DMA** — one session; the sound-DMA section is the valuable half.
 4. **Blitter** — one session.
 5. **MFP / WD1772 / ACIA / PSG** — one combined session.

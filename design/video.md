@@ -51,7 +51,8 @@ a read or a write (ADR 0008 invariant 3), so there is nothing for the assertion 
 phase and its state changes on deliveries, selects and levels.
 
 **Per-line work is `DisplayBytes / 4` deliveries** — 20 on a low-res line, 20 in medium (80 words),
-40 in mono. Nothing here is precomputed at the line boundary.
+10 in mono. Nothing here is precomputed at the line boundary. *(The `40` this line carried until
+2026-11-21 was a slip: a mono line is 40 words, i.e. ten groups — see the corrections section at the end.)*
 
 ## 3. The shifter, one chunk at a time
 
@@ -267,3 +268,30 @@ external (genlock) sync, and the net is the field-parity/strobe that path needs.
 the machine cannot, which is why every emulator ignores the bit and why the reconstruction ties it off.
 `research/gstmcu-silicon-implementation.md` §5.6 has the evidence; this document records the consequence: our
 core does not model interlace, `$FF820A` bit 0 is stored and ignored, and no test depends on it.
+
+## Corrections from the U401 study — 2026-11-21
+
+`research/gst-shifter-implementation.md` studied the video chip itself (no decap, no Atari drawing; the
+service manual's 84-pin symbol, ijor's reverse engineering of the earlier ST Shifter, Atari's register
+wording and the board article). Three of its findings land on this document.
+
+1. **The group is four words, not sixteen pixels.** `§3`'s `chunk = 16 pixels` is the *low-res* case of a
+   two-microsecond grid: the chip transfers four words into a 64-bit shift path on every fourth `LOAD`, so
+   a group is 16 pixels in low res, **32 in medium and 64 in mono**, and a line carries 20, 20 and **10**
+   groups respectively. The frame total of 4,000 deliveries (16,000 chunk writes) is unaffected — 200 colour
+   lines × 20 and 400 mono lines × 10 are the same number. `§2`'s per-line sentence is corrected above.
+2. **The palette's four bits are weighted 1-8-4-2.** `§4` describes the field as `R at 11–8` and calls the
+   RTL's rotation "that serial order", which is right but understated: Atari's own register table gives the
+   order as *"0 3 2 1 encoding the values 1 8 4 2"*, so register bit 11 carries weight 1 and bit 10 weight 8.
+   Two consequences the model must keep: an ST program's `$0777` is **14/15** red here, not full; full red is
+   `$0F00`; and a one-step fade is `$888, $111, $999, $222…`, not `$111, $222, $333…`.
+3. **A palette write lands inside its own cycle.** `§4`'s "the instant on the register record is the
+   ordering" stands, and now has its mechanism: the palette registers are **asynchronous transparent latches**
+   gated by `CS`, not edge-clocked flip-flops, which is what makes a mid-line palette change (Spectrum 512)
+   land on the pixel the write covers rather than at a group boundary.
+
+Two claims stay as they were, now with a source: the `$FF8260` duplication (`§10.6`) is confirmed from the
+Shifter's side — the board article states two registers at that address, one in each chip — and the sound
+DMA's split (counters in the System Control Unit, FIFO and byte split in the Shifter) is confirmed by the
+same article. The sound FIFO's **depth** stays `unknown`/T3: four words is Steem's figure and no source
+states it.
