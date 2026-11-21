@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>GST Shifter — five sheets, one chip</title>
+<style>
+  :root { --ink:#22232a; --mut:#63666f; --paper:#fbfaf6; --rule:#e8e5db; }
+  html { background:#efece3; }
+  body { margin:0 auto; max-width:1500px; padding:32px 24px 80px;
+         font-family:'Inter','Helvetica Neue',Arial,sans-serif; color:var(--ink); background:var(--paper); }
+  header { border-bottom:2px solid var(--ink); padding-bottom:14px; margin-bottom:8px; }
+  h1 { font-size:30px; margin:0 0 6px; letter-spacing:-.01em; }
+  .sub { color:var(--mut); font-size:15px; }
+  .note { background:#fdf1de; border-left:4px solid #b4761a; padding:12px 16px; margin:18px 0 26px; font-size:14px; }
+  section { margin:34px 0 46px; page-break-inside:avoid; }
+  h2 { font-size:19px; margin:0 0 2px; }
+  .lede { color:var(--mut); font-size:13.5px; margin:0 0 12px; }
+  object, img { width:100%; height:auto; border:1px solid var(--rule); background:#fff; }
+  footer { border-top:1px solid var(--rule); padding-top:12px; color:var(--mut); font-size:12.5px; }
+  @media print {
+    @page { size:A3 landscape; margin:10mm; }
+    html, body { background:#fff; }
+    body { padding:0; max-width:none; }
+    .note, footer { display:none; }
+    section { margin:0; page-break-after:always; }
+    section:last-of-type { page-break-after:auto; }
+    h2, .lede { margin-bottom:4mm; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>GST Shifter — five sheets, one chip</h1>
+  <div class="sub">C300588-001, the STE's video chip: the blocks, one group, the colour path, one line, and the registers it shares with U400.</div>
+</header>
+
+<div class="note">
+  Educational schematics, drawn from the service manual's pin symbol, ijor's reverse engineering of the
+  earlier ST Shifter, Atari's register tables and the board article. Functional, not to scale, and
+  <strong>not a floorplan</strong> — this part has no die photograph, so no layout is claimed anywhere.
+  The study behind them is <code>research/gst-shifter-implementation.md</code>.
+</div>
+
+<section>
+  <h2>00 · The chip as blocks</h2>
+  <p class="lede">Five paths through one 84-pin package, and what is deliberately not in it. Start here.</p>
+  <img src="00-blocks.svg" alt="Block diagram of the GST Shifter">
+</section>
+
+<section>
+  <h2>01 · One group — four words, 2 µs</h2>
+  <p class="lede">The sixteen-word buffer, the 64-bit shift path, the reload control, and how four words become 16, 32 or 64 pixels.</p>
+  <img src="01-group.svg" alt="The buffer, the shift array and the reload control">
+</section>
+
+<section>
+  <h2>02 · Colour — index, palette, twelve pins, three ladders</h2>
+  <p class="lede">The 4-bit index, sixteen 12-bit transparent latches, and the 1-8-4-2 weighting that makes <code>$0777</code> 14/15.</p>
+  <img src="02-colour.svg" alt="The colour path from index to analogue output">
+</section>
+
+<section>
+  <h2>03 · One line — 512 clocks, three modes, one window</h2>
+  <p class="lede">DE and *BLANK against the clock ruler, the 80 video windows of a colour line, and the 48 the other clients get.</p>
+  <img src="03-line.svg" alt="Timing of one scan line">
+</section>
+
+<section>
+  <h2>04 · The registers and the seam</h2>
+  <p class="lede">Two chips answer at <code>$FF82xx</code>: what is stored where, and what one Microwire transfer looks like.</p>
+  <img src="04-registers.svg" alt="Register map split across the two chips">
+</section>
+
+<footer>
+  Regenerate with <code>python3 build_schematics.py</code>. Colour rule shared with the 68000 and GSTMCU sets:
+  blue address, green data, amber control, violet clocking. Licence position: <code>research/gst-shifter-implementation.md</code> §9.
+</footer>
+</body>
+</html>

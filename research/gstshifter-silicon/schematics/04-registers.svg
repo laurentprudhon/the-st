@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 940" width="1440" height="940"
+     font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" role="img" aria-label="04 · The registers and the seam">
+<defs>
+  <marker id="a-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#1f5fa8"/>
+</marker>
+  <marker id="a-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#2f7f5b"/>
+</marker>
+  <marker id="a-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#b4761a"/>
+</marker>
+  <marker id="a-k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#8a4fb0"/>
+</marker>
+  <marker id="a-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#6f5aad"/>
+</marker>
+  <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+<path d="M24 0 L0 0 0 24" fill="none" stroke="#e8e5db" stroke-width="1"/>
+</pattern>
+  <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+<path d="M0 0 L0 8" stroke="#b4761a" stroke-width="1.4" opacity=".55"/>
+</pattern>
+</defs>
+<rect width="100%" height="100%" fill="#fbfaf6"/>
+<rect width="100%" height="100%" fill="url(#grid)" opacity=".6"/>
+<text x="44" y="44" font-size="25" font-weight="700" fill="#22232a" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">04 · The registers and the seam</text>
+<text x="44" y="71" font-size="14" fill="#63666f" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">Two chips answer at $FF82xx: what is stored here, what is stored in U400, and what the Microwire frame looks like.</text>
+<text x="44" y="116" font-size="13" fill="#1f5fa8" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">in U400 — the System Control Unit</text>
+<text x="744" y="116" font-size="13" fill="#6f5aad" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">in U401 — this chip</text>
+<line x1="720" y1="104" x2="720" y2="560" stroke="#8a90a8" stroke-width="1.4" stroke-dasharray="6 5"/>
+<text x="712" y="512" font-size="10.5" fill="#8a90a8" text-anchor="middle" font-style="italic" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the seam</text>
+<rect x="44" y="132" width="640" height="52" rx="6" fill="#e8eefa" stroke="#1f5fa8" stroke-width="1.3"/>
+<text x="60" y="153" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8201 / 03 / 0D</text>
+<text x="60" y="172" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">video base</text>
+<text x="400" y="164" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the address a line starts from</text>
+<rect x="44" y="194" width="640" height="52" rx="6" fill="#e8eefa" stroke="#1f5fa8" stroke-width="1.3"/>
+<text x="60" y="215" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8205 / 07 / 09</text>
+<text x="60" y="234" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">video counter</text>
+<text x="400" y="226" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the running fetch address, readable</text>
+<rect x="44" y="256" width="640" height="52" rx="6" fill="#e8eefa" stroke="#1f5fa8" stroke-width="1.3"/>
+<text x="60" y="277" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF820F</text>
+<text x="60" y="296" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">line width</text>
+<text x="400" y="288" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">words skipped after each line</text>
+<rect x="44" y="318" width="640" height="52" rx="6" fill="#e8eefa" stroke="#1f5fa8" stroke-width="1.3"/>
+<text x="60" y="339" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF820A</text>
+<text x="60" y="358" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">sync control</text>
+<text x="400" y="350" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">50/60 Hz, internal or genlock sync</text>
+<rect x="44" y="380" width="640" height="52" rx="6" fill="#e8eefa" stroke="#1f5fa8" stroke-width="1.3"/>
+<text x="60" y="401" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8260 (copy)</text>
+<text x="60" y="420" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">timing mode</text>
+<text x="400" y="412" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the second storage site of one write</text>
+<rect x="44" y="442" width="640" height="52" rx="6" fill="#e8eefa" stroke="#1f5fa8" stroke-width="1.3"/>
+<text x="60" y="463" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8901 … $FF8913</text>
+<text x="60" y="482" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">sound DMA</text>
+<text x="400" y="474" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">control, frame base, top, count</text>
+<rect x="744" y="132" width="652" height="52" rx="6" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.3"/>
+<text x="760" y="153" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8240 – $FF825E</text>
+<text x="760" y="172" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">palette</text>
+<text x="1092" y="164" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">16 words × 12 bits, in latches</text>
+<rect x="744" y="194" width="652" height="52" rx="6" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.3"/>
+<text x="760" y="215" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8260 (copy)</text>
+<text x="760" y="234" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">plane mode</text>
+<text x="1092" y="226" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the clock mux reads these two bits</text>
+<rect x="744" y="256" width="652" height="52" rx="6" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.3"/>
+<text x="760" y="277" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8261</text>
+<text x="760" y="296" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">plane mode only</text>
+<text x="1092" y="288" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the documented way to disagree</text>
+<rect x="744" y="318" width="652" height="52" rx="6" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.3"/>
+<text x="760" y="339" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8264 / $FF8265</text>
+<text x="760" y="358" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">pixel offset</text>
+<text x="1092" y="350" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">0–15, and the prefetch request</text>
+<rect x="744" y="380" width="652" height="52" rx="6" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.3"/>
+<text x="760" y="401" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8920 / $FF8921</text>
+<text x="760" y="420" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">SAMPMOD</text>
+<text x="1092" y="412" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">sample rate; Sound's business</text>
+<rect x="744" y="442" width="652" height="52" rx="6" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.3"/>
+<text x="760" y="463" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8922 / $FF8924</text>
+<text x="760" y="482" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">Microwire</text>
+<text x="1092" y="474" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">data register and mask register</text>
+<text x="44" y="540" font-size="13" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">one Microwire transfer — eleven bits at 1 Mbit/s, and the mask decides which ones clock out</text>
+<rect x="44" y="556" width="160" height="34" rx="4" fill="#fdf1de" stroke="#b4761a" stroke-width="1.3"/>
+<text x="124.0" y="572" font-size="11.5" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">1 0</text>
+<text x="124.0" y="586" font-size="9.5" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">2 bits: selects the chip</text>
+<rect x="204" y="556" width="240" height="34" rx="4" fill="#fdf1de" stroke="#b4761a" stroke-width="1.3"/>
+<text x="324.0" y="572" font-size="11.5" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">register</text>
+<text x="324.0" y="586" font-size="9.5" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">3 bits: the command</text>
+<rect x="444" y="556" width="480" height="34" rx="4" fill="#fdf1de" stroke="#b4761a" stroke-width="1.3"/>
+<text x="684.0" y="572" font-size="11.5" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">data</text>
+<text x="684.0" y="586" font-size="9.5" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">6 bits</text>
+<rect x="924" y="556" width="400" height="34" rx="4" fill="#ffffff" stroke="#b4761a" stroke-width="1.3" stroke-dasharray="4 3"/>
+<text x="1124.0" y="572" font-size="11.5" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">five unused</text>
+<text x="1124.0" y="586" font-size="9.5" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">no clock while the mask is 0</text>
+<text x="44" y="614" font-size="11.5" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8922 write starts it; the mask written at $FF8924 rotates and gates MWK; a write to the mask during a transfer aborts it.</text>
+<text x="44" y="632" font-size="11.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">Atari's own example uses $07FF, which is eleven clocks — about 11 µs. The shift itself always runs sixteen bit-times.</text>
+<text x="44" y="674" font-size="13" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">one sound word — the two ends of the same wire</text>
+<rect x="44" y="688" width="250" height="74" rx="8" fill="#fdf1de" stroke="#b4761a" stroke-width="1.6"/>
+<text x="169.0" y="721.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">SREQ (out)</text>
+<text x="169.0" y="740.0" text-anchor="middle" font-size="11" fill="#63666f">not full, sampled by U400</text>
+<rect x="334" y="688" width="250" height="74" rx="8" fill="#fdf1de" stroke="#b4761a" stroke-width="1.6"/>
+<text x="459.0" y="721.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">*SLOAD (in)</text>
+<text x="459.0" y="740.0" text-anchor="middle" font-size="11" fill="#63666f">phase 1 of the granted slot</text>
+<rect x="624" y="688" width="250" height="74" rx="8" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.6"/>
+<text x="749.0" y="721.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">latch on rising edge</text>
+<text x="749.0" y="740.0" text-anchor="middle" font-size="11" fill="#63666f">the memo's own wording</text>
+<rect x="914" y="688" width="240" height="74" rx="8" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.6"/>
+<text x="1034.0" y="721.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">FIFO</text>
+<text x="1034.0" y="740.0" text-anchor="middle" font-size="11" fill="#63666f">depth unknown — T3</text>
+<rect x="1194" y="688" width="202" height="74" rx="8" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.6"/>
+<text x="1295.0" y="721.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">byte split</text>
+<text x="1295.0" y="740.0" text-anchor="middle" font-size="11" fill="#63666f">two lanes, one sample apart</text>
+<line x1="297" y1="725" x2="331" y2="725" stroke="#b4761a" stroke-width="2" marker-end="url(#a-c)"/>
+<line x1="587" y1="725" x2="621" y2="725" stroke="#b4761a" stroke-width="2" marker-end="url(#a-c)"/>
+<line x1="877" y1="725" x2="911" y2="725" stroke="#2f7f5b" stroke-width="2" marker-end="url(#a-d)"/>
+<line x1="1157" y1="725" x2="1191" y2="725" stroke="#2f7f5b" stroke-width="2" marker-end="url(#a-d)"/>
+<rect x="44" y="786" width="1352" height="74" rx="8" fill="#eef0f5" stroke="#8a90a8" stroke-width="1.6"/>
+<text x="720.0" y="819.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">counted in U400, spent here</text>
+<text x="720.0" y="838.0" text-anchor="middle" font-size="11" fill="#63666f">FBASE · FCOUNT · FEND and the address counter are the other chip's; the requester, FIFO and byte split are this one's</text>
+<rect x="0" y="894" width="1440" height="46" fill="#f4f1e8"/>
+<text x="44" y="912" font-size="11" fill="#63666f" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">Provenance: register addresses and semantics from Atari's STE documentation (and Hatari for the readback behaviour); the $FF8260</text>
+<text x="44" y="927" font-size="11" fill="#63666f" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">duplication from the board article and the GSTMCU study §6.7; the Microwire frame from the board article and the reconstruction.</text>
+</svg>

@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 870" width="1440" height="870"
+     font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" role="img" aria-label="00 · The chip as blocks">
+<defs>
+  <marker id="a-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#1f5fa8"/>
+</marker>
+  <marker id="a-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#2f7f5b"/>
+</marker>
+  <marker id="a-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#b4761a"/>
+</marker>
+  <marker id="a-k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#8a4fb0"/>
+</marker>
+  <marker id="a-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#6f5aad"/>
+</marker>
+  <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+<path d="M24 0 L0 0 0 24" fill="none" stroke="#e8e5db" stroke-width="1"/>
+</pattern>
+  <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+<path d="M0 0 L0 8" stroke="#b4761a" stroke-width="1.4" opacity=".55"/>
+</pattern>
+</defs>
+<rect width="100%" height="100%" fill="#fbfaf6"/>
+<rect width="100%" height="100%" fill="url(#grid)" opacity=".6"/>
+<text x="44" y="44" font-size="25" font-weight="700" fill="#22232a" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">00 · The chip as blocks</text>
+<text x="44" y="71" font-size="14" fill="#63666f" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">GST Shifter C300588-001 — five paths through one 84-pin package. Functional, not to scale.</text>
+<text x="44" y="112" font-size="12" fill="#63666f" text-anchor="start" font-style="italic" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">video — one word per window, four to a group</text>
+<text x="44" y="232" font-size="12" fill="#63666f" text-anchor="start" font-style="italic" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">colour — index to analogue, twelve bits wide</text>
+<text x="44" y="352" font-size="12" fill="#63666f" text-anchor="start" font-style="italic" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">sound — DMA words into two byte lanes</text>
+<text x="44" y="472" font-size="12" fill="#63666f" text-anchor="start" font-style="italic" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">microwire — eleven bits to the LMC1992</text>
+<text x="44" y="592" font-size="12" fill="#63666f" text-anchor="start" font-style="italic" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">registers and control — the other side of the wires</text>
+<rect x="44" y="124" width="300" height="84" rx="8" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.6"/>
+<text x="194.0" y="162.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">MD0–MD15</text>
+<text x="194.0" y="181.0" text-anchor="middle" font-size="11" fill="#63666f">one word per display window</text>
+<rect x="384" y="124" width="320" height="84" rx="8" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.6"/>
+<text x="544.0" y="162.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">16-word buffer</text>
+<text x="544.0" y="181.0" text-anchor="middle" font-size="11" fill="#63666f">4 words × 16 bits, clocked by LOAD</text>
+<rect x="744" y="124" width="320" height="84" rx="8" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.6"/>
+<text x="904.0" y="162.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">Shift array</text>
+<text x="904.0" y="181.0" text-anchor="middle" font-size="11" fill="#63666f">4 × 16 cells, two flip-flops each</text>
+<rect x="1104" y="124" width="296" height="84" rx="8" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.6"/>
+<text x="1252.0" y="162.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">Pixel stream</text>
+<text x="1252.0" y="181.0" text-anchor="middle" font-size="11" fill="#63666f">4-bit index, looked up below</text>
+<rect x="44" y="244" width="300" height="84" rx="8" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.6"/>
+<text x="194.0" y="282.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">Palette</text>
+<text x="194.0" y="301.0" text-anchor="middle" font-size="11" fill="#63666f">16 words × 12 bits, transparent</text>
+<rect x="384" y="244" width="320" height="84" rx="8" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.6"/>
+<text x="544.0" y="282.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">R3–R0 · G3–G0 · B3–B0</text>
+<text x="544.0" y="301.0" text-anchor="middle" font-size="11" fill="#63666f">twelve digital pins, active high</text>
+<rect x="744" y="244" width="320" height="84" rx="8" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.6"/>
+<text x="904.0" y="282.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">74S257 + ladder</text>
+<text x="904.0" y="301.0" text-anchor="middle" font-size="11" fill="#63666f">four weighted resistors per channel</text>
+<rect x="1104" y="244" width="296" height="84" rx="8" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.6"/>
+<text x="1252.0" y="282.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">MC1377 → DIN-13</text>
+<text x="1252.0" y="301.0" text-anchor="middle" font-size="11" fill="#63666f">the three analogue outputs</text>
+<rect x="44" y="364" width="300" height="84" rx="8" fill="#fdf1de" stroke="#b4761a" stroke-width="1.6"/>
+<text x="194.0" y="402.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">SREQ / *SLOAD</text>
+<text x="194.0" y="421.0" text-anchor="middle" font-size="11" fill="#63666f">one word per granted slot</text>
+<rect x="384" y="364" width="320" height="84" rx="8" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.6"/>
+<text x="544.0" y="402.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">Word FIFO</text>
+<text x="544.0" y="421.0" text-anchor="middle" font-size="11" fill="#63666f">depth unknown; four carried (T3)</text>
+<rect x="744" y="364" width="320" height="84" rx="8" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.6"/>
+<text x="904.0" y="402.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">Byte split</text>
+<text x="904.0" y="421.0" text-anchor="middle" font-size="11" fill="#63666f">SD0–SD7, high byte first</text>
+<rect x="1104" y="364" width="296" height="84" rx="8" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.6"/>
+<text x="1252.0" y="402.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">DAC0802 ×2</text>
+<text x="1252.0" y="421.0" text-anchor="middle" font-size="11" fill="#63666f">through 74F374s, on LD and HD</text>
+<rect x="44" y="484" width="300" height="84" rx="8" fill="#e8eefa" stroke="#1f5fa8" stroke-width="1.6"/>
+<text x="194.0" y="522.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">$FF8922 / $FF8924</text>
+<text x="194.0" y="541.0" text-anchor="middle" font-size="11" fill="#63666f">data and mask registers</text>
+<rect x="384" y="484" width="320" height="84" rx="8" fill="#fdf1de" stroke="#b4761a" stroke-width="1.6"/>
+<text x="544.0" y="522.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">Microwire shifter</text>
+<text x="544.0" y="541.0" text-anchor="middle" font-size="11" fill="#63666f">16 bit-times at 1 Mbit/s</text>
+<rect x="744" y="484" width="320" height="84" rx="8" fill="#fdf1de" stroke="#b4761a" stroke-width="1.6"/>
+<text x="904.0" y="522.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">*MWE · MWD · MWK</text>
+<text x="904.0" y="541.0" text-anchor="middle" font-size="11" fill="#63666f">the mask decides which bits clock</text>
+<rect x="1104" y="484" width="296" height="84" rx="8" fill="#fdf1de" stroke="#b4761a" stroke-width="1.6"/>
+<text x="1252.0" y="522.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">LMC1992</text>
+<text x="1252.0" y="541.0" text-anchor="middle" font-size="11" fill="#63666f">volume · bass · treble · mixing</text>
+<rect x="44" y="604" width="300" height="84" rx="8" fill="#e8eefa" stroke="#1f5fa8" stroke-width="1.6"/>
+<text x="194.0" y="642.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">PD0–PD15 · A1–A6</text>
+<text x="194.0" y="661.0" text-anchor="middle" font-size="11" fill="#63666f">CS and R/W: a 64-byte window</text>
+<rect x="384" y="604" width="320" height="84" rx="8" fill="#fdf1de" stroke="#b4761a" stroke-width="1.6"/>
+<text x="544.0" y="642.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">Transceiver + decode</text>
+<text x="544.0" y="661.0" text-anchor="middle" font-size="11" fill="#63666f">LATCH · *RDAT · *WDAT, moved in</text>
+<rect x="744" y="604" width="320" height="84" rx="8" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.6"/>
+<text x="904.0" y="642.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">Clock mux + reload</text>
+<text x="904.0" y="661.0" text-anchor="middle" font-size="11" fill="#63666f">8 · 16 · 32 MHz, and the group rule</text>
+<rect x="1104" y="604" width="296" height="84" rx="8" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.6"/>
+<text x="1252.0" y="642.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">DE · *BLANK · MONO</text>
+<text x="1252.0" y="661.0" text-anchor="middle" font-size="11" fill="#63666f">in: the window, the edge, mono select</text>
+<line x1="348" y1="166.0" x2="380" y2="166.0" stroke="#2f7f5b" stroke-width="3" marker-end="url(#a-d)"/>
+<line x1="708" y1="166.0" x2="740" y2="166.0" stroke="#2f7f5b" stroke-width="3" marker-end="url(#a-d)"/>
+<line x1="1068" y1="166.0" x2="1100" y2="166.0" stroke="#2f7f5b" stroke-width="3" marker-end="url(#a-d)"/>
+<line x1="348" y1="286.0" x2="380" y2="286.0" stroke="#2f7f5b" stroke-width="3" marker-end="url(#a-d)"/>
+<line x1="708" y1="286.0" x2="740" y2="286.0" stroke="#2f7f5b" stroke-width="3" marker-end="url(#a-d)"/>
+<line x1="1068" y1="286.0" x2="1100" y2="286.0" stroke="#2f7f5b" stroke-width="3" marker-end="url(#a-d)"/>
+<line x1="348" y1="406.0" x2="380" y2="406.0" stroke="#b4761a" stroke-width="3" marker-end="url(#a-c)"/>
+<line x1="708" y1="406.0" x2="740" y2="406.0" stroke="#b4761a" stroke-width="3" marker-end="url(#a-c)"/>
+<line x1="1068" y1="406.0" x2="1100" y2="406.0" stroke="#b4761a" stroke-width="3" marker-end="url(#a-c)"/>
+<line x1="348" y1="526.0" x2="380" y2="526.0" stroke="#b4761a" stroke-width="3" marker-end="url(#a-c)"/>
+<line x1="708" y1="526.0" x2="740" y2="526.0" stroke="#b4761a" stroke-width="3" marker-end="url(#a-c)"/>
+<line x1="1068" y1="526.0" x2="1100" y2="526.0" stroke="#b4761a" stroke-width="3" marker-end="url(#a-c)"/>
+<line x1="348" y1="646.0" x2="380" y2="646.0" stroke="#1f5fa8" stroke-width="3" marker-end="url(#a-a)"/>
+<line x1="708" y1="646.0" x2="740" y2="646.0" stroke="#1f5fa8" stroke-width="3" marker-end="url(#a-a)"/>
+<line x1="1068" y1="646.0" x2="1100" y2="646.0" stroke="#1f5fa8" stroke-width="3" marker-end="url(#a-a)"/>
+<path d="M1252.0,210 L1252.0,218 L194.0,218 L194.0,242" fill="none" stroke="#6f5aad" stroke-width="1.6" marker-end="url(#a-s)" stroke-dasharray="4 4"/>
+<text x="394" y="212" font-size="10" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the index addresses the palette</text>
+<rect x="44" y="706" width="1356" height="94" rx="8" fill="#eef0f5" stroke="#8a90a8" stroke-width="1.4" stroke-dasharray="5 4"/>
+<text x="64" y="730" font-size="13" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">What is deliberately not in this box</text>
+<text x="64" y="750" font-size="11.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">no video address counter — U400 walks the fetch address</text>
+<text x="560" y="750" font-size="11.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">no DE, *BLANK, HSYNC or VSYNC generator — U400's sync block</text>
+<text x="64" y="770" font-size="11.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">no fetch decision — one word per display window, chosen in U400</text>
+<text x="560" y="770" font-size="11.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">no fourth resolution — MWE, MWD and MWK are the Microwire link</text>
+<rect x="0" y="824" width="1440" height="46" fill="#f4f1e8"/>
+<text x="44" y="842" font-size="11" fill="#63666f" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">Provenance: the 84-pin symbol in the service manual (design/board-inventory.md §3.5); the block structure from</text>
+<text x="44" y="857" font-size="11" fill="#63666f" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">ijor's ST-Shifter reverse engineering and the board article; no die photograph of this part exists. See README.md.</text>
+</svg>

@@ -150,5 +150,5 @@ schematic for structure, and only then read an emulator.
 | §7.3 the U400 study's Shifter-facing claims | §3.4 (sound-data split) and §6.7 (`$FF8260`) confirmed in place, dated |
 | §7.4 commits | `b3ae665` (the study) and `84e1415` (index + corrections), pushed to `origin main` |
 | §7.5 model changes | `design/video.md`'s dated corrections section; `design/board-inventory.md` §3.5's dated note |
-| §3 deliverable worth having: a video-path sheet | **still owed** — no die geometry exists, but a block/flow sheet is drawable from study §3–§4 |
+| §3 deliverable worth having: a video-path sheet | `research/gstshifter-silicon/schematics/` — five sheets with an index, a README and one generator; `0 layout warnings`, `0 overlaps` |
 | §6 still unknown | five items listed in study §8, none load-bearing for the video path |

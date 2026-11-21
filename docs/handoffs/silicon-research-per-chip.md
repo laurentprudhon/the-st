@@ -144,8 +144,10 @@ What the session established:
   and no sheet for this chip in the recovered CAD set. The study says so up front and builds on the service
   manual's 84-pin symbol, **ijor's reverse engineering of the earlier ST Shifter** (the family's only real
   documentation, and a *different* chip), Atari's register wording, the board article and the reconstruction.
-* **No figure was drawn.** No geometry exists to draw from; the block flow is prose and a table in §3–§4,
-  and a schematic sheet of the video path is left as the one deliverable still owed (§6 ordering).
+* **The sheet is drawn, as a set of five.** `research/gstshifter-silicon/schematics/` — blocks, one group
+  (buffer, shift array, reload control), the colour path, one line as a timetable, and the register seam —
+  each sheet standalone, with an index page, a README and one generator. No floorplan is claimed anywhere:
+  this part has no die, so the drawings are functional diagrams, and the README says so.
 * **Three findings change the arithmetic or the model.** (a) The "sixteen-pixel group" is a **two-microsecond
   grid**: the transfer is always four words into a 64-bit shift path, so a group is 16 low-res pixels, 32
   mid, 64 mono — a mono line is **ten** groups, not forty. (b) The palette's four bits are weighted
@@ -170,8 +172,8 @@ What the session established:
 * **Evidence:** our `research/ste-super-hires.md` (settles what this part does *not* have), Hatari's
   shifter model, service-manual pin list (§3.5), and photographs of the board for the DAC path.
 * **Deliverable worth having:** a sheet like `schematics/01-datapath.svg` but for the video path —
-  bitplanes → shift → palette → DE/BLANK → monitor. **Still owed**: no drawing was earned from a die that
-  does not exist, but a block/flow sheet is drawable from §3–§4 and is the next session's obvious artefact.
+  bitplanes → shift → palette → DE/BLANK → monitor. **Done**: `research/gstshifter-silicon/schematics/`,
+  five sheets, one generator, audited on every build.
 * **Handoff: [`u401-gst-shifter-study.md`](u401-gst-shifter-study.md)** — the exact brief, the evidence
   ladder (manual pin list → ijor's schematic → Hatari), the six acceptance criteria, the arithmetic seeds
   (80 words a line, 20 groups, 16-word palette), and the method rules this week's GSTMCU work earned.

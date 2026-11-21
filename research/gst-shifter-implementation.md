@@ -18,7 +18,9 @@ side of every wire they share.*
 `inferred` (a re-implementation or a careful reader implies it), `unknown`; T1 hardware-captured, T2
 hardware-corrected, T3 emulator-derived. Companion pages: `research/gstmcu-silicon-implementation.md` (the
 other side of `DE`/`DCYC`), `research/ste-super-hires.md` (what this part does *not* have),
-`research/gstmcu-reconstructions.md` (the RTL, file:line), `design/video.md` (the shape our model takes).*
+`research/gstmcu-reconstructions.md` (the RTL, file:line), `design/video.md` (the shape our model takes).
+The five educational sheets drawn from this study are in `research/gstshifter-silicon/schematics/` (blocks,
+one group, colour, one line, registers) — functional diagrams, and no floorplan, since no die exists.*
 
 ---
 

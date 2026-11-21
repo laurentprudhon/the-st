@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 940" width="1440" height="940"
+     font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" role="img" aria-label="03 · One line — 512 clocks, three modes, one window">
+<defs>
+  <marker id="a-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#1f5fa8"/>
+</marker>
+  <marker id="a-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#2f7f5b"/>
+</marker>
+  <marker id="a-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#b4761a"/>
+</marker>
+  <marker id="a-k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#8a4fb0"/>
+</marker>
+  <marker id="a-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#6f5aad"/>
+</marker>
+  <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+<path d="M24 0 L0 0 0 24" fill="none" stroke="#e8e5db" stroke-width="1"/>
+</pattern>
+  <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+<path d="M0 0 L0 8" stroke="#b4761a" stroke-width="1.4" opacity=".55"/>
+</pattern>
+</defs>
+<rect width="100%" height="100%" fill="#fbfaf6"/>
+<rect width="100%" height="100%" fill="url(#grid)" opacity=".6"/>
+<text x="44" y="44" font-size="25" font-weight="700" fill="#22232a" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">03 · One line — 512 clocks, three modes, one window</text>
+<text x="44" y="71" font-size="14" fill="#63666f" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">What arrives from U400 as DE and what this chip does with it: 80 words in colour, 40 in mono.</text>
+<text x="44" y="112" font-size="12.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the clock ruler — one tick a clock (125 ns), the numbers are the ones the GLUE model prints</text>
+<line x1="44" y1="132" x2="1396" y2="132" stroke="#22232a" stroke-width="1.4"/>
+<line x1="44.0" y1="126" x2="44.0" y2="138" stroke="#22232a" stroke-width="1.2"/>
+<text x="44.0" y="150" font-size="10" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">0</text>
+<line x1="54.5625" y1="126" x2="54.5625" y2="138" stroke="#22232a" stroke-width="1.2"/>
+<text x="54.5625" y="150" font-size="10" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">4</text>
+<line x1="117.9375" y1="126" x2="117.9375" y2="138" stroke="#22232a" stroke-width="1.2"/>
+<text x="117.9375" y="150" font-size="10" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">28</text>
+<line x1="191.875" y1="126" x2="191.875" y2="138" stroke="#22232a" stroke-width="1.2"/>
+<text x="191.875" y="150" font-size="10" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">56</text>
+<line x1="477.0625" y1="126" x2="477.0625" y2="138" stroke="#22232a" stroke-width="1.2"/>
+<text x="477.0625" y="150" font-size="10" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">164</text>
+<line x1="529.875" y1="126" x2="529.875" y2="138" stroke="#22232a" stroke-width="1.2"/>
+<text x="529.875" y="150" font-size="10" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">184</text>
+<line x1="1036.875" y1="126" x2="1036.875" y2="138" stroke="#22232a" stroke-width="1.2"/>
+<text x="1036.875" y="150" font-size="10" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">376</text>
+<line x1="1227.0" y1="126" x2="1227.0" y2="138" stroke="#22232a" stroke-width="1.2"/>
+<text x="1227.0" y="150" font-size="10" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">448</text>
+<line x1="1396.0" y1="126" x2="1396.0" y2="138" stroke="#22232a" stroke-width="1.2"/>
+<text x="1396.0" y="150" font-size="10" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">512</text>
+<text x="44" y="186" font-size="12" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">DE — the display window, from U400</text>
+<rect x="191.875" y="166" width="845.0" height="20" rx="3" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.3"/>
+<text x="614.375" y="180" font-size="10" fill="#22232a" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">colour: 56 → 376 = 320 clocks = 80 words</text>
+<rect x="54.5625" y="196" width="422.5" height="20" rx="3" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.3"/>
+<text x="265.8125" y="210" font-size="10" fill="#22232a" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">mono: 4 → 164 = 160 clocks = 40 words</text>
+<text x="44" y="264" font-size="12" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">*BLANK — the picture area, 840 columns wide at 16 MHz</text>
+<rect x="117.9375" y="244" width="1109.0625" height="20" rx="3" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.3"/>
+<text x="672.46875" y="258" font-size="10" fill="#22232a" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">picture: 28 → 448 = 420 clocks = 52.5 µs</text>
+<line x1="1227.0" y1="240" x2="1227.0" y2="268" stroke="#b4761a" stroke-width="1.6"/>
+<text x="1233.0" y="236" font-size="9.5" fill="#b4761a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">blank on</text>
+<text x="111.9375" y="236" font-size="9.5" fill="#8a4fb0" text-anchor="end" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">blank off</text>
+<text x="44" y="320" font-size="12.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the memory grid — 128 windows of 500 ns, one internal slot each (the colour line is drawn)</text>
+<rect x="44" y="330" width="1352" height="40" fill="#ffffff" stroke="#22232a" stroke-width="1.2"/>
+<rect x="191.875" y="330" width="845.0" height="40" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.2"/>
+<text x="614.375" y="355" font-size="10.5" fill="#22232a" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">80 windows to video — one word each, four to a group</text>
+<text x="117.9375" y="355" font-size="10.5" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">14</text>
+<text x="1216.4375" y="355" font-size="10.5" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">48 windows: sound DMA, else RAS-only refresh</text>
+<text x="44" y="388" font-size="10" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">0</text>
+<text x="191.875" y="388" font-size="10" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">window 14</text>
+<text x="1036.875" y="388" font-size="10" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">window 94</text>
+<text x="1396" y="388" font-size="10" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">128</text>
+<text x="44" y="436" font-size="13" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the three modes, closed against U400's budget</text>
+<text x="44" y="460" font-size="10.5" fill="#63666f" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">mode</text>
+<text x="200" y="460" font-size="10.5" fill="#63666f" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">pixels</text>
+<text x="330" y="460" font-size="10.5" fill="#63666f" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">pixel time</text>
+<text x="470" y="460" font-size="10.5" fill="#63666f" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">words</text>
+<text x="580" y="460" font-size="10.5" fill="#63666f" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">groups</text>
+<text x="720" y="460" font-size="10.5" fill="#63666f" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">DE in clocks</text>
+<text x="900" y="460" font-size="10.5" fill="#63666f" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">pixels per group</text>
+<rect x="44" y="470" width="1300" height="30" rx="4" fill="#e7f2ec" stroke="#e8e5db" stroke-width="1"/>
+<text x="44" y="490" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">low</text>
+<text x="200" y="490" font-size="11.5" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">320</text>
+<text x="330" y="490" font-size="11.5" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">125 ns</text>
+<text x="470" y="490" font-size="11.5" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">80</text>
+<text x="580" y="490" font-size="11.5" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">20</text>
+<text x="720" y="490" font-size="11.5" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">56 → 376</text>
+<text x="900" y="490" font-size="11.5" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">16</text>
+<rect x="44" y="504" width="1300" height="30" rx="4" fill="#ffffff" stroke="#e8e5db" stroke-width="1"/>
+<text x="44" y="524" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">mid</text>
+<text x="200" y="524" font-size="11.5" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">640</text>
+<text x="330" y="524" font-size="11.5" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">62.5 ns</text>
+<text x="470" y="524" font-size="11.5" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">80</text>
+<text x="580" y="524" font-size="11.5" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">20</text>
+<text x="720" y="524" font-size="11.5" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">56 → 376</text>
+<text x="900" y="524" font-size="11.5" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">32</text>
+<rect x="44" y="538" width="1300" height="30" rx="4" fill="#e7f2ec" stroke="#e8e5db" stroke-width="1"/>
+<text x="44" y="558" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">mono</text>
+<text x="200" y="558" font-size="11.5" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">640</text>
+<text x="330" y="558" font-size="11.5" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">31.25 ns</text>
+<text x="470" y="558" font-size="11.5" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">40</text>
+<text x="580" y="558" font-size="11.5" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">10</text>
+<text x="720" y="558" font-size="11.5" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">4 → 164</text>
+<text x="900" y="558" font-size="11.5" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">64</text>
+<text x="44" y="620" font-size="12" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">The frame closes at 4 000 groups whichever mode is on: 200 colour lines × 20, 400 mono lines × 10.</text>
+<text x="44" y="642" font-size="12" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">A group is always four words, so the fetch schedule is identical in low and mid and halves in mono.</text>
+<text x="44" y="664" font-size="12" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">Outside DE the internal slot belongs to sound when SREQ is pending and to a RAS-only refresh otherwise —</text>
+<text x="44" y="686" font-size="12" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the memo's rule seen from this side, and the reason a line has 48 spare windows rather than none.</text>
+<rect x="44" y="712" width="640" height="80" rx="8" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.6"/>
+<text x="364.0" y="748.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">PRELOAD — the STE's addition</text>
+<text x="364.0" y="767.0" text-anchor="middle" font-size="11" fill="#63666f">LOADs before DE, so an offset can start the line early</text>
+<rect x="716" y="712" width="680" height="80" rx="8" fill="#fdf1de" stroke="#b4761a" stroke-width="1.6"/>
+<text x="1056.0" y="748.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">hard scroll does not move the group</text>
+<text x="1056.0" y="767.0" text-anchor="middle" font-size="11" fill="#63666f">the offset acts after the group, in the shift path</text>
+<text x="44" y="828" font-size="11.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">The picture area and the DE window are different facts: DE says which words the video client fetches, *BLANK says which pixels reach</text>
+<text x="44" y="846" font-size="11.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the monitor. The 840-column buffer is the second, and the 80 words are the first.</text>
+<rect x="0" y="894" width="1440" height="46" fill="#f4f1e8"/>
+<text x="44" y="912" font-size="11" fill="#63666f" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">Provenance: DE and *BLANK edges from the GLUE/Shifter state-machine model (AtariForumWiki); window counts, pixel times and the frame</text>
+<text x="44" y="927" font-size="11" fill="#63666f" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">total derived in study §4.1–§4.2 against U400's own line budget. The mono blank release is not stated by any source.</text>
+</svg>

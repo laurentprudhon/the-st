@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 920" width="1440" height="920"
+     font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" role="img" aria-label="02 · Colour — index, palette, twelve pins, three ladders">
+<defs>
+  <marker id="a-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#1f5fa8"/>
+</marker>
+  <marker id="a-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#2f7f5b"/>
+</marker>
+  <marker id="a-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#b4761a"/>
+</marker>
+  <marker id="a-k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#8a4fb0"/>
+</marker>
+  <marker id="a-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#6f5aad"/>
+</marker>
+  <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+<path d="M24 0 L0 0 0 24" fill="none" stroke="#e8e5db" stroke-width="1"/>
+</pattern>
+  <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+<path d="M0 0 L0 8" stroke="#b4761a" stroke-width="1.4" opacity=".55"/>
+</pattern>
+</defs>
+<rect width="100%" height="100%" fill="#fbfaf6"/>
+<rect width="100%" height="100%" fill="url(#grid)" opacity=".6"/>
+<text x="44" y="44" font-size="25" font-weight="700" fill="#22232a" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">02 · Colour — index, palette, twelve pins, three ladders</text>
+<text x="44" y="71" font-size="14" fill="#63666f" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">Why the fourth bit is the cheap one, and why an ST program's colour $0777 is 14/15 here.</text>
+<rect x="44" y="120" width="240" height="78" rx="8" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.6"/>
+<text x="164.0" y="155.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">4-bit index</text>
+<text x="164.0" y="174.0" text-anchor="middle" font-size="11" fill="#63666f">one bit per plane</text>
+<rect x="352" y="120" width="320" height="78" rx="8" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.6"/>
+<text x="512.0" y="155.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">16 × 12-bit palette</text>
+<text x="512.0" y="174.0" text-anchor="middle" font-size="11" fill="#63666f">transparent latches, gated by CS</text>
+<rect x="744" y="120" width="300" height="78" rx="8" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.6"/>
+<text x="894.0" y="155.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">twelve pins</text>
+<text x="894.0" y="174.0" text-anchor="middle" font-size="11" fill="#63666f">R3–R0 · G3–G0 · B3–B0</text>
+<rect x="1104" y="120" width="292" height="78" rx="8" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.6"/>
+<text x="1250.0" y="155.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">74S257</text>
+<text x="1250.0" y="174.0" text-anchor="middle" font-size="11" fill="#63666f">colour / mono, selected by MONO</text>
+<line x1="288" y1="159" x2="348" y2="159" stroke="#2f7f5b" stroke-width="3" marker-end="url(#a-d)"/>
+<line x1="676" y1="159" x2="740" y2="159" stroke="#2f7f5b" stroke-width="3" marker-end="url(#a-d)"/>
+<line x1="1048" y1="159" x2="1100" y2="159" stroke="#2f7f5b" stroke-width="3" marker-end="url(#a-d)"/>
+<text x="44" y="250" font-size="13" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">one channel, as the board sums it — the four bits are weighted 1-8-4-2</text>
+<rect x="44" y="252" width="174" height="28" rx="5" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.2"/>
+<text x="131" y="271" font-size="10.5" fill="#22232a" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">bit 11 → weight 1</text>
+<line x1="220" y1="266" x2="326" y2="414" stroke="#2f7f5b" stroke-width="1.6" marker-end="url(#a-d)"/>
+<rect x="44" y="288" width="174" height="28" rx="5" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.2"/>
+<text x="131" y="307" font-size="10.5" fill="#22232a" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">bit 10 → weight 8</text>
+<line x1="220" y1="302" x2="326" y2="408" stroke="#2f7f5b" stroke-width="1.6" marker-end="url(#a-d)"/>
+<rect x="44" y="324" width="174" height="28" rx="5" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.2"/>
+<text x="131" y="343" font-size="10.5" fill="#22232a" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">bit 9 → weight 4</text>
+<line x1="220" y1="338" x2="326" y2="402" stroke="#2f7f5b" stroke-width="1.6" marker-end="url(#a-d)"/>
+<rect x="44" y="360" width="174" height="28" rx="5" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.2"/>
+<text x="131" y="379" font-size="10.5" fill="#22232a" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">bit 8 → weight 2</text>
+<line x1="220" y1="374" x2="326" y2="396" stroke="#2f7f5b" stroke-width="1.6" marker-end="url(#a-d)"/>
+<circle cx="336" cy="330" r="7" fill="#2f7f5b"/>
+<line x1="344" y1="330" x2="400" y2="330" stroke="#2f7f5b" stroke-width="2" marker-end="url(#a-d)"/>
+<rect x="404" y="292" width="260" height="76" rx="8" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.6"/>
+<text x="534.0" y="326.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">MC1377 encoder</text>
+<text x="534.0" y="345.0" text-anchor="middle" font-size="11" fill="#63666f">RGB + sync → composite</text>
+<rect x="704" y="292" width="240" height="76" rx="8" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.6"/>
+<text x="824.0" y="326.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">DIN-13</text>
+<text x="824.0" y="345.0" text-anchor="middle" font-size="11" fill="#63666f">the monitor's RGB, 1 V p-p</text>
+<line x1="664" y1="330" x2="704" y2="330" stroke="#2f7f5b" stroke-width="2" marker-end="url(#a-d)"/>
+<rect x="974" y="292" width="422" height="76" rx="8" fill="#eef0f5" stroke="#8a90a8" stroke-width="1.6"/>
+<text x="1185.0" y="326.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">nine bits would be the ST</text>
+<text x="1185.0" y="345.0" text-anchor="middle" font-size="11" fill="#63666f">3 bits a channel, 512 colours — not this board</text>
+<text x="44" y="408" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the four resistors sum into one node per channel; their values are unread at 600 dpi</text>
+<text x="44" y="446" font-size="13" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the arithmetic, which three artefacts agree on</text>
+<rect x="44" y="466" width="1356" height="26" rx="4" fill="#fdf1de" stroke="#e8e5db" stroke-width="1"/>
+<text x="58" y="484" font-size="11" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">register bits, most to least significant</text>
+<text x="700" y="484" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">11 · 10 · 9 · 8</text>
+<rect x="44" y="496" width="1356" height="26" rx="4" fill="#ffffff" stroke="#e8e5db" stroke-width="1"/>
+<text x="58" y="514" font-size="11" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">intensity weight each bit carries</text>
+<text x="700" y="514" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">1 · 8 · 4 · 2</text>
+<rect x="44" y="526" width="1356" height="26" rx="4" fill="#fdf1de" stroke="#e8e5db" stroke-width="1"/>
+<text x="58" y="544" font-size="11" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the order Atari's register table prints</text>
+<text x="700" y="544" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">"0 3 2 1" encoding "1 8 4 2"</text>
+<rect x="44" y="556" width="1356" height="26" rx="4" fill="#ffffff" stroke="#e8e5db" stroke-width="1"/>
+<text x="58" y="574" font-size="11" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">so $0777, full red on the ST, is here</text>
+<text x="700" y="574" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">14/15 — one step down</text>
+<rect x="44" y="586" width="1356" height="26" rx="4" fill="#fdf1de" stroke="#e8e5db" stroke-width="1"/>
+<text x="58" y="604" font-size="11" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">full red</text>
+<text x="700" y="604" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$0F00, not $0E00</text>
+<rect x="44" y="616" width="1356" height="26" rx="4" fill="#ffffff" stroke="#e8e5db" stroke-width="1"/>
+<text x="58" y="634" font-size="11" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the new bit alone, $0800</text>
+<text x="700" y="634" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">1/15 — the dimmest level, not the brightest</text>
+<rect x="44" y="646" width="1356" height="26" rx="4" fill="#fdf1de" stroke="#e8e5db" stroke-width="1"/>
+<text x="58" y="664" font-size="11" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">a clean fade steps</text>
+<text x="700" y="664" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$888, $111, $999, $222, $AAA …</text>
+<rect x="44" y="700" width="430" height="84" rx="8" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.6"/>
+<text x="259.0" y="738.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">monocolor</text>
+<text x="259.0" y="757.0" text-anchor="middle" font-size="11" fill="#63666f">a second copy of bit 0 of colour 0, written together</text>
+<rect x="504" y="700" width="430" height="84" rx="8" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.6"/>
+<text x="719.0" y="738.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">transparent, not clocked</text>
+<text x="719.0" y="757.0" text-anchor="middle" font-size="11" fill="#63666f">a write is visible while CS is still low</text>
+<rect x="964" y="700" width="432" height="84" rx="8" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.6"/>
+<text x="1180.0" y="738.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">a byte write lands twice</text>
+<text x="1180.0" y="757.0" text-anchor="middle" font-size="11" fill="#63666f">the 68000 puts it on both halves of the bus</text>
+<text x="44" y="806" font-size="11.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">The three notes above are what a model must keep: the mono/inverse select is not a mode register, the palette has no capture edge,</text>
+<text x="44" y="824" font-size="11.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">and a byte store to $FF8240 leaves $0707 rather than $0007. All three are testable with a read-back (§7 of the study).</text>
+<rect x="0" y="874" width="1440" height="46" fill="#f4f1e8"/>
+<text x="44" y="892" font-size="11" fill="#63666f" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">Provenance: the bit weights are Atari's own register table (STE FAQ, worked fade sequence); the twelve pins are the service manual's</text>
+<text x="44" y="907" font-size="11" fill="#63666f" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">symbol; the ladder's existence and four-resistors-per-channel reading are from the STE video schematic. Values are not read at 600 dpi.</text>
+</svg>

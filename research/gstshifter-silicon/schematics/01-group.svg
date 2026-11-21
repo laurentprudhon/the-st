@@ -1,0 +1,189 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 1010" width="1440" height="1010"
+     font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" role="img" aria-label="01 · One group — four words, 2 µs">
+<defs>
+  <marker id="a-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#1f5fa8"/>
+</marker>
+  <marker id="a-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#2f7f5b"/>
+</marker>
+  <marker id="a-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#b4761a"/>
+</marker>
+  <marker id="a-k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#8a4fb0"/>
+</marker>
+  <marker id="a-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#6f5aad"/>
+</marker>
+  <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+<path d="M24 0 L0 0 0 24" fill="none" stroke="#e8e5db" stroke-width="1"/>
+</pattern>
+  <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+<path d="M0 0 L0 8" stroke="#b4761a" stroke-width="1.4" opacity=".55"/>
+</pattern>
+</defs>
+<rect width="100%" height="100%" fill="#fbfaf6"/>
+<rect width="100%" height="100%" fill="url(#grid)" opacity=".6"/>
+<text x="44" y="44" font-size="25" font-weight="700" fill="#22232a" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">01 · One group — four words, 2 µs</text>
+<text x="44" y="71" font-size="14" fill="#63666f" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">The buffer, the shift array and the reload control; why a group is 16, 32 or 64 pixels and never 500 ns.</text>
+<text x="44" y="116" font-size="13" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the buffer — sixteen cells, four words deep</text>
+<rect x="64" y="132" width="240" height="50" rx="6" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.4"/>
+<text x="184" y="154" font-size="12" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">word 0</text>
+<text x="184" y="172" font-size="10.5" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">16 bits · one per plane cell</text>
+<rect x="64" y="194" width="240" height="50" rx="6" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.4"/>
+<text x="184" y="216" font-size="12" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">word 1</text>
+<text x="184" y="234" font-size="10.5" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">16 bits · one per plane cell</text>
+<rect x="64" y="256" width="240" height="50" rx="6" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.4"/>
+<text x="184" y="278" font-size="12" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">word 2</text>
+<text x="184" y="296" font-size="10.5" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">16 bits · one per plane cell</text>
+<rect x="64" y="318" width="240" height="50" rx="6" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.4"/>
+<text x="184" y="340" font-size="12" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">word 3</text>
+<text x="184" y="358" font-size="10.5" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">16 bits · one per plane cell</text>
+<line x1="44" y1="132" x2="44" y2="400" stroke="#6f5aad" stroke-width="2" marker-end="url(#a-s)"/>
+<text x="50" y="420" font-size="10" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">
+</text>
+<text x="44" y="372" font-size="11" fill="#6f5aad" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">LOAD</text>
+<text x="44" y="388" font-size="10" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">in at the top</text>
+<text x="330" y="408" font-size="11" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">a fifth LOAD</text>
+<text x="330" y="424" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">pushes the oldest</text>
+<text x="330" y="440" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">word out — it is a</text>
+<text x="330" y="456" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">shift array, not a FIFO</text>
+<text x="560" y="116" font-size="13" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the shift path — 16 cells per plane, clocked by the pixel clock</text>
+<text x="556" y="154" font-size="11" fill="#63666f" text-anchor="end" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">plane 0</text>
+<rect x="560" y="132" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="580" y="132" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="600" y="132" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="620" y="132" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="640" y="132" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="660" y="132" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="680" y="132" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="700" y="132" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="720" y="132" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="740" y="132" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="760" y="132" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="780" y="132" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="800" y="132" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="820" y="132" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="840" y="132" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="860" y="132" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<line x1="886" y1="149.0" x2="938" y2="149.0" stroke="#2f7f5b" stroke-width="2" marker-end="url(#a-d)"/>
+<text x="556" y="200" font-size="11" fill="#63666f" text-anchor="end" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">plane 1</text>
+<rect x="560" y="178" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="580" y="178" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="600" y="178" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="620" y="178" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="640" y="178" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="660" y="178" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="680" y="178" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="700" y="178" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="720" y="178" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="740" y="178" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="760" y="178" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="780" y="178" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="800" y="178" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="820" y="178" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="840" y="178" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="860" y="178" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<line x1="886" y1="195.0" x2="938" y2="195.0" stroke="#2f7f5b" stroke-width="2" marker-end="url(#a-d)"/>
+<text x="556" y="246" font-size="11" fill="#63666f" text-anchor="end" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">plane 2</text>
+<rect x="560" y="224" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="580" y="224" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="600" y="224" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="620" y="224" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="640" y="224" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="660" y="224" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="680" y="224" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="700" y="224" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="720" y="224" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="740" y="224" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="760" y="224" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="780" y="224" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="800" y="224" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="820" y="224" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="840" y="224" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="860" y="224" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<line x1="886" y1="241.0" x2="938" y2="241.0" stroke="#2f7f5b" stroke-width="2" marker-end="url(#a-d)"/>
+<text x="556" y="292" font-size="11" fill="#63666f" text-anchor="end" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">plane 3</text>
+<rect x="560" y="270" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="580" y="270" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="600" y="270" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="620" y="270" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="640" y="270" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="660" y="270" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="680" y="270" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="700" y="270" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="720" y="270" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="740" y="270" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="760" y="270" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="780" y="270" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="800" y="270" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="820" y="270" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="840" y="270" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<rect x="860" y="270" width="20" height="34" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1"/>
+<line x1="886" y1="287.0" x2="938" y2="287.0" stroke="#2f7f5b" stroke-width="2" marker-end="url(#a-d)"/>
+<text x="560" y="326" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">one bit leaves each plane per pixel clock</text>
+<text x="560" y="344" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">four of them make the 4-bit index</text>
+<text x="942" y="156" font-size="11" fill="#2f7f5b" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">index</text>
+<text x="942" y="172" font-size="10" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">bit 3 … 0</text>
+<path d="M304,222 L360,222 L360,300 L556,300" fill="none" stroke="#6f5aad" stroke-width="2" marker-end="url(#a-s)"/>
+<text x="364" y="292" font-size="10.5" fill="#6f5aad" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">reload: 64 bits at once</text>
+<text x="44" y="470" font-size="13" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">how four words become pixels — the mode changes the chaining, not the transfer</text>
+<text x="44" y="502" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">low · 8 MHz</text>
+<rect x="220.0" y="486" width="180" height="30" rx="5" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.2"/>
+<text x="310.0" y="506" font-size="10.5" fill="#22232a" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">16 bits</text>
+<rect x="453.33333333333337" y="486" width="180" height="30" rx="5" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.2"/>
+<text x="543.3333333333334" y="506" font-size="10.5" fill="#22232a" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">16 bits</text>
+<rect x="686.6666666666667" y="486" width="180" height="30" rx="5" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.2"/>
+<text x="776.6666666666667" y="506" font-size="10.5" fill="#22232a" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">16 bits</text>
+<rect x="920.0" y="486" width="180" height="30" rx="5" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.2"/>
+<text x="1010.0" y="506" font-size="10.5" fill="#22232a" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">16 bits</text>
+<text x="1120" y="498" font-size="10" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">four separate 16-bit shifts</text>
+<text x="1120" y="514" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">16 pixels</text>
+<text x="44" y="560" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">mid · 16 MHz</text>
+<rect x="220.0" y="544" width="380" height="30" rx="5" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.2"/>
+<text x="410.0" y="564" font-size="10.5" fill="#22232a" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">32 bits</text>
+<rect x="720.0" y="544" width="380" height="30" rx="5" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.2"/>
+<text x="910.0" y="564" font-size="10.5" fill="#22232a" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">32 bits</text>
+<text x="1120" y="556" font-size="10" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">two chained pairs, 2 bits a pixel</text>
+<text x="1120" y="572" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">32 pixels</text>
+<text x="44" y="618" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">mono · 32 MHz</text>
+<rect x="220" y="602" width="880" height="30" rx="5" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.2"/>
+<text x="660.0" y="622" font-size="10.5" fill="#22232a" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">64 bits</text>
+<text x="1120" y="614" font-size="10" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">one 64-bit shift, 1 bit a pixel</text>
+<text x="1120" y="630" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">64 pixels</text>
+<text x="44" y="690" font-size="13" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the reload control — both conditions, or no transfer</text>
+<rect x="44" y="704" width="320" height="80" rx="8" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.6"/>
+<text x="204.0" y="740.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">4-stage LOAD register</text>
+<text x="204.0" y="759.0" text-anchor="middle" font-size="11" fill="#63666f">a 1 per LOAD, cleared after Reload</text>
+<rect x="420" y="704" width="300" height="80" rx="8" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.6"/>
+<text x="570.0" y="740.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">4-bit pixel counter</text>
+<text x="570.0" y="759.0" text-anchor="middle" font-size="11" fill="#63666f">wraps every 16 pixel clocks</text>
+<rect x="776" y="704" width="260" height="80" rx="8" fill="#fdf1de" stroke="#b4761a" stroke-width="1.6"/>
+<text x="906.0" y="740.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">Reload</text>
+<text x="906.0" y="759.0" text-anchor="middle" font-size="11" fill="#63666f">one pulse, then start again</text>
+<line x1="364" y1="744" x2="420" y2="744" stroke="#6f5aad" stroke-width="2" marker-end="url(#a-s)"/>
+<line x1="720" y1="744" x2="776" y2="744" stroke="#8a4fb0" stroke-width="2" marker-end="url(#a-k)"/>
+<path d="M1092,744 L1160,744 L1160,700 L1180,700" fill="none" stroke="#b4761a" stroke-width="2" marker-end="url(#a-c)" stroke-dasharray="4 4"/>
+<text x="1096" y="786" font-size="10" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">to the buffer</text>
+<text x="44" y="814" font-size="11.5" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">Miss a reload and sixteen pixels of palette 0 leave the chip: the border colour, for one group — the</text>
+<text x="44" y="832" font-size="11.5" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">"every other 16 pixels background" that demos live with is a transfer that did not happen.</text>
+<text x="44" y="872" font-size="12.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">one group in time — four display windows, whichever the mode</text>
+<rect x="44" y="882" width="1352" height="26" rx="4" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.2"/>
+<line x1="382.0" y1="878" x2="382.0" y2="912" stroke="#22232a" stroke-width="1.2" stroke-dasharray="3 3"/>
+<line x1="720.0" y1="878" x2="720.0" y2="912" stroke="#22232a" stroke-width="1.2" stroke-dasharray="3 3"/>
+<line x1="1058.0" y1="878" x2="1058.0" y2="912" stroke="#22232a" stroke-width="1.2" stroke-dasharray="3 3"/>
+<text x="213.0" y="900" font-size="10" fill="#22232a" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">LOAD</text>
+<text x="551.0" y="900" font-size="10" fill="#22232a" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">LOAD</text>
+<text x="889.0" y="900" font-size="10" fill="#22232a" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">LOAD</text>
+<text x="1227.0" y="900" font-size="10" fill="#22232a" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">LOAD</text>
+<text x="44.0" y="928" font-size="10.5" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">0</text>
+<text x="382.0" y="928" font-size="10.5" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">500 ns</text>
+<text x="720.0" y="928" font-size="10.5" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">1 µs</text>
+<text x="1058.0" y="928" font-size="10.5" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">1.5 µs</text>
+<text x="1396.0" y="928" font-size="10.5" fill="#63666f" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">2 µs</text>
+<text x="1396" y="876" font-size="10.5" fill="#b4761a" text-anchor="end" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">reload at 2 µs</text>
+<rect x="0" y="964" width="1440" height="46" fill="#f4f1e8"/>
+<text x="44" y="982" font-size="11" fill="#63666f" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">Provenance: array geometry and the 4-word transfer from ijor's reverse engineering of the ST Shifter; the reload rule and</text>
+<text x="44" y="997" font-size="11" fill="#63666f" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">the failure mode from the same; the 2 µs grid and the pixels-per-group figures derived in study §4.1. No die geometry claimed.</text>
+</svg>
