@@ -166,7 +166,7 @@ The netlist supplies the clocks: `REFCLK` and `VIDCLK` each drive only a handful
 | video address | advances once per 500 ns cycle while the display window is open | 24 bits across `VIDBH/VIDBM/VIDBL` + `VCOUNT` | `documented` (sheets 4, 12, 15) |
 | sound address | `SNDCLK` = the granted slot | 21 bits (`SFTH/SFTM/SFTL`) | `documented` (sheet 17 + memo §4) |
 | disk DMA address | `DMADIR`/`RDY` handshake with U300 | 24 bits (`DMAH/DMAM/DMAL`) | `documented` (sheet 16) |
-| paddle | `PADC` — the 500 kHz timebase through sheet 31's own divider, reset by `PADRST` | four registers (`PAD0X/PAD0Y/PAD1X/PAD1Y`), one byte each at `$FF9211/13/15/17` in the emulator map | `documented` structure and clock source, `inferred` width, `unknown` law (§7.6) |
+| paddle | `PADC` — the 500 kHz timebase through sheet 31's own divider, whose reset `PADRST` is the chip's power-on reset | four registers (`PAD0X/PAD0Y/PAD1X/PAD1Y`), one byte each at `$FF9211/13/15/17` in the emulator map | `documented` structure and clock source, `inferred` width, `unknown` law (§7.6) |
 
 `documented` The paddle block is worth a sentence because it is the one place where the chip is *analog*: four registers built from `LLR` latches and `TB2` cells with shift registers `SHR01/03/05/12`, and a `PADC` clock that sheet 31 generates[2].
 `documented` What sheet 31 actually draws, read off the sheet by its owner: `K500CLK` into the `C` pin of `DPR` `PV009`, then a chain of `NLCB1` and six `NLCBN` carry cells, giving eight taps printed 0–7, reset by `PADRST`, with one tap leaving the sheet as `PADC` towards sheet 32 (pads `PV001`–`PV017`).[2]
@@ -433,7 +433,9 @@ CAS0L = ~( TIME2 & LCYCSELB & ... )   (pad PM002, sheet 22)        [2]
 `documented` The controller side is three scanners, not one ADC: `PADR`/`PADRB` and `PENR`/`PENRB` (sheets 8, 10, 32, 33) plus the joypad selects, with the `SHR01/03/05/12` shift registers and `TB2` cells of sheet 32 as the sampling machinery and `PADC` generated next to the refresh counter on sheet 31.[2]
 `derived` That is a counting converter clocked from the same 500 kHz timebase as refresh — which is exactly why the paddle reading depends on the video mode: the count is a number of `PADC` ticks inside a fixed number of lines, and the line rate changes with the mode.
 `documented` `PADC` is the 500 kHz timebase through sheet 31's own eight-tap divider, and `PADRST` clears that divider.[2]
-`unknown` Whether `PADRST` is the paddle register select (a read starts the count) or the line start (the count free-runs and a read samples it) is the one piece of the law the sheet does not state; it is §7's question 6 and §8's test 6.
+`documented` And `PADRST` is not a start of anything: it is built from `RESB` and `PORB` through an `AA2` (`PV017`) whose output drives the `XR` pin of `DPR` `PV010`, whose `XQ` runs out through an `I3`, an `I4` and an `OB4` (pads `PV011`–`PV013`) and leaves as `PADRST`, active low (the owner's read; the sheet's text layer carries the same cells).[2]
+`derived` So the paddle divider is cleared only at reset, never per read and never per line: the `PADRST`-is-the-start hypothesis is dead, and a conversion's start must be either the register select acting on sheet 32's own latches or nothing at all — a free-running count that a read samples.
+`unknown` Which of those two it is stays §7's question 6 and §8's test 6, but the question is now narrow: with `PADRST` out of the way, what starts a conversion at all.
 
 ### 5.7 Reset, test, and the clocks out
 
@@ -508,7 +510,7 @@ Tiers per the handoff: T1 hardware-captured, T2 hardware-corrected, T3 emulator-
 | 3 | Is `SINT` a slot-wide level or a 480 ns pulse? | 480 ns pulse, and the next frame's first fetch may overlap it | T2 (memo) | Sound's frame-end event |
 | 4 | Does a mid-frame `top` write move the current boundary? | no — the boundary is `count == top`, evaluated continuously | T2 (memo) | Sound |
 | 5 | What is the refresh period and row order? | `derived` 7.8 µs for 512 rows in 4 ms; the row counter is a ten-tap gate chain on sheet 11 (1 024 states), so ten `MAL` lines now fit 512 rows; which tap goes to which pin is unread | T3 | SCU §11.1 |
-| 6 | Is the paddle a counting ADC, and what is its law? | counting, clocked from the same 500 kHz timebase; law unknown | unknown | Controllers |
+| 6 | Is the paddle a counting ADC, and what is its law? | counting, clocked from the 500 kHz timebase through sheet 31's divider; its only reset is `PADRST` (power-on), so the start is elsewhere — the register select or nothing | unknown | Controllers |
 | 7 | Are 313 lines × 512 clocks right, and where is the `DE` edge? | design has `HDE/LPHDE/VDE/HBLANK`, `SYNCSEL`, `MDE0/MDE1`; the reconstruction gives `ivsync_set` 508/510 | T3 | Video |
 | 8 | Does the CPU really get every second slot? | yes — `ADDRSELB` is a phase, and CPU-outranks-DMA only *inside* the external slot | T2 (design table) | SCU §3 |
 | 9 | Is `$FF8001` write-only, mirrored, or aliased? | the design carries separate read and write nets for these registers; Hatari models readback, and `$FF8000`/`$FF8002-0F` are harmless | T3 | SCU registers |
