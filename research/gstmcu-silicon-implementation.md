@@ -29,7 +29,7 @@ our model takes).*
 | What counts? | **Real counters, unlike the 68000.** Seven counting structures, each with its own clock net: the refresh row chain, the video address counter, the sound address counter, the DMA address counter, the paddle divider, and the pen's horizontal and vertical pair on sheet 33, read since this section was written. The chip has no datapath that can be made to count. | 3.4 |
 | Clocking? | One 8-phase timing generator, drawn as a **single macro cell (`TGEN`)** from `TIME0`–`TIME7`, fed by a 16 MHz clock divided to 8/4/2 MHz and 500 kHz on sheet 7. Every slot decision in the chip is a decode of those phases. | 3.3 |
 | How does the address mux arbitrate? | Ten 4:1 muxes (`MX41`), one per `MAD` line, with the designer's own decode table printed on the sheet: refresh → sound → video inside a slot, CPU → DMA outside it. | 3.6 |
-| What does the emulator still not know? | `LATCH`'s payload, the ring's wrap, and `BINT`'s purpose — everything else this study opened has been read, derived or answered from the board. §7 ranks them; §8 gives the tests that settle the rest. | 7, 8 |
+| What does the emulator still not know? | whether the `CAS`/`RAS` paths are combinational from their phases (which decides if a phase is 31.25 or 62.5 ns), and which cells `LATCH` clocks. Interlace, the test mode and `BINT` are closed by ruling: not modelled. | 5, 9 |
 
 `derived` The one-sentence machine: *a 16 MHz clock is divided into eight phases by a single macro cell; every 250 ns one phase picks an address from ten 4:1 muxes — video while the display window is open, sound DMA if a request is outstanding outside it, otherwise a RAS-only refresh — and the CPU or the DMA controller gets the other slot of the pair, while 68 flip-flops and ~90 latches hold the register state and no table of any kind is consulted.*
 
@@ -351,6 +351,8 @@ CAS0L = ~( TIME2 & LCYCSELB & ... )   (pad PM002, sheet 22)        [2]
 `documented` The row/column select is `ROWB`: a macro `LLR` latch whose clock term carries `TIME0B` (pads `PL039`/`PL036`, sheet 21), i.e. a register that flips once per DRAM cycle, not a combinational decode of the phase.[2]
 `documented` The write strobe is confined to the external half: `WE` is built from `TIME0B`, `ADDRSEL`, `CMPCYC`/`RAMCYCB` and the data-direction term `IRWB` (pads `PL014`/`PL012`, sheet 21), so the CPU's write window is bounded by phase 0 of the external slot at its start and by phase 1 at its end.[2]
 `documented` `LATCH` is not a phase decode at all: it is the output of an `LLR` latch clocked by `CLKB` (pads `P7046`–`P7049`, sheet 7), so it is a registered level one 8 MHz clock wide, and the chart draws exactly that.[2]
+`inferred` Its *payload* is now named by an outside analysis that fits every artefact here: this chip carries "a data latch for CPU reads, effectively converting the fast-page memory into something more like EDO RAM", and it "latches the write into the DRAM very early in the DRAM clock cycle" — a read/write data latch between the DRAM pins and the CPU bus, not an address latch.[13]
+`derived` That reading is what the artefacts require: `LATCH` coincides with each lane's own `CAS`/`DCYC`/`SLOAD` window (sheet 48), it cannot be the address latch for its own cycle (that would have to close before `RAS`), and the `TA` revision puts its driving pad on **sheet 6**, the data-bus interface.[2]
 
 `derived` A window as sheet 48 draws it, in the sheet's own `MHZ16` state numbers, read off the drawing by its owner. An independent measurement of the same sheet's vector geometry (transition x-positions located on the 16-state grid to ±0.5 %) agrees with every row below except `LATCH`, where a band one point too wide merged its two pulses into one — the reading here is the owner's, and it is the one to trust.
 
@@ -370,9 +372,9 @@ CAS0L = ~( TIME2 & LCYCSELB & ... )   (pad PM002, sheet 22)        [2]
 `derived` Three facts follow from that one line of the chart, and each of them was an assumption before: `CAS` is asserted in **every** cycle but the refresh one — the refresh cycle is the only CAS-less access, which is the memo's "RAS only" drawn rather than argued; `DCYC` and `SLOAD` are *additional* strobes belonging to the video and sound lanes, they do not replace `CAS`; and the internal slot alternates with an external partner cycle for cycle, with video, sound and refresh taking it in turn — the owner equation of `design/system-control-unit.md` §4, drawn out.
 `derived` The equations said as much before the chart did: `CAS0L` has no `ADDRSEL` term in it (§5.1), which is exactly why it appears in every lane, while `DCYC` and `SLOAD` each carry `ADDRSELB` and so cannot appear in the external half.
 
-`derived` The two artefacts settle the phases' *spacing* between them, and the answer is not the one the reconstruction assumes: the chart puts `CAS` two steps after `RAS`, and the netlist names them `TIME2` and `TIME0`, so a step is half a 16 MHz clock — **31.25 ns** — and the eight `TIME` levels rise one such step apart, each staying high for a whole slot.
-`derived` The reconstruction reads the ring as eight one-hot 62.5 ns phases instead, which would put `CAS` 125 ns behind `RAS` — twice the spacing the designer drew and twice the DRAM's own `tRCD` budget. The drawing and the netlist agree against the model, so the model's phase width is a synthesis convenience and the study takes the drawings.
-`unknown` What no artefact settles is whether the ring is 16 steps (two per phase, repeating twice a slot) or 8 levels read as a window; a scope on `RAS0` against `CLK4` would close it, but nothing in this section's arithmetic depends on the answer.
+`derived` The chart and the netlist together fix the phases' *spacing* at half a 16 MHz clock — **31.25 ns** — provided one premise holds, and the premise is where the doubt now sits rather than the arithmetic: the chart puts `CAS` two `MHZ16` labels after `RAS`, and the netlist names those two strobes `TIME2` and `TIME0`, so **one step = one phase = 31.25 ns**, the eight `TIME` levels rise one step apart, and each stays high for a whole slot.
+`unknown` The premise in full, so it can be attacked directly: **`CAS0L`'s path from `TIME2` must be combinational** — if any latch sits between the phase input and the `CAS` pin, `CAS` would fall a label later than the equation implies, the chart's two-label gap would then be consistent with 62.5 ns phases instead, and the reconstruction's reading would be right after all. The same question applies to `RAS0` from `TIME0`/`TIME0B`, though `RAS` is the one strobe whose position the DRAM cannot tolerate being late.
+`unknown` A second, smaller doubt: whether the ring is 16 steps (each phase one `MHZ16` label, repeating once per 500 ns window) or eight slot-wide levels whose apparent stagger is drawn for legibility. The chart's `TIME0` has a period of exactly one window and is high for half of it, which reads as the first; a scope on `RAS0` against `CLK4` settles both, and the study's arithmetic depends on neither as long as a step is 31.25 ns.
 
 `documented` And this is where the mux table of §3.6 is finally resolved: the printed order refresh → sound → video is a **decode**, not a priority, because the design derives the two request terms from one gate group — `REFB` is the output of a `NO2` whose inputs are the `ADDRSELB`-gated horizontal-window term and the sound-request term (`PK020`/`PK023`/`PK030`, sheet 20), and `SNDEN` is an `AA2` gated by the same `ADDRSELB` (`PK015`/`PK017`).[2]
 `derived` Two complementary terms cannot both be true, so the table's first two arms are mutually exclusive and the third is what remains: an internal slot is video's while the display window is open, sound's while a request is pending outside it, and a RAS-only refresh otherwise. Nothing in the hardware ranks them, exactly as `design/system-control-unit.md` §4 assumes.
@@ -508,8 +510,8 @@ CAS0L = ~( TIME2 & LCYCSELB & ... )   (pad PM002, sheet 22)        [2]
 
 `unknown` Two questions are left in this section, and the owner's readings plus the outside record closed the rest — `COL/ROW`'s polarity by where `RAS` falls, `DCYC`'s seam by the lane its pulse is drawn in, the sheet-49 lane order into §5.1, the refresh chain (§3.4), the paddle's capture (§5.6), `INTERLACE` (§5.6) and the test pin (§5.7).
 
-- **`LATCH`'s payload**: both netlist exports carry `LATCH` only as a pad output (`P7048` on the drawing revision, `P6020` on the `TA` one) and its consumers are outside their coverage, so what it clocks is still open — the chart's coincidence with each lane's own strobe is the only handle.
-- **The ring's step count** (§5.1): the spacing is settled at 31.25 ns by the drawings, but whether the ring runs 16 steps or repeats twice a slot needs a scope on `RAS0` against `CLK4`; nothing in this section's arithmetic depends on it.
+- **Which cells `LATCH` clocks** (§5.1): its payload is now `inferred` — the CPU-read data latch the outside analysis describes[13] — and both netlist exports stop short of its consumers, so the remaining step is naming the cells, not deciding what the signal is for.
+- **The `CAS` path's combinationality** (§5.1): the 31.25 ns step follows from `CAS` falling two labels after `RAS` while the netlist calls them `TIME2` and `TIME0`; a latch on that path would make the gap consistent with 62.5 ns phases instead, and that is the one premise left. A scope on `RAS0` against `CLK4` settles it in a minute.
 
 ---
 
@@ -564,7 +566,7 @@ Tiers per the handoff: T1 hardware-captured, T2 hardware-corrected, T3 emulator-
 | 7 | Are 313 lines × 512 clocks right, and where is the `DE` edge? | design has `HDE/LPHDE/VDE/HBLANK`, `SYNCSEL`, `MDE0/MDE1`; the reconstruction gives `ivsync_set` 508/510 | T3 | Video |
 | 8 | Does the CPU really get every second slot? | yes — `ADDRSELB` is a phase, and CPU-outranks-DMA only *inside* the external slot | T2 (design table) | SCU §3 |
 | 9 | Is `$FF8001` write-only, mirrored, or aliased? | the design carries separate read and write nets for these registers; Hatari models readback, and `$FF8000`/`$FF8002-0F` are harmless | T3 | SCU registers |
-| 10 | What is `BINT` for? | the blitter's interrupt brought into the GLUE; Info-Coach could not determine its role either and notes the MFP's configuration suggests it is still not taken into account — so `unknown`, and probably inert | unknown | Blitter study |
+| 10 | What is `BINT` for? | the blitter's interrupt brought into the GLUE; Info-Coach could not determine its role either and notes the MFP's configuration suggests it is still not taken into account | **not modelled** (ruling) | Blitter study |
 
 Two of these (2 and 10) are candidates for a labelled `unknown` in the model rather than a guessed rule; the handoff's stopping rule is explicit that an honest `unknown` plus the experiment beats a plausible constant.
 Question 6 has since been answered from the board rather than a sheet, and question 10 has the best negative evidence available: the pin is documented, its purpose is not, and two independent readers — Info-Coach and this study — failed to give it one.[6]
@@ -606,6 +608,17 @@ None of the six needs a die, and all six are cheaper than one decap attempt by o
   outside both netlist exports, and the ring's spacing is settled while its wrap is not.
 - **`BINT`'s function inside the GSTMCU**, and whether the C302183 variant's blitter logic reuses it — the one
   pin on this chip that two independent readings have both failed to explain[6].
+
+**Not modelled — owner's ruling, 2026-11-21.** Three of this study's questions are closed by decision rather
+than by evidence, and the decision is that our core does not implement them:
+
+- **Interlace.** `INTERLACE` is the genlock sync-parity output behind `$FF820A` bit 0; no ST or STE
+  interlaces[14]. Not modelled, and `design/video.md` says so.
+- **The test mode.** `TEST` is tied inactive on the 1040STE, so no program can reach the mode; what it does
+  is academic. Not modelled.
+- **`BINT`.** The blitter's interrupt into the GLUE, whose purpose neither Info-Coach nor this study could
+  determine and which the MFP's configuration suggests is inert[6]. Not modelled; the Blitter study inherits
+  the note rather than the question.
 - **Whether the sound FIFO is 4 words.** Nothing in the design archive states a depth; the figure we carry is
   `inferred` from Steem, and the reconstruction puts the word pipeline in the *Shifter*, not here — the two
   claims are about different sides of the same wire and both are currently unmeasured[2].

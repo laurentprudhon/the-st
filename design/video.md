@@ -259,3 +259,11 @@ mono), 284 counter anchors, ≤ 939 register writes in the worst raster demo.
    photograph of a real SC1224 with a calibration grid, or M1 against a screenshot, would prove the
    picture's fraction of the area. If it is wrong, only the mm-per-pixel rows of §5.1 move — the aspect
    of the *buffer* (1.35 : 1) does not.
+
+## Interlace — not modelled (ruling, 2026-11-21)
+
+The GSTMCU carries a real `INTERLACE` net, and it is not a display mode: `$FF820A` bit 0 selects internal or
+external (genlock) sync, and the net is the field-parity/strobe that path needs. No ST or STE interlaces —
+the machine cannot, which is why every emulator ignores the bit and why the reconstruction ties it off.
+`research/gstmcu-silicon-implementation.md` §5.6 has the evidence; this document records the consequence: our
+core does not model interlace, `$FF820A` bit 0 is stored and ignored, and no test depends on it.
