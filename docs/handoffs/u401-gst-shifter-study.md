@@ -78,6 +78,20 @@ schematic for structure, and only then read an emulator.
   with the two candidate answers and what each would mean, is worth more than any number of open-ended asks.
   The owner is the eye; the agent is the arithmetic and the netlist.
 * **Never let a vision model's geometry be evidence.** It reads text and levels well; it invents positions.
+* **A qualifier in a strobe's equation often explains a behaviour you had assumed was a special case.** The
+  refresh cycle is CAS-less because `VOS` gates `CAS` while `~REFB` gates `RAS` — one gate group, two
+  behaviours, no special case anywhere. Before writing "the hardware does X on refresh cycles", read the
+  strobe's other inputs.
+* **A transparent latch is not a resynchroniser.** Its edge *is* the decode's edge, delayed at most by one
+  open window. A one-step offset between a strobe and its decode is therefore the latch's gate, not a
+  phase width — reading it the other way put this study on the wrong foot for two sessions.
+* **Read the reconstruction as a transcription with comments.** Its author writes latches out longhand
+  (`clk ? d : hold`) with the sheet's pad number beside them (`// pl025`), which settled a cell's polarity
+  that no sheet in the archive showed. It is still `inferred`, but it is evidence of how a careful reader
+  read the same drawing, and it costs one grep.
+* **Test every timing reading against a second artefact.** The phase width was settled by `CAS`'s
+  combinational path meeting the chart's two-number gap; the latch polarity by the chart's two edges
+  meeting `CLK8`'s open half. One artefact can be misread; two that agree cannot both be.
 * **Keep sheet numbers out of citation syntax** (`LC[20]` reads as a citation and fails the verifier).
 
 ## 5. Arithmetic seeds to check, not to copy

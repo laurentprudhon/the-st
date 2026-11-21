@@ -31,7 +31,7 @@ our model takes).*
 | How does the address mux arbitrate? | Ten 4:1 muxes (`MX41`), one per `MAD` line, with the designer's own decode table printed on the sheet: refresh → sound → video inside a slot, CPU → DMA outside it. | 3.6 |
 | What does the emulator still not know? | which cells `LATCH` clocks — the last item that a sheet can still close. Everything else this study opened has been read, derived or answered from the board; interlace, the test mode and `BINT` are closed by ruling: not modelled. | 5, 9 |
 
-`derived` The one-sentence machine: *a 16 MHz clock is divided into eight phases by a single macro cell; every 250 ns one phase picks an address from ten 4:1 muxes — video while the display window is open, sound DMA if a request is outstanding outside it, otherwise a RAS-only refresh — and the CPU or the DMA controller gets the other slot of the pair, while 68 flip-flops and ~90 latches hold the register state and no table of any kind is consulted.*
+`derived` The one-sentence machine: *a 16 MHz clock is divided into eight phase outputs by a single macro cell; every 250 ns one phase picks an address from ten 4:1 muxes — video while the display window is open, sound DMA if a request is outstanding outside it, otherwise a RAS-only refresh — and the CPU or the DMA controller gets the other slot of the pair, while 68 flip-flops and ~90 latches hold the register state and no table of any kind is consulted.*
 
 `documented` And the finding that reframes the whole chip for us: **the sound channel was not an STE afterthought bolted onto a GLUE clone — it was specified into the base design in April 1988, in a memo that states its register semantics, its slot policy and its three new pins more precisely than any emulator does.** That memo (§4) is the most valuable single document in the archive, and it contradicts a habit our own design notes inherited from emulator source.
 
@@ -136,7 +136,7 @@ This is the sharpest structural difference from the reference case, and it is se
 
 `derived` The consequence for anyone hoping to emulate this chip from a "control word" is that there is nothing to dump: the chip's behaviour **is** its wiring, which is why the drawings and the netlist are the only route to it, and why every published model of it is somebody's reading of those drawings[2].
 
-### 3.3 Clocking: one macro cell, eight phases
+### 3.3 Clocking: one macro cell, eight phase outputs
 
 `documented` Sheet 7 is the clock sheet: `ITEST`, `M2CLOCK`, `K500CLK`, `KHZ500`, `ICLK8B`, and the pads that carry `CLK8`/`CLK4`/`CLK2`/`KHZ500` out to the board (our inventory has pins 3–6 for exactly those four)[2].
 The division 16 MHz → 8 → 4 → 2 MHz and 500 kHz is drawn there, and the netlist shows `MHZ16`, `MHZ8`, `MHZ4`, `MHZ2`, `K500CLK`, `KHZ500`, `C500`, `VERTCLK`, `REFCLK`, `VIDCLK`, `ICLK8`, `M2CLOCK` as real nets[2].
@@ -318,8 +318,8 @@ The RTL picks "clocked when the slot is granted"; the memo's `SLOADB` wording ("
 |---|---|---|
 | master step | 31.25 ns | half a 16 MHz clock; sheet 48's grid carries 16 of them per 500 ns window |
 | phase | 31.25 ns | one `MHZ16` number on sheet 48's scale, and the `TIME0`→`TIME2` spacing the netlist and the chart agree on; **16 phases per 500 ns window** |
-| slot | 250 ns = 4 phases = 2 CPU clocks | one DRAM access; sheet 48 draws two `RAS` assertions per window |
-| cycle | 500 ns = 2 slots = 8 phases = 4 CPU clocks | one 68000 bus cycle; sheet 48's whole width |
+| slot | 250 ns = 8 phases = 2 CPU clocks | one DRAM access; sheet 48 draws two `RAS` assertions per window |
+| cycle | 500 ns = 2 slots = 16 phases = 4 CPU clocks | one 68000 bus cycle; sheet 48's whole width |
 | line | 64 µs = 512 CPU clocks = 128 cycles = 128 internal + 128 external slots | the line arithmetic of `design/system-control-unit.md` §3 |
 | frame | 313 lines = 160,256 clocks = 20.03 ms ≈ 49.9 Hz | 313 × 64 µs; PAL's 50 Hz less the line the counter eats |
 
@@ -424,8 +424,7 @@ CAS1L = ~( TIME2 & LCYCSELB & RAM2A & VOS )    (same, with RAM2A)
 
 `documented` The two strobes that mark a word's arrival are both phase-1 latches of the *granted* slot, built identically: `DCYC` from `NA2(RESB, NA3(TIME1, ADDRSELB, VIDEN))` and `SLOAD` from `NA3(ADDRSELB, TIME1, SNDEN)`, each through a macro latch clocked by `CLK` (pads `PL030`/`PL025`/`PL029` and `PL032`/`PL031`/`PL035`, sheet 21).[2]
 `derived` So the word is on the bus for the whole slot and its strobe lands two `MHZ16` numbers after `RAS` falls, in the same window as `CAS` rather than before it — early enough for a DRAM access and late enough that the address has settled.
-`derived` That alignment is itself a test of the phase width, and a sharp one: `CAS` is combinational from `TIME2` and lands at number 2, while `DCYC`/`SLOAD` are built from `TIME1` and land at the *same* number. With 31.25 ns phases that is exactly right — `TIME1` fires one number after `RAS` and the `LHS` latch that follows it costs the second — whereas with 62.5 ns phases `TIME1` would already sit at number 2 and the latch would have to add nothing at all, which no latch does.
-`unknown` So the phase width now hangs on two cell-level facts rather than on interpretation: whether `CAS0L`'s path from `TIME2` is pure gates (sheet 22), and whether the `LHS` latch that produces `DCYC`/`SLOAD` is transparent (pad `PL025`, sheet 21) rather than edge-clocked. Transparent plus combinational `CAS` ⇒ 31.25 ns; anything else reopens it.
+`derived` That alignment is a second, independent confirmation of the phase width: `CAS` is combinational from `TIME2` and lands at number 2, while `DCYC`/`SLOAD` come from `TIME1` and land on the *same* number — which is what a decode at number 1 plus a latch whose open half begins at 2 gives, and what no 62.5 ns reading can produce.
 `documented` `DCYC`'s third input is `VIDEN` taken **directly** (pad `PL030`, sheet 21), while `SNDEN`'s chain takes the inverted form of the same net through an `I2` (pad `PK011`, sheet 20) — so `DCYC` is gated on the video enable and `SNDEN` on its absence, which is the blanking rule expressed in two gates.[2]
 `documented` Sheet 49 says the same thing in lane form: the `DCYC` pulse sits in the cycle labelled `video` and the `SLOAD` pulse in the cycle labelled `sound`.[2]
 `derived` That closes the seam this section first opened: `DCYC` **is** the video word-load strobe — the net the STE Shifter takes as `LOAD` — and the reconstruction's `viden = ~vidb` reading has `vidb`'s polarity inverted, which is a model bug and not a hardware fact.[9]
@@ -527,7 +526,7 @@ CAS1L = ~( TIME2 & LCYCSELB & RAM2A & VOS )    (same, with RAM2A)
 `unknown` One question is left in this section, and the owner's readings plus the outside record closed the rest — `COL/ROW`'s polarity by where `RAS` falls, `DCYC`'s seam by the lane its pulse is drawn in, the sheet-49 lane order into §5.1, the refresh chain (§3.4), the paddle's capture (§5.6), `INTERLACE` (§5.6) and the test pin (§5.7).
 
 - **Which cells `LATCH` clocks** (§5.1): its payload is `inferred` — the CPU-read data latch the outside analysis describes[13] — and both netlist exports stop short of its consumers, so the remaining step is naming the cells, not deciding what the signal is for.
-- **Nothing load-bearing is left.** The two remaining micro-facts — the gate polarity of the `DCYC`/`SLOAD` latch and `LATCH`'s fanout — are now `inferred`-plus-arithmetic and one sheet trace respectively, and neither moves a timing by more than a phase.
+- **Nothing load-bearing is left.** The `DCYC`/`SLOAD` latch's polarity is settled (transparent on `CLK8` high, §5.2), and the only item still open in the whole section is `LATCH`'s fanout, which no timing depends on.
 
 ---
 
