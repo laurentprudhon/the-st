@@ -908,9 +908,37 @@ public sealed partial class M68000
     /// <summary>
     /// MOVEM memory → registers (0x4C80 word, 0x4CC0 long; UM §4.6). Mask bit n is Dn for n in 0–7 and
     /// A(n−8) above that, and the transfer walks the mask upwards, so memory is read in that same order.
-    /// The width is 2 or 4 **bytes** for the address arithmetic; the shared effective-address helper wants
-    /// a size *index* (1 = word, 2 = long). Conflating the two moved every register by half its width,
-    /// which no flag or register comparison could see until the drift walked a stack into a return address.
+    /// (MAME's <c>step_movem</c>: `countr_zero(m_movemr)` each turn, `map_sp` resolving index 15 to the
+    /// *active* stack pointer.) The width is 2 or 4 **bytes** for the address arithmetic; the shared
+    /// effective-address helper wants a size *index* (1 = word, 2 = long). Conflating the two moved every
+    /// register by half its width, which no flag or register comparison could see until the drift walked
+    /// a stack into a return address.
+    /// <para>
+    /// <b>The loop, and why this family has no clock to charge.</b> MAME's class is
+    /// <c>movem_l_aips_list</c>, and its own footer reads “10 bus accesses, <b>0 idle states</b>”: every
+    /// state in it is a bus access at 4 clocks, so a MOVEM's whole timing is its reads and its
+    /// <c>length</c> is <c>4 × accesses</c>. Three pieces of machine state drive it — <c>m_movemr</c>
+    /// (the mask, drained one bit a turn; <c>m_t = !m_movemr</c> is the loop's exit test),
+    /// <c>m_movems</c> (this turn's register) and <c>m_at</c> (**the address of the access just
+    /// issued**) — beside <c>m_au</c>, the base's shadow: the real <c>An</c> is written once, at the end.
+    /// </para>
+    /// <para>
+    /// The long form takes two reads per register (<c>popm2</c> reads the high word at the base,
+    /// <c>popm3</c> sets it into the high half <em>and</em> reads the low word, <c>popm5</c> sets that
+    /// into the low half); the word form takes one (<c>popm2</c> then <c>popm4</c>, which sign-extends).
+    /// **Both read one word ahead**: the state that publishes a register also starts the read for the
+    /// next access — `m_aob = m_au; m_at = m_au;` before it knows whether the mask is exhausted — so a
+    /// clean transfer ends with one <em>discarded</em> word read past the list, and a faulting one issues
+    /// none. Add <c>popm1</c>'s prefetch and <c>popm6</c>'s closing fetch and a clean five-long record
+    /// is 13 accesses = 52 clocks, which is exactly the corpus's <c>length</c>.
+    /// </para>
+    /// <para>
+    /// **<c>m_at</c> is the whole of <c>An</c>.** <c>popm6</c> is `m_da[ry] = m_at` and it is reached
+    /// only when the mask is exhausted, so on success <c>An</c> lands one width past the last register
+    /// (because <c>m_at</c> is the read-ahead's address) and on <em>any</em> fault it lands nowhere —
+    /// the first access or the fifth, and a fault between a long register's two words too. That single
+    /// rule is the 249 records below, and it is why nothing here pre-commits a step.
+    /// </para>
     /// </summary>
     async ValueTask MovemToRegistersAsync(ushort op)
     {
@@ -953,11 +981,13 @@ public sealed partial class M68000
         {
             if ((mask & (1 << bit)) == 0) continue;
 
+            // one register a turn: `popm2` + `popm3` + `popm5` for a long (`set_16h` then `set_16l`,
+            // high word first), `popm2` + `popm4` for a word (`ext32`)
             uint value;
             if (programBus)
             {
                 ushort highWord = await ReadOperandProgramAsync(address);
-                if (_busFaulted) return;
+                if (_busFaulted) return;                     // popm6 never runs: An keeps its value
                 if (size == 2)
                 {
                     ushort lowWord = await ReadOperandProgramAsync(address + 2);
@@ -976,6 +1006,9 @@ public sealed partial class M68000
 
             if (_busFaulted) return;
 
+            // the register lands here, where the microcode's `set_16h`/`set_16l` (or `ext32`) put it —
+            // and the state that publishes it is also the one that starts the next read, which is why
+            // the last turn's read is the discarded one below
             uint loaded = size == 2 ? value : (uint)(short)(value & 0xFFFF);
             if (bit < 8) _d[bit] = loaded;
             else SetA(bit - 8, loaded);
@@ -1000,6 +1033,9 @@ public sealed partial class M68000
 
         if (_busFaulted) return;
 
+        // `popm6`: `m_da[ry] = m_at`, and `m_at` is the read-ahead's own address — one write, after the
+        // whole transfer, on success only. This is also what makes `MOVEM.l (A0)+,A0` behave: the loaded
+        // value is overwritten by the address, because popm6 runs after the loads.
         if (mode == 3) SetA(reg, address);
     }
 
@@ -1018,6 +1054,25 @@ public sealed partial class M68000
     /// EmuTOS's `_memmove` relies on it, and 528 of the corpus's clean predecrement tests pin it. Read
     /// straight, the save lands one register off and `_memmove` restores a clobbered A6 — which is
     /// exactly how this core's boot died inside `doprintf`.
+    /// <para>
+    /// <b>The loop is the mirror image of the load's, minus the read-ahead.</b> `movem_l_list_ais` is
+    /// `stmr1` (the mask out of the queue, no read of its own), `stmr2` (the instruction's prefetch,
+    /// which is the only program read before the loop), then per register `stmr4` (the **high** word at
+    /// the base) and `stmr6` (the low one) for a long, `stmr4` alone for a word — and `mmrw2`'s closing
+    /// fetch at the end. There is no speculative read, because a store has nothing to prefetch into:
+    /// <c>2n</c> writes and two reads for <c>n</c> longs (record `48D0 (A0)` with `n = 11` is 24
+    /// accesses = 96 clocks, and the corpus agrees). The predecrement class `movem_l_listp_pais` is the
+    /// same shape with `push4`/`push5` and a **reversed** register pick (`step_movem_predec`'s
+    /// `r ^ 0xf`), storing the low word first at the higher address and `m_at` trailing each write.
+    /// </para>
+    /// <para>
+    /// <b>This direction needed no corpus fix in row 78, and its `An` handling differs on purpose.</b>
+    /// `stmr4`/`push4` write their own `m_at`, and the store direction's `(An)+` branch keeps a
+    /// per-store step (a faulting store keeps the step) — but MAME's decode table has **no entry at all**
+    /// for `movem <list>,(An)+` (`0x48D8`) or for the load's `-(An)` form, so both are illegal on the
+    /// part and this branch is ungraded by either corpus. Do not "unify" it with the load's single
+    /// commit without deciding that first (see the handoff).
+    /// </para>
     /// </summary>
     async ValueTask MovemToMemoryAsync(ushort op)
     {
@@ -1039,14 +1094,18 @@ public sealed partial class M68000
         uint address = mode is 3 or 4 ? GetA(reg) : await EaAddressAsync(mode, reg, size);
         if (_busFaulted) return;
 
-        // the transfer's own prefetch, as in the other direction (#76)
+        // `stmr2`/`push2`'s prefetch: the one program read before the loop, and it comes before any
+        // write — a fault here means the transfer never started (and the base register never moved)
         await PrefetchAsync();
         if (_busFaulted) return;
 
         if (predecrement)
         {
-            // Bit upwards (the address travels downwards, so the first store is the highest address) and
-            // the register reversed: bit 0 is A7, bit 15 is D0.
+            // `push4` then `push5`, per register: bit upwards (the address travels downwards, so the
+            // first store is the highest address) and the register reversed — `step_movem_predec`'s
+            // `r ^ 0xf`, so bit 0 is A7 and bit 15 is D0. A long goes out **low word first, at the
+            // higher address** (`push4` at A − 2, `push5` at A − 4): memory still reads high-then-low,
+            // but the access order is inverted, which is why an odd base faults on the low word.
             for (int bit = 0; bit < 16; bit++)
             {
                 if ((mask & (1 << bit)) == 0) continue;
@@ -1067,10 +1126,14 @@ public sealed partial class M68000
                 if (_busFaulted) return;
             }
 
+            // `push3`: `m_da[ry] = m_at` — the lowest address written, and only if every store landed
             SetA(reg, address);
         }
         else
         {
+            // `stmr4` (high word) then `stmr6` (low word) per long register, `stmr4` alone for a word:
+            // 2n writes and two reads for n longs, and no read-ahead — which is why this direction's
+            // clock column was already right before row 78
             for (int bit = 0; bit < 16; bit++)
             {
                 if ((mask & (1 << bit)) == 0) continue;
@@ -1088,6 +1151,11 @@ public sealed partial class M68000
 
     }
 
+    /// <summary>
+    /// One register's store: `stmr4` + `stmr6` for a long (`WriteLongAsync` writes the **high** word
+    /// first, at the base, which is the pair's order), `stmr4` alone for a word. Called with the
+    /// address the store lands at — the caller has already applied any step.
+    /// </summary>
     async ValueTask StoreMovemAsync(uint address, int bit, int size)
     {
         uint value = bit < 8 ? _d[bit] : GetA(bit - 8);
