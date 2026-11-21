@@ -52,7 +52,14 @@ state of their own; their behaviour is absorbed by the chip on whose pins they s
 | U202 YM2149 | **Sound** (PSG) + **Controllers** (I/O ports A/B) | the PSG has its own 2 MHz clock; the ports are a keyboard/joystick scanner |
 
 `U300` (DMA controller) is **not** split: it is a bus master for disk DMA and the register slave for
-the FDC, and both serve the platter's timeline. `U400`'s memory half and `U401` (Shifter) are separate
+the FDC, and both serve the platter's timeline.
+
+> **Correction — 2026-11-21** (U300 study, `research/dma-controller-implementation.md` §3.1, §4.3). The split
+> ruling stands — one chip, one timeline, nothing to divide — but **"bus master" is the wrong word for it**. The
+> 40-pin symbol is complete and has no address output: U300 drives data and asserts `RDY`, and the GSTMCU
+> arbitrates *and performs* every word of the burst from its own counter. The Blitter is the machine's second
+> bus master; this chip is a client of the memory controller, and the distinction matters because a model that
+> gives Disk an address bus is modelling pins that do not exist. `U400`'s memory half and `U401` (Shifter) are separate
 chips: the counters that decide *when* a word is fetched are the System Control Unit's, the registers that turn it into
 pixels are Video's.
 

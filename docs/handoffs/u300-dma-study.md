@@ -1,5 +1,12 @@
 # Handoff — U300, the DMA controller (C398739-001)
 
+**STATUS — executed 2026-11-21.** `research/dma-controller-implementation.md` is written, `verify
+--min-coverage 0.30` is green (35 %), the six acceptance criteria below are met (§2 ticked), the per-chip index
+entry is **done**, and the corrections this session earned are dated in `design/disk-path.md` §3/§4,
+`design/crossings.md` §4/§5, `design/board-inventory.md` §3.6/§3.7 and in both neighbouring studies. The
+brief's own two wrong bullets are corrected in place below (`FDINT`/`HDINT` do not come from U300; `RDY` is a
+level per burst, not per sector).
+
 **Goal of the next session.** Write `research/dma-controller-implementation.md`: the STE's DMA controller
 studied to the standard the GSTMCU and Shifter studies reached — what it *is*, how it operates (one device
 byte, one memory word, one stolen bus cycle, one sector, one register write), what the record disputes, and
@@ -34,10 +41,16 @@ of any of these channels — and it is about the *other* chip), that study's §5
 * **The grant path is documented from U400's side** and is the cheapest lever: `RDY` (pin 38) reaches the
   GSTMCU, which relays `BR`; `BGACK` is a function of the address select, so a steal is cycle-granular; the
   DMA address counter on that side is 24 bits (`DMAH/DMAM/DMAL`, sheet 16) and the direction is `DMADIRB`.
+  *(Executed: confirmed, and sharpened — `RDY` is asserted **per sixteen-byte burst**, so a sector is 32
+  steals; the counter is 22 bits; and U300 has no address pins, so U400 performs every word of the burst.)*
 * **The STE fixed the ST's worst disk behaviour on this chip's output lines.** `*HDINT` and `*FDINT` leave
   U300 into the GSTMCU, which NORs them into `*DISKINT` on the MFP's I05 — the pin that was *not connected*
   on the STF, which is why ST software polls the DMA counter through a whole transfer. That is the study's
   one hardware-argued claim to verify from this end.
+  *(Executed — corrected: they do **not** leave U300, which has no interrupt pin at all. `FDINT` is the
+  WD1772's `INTRQ` (`U301.28`) and `HDINT` the ACSI header's `_IRQ` (`J301.10`), both inputs to the GSTMCU's
+  combiner; the NOR output `*DISKINT` leaves on `U400.17`. The claim itself survives — the STF's MMU never saw
+  the pair — but its source was this board's controllers, not this chip.)*
 * **Half the model is missing in public sources.** `research/gstmcu-reconstructions.md` §7 records that the
   MiSTer core's `rtl/dma.v` is an **ST-class** DMA with no `$FF890x` sound support, and that the
   DMA-controller ↔ MMU `RDY` timing is therefore only half modelled anywhere.
@@ -46,21 +59,21 @@ of any of these channels — and it is about the *other* chip), that study's §5
 
 A reader who has the study must be able to do these without opening another document:
 
-1. **Follow one device byte to one memory word**: `*FDRQ`/`*HDRQ` request → `*ACK` per byte on `CD0–CD7` →
+1. ✅ **Follow one device byte to one memory word**: `*FDRQ`/`*HDRQ` request → `*ACK` per byte on `CD0–CD7` →
    the two bytes packed into one 16-bit word on `D0–D15` → the `RDY` handshake that turns it into a stolen
    bus cycle, naming every pin and stating which side drives it.
-2. **Draw the bus steal**: `RDY` → the GLUE's `BR` relay → the 68000's `BG` → `BGACK`, what one cycle
+2. ✅ **Draw the bus steal**: `RDY` → the GLUE's `BR` relay → the 68000's `BG` → `BGACK`, what one cycle
    costs (`DTACK` on `ICLK8B`, whole 8 MHz edges, 250 ns granularity), and why this path differs from the
    Blitter's, which asks the CPU directly.
-3. **Follow the counter end to end**: a write to `$FF8609/0B/0D` → the 24-bit address on the machine bus
+3. ✅ **Follow the counter end to end**: a write to `$FF8609/0B/0D` → the 24-bit address on the machine bus
    during a granted slot → `DMADIRB`'s direction → and what happens at terminal count, with the readback
    behaviour stated.
-4. **Say where the end-of-transfer interrupt comes from**: `*HDINT`/`*FDINT` → `*DISKINT` → MFP I05, what a
+4. ✅ **Say where the end-of-transfer interrupt comes from**: `*HDINT`/`*FDINT` → `*DISKINT` → MFP I05, what a
    program sees, and what the STF did instead.
-5. **Say what of the sound channel is in this chip — nothing — and give the falsifier**: which two pins and
+5. ✅ **Say what of the sound channel is in this chip — nothing — and give the falsifier**: which two pins and
    which two documents would have to be wrong for the claim to fall, and the scope on them that would
    settle it.
-6. **Follow one register write**: `*FCS` with `A1` only (so four addresses, not eight), the byte lanes, what
+6. ✅ **Follow one register write**: `*FCS` with `A1` only (so four addresses, not eight), the byte lanes, what
    a read returns, and which of `$FF8604`/`$FF8606` is a command to the FDC and which is a mode to this chip.
 
 ## 3. Evidence, and what each layer can answer
@@ -85,6 +98,8 @@ then an emulator.
   pins, never its letters — the Shifter study's `SHR01` lesson one chip over.
 * **A handshake held for a whole sector is a level, not an edge.** `RDY` is asserted for milliseconds while
   the FDC dribbles bytes; model the duty, not an imagined per-byte pulse (the memo's `SINT` lesson).
+  *(Executed — half wrong: the handshake is **per byte** (240 ns answer, 250 ns wide) and the level is the
+  **bus request**, four microseconds per sixteen-byte burst. Both halves are needed.)*
 * **A byte counter and a word counter are not the same counter.** Two device bytes make one memory word; if
   the study finds one counter, say which side it counts and what the other side derives from.
 * **Ask where the mechanism lives before modelling it.** The sector's timing, the MFM encode and the
@@ -129,16 +144,16 @@ then an emulator.
 
 ## 7. Definition of done
 
-1. `research/dma-controller-implementation.md` in the study shape (§1 summary, §2 evidence, §3 the chip as the
+1. ✅ `research/dma-controller-implementation.md` in the study shape (§1 summary, §2 evidence, §3 the chip as the
    record shows it, §4 the chip in operation, §5 conflicts, §6 what the model needs, §7 tests, §8 what stays
    unknown, §9 licence), every acceptance criterion in §2 demonstrably met, `verify --min-coverage 0.30` green.
-2. `docs/handoffs/silicon-research-per-chip.md` §4's U300 entry updated to **done** with a one-line pointer,
+2. ✅ `docs/handoffs/silicon-research-per-chip.md` §4's U300 entry updated to **done** with a one-line pointer,
    its role cell corrected (**no sound DMA**, dated), and this file's items ticked.
-3. The two neighbouring studies' claims about this chip confirmed or corrected in place, with a date: the
+3. ✅ The two neighbouring studies' claims about this chip confirmed or corrected in place, with a date: the
    GSTMCU study's `RDY`/`BR` relay (§5.4) and its disk counter row (§3.4); the Shifter study's §5.7 finding
    that the sound path is a two-chip mechanism.
-4. Commits: one for the study, one for the index and the corrections; pushed to `origin main`.
-5. Anything that changes our model lands as a dated correction in `design/disk-path.md` or
+4. ✅ Commits: one for the study, one for the index and the corrections; pushed to `origin main`.
+5. ✅ Anything that changes our model lands as a dated correction in `design/disk-path.md` or
    `design/subsystems-spec.md`, or as a ticket — never as prose inside a ranking table.
 
 ---

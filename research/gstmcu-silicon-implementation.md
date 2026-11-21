@@ -167,7 +167,7 @@ The netlist supplies the clocks: `REFCLKB` clocks the refresh chain's ten stages
 | refresh row | ten stages on **sheet 11** carrying `REFCLKB`; that clock is a flop on **sheet 27** clocked by the 500 kHz timebase with `D = NAND(HCTR, LC)`, and `REFCLKB = NAND(SNDEN, REFCLK)` on sheet 20 | ten taps = 1 024 states against 512 rows per bank; **tap 1 is `RA9`**, tap 10 is `RA0` | `documented` (sheets 11 and 6 read; `RA9` read into the `MAD9` mux) |
 | video address | advances once per 500 ns cycle while the display window is open | 24 bits across `VIDBH/VIDBM/VIDBL` + `VCOUNT` | `documented` (sheets 4, 12, 15) |
 | sound address | `SNDCLK` = the granted slot | 21 bits (`SFTH/SFTM/SFTL`) | `documented` (sheet 17 + memo §4) |
-| disk DMA address | `DMADIR`/`RDY` handshake with U300 | 24 bits (`DMAH/DMAM/DMAL`) | `documented` (sheet 16) |
+| disk DMA address | `DMADIR`/`RDY` handshake with U300 | 24 bits (`DMAH/DMAM/DMAL`), **22 implemented** | `documented` (sheet 16; 22 bits and the write order from the U300 study, `research/dma-controller-implementation.md` §4.4, 2026-11-21) |
 | paddle | `PADC` — the 500 kHz timebase through sheet 31's own divider, whose reset `PADRST` is the chip's power-on reset | four registers (`PAD0X/PAD0Y/PAD1X/PAD1Y`), one byte each at `$FF9211/13/15/17` in the emulator map | `documented` structure and clock source, `inferred` width, `unknown` law (§7.6) |
 | pen position | horizontal from `M2CLOCK` through `PX033`/`PX031`/`PX032`, vertical from `IHSYNC`+`VDE` through `PX064`–`PX066`; cleared from `IHSYNC` and `IVSYNC` respectively | two `NCBMS`/`NLCB` chains (`PX021`–`PX026`, `PX052`–`PX059`) captured into `MF2` banks (`PX010`–`PX017`, `PX038`–`PX046`) | `documented` (sheet 33, read cell by cell) |
 
@@ -458,6 +458,13 @@ CAS1L = ~( TIME2 & LCYCSELB & RAM2A & VOS )    (same, with RAM2A)
 `documented` The grant relay is the classic 68000 set and it is all on the bus-interface sheets: `BR` (request in), `BGI`/`BGO` (grant in and out, for a second master), `BGACK` (acknowledge, sheet 9), `RDY`/`READY` (the DMA controller's handshake, sheet 8) and `DMADIRB` (direction, sheet 3).[2]
 `inferred` The reconstruction makes the acknowledge a function of the address select — `BGACK = ixdmab` — so a granted master only sees acknowledge when the current cycle has finished, and a steal is cycle-granular by construction rather than by courtesy.[9]
 `derived` If that holds, no DMA or blitter access can split a 4-clock 68000 cycle, which is the property every emulator's blitter timing assumes without proof.
+`documented` **Confirmed from the other end, 2026-11-21** (`research/dma-controller-implementation.md` §4.3). The
+relay is now read from U300's side and it is stronger than "a relay": the DMA controller has **no address pins
+at all** (40 pins, all named: data, `A1`, `FCS`, `R/W`, `CLK`, the device port, `FDRQ`/`HDRQ`/`ACK` and `RDY`),
+so it cannot drive a memory cycle. It asserts `RDY` for one sixteen-byte block, this chip answers with `BR` →
+the CPU's `BG` → `BGACK`, and then this chip performs the eight word cycles from **its own** `DMAH/DMAM/DMAL`
+counter while U300 drives the data. A steal is cycle-granular for a structural reason rather than a polite
+one: there is only one master of the memory interface, and it is this chip.[2][23]
 
 `documented` `VMA`/`VPA` are the 6800-peripheral pair, and the design carries a separate `VPAEN` and `PVPAEN` alongside `IACK`, `IIACK`, `FC0–FC2` and the `FFFXXX` decode — the interrupt-acknowledge cycle is decoded on-chip rather than left to the peripherals.[2]
 `unknown` Nothing in the archive times the `VMA`/`VPA` cycle against the slot grid; the drawing shows the decode, not the sequence.

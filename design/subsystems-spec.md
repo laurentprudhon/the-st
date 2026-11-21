@@ -109,6 +109,13 @@ Disk DMA is the opposite case: the DMA controller cannot ask the CPU itself — 
 GSTMCU, which relays `*BR`. That relay is why disk DMA is a *memory-subsystem-mediated* burst while the
 Blitter's is a direct one, and it is the only asymmetry between the two bus masters.
 
+> **Correction — 2026-11-21** (U300 study, `research/dma-controller-implementation.md` §3.1, §4.3). The
+> asymmetry is deeper than a relay: **U300 cannot address memory at all** — its 40 pins carry no address
+> output, no `DTACK` and no `BERR`, so the GSTMCU performs the eight word cycles of each burst from its own
+> 24-bit counter (`DMAH/DMAM/DMAL`) while U300 drives the data. It is not a second bus master; it is a device
+> port with a FIFO that asks for the bus 32 times a sector. The Blitter, which does drive `A1–A23` and take
+> `BGACK` itself, is the board's only other master.
+
 ---
 
 ## 4. Corrections and open points

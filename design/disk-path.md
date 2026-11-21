@@ -68,6 +68,20 @@ Rejected, and why: byte-cadence-as-deadline would be **512 wakes per sector** (3
 currently measuring a 3.56 ms/frame ring; command-duration-as-deadline cannot interrupt a read mid-sector and
 invents DRQ timing; two deadlines give one device two sources of truth about which byte is in flight.
 
+> ### Correction — 2026-11-21 (U300 study, `research/dma-controller-implementation.md` §4.2, §4.3)
+>
+> **"One sector read is one ownership transfer" is wrong, and the six-wake figure with it.** The DMA controller
+> buffers **sixteen bytes** and asks the bus for one **burst** of eight words when a FIFO fills
+> (`$FF8609`'s counter answers, `RDY` to the GSTMCU's pin 135), so a 512-byte sector is **32 bursts**, not one
+> transfer: 6 records each is **192 records a sector**, and continuous streaming costs **39 bursts and 234
+> records a frame** (625 bytes ÷ 16 × 6) where `design/crossings.md` §5 carried "~60".
+>
+> The byte cadence below is unchanged and so is the ruling: the chip does wait on the FDC for the whole 16.4 ms,
+> and the sector period stays the only *resumable* deadline — the 32 bursts are a cadence inside it, computed
+> from the transfer position rather than scheduled. What changes is the **wake accounting**: the 270 wakes/s
+> above is a floor by a factor of 32 (≈ 8 640/s while streaming), and the FDC's 32 µs byte clock is what makes
+> the bursts cheap (4 µs of bus time each, §4.2's table).
+
 ## 4. The register file — Disk owns it, Sound is a client
 
 **Ruled** (owner: "*1*"): Disk owns `$FF8600`–`$FF860F`; Sound (#26) reads the counters through Disk's
@@ -83,6 +97,19 @@ and ownership reduces to "who owns the computation".
 | control, command, sector count, sector number, track, side, DMA address | **value logs** (append-only records of what the CPU wrote) |
 | `$FF8609` / `$FF860B` / `$FF860D` (address counters) | **arithmetic** (computed on read) |
 | status | **computed** from FDC state + transfer position — so the write-1-to-acknowledge quirks live in the status *read path*, not in a stored flag |
+
+> ### Correction — 2026-11-21 (U300 study, `research/dma-controller-implementation.md` §3.5, §4.4)
+>
+> **"The file lives where the silicon is" needs a second home, because the silicon has two.** `$FF8604` (the
+> device window or the sector count) and `$FF8606` (mode on a write, status on a read) are **U300's** — the chip
+> decodes `A1` and `R/W` and nothing else, which is why it can distinguish exactly two registers. The three
+> address bytes are **not**: the 24-bit counter is the GSTMCU's (`DMAH/DMAM/DMAL`, sheet 16; only 22 bits
+> implemented), decoded by U400 and never seen by U300, which has no address pins and cannot drive a memory
+> cycle at all.
+>
+> The ruling above stands at the *virtual chip* level — both halves are inside Disk's address space and Disk
+> owns the computation — but a model that keeps the pointer inside the DMA controller is modelling a pin that
+> does not exist, and the SCU has to be told the address and the direction for every burst it performs.
 
 ## 5. The drives — literal pins
 

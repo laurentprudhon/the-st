@@ -453,6 +453,13 @@ break one of those runs, so the ranges are recorded as ranges rather than as 39 
 Still unresolved on this symbol: the `MAL0–MAL9` refresh-counter pins, `CLK` in, the internal-only
 `RAM`/`DEV`/`DMA` nets, and the ground pins (drawn but not individually numbered at this scale).
 
+*Correction — 2026-11-21 (U300 study, `research/dma-controller-implementation.md` §4.5).* Rows 15 and 16 are
+the wrong way round: `HDINT` and `FDINT` are **inputs** to this chip's interrupt combiner, driven by the ACSI
+header's `_IRQ` (`J301.10`) and by the WD1772's `INTRQ` (`U301.28`) — Info-Coach describes them as "the
+\*HDINT and FDINT interrupt signal **inputs** that takes the signals coming respectively from the hard disk
+controller (HD) and from the floppy disk controller (FD)". Pin 17 `DINT` is the output that leaves the chip:
+`*DISKINT`, the NOR of the two, into the MFP's `I05` (GPIP bit 5).
+
 *Note, 2026-11-21 (memory population, now sourced): a stock 1040STE has no motherboard DRAM — four 30-pin
 SIMM sockets (`U600`–`U603`) hold 4 × 256 KB, each SIMM being eight 256K×1 devices of the 41256 family
 (`HYB41256-12`, `M5M4256P`, `TMS4256`, `HM50256`), 9 address bits split 9/9, so **512 rows per bank** and
@@ -558,6 +565,22 @@ Sheet 3 (printed p61). Complete.
 | 38 | RDY | out | L | V |
 | 39 | CLK | in | ↑ | V |
 | 40 | VCC | pwr | — | V (pin number inferred from the package's power pin; not on the extracted rows) |
+
+> **Correction — 2026-11-21** (U300 study, `research/dma-controller-implementation.md` §3.1, §5.1). Three
+> direction cells above are the *peripheral's* eye view, and the nets say the opposite:
+>
+> * **`FDRQ` (21) and `HDRQ` (23) are inputs.** `FDRQ` is wired to the WD1772's `DRQ` (`U301.27`), which the
+>   datasheet calls "this active high **output**", and the ACSI `_DRQ` "is driven by the peripheral with an open
+>   collector output". Two chips cannot both drive a net.
+> * **`ACK` (37) is an output**, the host's acknowledge of a byte: Atari's own guide says the handshake happens
+>   "with the host asserted _ACK signal and the peripheral controller asserted _DRQ signal".
+>
+> The rest of the column stands (`FDCS`, `HDCS`, `CR/W`, `CA1`, `CA2` and `RDY` are outputs).
+>
+> Two consequences for the rows that are *not* in this table: the three address bytes are **not in this
+> package** — `$FF8609/0B/0D` are the GSTMCU's 24-bit DMA counter (its sheet 16, `DMAH/DMAM/DMAL`), decoded by
+> `U400`, while `U300` sees only `A1` and drives no address line at all — and `U301.28` is named by the WD1772
+> datasheet as **`INTRQ`**, the command-complete output that resets on a status read, not "a supply/test pin".
 
 ### 3.7 U301 — WD1772 FDC, 28-pin DIP (C026028-002)
 

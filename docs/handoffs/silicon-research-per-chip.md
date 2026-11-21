@@ -32,7 +32,7 @@ CA400329-101). Designators are the board's; do not invent new ones.
 | U100 | C398061-001, **68000** @ 8 MHz | 68-pin PLCC | CPU | **done** — reference case |
 | U400 | C300589-001, **GSTMCU** | 144-pin PGA/PLCC | glue + MMU + DMA arbitration + video timing + DRAM control + pad/pen ADC + blitter control | **highest** — everything the STE does that an ST cannot |
 | U401 | C300588-001, **GST Shifter** | 84-pin PLCC | bitplane shift, palette, DE/BLANK, hardware scrolling, Microwire | **highest** — video is where the STE differs most |
-| U300 | C398739-001, **DMA controller** | 40-pin DIP | disk DMA and ACSI, plus the bus arbitration the GSTMCU relays; **no sound DMA** — corrected 2026-11-21 from the Shifter study (§5.7), it is a two-chip mechanism between U401 and U400 | high — the sound question is closed from both ends; the disk/ACSI path is unread |
+| U300 | C398739-001, **DMA controller** | 40-pin DIP | disk DMA and ACSI: a device port with a FIFO and a request line — **no address pins, no interrupt, no reset, and no sound DMA** (corrected 2026-11-21; the sound path is a two-chip mechanism between U401 and U400) | **done** — `research/dma-controller-implementation.md` |
 | U101 | C101643, **Blitter** | 68-pin PLCC | blitter (discrete on this board; merged into GSTMCU later) | high — masks/skew/line mode are fiddly |
 | U203 | C025984, **68901 MFP** | 48-pin DIP | timers, USART, interrupt controller, GPIO | medium — datasheet-rich, but timer quirks matter |
 | U301 | C026028-002, **WD1772** | 28-pin DIP | floppy controller | medium — command/step timing |
@@ -178,7 +178,33 @@ What the session established:
   ladder (manual pin list → ijor's schematic → Hatari), the six acceptance criteria, the arithmetic seeds
   (80 words a line, 20 groups, 16-word palette), and the method rules this week's GSTMCU work earned.
 
-### U300 DMA controller (C398739-001) — **next**, brief: [`u300-dma-study.md`](u300-dma-study.md)
+### U300 DMA controller (C398739-001) — **done, 2026-11-21**, `research/dma-controller-implementation.md`
+
+What the session established, and what later parts can reuse:
+
+* **The chip is a port with a FIFO, not a bus master.** The 40-pin symbol is complete and decides the
+  architecture by counting: 37 signals in four ports (CPU, device, request, memory), three power pins, and no
+  address output, no `DTACK`/`BERR`, no interrupt pin and **no reset pin**. It drives data and asks on `RDY`;
+  the GSTMCU addresses, times and performs every memory cycle.
+* **The register file is split across two packages.** `$FF8604` (device window / sector count) and `$FF8606`
+  (mode / status) are U300's — it decodes `A1` and `R/W` only, so it can see exactly two registers — while
+  `$FF8609/0B/0D` are the GSTMCU's 24-bit counter (22 bits implemented), written low→high and read high→low.
+* **The steal is per sixteen bytes.** `RDY` is a level for one eight-word burst (32 clocks, 4 µs), 32 times a
+  sector and ~39 a frame — which corrects `design/disk-path.md` §3's "six wakes a sector" to 192 and
+  `design/crossings.md` §5's `RDY` rate to 234 records a frame. 0.78 % of the CPU, not "under 1 %" by luck.
+* **The interrupt is not this chip's.** `FDINT` (`U400.16`) ← WD1772 `INTRQ` (`U301.28`, the inventory's
+  illegible pin 28) and `HDINT` (`U400.15`) ← ACSI `_IRQ` (`J301.10`), NORed into `*DISKINT` (`U400.17`) for
+  the MFP's `I05` — which is what the STE's GSTMCU consumes to stop its own counter, and what the STF lacked.
+* **Directions corrected in `board-inventory` §3.6** (`FDRQ`/`HDRQ` in, `ACK` out — the symbol was drawn from
+  the peripheral's side), and the sound finding closed from the third end by a pin census.
+* **Four behaviours Atari documents and no emulator models**: the double strobe, the status read that can
+  disrupt a transfer, the write-only sector count, and the 32-byte prefill on the sector-count write.
+
+* **Questions the study leaves open** (each with a scope test in its §7): the shipped revision
+  (`C025913-38` vs `C398739-001A`), the power-on state of a chip with no reset, the width of `FCS`, how the
+  direction bit reaches U400, and the priority between `FDRQ` and `HDRQ`.
+
+### U300 — original question set (kept for reference)
 * **Questions:** the arbitration request/grant protocol with the GSTMCU; disk sector DMA (ACSI) address
   and counter registers; **STE sound DMA** — buffer addressing, the loop/reload behaviour, sample-rate
   dividers, and the exact moment the FIFO refills; what happens on a mid-transfer mode change.
@@ -245,9 +271,13 @@ nomenclature section (only if the part has internal names worth fixing), drawing
 1. **GSTMCU** — two sessions. It gates video, DMA, blitter and memory mapping.
 2. **GST Shifter** — **done, 2026-11-21**; one session for the study and one for the five sheets
    (`research/gstshifter-silicon/schematics/`).
-3. **DMA** — **next**; one session, and it starts from a closed question rather than an open one: the sound
-   path is not in this chip, so the session's work is the disk/ACSI path and the grant relay. Brief written.
-4. **Blitter** — one session.
+3. **DMA** — **done, 2026-11-21**; one session, and it started from a closed question rather than an open
+   one: the sound path is not in this chip, so the work was the disk/ACSI path and the grant relay. It found
+   that the chip is a port with a FIFO — no address pins, no interrupt, no reset — and that the counter and
+   every memory cycle belong to the GSTMCU.
+4. **Blitter** — **next**; one session. The two questions this campaign hands it: whether its `BR`/`BG`/`BGACK`
+   are truly direct (the DMA's are not), and the 63-or-64 bus cycle non-HOG window the U400 study filed
+   (§6.6).
 5. **MFP / WD1772 / ACIA / PSG** — one combined session.
 6. **IKBD** — half a session, behavioural only.
 

@@ -289,6 +289,9 @@ The U400 study's §6.7 stands unchanged, and the reconstruction's shared decode 
 
 **7. The sound-DMA split — confirmed.** `documented` Counters in the GSTMCU, requester and FIFO and byte split here.[6] The U400 study's §9 note that the word pipeline may live in the Shifter is right, and the two halves are not two claims about one register: they are the two ends of `SREQ`/`\*SLOAD`.
 `derived` Nothing about the sound path is in U300 (the DMA controller) on this board: it is a two-chip mechanism, and the DMA controller's own model stays out of it.
+`documented` **Confirmed from the third end, 2026-11-21** (`research/dma-controller-implementation.md` §4.7): U300's
+40-pin symbol is complete and carries no `SREQ`, no load strobe and no clock but the 8 MHz one it shares with
+the FDC, so the finding is now closed by a pin census as well as by the counter side and by the requester.
 
 **8. Five pins still unnamed.** `unknown` Pins 35, 52, 55, 72 and 76 are drawn on the symbol but not legible in the transcription. One of them is almost certainly the internal reset condition's second input (§5.9), since the chip has **no reset pin** at all — the symbol lists none.
 

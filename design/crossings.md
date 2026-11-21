@@ -132,8 +132,15 @@ resumes).
 | `IPL0–IPL2` (33/34/35) | System Control Unit | CPU | single-driver, 3 lanes | 1 | the **resolved level changes** | 1 + 313 + one per MFP assertion | System Control Unit arbitrates VBL 4, HBL 2 and the MFP's request 6 and drives the winner. HBL is raised on **all 313 lines**, vertical blanking included — see the correction below |
 | `IACK` (83) | CPU | Timers and events | single-driver | 2 | the CPU acknowledges | one per acknowledge | part of the cycle `IPL` opened |
 | `D0–D7` vector | Timers and events | CPU | tristate bus | data | — | one per acknowledge | the MFP supplies its vector; autovector levels need no data |
+
 | `FDINT` 16, `DINT` 17, `BINT` 60, `SINT` 105 | System Control Unit | Timers and events | single-driver, active low | 1 | floppy command done, disk DMA done, blit done, sound frame end | per completion | each sets an MFP pending bit; that is the whole behaviour |
 | `KHZ500` (6), `CLK8/4/2` (3/4/5), `SCLK`, `FCLK`, `CLK` | System Control Unit / Video | — | **class 3** | — | never | — | phase only; no records, no subscriptions |
+
+**Correction — 2026-11-21** (U300 study, `research/dma-controller-implementation.md` §4.5). The `FDINT`/`DINT` row of the table above does not describe a hop from the System Control Unit to Timers and events: `FDINT` (`U400.16`) and `HDINT`
+(`U400.15`) are **inputs** to the GSTMCU's combiner, driven by the WD1772's `INTRQ` (`U301.28`) and by the ACSI
+header's `_IRQ` (`J301.10`), and the GSTMCU NORs them into `DINT` — `*DISKINT` — which is the single disk line
+the MFP sees, on `I05` (GPIP bit 5), the pin Atari's guide names. Neither signal comes from the DMA controller,
+which has no interrupt pin at all. `BINT` and `SINT` are unaffected: each still reaches its own GPIP source.
 
 **Correction — 2026-11-11** (ticket #28). The `IPL0–IPL2` row and §11 point 4 assumed HBL is suppressed
 during the VSYNC pulse, giving ~309 lines. **It is not suppressed.** The horizontal machine runs on all
@@ -159,11 +166,18 @@ takes the CPU to the spurious vector 24. `IRQ`'s row is unchanged: Timers and ev
 | `BR` (29 in, `BGO` 27 out) | Disk DMA, relayed by the System Control Unit; Blitter directly (`U101.13`) | CPU | **wired-OR (open collector)** | 1 | a burst wants the bus | 1 per transfer | two possible drivers — #23 must confirm the resolver |
 | `BG` (28 in / `BGI`) | CPU | the requesting burst owner | wired-OR | 1 | the CPU has finished its cycle | 1 per transfer | the CPU stops driving; a real state change |
 | `BGACK` (26) | the burst owner | CPU | wired-OR | 1 | the device has taken / released the bus | 2 per transfer (assert + release) | the release is a crossing: the CPU resumes |
-| `RDY` (38 → 135) | Disk | System Control Unit | single-driver, active low | 1 | the DMA controller wants the bus | ~60 while streaming | the System Control Unit's part is a relay into `BR`; the relay adds no wake |
+| `RDY` (38 → 135) | Disk | System Control Unit | single-driver, active low | 1 | **one sixteen-byte FIFO has filled** — a burst, not a transfer | ~39 bursts a frame = 234 records (2026-11-21) | the System Control Unit's part is a relay into `BR`; the relay adds no wake |
 
 Six wakes per ownership transfer: three to acquire (`BR`, `BG`, `BGACK`), three on release. The 4-cycle
 acquire and release latencies are computed, not scheduled. This is what makes the Blitter's cooperative
 mode (a release between words) expressible as a second transfer.
+
+**Correction — 2026-11-21** (U300 study, `research/dma-controller-implementation.md` §4.2). The `RDY` row's
+rate and its wake condition were both wrong by a factor of 32. The DMA controller asks for the bus **once per
+sixteen-byte FIFO fill**, not once per transfer: `RDY` is asserted for one burst (eight word cycles, 32 CPU
+clocks = 4 µs) and released, 32 times a sector and **~39 times a frame** while the floppy streams continuously
+(625 bytes ÷ 16) — so the row's "~60" is the burst count and the class-1 records are **234 a frame**, six per
+burst. `design/disk-path.md` §3 carries the same correction.
 
 ## 6. Register accesses and selects
 
