@@ -132,3 +132,23 @@ schematic for structure, and only then read an emulator.
 5. Commits: one for the study, one for the sheets, one for the index and the corrections; pushed to `origin main`.
 6. Anything that changes our model lands as a dated correction in `design/video.md` or as a ticket — never as
    prose inside a ranking table.
+
+---
+
+## Ticked — executed 2026-11-21
+
+| brief item | where it is met |
+|---|---|
+| §2.1 a sixteen-pixel group, the modes, the group's origin, a non-multiple-of-16 offset | study §3.3–§3.4 (array and reload control), §4.1 (the 2 µs grid, 16/32/64 px, the offset) |
+| §2.2 one line as a timetable | study §4.2 (320/640/640 against 512 clocks, `DE` 56→376 colour and 4→164 mono, 80 words in 128 windows, the 48 blanking windows) |
+| §2.3 colour end to end, 0321 vs 0123 | study §3.6 and §4.3 (weights 1-8-4-2, the twelve pins, the ladder, the `$0777` consequence) |
+| §2.4 one palette write, `$FF8260`'s duplication | study §4.4 (transparent latch, readback, byte duplication) and §5.6 |
+| §2.5 one DMA-sound word | study §4.5 (rising edge of `\*SLOAD`, FIFO, byte split), memo side referenced not re-derived |
+| §2.6 the fine-scroll boundary | study §4.7 (register table: base/linewidth/counter in U400, `$FF8264/65` here) |
+| §7.1 the study, shape, verifier green | `research/gst-shifter-implementation.md`, nine sections, `verify --min-coverage 0.30` green at 34 % |
+| §7.2 the index row and this file | `silicon-research-per-chip.md` §4's U401 entry marked done; this table |
+| §7.3 the U400 study's Shifter-facing claims | §3.4 (sound-data split) and §6.7 (`$FF8260`) confirmed in place, dated |
+| §7.4 commits | `b3ae665` (the study) and `84e1415` (index + corrections), pushed to `origin main` |
+| §7.5 model changes | `design/video.md`'s dated corrections section; `design/board-inventory.md` §3.5's dated note |
+| §3 deliverable worth having: a video-path sheet | **still owed** — no die geometry exists, but a block/flow sheet is drawable from study §3–§4 |
+| §6 still unknown | five items listed in study §8, none load-bearing for the video path |
