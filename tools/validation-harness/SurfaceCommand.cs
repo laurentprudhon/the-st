@@ -225,7 +225,7 @@ internal static class SurfaceCommand
         // a nested type is a place, reached through an accessor: `Emulator` for Instruments (§6; C#
         // forbids a member and a nested type sharing a name), `Pins` for the pads
         allowed.Add("Emulator");
-        allowed.Add("Pins");
+        allowed.Add("Pads");
         var extras = new List<string>();
         foreach (MemberInfo member in cpu.GetMembers(Declared).OrderBy(member => member.Name, StringComparer.Ordinal))
         {

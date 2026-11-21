@@ -138,6 +138,7 @@ public sealed partial class M68000 : Chip
         : base(engine, id, "CPU")
     {
         Emulator = new Instruments(this);
+        Pads = new Pins(this);
     }
 
     // ---- registers -----------------------------------------------------------------------
