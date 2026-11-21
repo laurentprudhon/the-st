@@ -71,6 +71,20 @@ public sealed partial class M68000
     }
 
     // ---- effective addressing -------------------------------------------------------------
+    /// <summary>
+    /// The second half of the indexed EA block, for the two families that charge nothing of their
+    /// own: MAME's <c>leax0</c> and <c>peax0</c> spend 2 clocks before the index word is examined and
+    /// <c>leax4</c>/<c>peax4</c> 2 more after the address is built, while <see cref="EaAddressAsync"/>
+    /// charges only the first — so <c>LEA</c> (842 records) and <c>PEA</c> (783) were exactly 2 short
+    /// on every indexed shape. Both listings' footers say "idle states: 2".
+    /// </summary>
+    async ValueTask IndexedBlockIdleAsync(int mode, int reg)
+    {
+        if (mode == 6 || (mode == 7 && reg == 3))
+        {
+            await ClocksAsync(2);
+        }
+    }
 
     async ValueTask<uint> EaAddressAsync(int mode, int reg, int size)
     {
@@ -307,6 +321,28 @@ public sealed partial class M68000
             SetLogicFlags(value, size);
         }
 
+        // MAME's `move_bw` blocks charge the EA's own 2 clocks **per operand**: an indexed
+        // destination (`aixw1`) spends its 2 even when the source already spent one, while a
+        // predecrement is charged once per instruction (that is `_eaCharged`, and it is why
+        // `-(An),-(An)`-shaped records are right already). So the one case the shared charge gets
+        // wrong is an indexed destination behind a charged source: 2 clocks short on 65 + 67
+        // records of MOVE.b. The word and long forms are scripts and never take this path.
+        if (size == 0
+            && destinationMode == 6
+            && (sourceMode is 4 or 6 || (sourceMode == 7 && sourceReg == 3)))
+        {
+            _own += 2;
+        }
+
+        // …and the *destination* predecrement block is never charged on its own: `move_bw`'s
+        // `-(An)` destination reuses the address machinery's idle instead of spending a second one
+        // (`(A3)+, -(A4)` is 12 clocks: two reads and the source's block only). Suppressing it here
+        // is what `EaAddressAsync`'s charge block would otherwise add — 281 records, exactly 2 over
+        if (size == 0 && destinationMode == 4)
+        {
+            _eaCharged = true;
+        }
+
         await WriteEaAsync(destinationMode, destinationReg, size, value);
         if (_busFaulted) return;
 
@@ -448,15 +484,20 @@ public sealed partial class M68000
     {
         const ushort DefinedSr = 0xA71F;
 
-        uint immediate = await FetchAsync();
-        if (_busFaulted) return;
-
         bool toStatusRegister = ((op >> 6) & 0x1) != 0;
+
+        // the privilege check IS the script's first state — `andi_i16u_sr` branches to
+        // S_PRIVILEDGE before `o#w1`, so a user-mode record never reads the immediate word and
+        // pays no bus cycle for it (1 207 + 1 301 + 1 222 records were 4 clocks over until the
+        // fetch moved behind this test)
         if (toStatusRegister && !Supervisor)
         {
             await EnterExceptionAsync(8, 0);
             return;
         }
+
+        uint immediate = await FetchAsync();
+        if (_busFaulted) return;
 
         ushort mask = toStatusRegister ? DefinedSr : (ushort)0x00FF;
         ushort value = (ushort)(immediate & mask);
@@ -469,6 +510,21 @@ public sealed partial class M68000
         };
 
         _sr = (ushort)(_sr & DefinedSr);
+
+        if (!toStatusRegister)
+        {
+            return;                                        // to-CCR is the table's 12 and one fetch
+        }
+
+        // the to-SR script's tail is the status moves' own: four 2-clock states (`stiw1`…`stiw4`,
+        // the table's 8) and then **two** program reads at the instruction's own next word
+        // (`malw3` then the branch's `mmrw3`), because a write to SR can change which stack and
+        // bus the CPU runs on. `CloseInstructionAsync` would issue only the first of the two, so
+        // the tail is spent here and the refill marks the flow transferred — 1 199 + 1 293 + 1 278
+        // supervisor records were exactly 4 clocks short with a single trailing fetch.
+        await ClocksAsync(_own);
+        _own = 0;
+        await RefillAsync(_pc);
     }
 
     async ValueTask BitOperationAsync(ushort op, int size, int mode, int reg)
@@ -487,6 +543,13 @@ public sealed partial class M68000
             int bit = (int)(bitNumber & 31);
             uint value = _d[reg];
             bool set = ((value >> bit) & 1) != 0;
+
+            // the operation's own clocks: BTST 2, BCHG/BSET 2, BCLR 4, **plus 2 when the bit position
+            // is above 15** for the three that write back — CLK's `did_bit_op`
+            // (`dynamic_instruction_length_ = int(bit > 15)`) and `BCHG_BSET_Dn`'s
+            // `IdleBus(1 + dynamic_instruction_length_)` (BCLR: `2 + …`). BTST reads only and its
+            // state is `Perform_np_n`, which never spends the dynamic length: 1 212 records
+            _own = (operation == 2 ? 4 : 2) + (operation != 0 && bit > 15 ? 2 : 0);
 
             switch (operation)
             {
@@ -511,6 +574,8 @@ public sealed partial class M68000
             // 0–7 are reachable, whatever a matching word might hold
             bool immediateSet = (((immediate & 0xFF) >> (int)(bitNumber & 7)) & 1) != 0;
             _sr = (ushort)(immediateSet ? _sr & ~FlagZ : _sr | FlagZ);
+            // `btsr3`'s closing idle: this form is two reads and 2 clocks (10 total, 58 records)
+            _own = 2;
             return;
         }
 
@@ -660,6 +725,8 @@ public sealed partial class M68000
         if ((op & 0x01C0) == 0x01C0)
         {
             uint address = await EaAddressAsync(mode, reg, 2);
+            if (_busFaulted) return;
+            await IndexedBlockIdleAsync(mode, reg);
             SetA((op >> 9) & 0x7, address);
             return;
         }
@@ -817,6 +884,8 @@ public sealed partial class M68000
                 if ((op & 0xFFC0) == 0x4840)   // PEA <ea>
                 {
                     uint effective = await EaAddressAsync(mode, reg, 2);
+                    if (_busFaulted) return;
+                    await IndexedBlockIdleAsync(mode, reg);
                     uint stack = A7 - 4;
                     A7 = stack;
                     await WriteLongAsync(stack, effective);
@@ -837,6 +906,10 @@ public sealed partial class M68000
                     if (mode == 0)
                     {
                         _d[reg] = (_d[reg] & 0xFFFFFF00) | nbcdResult;
+                        // `nbcr3` ends on `set_8` and a 2-clock idle: the register form is 6 clocks
+                        // (one read and one idle), the memory forms have no such state and are exact
+                        // (403 records)
+                        _own = 2;
                     }
                     else
                     {
@@ -1377,10 +1450,26 @@ public sealed partial class M68000
                     if (counter != 0xFFFF)
                     {
                         await ClocksAsync(2);                       // a taken DBcc (M68000.Timing.cs)
-                        short displacement = (short)await FetchAsync();
+                        // the displacement is the queue's own word: a branch abandons the stream it
+                        // would refill, so the pop is free (`dbcc6`'s idle is the only charge and the
+                        // reads in the record are the target's pair — 611 records were 4 clocks long
+                        // while the pop was a bus read)
+                        short displacement = (short)await JumpWordAsync(0);
+                        if (_busFaulted) return;
+                        // `dbcc3` moves `m_pc` past the displacement before it reads the target, so a
+                        // fault there saves that word (`_fetchPointer - 2`): the pop consumes the word
+                        // without a read, and the counter moves with it — 632 faulting records measured it
+                        _fetchPointer = _pc + 2;
                         uint target = _pc - 2 + (uint)displacement;
                         await RefillAsync(target);
-                        if (_busFaulted) return;
+                        if (_busFaulted)
+                        {
+                            // the refill's first read is the branch's own (`dbcc3`), so an odd target
+                            // pays the aborting state's 4 — `Cycle` charges only the abandoned cycle's
+                            // (632 records)
+                            await ChargeAbortedReadAsync();
+                            return;
+                        }
                         _d[reg] = (_d[reg] & 0xFFFF0000) | counter;
                         return;
                     }
@@ -1399,13 +1488,27 @@ public sealed partial class M68000
             }
 
             bool set = Condition(condition);
-            if (set && mode == 0)
+            if (mode == 0)
             {
-                _own = 2;                                // Scc Dn: 4 false, 6 true (M68000.Timing.cs)
+                _d[reg] = (_d[reg] & 0xFFFF_FF00u) | (set ? 0xFFu : 0x00u);
+                if (set) _own = 2;                       // Scc Dn: 4 false, 6 true (M68000.Timing.cs)
+                return;
             }
 
-            await WriteEaAsync(mode, reg, 0, set ? 0xFFu : 0x00u);
+            // a memory Scc READS the byte it writes (`adrw2` is the operand's read, `sccb2`/`sccb3`
+            // the program read that follows it, `morw2` the store — three accesses, no idle), which
+            // is the whole of the file's clock column: 2 096 memory records were exactly 4 short
+            // while only storing. The value written does not depend on what came back.
+            uint? sccAddress = await ReadSmallEaAsync(mode, reg, 0);
+            if (sccAddress is null)
+            {
+                return;
+            }
+
+            await TrailingFetchAsync();
             if (_busFaulted) return;
+
+            await WriteByteAsync(sccAddress.Value, set ? (byte)0xFF : (byte)0x00);
             return;
         }
 
@@ -1488,10 +1591,15 @@ public sealed partial class M68000
 
         int displacement = op & 0xFF;
         long opcodeAddress = _pc - 2;
+        bool wordForm = displacement == 0;
 
-        if (displacement == 0)
+        if (wordForm)
         {
-            displacement = (short)await FetchAsync();
+            // the word form's displacement is the queue's own word (`bbcw1` takes it out of
+            // `m_dbin`) — peeked here, consumed where the branch decides what to do with the
+            // stream: free when taken (`bbci3` and the target's pair are the only reads), a real
+            // fetch when falling through (`bbcw3` + `malw3` refill at `m_pc + 2`), 5 + 9 records
+            displacement = (short)_ir;
         }
         else if (displacement >= 0x80)
         {
@@ -1509,16 +1617,35 @@ public sealed partial class M68000
         {
             await ClocksAsync(2);                                   // taken: 10 clocks, 2 of them its own
 
+            if (wordForm)
+            {
+                await JumpWordAsync(0);                             // free: the stream is abandoned
+                if (_busFaulted) return;
+            }
+
             // an odd target's fault is `bbci3`'s read, and `m_pc` has not moved since the boundary:
             // it saves the extension word's own address (`opcode + 2`), not the word behind the queue
             // — the one measured record of the family (a rel16 branch to an odd address, saved
             // `00de2886` for an opcode at `00de2884`)
             FrameSavesOnFetch(_opcodeAddress + 2);
             await RefillAsync((uint)target);
+            if (_busFaulted)
+            {
+                // the refill's first read is the branch's own (`bbci3`), so an odd target pays the
+                // aborting state's 4 on top of the abandoned cycle's (669 records of the file)
+                await ChargeAbortedReadAsync();
+                return;
+            }
         }
         else
         {
             await ClocksAsync(4);                                   // not taken: 8 clocks, 4 of them its own
+
+            if (wordForm)
+            {
+                await FetchAsync();                                 // the fall-through's own read
+                if (_busFaulted) return;
+            }
         }
 
     }

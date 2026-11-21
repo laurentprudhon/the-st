@@ -87,16 +87,17 @@ public sealed partial class M68000
                     return 12;
                 }
 
-                // BTST/BCHG/BCLR/BSET with a data-register destination: BTST 2, BCHG/BSET 2, BCLR 4.
-                // The corpus splits BCHG/BSET/BCLR 6-or-8 on that shape with nothing in the record to
-                // separate the two (LENGTH.md §6); the majority is charged here.
-                if ((op & 0x0100) != 0 || (mode == 0))
+                // BTST/BCHG/BCLR/BSET with a data-register destination. The charge is the bit
+                // operation's own: BTST 2, BCHG/BSET 2, BCLR 4 — and **2 more when the bit position
+                // is above 15**, which is the 6-or-8 split LENGTH.md §6 could not settle from the
+                // records: CLK's `did_bit_op` sets `dynamic_instruction_length_ = int(bit > 15)` and
+                // `BCHG_BSET_Dn` spends `IdleBus(1 + dynamic_instruction_length_)` (`BCLR_Dn`:
+                // `2 + …`). Checked against every record of the three files: 410/410 BCHG, 413/413
+                // BCLR, 389/389 BSET. The handler charges it (the bit number is its own read: a
+                // register form's `Dn & 31`, a static form's extension word), so the table adds nothing
+                if ((op & 0x0100) != 0 || (op & 0x0F00) == 0x0800)
                 {
-                    if (mode == 0)
-                    {
-                        int operation = (op >> 6) & 0x3;
-                        return operation == 2 ? 4 : 2;
-                    }
+                    return 0;
                 }
 
                 return 0;
@@ -200,6 +201,23 @@ public sealed partial class M68000
 
             case 0x6:
                 return 0;                                           // Bcc/BSR: leading, set by the family
+
+            case 0x7:
+                // MOVEQ: rlql1 and the one closing read, no idle at all (2 500 records). The line
+                // falls through to AluOwnClocks otherwise, where the plain two-operand long row
+                // claims it by accident — its "size" field is the MOVEQ value's top two bits and its
+                // "mode" field is part of the value, so 1 081 records read 2 clocks long and 123 4
+                return 0;
+
+            case 0x1:
+                // MOVE.b is the one MOVE size the port left on the table's side (IsScriptedMove is
+                // lines 2 and 3), and the table never measured it: its "size" field is 3 (MOVE's
+                // byte code), so the CMPA/ADDA row's `(op & 0x00C0) == 0x00C0` claims every one and
+                // charges 2 (1 259 records) — and 4 where the *source* field reads as mode ≤ 1 (124).
+                // MAME's move_bw blocks charge nothing of their own: the record's internal clocks are
+                // the EA's 2 and nothing else (`--clocks`: L − 4 × bus is 0 or the EA's 2 on all
+                // 2 500 records), so the byte form adds nothing here
+                return 0;
 
             case 0xE:
                 // shifts and rotates: 2 + 2 × count (4 + 2 × count for long); the memory forms charge

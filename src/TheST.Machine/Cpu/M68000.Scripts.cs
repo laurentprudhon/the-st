@@ -45,7 +45,7 @@ public sealed partial class M68000
 
         if (line is not (0x8 or 0x9 or 0xB or 0xC or 0xD)
             || (op & 0xF1F8) == 0xC188                          // EXG Dn,An
-            || (op & 0xF138) == 0xB108)                         // CMPM
+            || IsScriptedCmpm(op))                              // CMPM — *not* CMPA.l with a mode-1 source
         {
             return false;
         }
