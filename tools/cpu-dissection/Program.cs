@@ -104,8 +104,7 @@ internal static class Program
     readonly struct CpuCounters
     {
         readonly Chip _cpu;
-        readonly PropertyInfo? _instructions, _busCycles, _pc, _sr;
-        readonly MethodInfo? _peekD, _peekA;
+        readonly PropertyInfo? _instructions, _busCycles, _pc, _sr, _d0, _a7;
 
         CpuCounters(Chip cpu)
         {
@@ -115,8 +114,10 @@ internal static class Program
             _busCycles = type.GetProperty("BusCycles");
             _pc = type.GetProperty("PC");
             _sr = type.GetProperty("SR");
-            _peekD = type.GetMethod("PeekD");
-            _peekA = type.GetMethod("PeekA");
+            // the manual's own names since #85: D0 and A7 are views, and the probes that were
+            // PeekD/PeekA now read the programmer's model directly
+            _d0 = type.GetProperty("D0");
+            _a7 = type.GetProperty("A7");
         }
 
         public static CpuCounters Of(Chip cpu) => new(cpu);
@@ -125,8 +126,8 @@ internal static class Program
         public long BusCycles => (long)(_busCycles!.GetValue(_cpu) ?? 0L);
         public uint Pc => (uint)(_pc!.GetValue(_cpu) ?? 0u);
         public ushort Sr => (ushort)(_sr!.GetValue(_cpu) ?? (ushort)0);
-        public uint D0 => (uint)(_peekD!.Invoke(_cpu, [0]) ?? 0u);
-        public uint A7 => (uint)(_peekA!.Invoke(_cpu, [7]) ?? 0u);
+        public uint D0 => (uint)(_d0!.GetValue(_cpu) ?? 0u);
+        public uint A7 => (uint)(_a7!.GetValue(_cpu) ?? 0u);
     }
 
     // ---- check -----------------------------------------------------------------------------

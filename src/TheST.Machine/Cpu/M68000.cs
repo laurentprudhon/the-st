@@ -165,7 +165,6 @@ public sealed partial class M68000 : Chip
 
     // ---- registers -----------------------------------------------------------------------
 
-    public bool Supervisor => (_sr & 0x2000) != 0;
     public bool Halted
     {
         get
@@ -181,17 +180,31 @@ public sealed partial class M68000 : Chip
 
     public string? HaltReason { get; private set; }
 
-    /// <summary>A data register, for the harness's probes and the debug instruments.</summary>
-    public uint PeekD(int index) => _d[index];
+    // ---- the programmer's model (ADR 0015 §1) ---------------------------------------------
+    // Every member below is a *view* over the machine underneath and none owns a field of its own, so
+    // there is one copy of the state and these are the manual's names for its doors (tutorial §1.1–§1.3).
+    // A register is 32 bits (ADR 0015 §3): a word write leaves the high half standing, a byte write the
+    // rest of the low half.
 
-    /// <summary>An address register (A7 is whichever stack pointer is live), for the probes.</summary>
-    public uint PeekA(int index) => GetA(index);
+    public uint D0 { get => _d[0]; set => _d[0] = value; }
+    public uint D1 { get => _d[1]; set => _d[1] = value; }
+    public uint D2 { get => _d[2]; set => _d[2] = value; }
+    public uint D3 { get => _d[3]; set => _d[3] = value; }
+    public uint D4 { get => _d[4]; set => _d[4] = value; }
+    public uint D5 { get => _d[5]; set => _d[5] = value; }
+    public uint D6 { get => _d[6]; set => _d[6] = value; }
+    public uint D7 { get => _d[7]; set => _d[7] = value; }
 
-    public int InterruptMask => (_sr >> 8) & 0x7;
-    public uint PC => _pc;
-    public ushort SR => _sr;
+    public uint A0 { get => _a[0]; set => _a[0] = value; }
+    public uint A1 { get => _a[1]; set => _a[1] = value; }
+    public uint A2 { get => _a[2]; set => _a[2] = value; }
+    public uint A3 { get => _a[3]; set => _a[3] = value; }
+    public uint A4 { get => _a[4]; set => _a[4] = value; }
+    public uint A5 { get => _a[5]; set => _a[5] = value; }
+    public uint A6 { get => _a[6]; set => _a[6] = value; }
 
-    uint A7
+    /// <summary>A7 is the live stack pointer — <c>SSP</c> in supervisor mode, <c>USP</c> in user mode (§1.3).</summary>
+    public uint A7
     {
         get => Supervisor ? _ssp : _usp;
         set
@@ -206,6 +219,46 @@ public sealed partial class M68000 : Chip
             }
         }
     }
+
+    /// <summary>
+    /// PC is "the next instruction word to be fetched" (§1.4) — the address adder's value at a boundary.
+    /// It is written only at one: an instruction's own prefetches move the counter inside the core.
+    /// </summary>
+    public uint PC { get => _pc; set => _pc = value; }
+
+    /// <summary>SR, whole (§1.1); the bits the manual leaves undefined read back zero because nothing sets them.</summary>
+    public ushort SR { get => _sr; set => _sr = value; }
+
+    /// <summary>CCR — the low five bits of SR (§0.1, §1.2).</summary>
+    public byte CCR { get => (byte)(_sr & 0x1F); set => _sr = (ushort)((_sr & ~0x1F) | (value & 0x1F)); }
+
+    public uint USP { get => _usp; set => _usp = value; }
+    public uint SSP { get => _ssp; set => _ssp = value; }
+
+    bool Bit(int mask) => (_sr & mask) != 0;
+    void SetBit(int mask, bool value) => _sr = (ushort)(value ? _sr | mask : _sr & ~mask);
+
+    /// <summary>Trace (§1.2).</summary>
+    public bool T { get => Bit(0x8000); set => SetBit(0x8000, value); }
+
+    /// <summary>Supervisor (§1.2).</summary>
+    public bool S { get => Bit(0x2000); set => SetBit(0x2000, value); }
+
+    public bool I2 { get => Bit(0x0400); set => SetBit(0x0400, value); }
+    public bool I1 { get => Bit(0x0200); set => SetBit(0x0200, value); }
+    public bool I0 { get => Bit(0x0100); set => SetBit(0x0100, value); }
+
+    public bool X { get => Bit(0x0010); set => SetBit(0x0010, value); }
+    public bool N { get => Bit(0x0008); set => SetBit(0x0008, value); }
+    public bool Z { get => Bit(0x0004); set => SetBit(0x0004, value); }
+    public bool V { get => Bit(0x0002); set => SetBit(0x0002, value); }
+    public bool C { get => Bit(0x0001); set => SetBit(0x0001, value); }
+
+    /// <summary>The S bit as the core reads it everywhere (the manual's <c>S</c>, §1.2).</summary>
+    bool Supervisor => S;
+
+    /// <summary>The interrupt mask as a number — I2:I1:I0 (§1.2), for the level comparison only.</summary>
+    int InterruptMask => (I2 ? 4 : 0) | (I1 ? 2 : 0) | (I0 ? 1 : 0);
 
     uint GetA(int index) => index == 7 ? A7 : _a[index];
 

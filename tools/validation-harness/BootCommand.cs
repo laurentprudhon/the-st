@@ -135,7 +135,7 @@ internal static class BootCommand
         {
             if (traceWriter is not null)
             {
-                traceWriter.WriteLine($"{instant} {pc:x6} {opcode:x4} sr={machine.Cpu.SR:x4} d0={machine.Cpu.PeekD(0):x8} d1={machine.Cpu.PeekD(1):x8} a0={machine.Cpu.PeekA(0):x8} a1={machine.Cpu.PeekA(1):x8} a6={machine.Cpu.PeekA(6):x8} a7={machine.Cpu.PeekA(7):x8}");
+                traceWriter.WriteLine($"{instant} {pc:x6} {opcode:x4} sr={machine.Cpu.SR:x4} d0={machine.Cpu.D0:x8} d1={machine.Cpu.D1:x8} a0={machine.Cpu.A0:x8} a1={machine.Cpu.A1:x8} a6={machine.Cpu.A6:x8} a7={machine.Cpu.A7:x8}");
             }
 
             ring.Enqueue($"{instant} {pc:x6} {opcode:x4}");
@@ -287,7 +287,7 @@ internal static class BootCommand
                         $"mfpw {machine.Timers.RegisterWrites,5}  tc {machine.Timers.TimerCExpiries,5}  irq {machine.Timers.IrqAssertions,4}  " +
                         $"sr {machine.Cpu.SR:x4}  ipl {machine.SystemControlUnit.ResolvedLevelAt(machine.Engine.MachineTime)}  " +
                         $"inkernel={machine.Cpu.Instructions,10}  " +
-                        $"stack={string.Join(",", Enumerable.Range(0, 6).Select(k => machine.PeekLong(machine.Cpu.PeekA(7) + (uint)(k * 4)).ToString("x6")))}");
+                        $"stack={string.Join(",", Enumerable.Range(0, 6).Select(k => machine.PeekLong(machine.Cpu.A7 + (uint)(k * 4)).ToString("x6")))}");
                 }
 
                 if (machine.Cpu.Halted)

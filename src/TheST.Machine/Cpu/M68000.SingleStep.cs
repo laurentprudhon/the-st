@@ -122,11 +122,9 @@ public sealed partial class M68000
     public int LastFrameVector { get; private set; }
 #endif
 
-    /// <summary>The user stack pointer, whatever mode the core is in — the corpus keeps both.</summary>
-    public uint Usp => _usp;
-
-    /// <summary>The supervisor stack pointer, whatever mode the core is in.</summary>
-    public uint Ssp => _ssp;
+    // The corpus's two stack pointers are the chip's own USP / SSP now (ADR 0015 §1's retired list):
+    // the state the seam loads and captures is the programmer's model, and the chip's views are its
+    // doors.
 
     /// <summary>
     /// One instruction: the decode, the execute, and a fault taken as the exception it would be — no
