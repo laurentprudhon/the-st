@@ -453,6 +453,12 @@ break one of those runs, so the ranges are recorded as ranges rather than as 39 
 Still unresolved on this symbol: the `MAL0–MAL9` refresh-counter pins, `CLK` in, the internal-only
 `RAM`/`DEV`/`DMA` nets, and the ground pins (drawn but not individually numbered at this scale).
 
+*Note, 2026-11-21 (memory population, now sourced): a stock 1040STE has no motherboard DRAM — four 30-pin
+SIMM sockets (`U600`–`U603`) hold 4 × 256 KB, each SIMM being eight 256K×1 devices of the 41256 family
+(`HYB41256-12`, `M5M4256P`, `TMS4256`, `HM50256`), 9 address bits split 9/9, so **512 rows per bank** and
+32 devices in total. The 41256 refreshes on 256 cycles per 4 ms, which a single-row RAS-only walk of 512
+rows must complete inside 8 ms.*
+
 *Note, 2026-11-21: the recovered design (`research/gstmcu-silicon-implementation.md` §3.4, §3.6) has **no
 `MAL` net at all**. The chip symbol carries `MAD0`–`MAD9` — the multiplexed DRAM address — and the refresh
 counter reaches those ten lines as `RA0`–`RA9` through the ten `MX41` address muxes. So "`MAL0–MAL9`" here
