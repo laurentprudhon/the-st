@@ -89,6 +89,8 @@ Each is a session or two. The bullet list is the *question set*; the deliverable
 claims, not answers in a chat.
 
 ### U400 GSTMCU (C300589-001) — **done, 2026-11-21**, `research/gstmcu-silicon-implementation.md`
+*(operating section added the same day: §5 "The chip in operation" — one slot, one line, one frame, one bus
+cycle, one register write, read off sheets 48–49 and the netlist's strobe equations.)*
 
 What the session established, in the form later chips can reuse:
 
@@ -104,11 +106,13 @@ What the session established, in the form later chips can reuse:
   MFP or YM2149** — so U401 and U300 are emulator-and-hardware studies, and the Shifter's published
   schematics are ijor's, not the archive's.
 * No figure was drawn: the design gives no die geometry and a gate-count floorplan would be invented.
-* Six hardware tests, with pass criteria, are specified in §7 of the study; they settle the refresh/sound
+* Six hardware tests, with pass criteria, are specified in §8 of the study; they settle the refresh/sound
   ordering questions that no document can.
-* **Follow-up handoff: [`gstmcu-operating-description.md`](gstmcu-operating-description.md)** — the study
-  describes the chip and adjudicates the record but never walks it through a slot, a line or a frame; that is
-  the next session's job, with the acceptance criteria and the sheet map it needs.
+* **Operating description: done** ([`gstmcu-operating-description.md`](gstmcu-operating-description.md), the
+  follow-up handoff) — the study now walks the chip through a slot (`RAS` at `TIME0`, `CAS` at `TIME2`, `WE`
+  in the external half, `LATCH` one clock wide), a line (128 internal slots, 80 to video in low/mid res), a
+  frame (313 × 512 clocks = 20.03 ms), a bus cycle (`DTACK` clocked on `ICLK8B`) and a register write (decode
+  on sheet 3, separate read/write nets). Its four remaining `unknown`s are at the end of §5.
 
 ### U400 — original question set (kept for reference)
 * **What it is:** the STE's combined GLUE + MMU, plus DMA arbitration, video timing, DRAM control, the
