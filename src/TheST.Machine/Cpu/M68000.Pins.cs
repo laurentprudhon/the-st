@@ -7,6 +7,10 @@
 // already relies on — instead of reaching into the core's fields. The core's internal copies of the
 // same facts are latches of its own (`AOB`, `DBIN`, `DOB`, #86), and they are *below* this layer.
 //
+// The **levels** are the pad buffers (`AOB` for `A1–A23`, `DOB`/`DT` for `D0–D15`), which the bus cycle
+// is the only writer of; what this file still decodes is the *strobes and the control word*, which have
+// no latch of their own until the bus state machine's own register (#88).
+//
 // The bus is one wire carrying one cycle as a positional group (ADR 0004's "a bus is one masked wire",
 // used as an ordered tuple): at the assertion instant the chip writes
 //
@@ -71,14 +75,12 @@ public sealed partial class M68000
                 Faulted: (answer & 0x0002) != 0);
         }
 
-        bool AddressBit(int bit)
-        {
-            BusCycle cycle = Current();
-            uint address = ((uint)cycle.AddressHigh << 16) | cycle.AddressLow;
-            return ((address >> bit) & 1) != 0;
-        }
+        // A1–A23 and D0–D15 are the buffers, not the record: a pad is a level and the level survives
+        // the cycle that put it there (ADR 0015's AOB/DOB/DT).
 
-        bool DataBit(int bit) => ((Current().Data >> bit) & 1) != 0;
+        bool AddressBit(int bit) => ((_cpu._aob >> bit) & 1) != 0;
+
+        bool DataBit(int bit) => ((_cpu._dt >> bit) & 1) != 0;
 
         bool ControlBit(int mask) => (Current().Control & mask) != 0;
 

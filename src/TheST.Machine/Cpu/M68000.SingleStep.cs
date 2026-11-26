@@ -62,7 +62,7 @@ public sealed partial class M68000
         _ird = state.Prefetch0;
         _ir = state.Prefetch1;
         _ircValid = false;
-        _irAddress = state.Pc;
+        _at = state.Pc;
         _fetchPointer = state.Pc + 4;
         _fetchStateAddress = state.Pc + 2;
         _streamStart = _fetchPointer;

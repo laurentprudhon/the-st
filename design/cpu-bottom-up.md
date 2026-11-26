@@ -34,7 +34,7 @@ bash scripts/cpu-shape-check.sh 82b5580     # corpus (both columns), folds, G8, 
   the read latch (`DBIN`), each with its patent name and sheet; `Set16H`/`Set16L` as the 16-bit section
   accessors (tutorial §1.1's rule). `_pc` becomes `_au` — the hardware's program counter, with `PC` the
   manual's view of it.
-- [ ] **2. Buses and pads.** `_aob`, `_dob`, `_at`, `_dt` become latches written by the bus cycle; `Pins` reads
+- [x] **2. Buses and pads.** (`_irAddress`→`_at`; `AOB`/`DOB`/`DT` written by `Cycle`; `Pins` reads the buffers) `_aob`, `_dob`, `_at`, `_dt` become latches written by the bus cycle; `Pins` reads
   them instead of decoding the bus record group (the pins are the interface; the record group is how the
   interface is transported).
 - [ ] **3. Atoms.** `M68000.ControlStores.cs` with `NanoStore` — the elementary operations (transfers, the AU

@@ -31,7 +31,7 @@ public sealed partial class M68000 : Chip
     // ---- the prefetch queue's position (ADR 0009 §4) --------------------------------------
     // An instruction's extension words come out of the queue and what it fetches is its own word
     // count, so the queue's head trails the fetch pointer by a word. `_fetchPointer` is the address
-    // of the next read; `_irAddress` (Registers) is the address of the word in IR.
+    // of the next read; `_at` (Registers) is the address of the word in IR.
     uint _fetchPointer;
 
     /// <summary>
@@ -502,6 +502,11 @@ public sealed partial class M68000 : Chip
 
         long asserted = Clock;
 
+        // the pads' buffers: AOB is the level the address lines take, DOB what the part drives for a
+        // write (and nothing for a read, where the slave owns the lanes)
+        _aob = address;
+        _dob = isWrite ? writeData : (ushort)0;
+
         ushort control = (ushort)(
             (isWrite ? 0x0100 : 0) |
             ((size == 0 ? 0 : 1) << 4) |
@@ -528,6 +533,7 @@ public sealed partial class M68000 : Chip
         bool faulted = (answer & 0x0002) != 0;
         bool vector = (answer & 0x0004) != 0;
         ushort data = isWrite ? (ushort)0 : Engine.ValueAt(Wires.Md, answerInstant);
+        _dt = isWrite ? writeData : data;   // the last operand transferred, either direction
 
 #if DEBUG
         Emulator.CycleObserver?.Invoke(isWrite, isCpuSpace ? 7 : isProgram ? (Supervisor ? 6 : 2) : (Supervisor ? 5 : 1), address, isWrite ? writeData : data);
@@ -658,7 +664,7 @@ public sealed partial class M68000 : Chip
         // the queue trails the fetch pointer by one word, which is the whole of the frame's rule:
         // a group-0/2 frame saves the address of the word in IR, and it is set by the read, not by a
         // subtraction on the counter
-        _irAddress = address - 2;
+        _at = address - 2;
 
         BusResult result = await Cycle(address, 1, false, 0, isProgram: true);
         if (result.Faulted)
@@ -692,7 +698,7 @@ public sealed partial class M68000 : Chip
         if (!_ircValid)
         {
             uint address = _fetchPointer;
-            _irAddress = address - 2;
+            _at = address - 2;
 
             BusResult result = await Cycle(address, 1, false, 0, isProgram: true);
             if (result.Faulted)
@@ -822,7 +828,7 @@ public sealed partial class M68000 : Chip
         }
 
         uint address = _fetchPointer;
-        _irAddress = address - 2;
+        _at = address - 2;
         _fetchStateAddress = address;
 
         BusResult result = await Cycle(address, 1, false, 0, isProgram: true);
@@ -904,7 +910,7 @@ public sealed partial class M68000 : Chip
     async ValueTask<ushort> ReadQueueWordAsync()
     {
         uint address = _fetchPointer;
-        _irAddress = address - 2;
+        _at = address - 2;
 
         BusResult result = await Cycle(address, 1, false, 0, isProgram: true);
         if (result.Faulted)
@@ -1150,7 +1156,7 @@ public sealed partial class M68000 : Chip
         Emulator.LastFramePc = returnPc;
         Emulator.LastFrameFetchPointer = _fetchPointer;
         Emulator.LastFramePcCounter = _au;
-        Emulator.LastFrameIrAddress = _irAddress;
+        Emulator.LastFrameIrAddress = _at;
         Emulator.LastFrameRefetched = _fetchPointer != _streamStart;
         Emulator.LastFrameTrailing = _trailingFetched;
         Emulator.LastFrameVector = vector;

@@ -70,8 +70,11 @@ public sealed partial class M68000
     /// <summary>Whether `IRC` holds a real word (the pipeline is three deep only after a fetch).</summary>
     bool _ircValid;
 
-    /// <summary>The address of the word in `IR` — what a group-0/2 frame saves (`m_pc` at the pop).</summary>
-    uint _irAddress;
+    /// <summary>
+    /// `AT` — the address temporary: the address of the word in `IR` (what a group-0/2 frame saves) and,
+    /// at a jump, the target the stream is abandoning itself for.
+    /// </summary>
+    uint _at;
 
     // ---- the ALU's registers and latches ---------------------------------------------------
     // m_aluo / m_alub / m_alue / m_isr and the nanocode's `i=` width field. They are chip state and
@@ -95,6 +98,20 @@ public sealed partial class M68000
 
     /// <summary>`DBIN` — the word the last read put on the internal data bus (`m_dbin`).</summary>
     ushort _dbin;
+
+    // ---- the two pad buffers (sheet 00: `ADDRESS BUFFERS`, `DATA BUFFER`) -------------------
+    // The pads do not read the core: they read these two, and the bus cycle is the only writer. AOB
+    // holds what is on A1–A23 between cycles and DOB what the part drives on D0–D15 during a write;
+    // DT is the last operand the part actually transferred, read or written.
+
+    /// <summary>`AOB` — the address output buffer: the level on `A1–A23`, and a fault's address.</summary>
+    uint _aob;
+
+    /// <summary>`DOB` — the data output buffer: the word the part drives on `D0–D15` for a write.</summary>
+    ushort _dob;
+
+    /// <summary>`DT` — the data temporary: the last operand transferred, in either direction.</summary>
+    ushort _dt;
 
     // ---- the section accessors (ADR 0015 §3, tutorial §1.1) --------------------------------
     // A word write to a 32-bit register changes the low half and leaves the rest; the High section's
