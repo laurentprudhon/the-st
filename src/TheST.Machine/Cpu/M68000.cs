@@ -24,25 +24,14 @@ public sealed partial class M68000 : Chip
     // ---- clock ---------------------------------------------------------------------------
     /// <summary>One CPU clock is four ticks of the 32 MHz oscillator: the 8 MHz bus.</summary>
 
-    readonly uint[] _d = new uint[8];
-    readonly uint[] _a = new uint[8];        // A0–A6; A7 is the active stack pointer
-    uint _usp;
-    uint _ssp;
+    // The register file, the pipeline cells and the ALU's latches live in M68000.Registers.cs —
+    // storage and nothing else (ADR 0015 §4). What stays here is the prefetch queue's *bookkeeping*:
+    // the words are `IRC`/`IR`/`IRD`, and these are the positions the core keeps about them.
 
-    uint _pc;
-    ushort _sr;
-
-    // ---- the prefetch queue (ADR 0009 §4) ------------------------------------------------
-    // IRD is the word being executed, IR the head of the two-word queue and IRC the word behind it, so
-    // the instruction stream runs a word ahead of the decoder: an instruction's extension words come
-    // out of the queue, and what it fetches is its own word count. `_irAddress` is the address of the
-    // word in IR — what a group-0/2 frame saves — and it trails the fetch pointer by one word.
-    // `_fetchPointer` is the address of the next read, i.e. the hardware's program counter.
-    ushort _ird;
-    ushort _ir;
-    ushort _irc;
-    bool _ircValid;
-    uint _irAddress;
+    // ---- the prefetch queue's position (ADR 0009 §4) --------------------------------------
+    // An instruction's extension words come out of the queue and what it fetches is its own word
+    // count, so the queue's head trails the fetch pointer by a word. `_fetchPointer` is the address
+    // of the next read; `_irAddress` (Registers) is the address of the word in IR.
     uint _fetchPointer;
 
     /// <summary>
@@ -187,7 +176,7 @@ public sealed partial class M68000 : Chip
     /// PC is "the next instruction word to be fetched" (§1.4) — the address adder's value at a boundary.
     /// It is written only at one: an instruction's own prefetches move the counter inside the core.
     /// </summary>
-    public uint PC { get => _pc; set => _pc = value; }
+    public uint PC { get => _au; set => _au = value; }
 
     /// <summary>SR, whole (§1.1); the bits the manual leaves undefined read back zero because nothing sets them.</summary>
     public ushort SR { get => _sr; set => _sr = value; }
@@ -478,7 +467,7 @@ public sealed partial class M68000 : Chip
     /// clock there when it resumes it.
     /// <para>
     /// One bus cycle is also <em>one suspended frame</em> (#62): the fault bookkeeping and a fetch's
-    /// <c>_pc</c> advance live here, so the helpers below are forwarders and the frame a wrapper would
+    /// <c>_au</c> advance live here, so the helpers below are forwarders and the frame a wrapper would
     /// have boxed does not exist. Same records, same instants, same order.
     /// </para>
     /// </summary>
@@ -574,7 +563,7 @@ public sealed partial class M68000 : Chip
         }
         else if (pcAdvance != 0)
         {
-            _pc += (uint)pcAdvance;
+            _au += (uint)pcAdvance;
         }
 
         return result.Data;
@@ -722,7 +711,7 @@ public sealed partial class M68000 : Chip
         ushort word = _ir;
         _ir = _irc;
         _ircValid = false;
-        _pc += 2;
+        _au += 2;
         return word;
     }
 
@@ -870,9 +859,9 @@ public sealed partial class M68000 : Chip
         _fetchStateAddress = target + 2;
         _ircValid = false;
 
-        // the boundary convention: `_pc` is the address of the opcode the queue has fetched, and the
+        // the boundary convention: `_au` is the address of the opcode the queue has fetched, and the
         // loop's own decode step is what advances it past that word
-        _pc = target;
+        _au = target;
     }
 
     async ValueTask<uint> FetchLongAsync()
@@ -902,7 +891,7 @@ public sealed partial class M68000 : Chip
         if (_busFaulted) return 0;
 
         uint low = _ir;
-        _pc += 2;               // the low word is consumed here, not by a pop of its own
+        _au += 2;               // the low word is consumed here, not by a pop of its own
         _queueShort = true;
         return (high << 16) | low;
     }
@@ -940,7 +929,7 @@ public sealed partial class M68000 : Chip
 
         _busFaulted = false;
         _ssp = await ReadLongAsync(0x00000000);
-        _pc = await ReadLongAsync(0x00000004);
+        _au = await ReadLongAsync(0x00000004);
         if (_busFaulted)
         {
             _halted = true;
@@ -949,10 +938,10 @@ public sealed partial class M68000 : Chip
 
         // Cwik's prefetch initialisation: the first instruction's opcode and the word behind it, which
         // makes the reset sequence six bus cycles rather than the vector's four (ADR 0009 §5)
-        _ird = await ReadProgramAsync(_pc);
+        _ird = await ReadProgramAsync(_au);
         if (!_busFaulted)
         {
-            _ir = await ReadProgramAsync(_pc + 2);
+            _ir = await ReadProgramAsync(_au + 2);
         }
 
         if (_busFaulted)
@@ -962,8 +951,8 @@ public sealed partial class M68000 : Chip
         }
 
         _ircValid = false;
-        _fetchPointer = _pc + 4;
-        _fetchStateAddress = _pc + 2;
+        _fetchPointer = _au + 4;
+        _fetchStateAddress = _au + 2;
         _busFaulted = false;
     }
 
@@ -993,8 +982,8 @@ public sealed partial class M68000 : Chip
             // the opcode is in the decode register — the queue fetched it before the instruction
             // started, so decoding costs no bus cycle of its own
             ushort opcode = _ird;
-            _pc += 2;
-            _opcodeAddress = _pc - 2;
+            _au += 2;
+            _opcodeAddress = _au - 2;
             _streamStart = _fetchPointer;
             _flowTransferred = false;
             _trailingFetched = false;
@@ -1014,7 +1003,7 @@ public sealed partial class M68000 : Chip
 
             Emulator.Instructions++;
             _opcode = opcode;
-            Emulator.Observer?.Invoke(Clock, opcode, _pc - 2);
+            Emulator.Observer?.Invoke(Clock, opcode, _au - 2);
             await ExecuteAsync(opcode);
 
             // the closing steps: an instruction that fell through fetches its last word here. A
@@ -1035,10 +1024,10 @@ public sealed partial class M68000 : Chip
 
             // the prefetch's own address error: the word the queue fetched after the instruction
             // landed on an odd program counter (a branch or a jump to an odd address)
-            if ((_pc & 1) != 0)
+            if ((_au & 1) != 0)
             {
                 _faultIsFetch = true;
-                await TakeFaultAsync(_pc, true);
+                await TakeFaultAsync(_au, true);
                 continue;
             }
 
@@ -1153,14 +1142,14 @@ public sealed partial class M68000 : Chip
             ? _faultIsFetch
                 ? _frameFetchPcDeclared ? _frameFetchPc : _fetchPointer - 2
                 : _fetchStateAddress
-            : SavesInstructionAddress(vector) ? _opcodeAddress : _pc;
+            : SavesInstructionAddress(vector) ? _opcodeAddress : _au;
 
 #if DEBUG
         // the frame's program counter, measured rather than assumed (#76): the MAME corpus decides it,
         // and these three quantities are the candidates a session tests it against — see cpu-tests --clocks
         Emulator.LastFramePc = returnPc;
         Emulator.LastFrameFetchPointer = _fetchPointer;
-        Emulator.LastFramePcCounter = _pc;
+        Emulator.LastFramePcCounter = _au;
         Emulator.LastFrameIrAddress = _irAddress;
         Emulator.LastFrameRefetched = _fetchPointer != _streamStart;
         Emulator.LastFrameTrailing = _trailingFetched;

@@ -142,14 +142,14 @@ public sealed partial class M68000
                     case 2:
                     {
                         short displacement = (short)await FetchAsync();
-                        return _pc - 2 + (uint)displacement;
+                        return _au - 2 + (uint)displacement;
                     }
 
                     case 3:
                     {
                         ushort extension = await FetchAsync();
                         if (_busFaulted) return 0;
-                        return _pc - 2 + (uint)ExtensionDisplacement(extension) + IndexValue(extension);
+                        return _au - 2 + (uint)ExtensionDisplacement(extension) + IndexValue(extension);
                     }
                 }
 
@@ -524,7 +524,7 @@ public sealed partial class M68000
         // supervisor records were exactly 4 clocks short with a single trailing fetch.
         await ClocksAsync(_own);
         _own = 0;
-        await RefillAsync(_pc);
+        await RefillAsync(_au);
     }
 
     async ValueTask BitOperationAsync(ushort op, int size, int mode, int reg)
@@ -858,7 +858,7 @@ public sealed partial class M68000
 
                 if ((op & 0xFFF8) == 0x4880)   // EXT.W Dn
                 {
-                    _d[reg] = (_d[reg] & 0xFFFF0000) | (uint)(ushort)(short)(sbyte)(_d[reg] & 0xFF);
+                    _d[reg] = Set16L(_d[reg], (ushort)((uint)(ushort)(short)(sbyte)(_d[reg] & 0xFF)));
                     SetLogicFlags(_d[reg] & 0xFFFF, 1);
                     return;
                 }
@@ -1262,7 +1262,7 @@ public sealed partial class M68000
 
             case 0x4E75:   // RTS
             {
-                _pc = await ReadLongAsync(A7);
+                _au = await ReadLongAsync(A7);
                 if (_busFaulted)
                 {
                     await ChargeAbortedReadAsync();
@@ -1270,7 +1270,7 @@ public sealed partial class M68000
                 }
 
                 A7 += 4;
-                await RefillAsync(_pc);
+                await RefillAsync(_au);
 
                 // an odd return address aborts the refill's first read: the state's own 4 is the
                 // return's to charge (1 237 records of the file were exactly 4 short)
@@ -1293,7 +1293,7 @@ public sealed partial class M68000
 
                 A7 += 2;
                 _sr = (ushort)((_sr & 0xFF00) | (status & 0xFF));
-                _pc = await ReadLongAsync(A7);
+                _au = await ReadLongAsync(A7);
                 if (_busFaulted)
                 {
                     await ChargeAbortedReadAsync();
@@ -1301,7 +1301,7 @@ public sealed partial class M68000
                 }
 
                 A7 += 4;
-                await RefillAsync(_pc);
+                await RefillAsync(_au);
                 await ChargeAbortedReadAsync();
                 return;
             }
@@ -1433,8 +1433,8 @@ public sealed partial class M68000
             A7 = userStack;
         }
 
-        _pc = pc;
-        await RefillAsync(_pc);
+        _au = pc;
+        await RefillAsync(_au);
 
         // an odd target aborts the refill's first read, and the aborting state's own 4 is the return's
         await ChargeAbortedReadAsync();
@@ -1476,8 +1476,8 @@ public sealed partial class M68000
                         // `dbcc3` moves `m_pc` past the displacement before it reads the target, so a
                         // fault there saves that word (`_fetchPointer - 2`): the pop consumes the word
                         // without a read, and the counter moves with it — 632 faulting records measured it
-                        _fetchPointer = _pc + 2;
-                        uint target = _pc - 2 + (uint)displacement;
+                        _fetchPointer = _au + 2;
+                        uint target = _au - 2 + (uint)displacement;
                         await RefillAsync(target);
                         if (_busFaulted)
                         {
@@ -1487,14 +1487,14 @@ public sealed partial class M68000
                             await ChargeAbortedReadAsync();
                             return;
                         }
-                        _d[reg] = (_d[reg] & 0xFFFF0000) | counter;
+                        _d[reg] = Set16L(_d[reg], (ushort)(counter));
                         return;
                     }
 
                     await ClocksAsync(4);                           // a falling-through DBcc
                     await FetchAsync();   // the displacement is consumed either way
                     if (_busFaulted) return;
-                    _d[reg] = (_d[reg] & 0xFFFF0000) | counter;
+                    _d[reg] = Set16L(_d[reg], (ushort)(counter));
                     return;
                 }
 
@@ -1607,7 +1607,7 @@ public sealed partial class M68000
         }
 
         int displacement = op & 0xFF;
-        long opcodeAddress = _pc - 2;
+        long opcodeAddress = _au - 2;
         bool wordForm = displacement == 0;
 
         if (wordForm)

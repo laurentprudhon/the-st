@@ -39,21 +39,9 @@ namespace TheST.Machine.Cpu;
 /// </summary>
 public sealed partial class M68000
 {
-    // ---- the ALU's three registers ---------------------------------------------------------
-    // m_aluo / m_alub / and the nanocode's i=.l/.w/.b width field. They are chip state and survive
-    // across states, which is why they are fields and not locals: `morl2` reads what `morl1` left.
-
-    /// <summary>The ALU's output latch (<c>m_aluo</c>) — where <c>sr_nzvc</c> reads its flags.</summary>
-    uint _aluo;
-
-    /// <summary>The word the last read put on the internal bus (<c>m_dbin</c>).</summary>
-    ushort _dbin;
-
-    /// <summary>The word the long read left behind (<c>m_alub</c>): the high half of a long operand.</summary>
-    uint _alub;
-
-    /// <summary>The ALU's width, in the core's own size code (0 = byte, 1 = word, 2 = long).</summary>
-    int _aluWidth;
+    // The ALU's latches (ALUO, ALUB, ALUE, ISR, the width field) and the read latch DBIN are storage:
+    // they live in M68000.Registers.cs (ADR 0015 §4). Everything below is an *atom* — one nanoword's
+    // worth of datapath work — and goes through those latches.
 
     /// <summary>
     /// The ALU's operation select for the two-operand long families — MAME's <c>r=</c> field
@@ -158,7 +146,7 @@ public sealed partial class M68000
 
     /// <summary><c>set_16l</c> — the low word of a data register, the high one untouched.</summary>
     void Set16L(int dataRegister, uint value) =>
-        _d[dataRegister] = (_d[dataRegister] & 0xFFFF0000) | (value & 0xFFFF);
+        _d[dataRegister] = Set16L(_d[dataRegister], (ushort)((value & 0xFFFF)));
 
     /// <summary><c>set_16h</c> — the high word of a data register, the low one untouched.</summary>
     void Set16H(int dataRegister, uint value) =>
@@ -243,7 +231,7 @@ public sealed partial class M68000
         ushort word = _ir;
         _ir = _irc;
         _ircValid = false;
-        _pc += 2;
+        _au += 2;
         return word;
     }
 
@@ -323,12 +311,6 @@ public sealed partial class M68000
     // the masks are semantics rather than hygiene: `a << 17` on a sixteen-bit operand is how the
     // divide's pair shifts left, and a transcription that widened m_alue to thirty-two bits produced
     // garbage on every record.
-
-    /// <summary>The flags of the last operation (<c>m_isr</c>).</summary>
-    ushort _isr;
-
-    /// <summary>The ALU's second operand register (<c>m_alue</c>, sixteen bits).</summary>
-    uint _alue;
 
     /// <summary><c>alu_and</c> — a bitwise and; V and C fall to the state's flag update, not here.</summary>
     /// <remarks>

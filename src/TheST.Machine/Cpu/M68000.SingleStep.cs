@@ -55,7 +55,7 @@ public sealed partial class M68000
         _usp = state.Usp;
         _ssp = state.Ssp;
         _sr = state.Sr;
-        _pc = state.Pc;
+        _au = state.Pc;
 
         // the corpus hands over the two words the hardware has already fetched: IRD is the opcode and
         // IR the word behind it, so no read happens for either of them
@@ -94,7 +94,7 @@ public sealed partial class M68000
             a[index] = _a[index];
         }
 
-        return new SingleStepResult(d, a, _usp, _ssp, _sr, _pc);
+        return new SingleStepResult(d, a, _usp, _ssp, _sr, _au);
     }
 
 // The seven LastFrame* columns are the emulator's instruments now: they live in M68000.Emulator.cs
@@ -112,8 +112,8 @@ public sealed partial class M68000
     public async ValueTask StepAsync()
     {
         ushort opcode = _ird;
-        _pc += 2;
-        _opcodeAddress = _pc - 2;
+        _au += 2;
+        _opcodeAddress = _au - 2;
         _streamStart = _fetchPointer;
         _flowTransferred = false;
         _trailingFetched = false;
@@ -132,7 +132,7 @@ public sealed partial class M68000
 
         Emulator.Instructions++;
         _opcode = opcode;
-        Emulator.Observer?.Invoke(Clock, opcode, _pc - 2);
+        Emulator.Observer?.Invoke(Clock, opcode, _au - 2);
         await ExecuteAsync(opcode);
 
         if (!_flowTransferred)
@@ -152,14 +152,14 @@ public sealed partial class M68000
         // `RTE` has to resume
         if (_stopped)
         {
-            _pc = _opcodeAddress;
+            _au = _opcodeAddress;
         }
 
         // the prefetch's own address error, exactly as the machine's loop takes it
-        if ((_pc & 1) != 0)
+        if ((_au & 1) != 0)
         {
             _faultIsFetch = true;
-            await TakeFaultAsync(_pc, true);
+            await TakeFaultAsync(_au, true);
         }
     }
 }

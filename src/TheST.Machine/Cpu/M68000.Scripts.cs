@@ -382,7 +382,7 @@ public sealed partial class M68000
         {
             ushort displacement = await FetchAsync();
             if (_busFaulted) return false;
-            await ReadLongOperandFromStreamAsync(_pc - 2 + Ext32(displacement));
+            await ReadLongOperandFromStreamAsync(_au - 2 + Ext32(displacement));
             return !_busFaulted;
         }
 
@@ -391,7 +391,7 @@ public sealed partial class M68000
         ushort extension = await FetchAsync();
         if (_busFaulted) return false;
         await ReadLongOperandFromStreamAsync(
-            _pc - 2 + (uint)ExtensionDisplacement(extension) + IndexValue(extension));
+            _au - 2 + (uint)ExtensionDisplacement(extension) + IndexValue(extension));
         return !_busFaulted;
     }
 
@@ -744,7 +744,7 @@ public sealed partial class M68000
     /// ends <c>n 4</c> then two program reads at the next opcode and the word after it (a status write
     /// can change which stack and bus the CPU runs on, so MAME re-fetches the stream), which is why
     /// every supervisor record was exactly 8 short: 4 of idle and 4 of read. <see cref="RefillAsync"/>
-    /// is that pair, at <c>_pc</c> — the measured addresses are the instruction's own next word
+    /// is that pair, at <c>_au</c> — the measured addresses are the instruction's own next word
     /// (<c>5722028</c> for a <c>(d16,An)</c> shape, i.e. the extension word read again, then
     /// <c>+2</c>);</item>
     /// <item><b>its clock charge is nothing of its own</b>: the whole difference is that pair plus the
@@ -854,7 +854,7 @@ public sealed partial class M68000
     async ValueTask StatusWriteRefillAsync()
     {
         await ClocksAsync(4);                              // `mstw1`/`stiw*`: two idle states
-        await RefillAsync(_pc);
+        await RefillAsync(_au);
     }
 
     void WriteStatusRegister(bool toStatus, uint value)
@@ -2125,7 +2125,7 @@ public sealed partial class M68000
 
         await IdleAsync();                                 // bsrw1 — `alu r=0 c=1`, the transfer's own 2
 
-        uint returnAddress = _pc;                          // the latch: bsrw1's `m_at = m_au`
+        uint returnAddress = _au;                          // the latch: bsrw1's `m_at = m_au`
         uint stack = A7 - 4;
         A7 = stack;
 
@@ -2238,7 +2238,7 @@ public sealed partial class M68000
         _ir = await ReadProgramAsync(address + 2);
         if (_busFaulted) return;
         _ircValid = false;
-        _pc = address;
+        _au = address;
     }
 
     /// <summary>
@@ -2251,8 +2251,8 @@ public sealed partial class M68000
     /// past each extension word <em>as it is consumed</em> (`m_au = m_pc + 2; m_pc = m_au`), so the return
     /// address is the counter past the last one — `opcode + 2` for `(An)`, `+4` for one extension word,
     /// `+6` for `(xxx).l` — and an odd <em>target</em> faults on that read with the same counter saved
-    /// (`FrameSavesOnFetch(_pc)`), the stack untouched and nothing pushed (FINDINGS row 43). The pushes
-    /// are the stacked copy of that counter, so both are `_pc` at one instant.
+    /// (`FrameSavesOnFetch(_au)`), the stack untouched and nothing pushed (FINDINGS row 43). The pushes
+    /// are the stacked copy of that counter, so both are `_au` at one instant.
     /// </para>
     /// </summary>
     async ValueTask JumpSubroutineAsync(ushort op)
@@ -2296,7 +2296,7 @@ public sealed partial class M68000
                 // jsal2 also commits `m_pc = m_au`, and that read moved `m_au` by 2 — so this shape's
                 // counter is the only one that a queue read *does* advance (or the return address and
                 // the frame are both a word low: 90 records)
-                _pc += 2;
+                _au += 2;
                 target = (high << 16) | low;
                 break;
             }
@@ -2325,7 +2325,7 @@ public sealed partial class M68000
 
         // jsra1/jsrd3 — the target's read, before the push, and the state that advanced `m_pc` past the
         // last extension word is also the one an odd target's frame saves
-        FrameSavesOnFetch(_pc);
+        FrameSavesOnFetch(_au);
         ushort first = await ReadTargetAsync(address);
         if (_busFaulted)
         {
@@ -2335,7 +2335,7 @@ public sealed partial class M68000
 
         // jsaw2, jsaw3 — the return address's two words, high first, the stack pointer committed with
         // the first one (as `m_da[m_sp] = m_au` does)
-        uint returnAddress = _pc;
+        uint returnAddress = _au;
         uint stack = A7 - 4;
         A7 = stack;
         await WriteWordAsync(stack, (ushort)High16(returnAddress));
@@ -2350,7 +2350,7 @@ public sealed partial class M68000
         _ir = await ReadProgramAsync(address + 2);
         if (_busFaulted) return;
         _ircValid = false;
-        _pc = address;
+        _au = address;
     }
 
     /// <summary>
@@ -2644,7 +2644,7 @@ public sealed partial class M68000
                     {
                         ushort displacement = await FetchAsync();
                         if (_busFaulted) return null;
-                        value = await ReadOperandProgramAsync(_pc - 2 + Ext32(displacement));
+                        value = await ReadOperandProgramAsync(_au - 2 + Ext32(displacement));
                         break;
                     }
 
@@ -2654,7 +2654,7 @@ public sealed partial class M68000
                         ushort extension = await FetchAsync();
                         if (_busFaulted) return null;
                         value = await ReadOperandProgramAsync(
-                            _pc - 2 + (uint)ExtensionDisplacement(extension) + IndexValue(extension));
+                            _au - 2 + (uint)ExtensionDisplacement(extension) + IndexValue(extension));
                         break;
                     }
 
@@ -2908,7 +2908,7 @@ public sealed partial class M68000
         // register's low word (it is the loop's starting remainder), and load the counter with ftu + 1:
         // sixteen iterations, because sixteen quotient bits are what has to be produced.
         bool borrow = (_isr & FlagC) != 0;
-        at = (at & 0xFFFF0000) | High16(dividend);
+        at = Set16L(at, (ushort)(High16(dividend)));
         uint counter = 16;                                    // au = ftu + 1
         AluAnd16(High16(dividend), 0xFFFF);
         SrNzvc();
@@ -2944,7 +2944,7 @@ public sealed partial class M68000
             // the working register (the value the restore path will want). The counter's zero test is the
             // last bit's exit, taken after the subtract so the final quotient bit is decided.
             bool last = (counter & 0x3F) == 0;
-            at = (at & 0xFFFF0000) | _aluo;
+            at = Set16L(at, (ushort)(_aluo));
             AluSub16(_alub, _aluo);
             SrNzvc();
             await IdleAsync();
@@ -3006,7 +3006,7 @@ public sealed partial class M68000
         // dvum0 — the quotient into Dn's low word (the pair's low half after sixteen shifts *is* the
         // quotient), and the flags from a subtract of zero: so N and Z are the quotient's, V and C are
         // clear, and X survives. The closing read is the instruction's second bus cycle.
-        _d[rx] = (_d[rx] & 0xFFFF0000) | (_alue & 0xFFFF);
+        _d[rx] = Set16L(_d[rx], (ushort)((_alue & 0xFFFF)));
         AluSub16(_alub, _alue);
         SrNzvc();
         await TrailingFetchAsync();
@@ -3088,7 +3088,7 @@ public sealed partial class M68000
     dvs04:
         // dvs04 / dvs05 — the dividend's high word into the working register's low word (the loop's
         // starting remainder) and the sixteen-bit counter.
-        at = (at & 0xFFFF0000) | High16(dividend);
+        at = Set16L(at, (ushort)(High16(dividend)));
         counter = 16;
         AluAnd16(High16(dividend), 0xFFFF);
         SrNzvc();
@@ -3122,7 +3122,7 @@ public sealed partial class M68000
         await IdleAsync();
 
         // dvs11
-        at = (at & 0xFFFF0000) | _aluo;
+        at = Set16L(at, (ushort)(_aluo));
         AluSub16(_alub, _aluo);
         SrNzvc();
         await IdleAsync();
@@ -3150,7 +3150,7 @@ public sealed partial class M68000
         // dvs0c — the comparison: remainder's high half minus divisor, the pre-subtract remainder copied
         // into the working register, and the counter's zero test as the last bit's exit.
         flag = (counter & 0x3F) == 0;
-        at = (at & 0xFFFF0000) | _aluo;
+        at = Set16L(at, (ushort)(_aluo));
         AluSub16(_alub, _aluo);
         SrNzvc();
         await IdleAsync();
@@ -3202,7 +3202,7 @@ public sealed partial class M68000
 
     dvs13:
         // dvs13 — the last bit was a 1: the subtraction stands, and its quotient bit is shifted in.
-        at = (at & 0xFFFF0000) | _aluo;
+        at = Set16L(at, (ushort)(_aluo));
         AluSla(1);
         await IdleAsync();
         goto dvs14;
@@ -3270,7 +3270,7 @@ public sealed partial class M68000
         // dvs17 — positive quotient, positive dividend: no complement, the result is final. The `if` is
         // on the *remainder's* sign because a zero remainder or a zero quotient takes the other door.
         flag = (_isr & FlagN) != 0;
-        at = (at & 0xFFFF0000) | _aluo;
+        at = Set16L(at, (ushort)(_aluo));
         AluAnd16(_aluo, 0xFFFF);
         SrNzvc();
         if (flag)
@@ -3290,7 +3290,7 @@ public sealed partial class M68000
         // dvs1b
         flag = (_isr & (FlagZ | FlagN)) != 0;
         _alub = _aluo;
-        at = (at & 0xFFFF0000) | _aluo;
+        at = Set16L(at, (ushort)(_aluo));
         AluSub16(High16(at), 0);
         await IdleAsync();
         if (flag)
@@ -3309,7 +3309,7 @@ public sealed partial class M68000
 
         // dvs20
         flag = (_isr & (FlagZ | FlagN)) != 0;
-        at = (at & 0xFFFF0000) | _aluo;
+        at = Set16L(at, (ushort)(_aluo));
         AluAnd16(_aluo, 0xFFFF);
         SrNzvc();
         if (flag)
@@ -3324,7 +3324,7 @@ public sealed partial class M68000
         // magnitude and the remainder keeps the dividend's (negative) sign.
         flag = (_isr & FlagN) != 0;
         _alub = _aluo;
-        at = (at & 0xFFFF0000) | _aluo;
+        at = Set16L(at, (ushort)(_aluo));
         AluSub16(High16(at), 0);
         await IdleAsync();
         if (flag)

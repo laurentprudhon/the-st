@@ -68,7 +68,7 @@ public sealed partial class M68000
             {
                 if (_cpu._halted && HaltReason is null)
                 {
-                    HaltReason = $"halted at pc={_cpu._pc:x6} sp={_cpu._ssp:x8} t={_cpu.Clock}";
+                    HaltReason = $"halted at pc={_cpu._au:x6} sp={_cpu._ssp:x8} t={_cpu.Clock}";
                 }
 
                 return _cpu._halted;
