@@ -14,7 +14,7 @@ will not.
 | chapter | claims checked | aligned | differences |
 |---|---|---|---|
 | §5.1 three sections, two buses, six lanes | 4 | 1 | 3 |
-| §5.2 the register file (21 × 32, 10 × 16) | 24 | 17 | 7 |
+| §5.2 the register file (21 × 32, 10 × 16) | 31 | 26 | 5 |
 | §5.3 pipeline, PSW-as-several-latches, SSW, INL/TPEND | 6 | 3 | 3 |
 | §5.4 the standard cells | 2 | — | n/a (no code implication) |
 | §6.1 clocks, microcycle, wait states, E, bus state machine, no incrementer | 7 | 4 | 3 |
