@@ -34,7 +34,7 @@ export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
 export DOTNET_CLI_TELEMETRY_OPTOUT=1
 
 if ! command -v dotnet >/dev/null 2>&1; then
-    for candidate in /opt/data/dotnet "$HOME/dotnet" /usr/share/dotnet; do
+    for candidate in /opt/data/.dotnet /opt/data/dotnet "$HOME/dotnet" /usr/share/dotnet; do
         if [ -x "$candidate/dotnet" ]; then
             PATH="$candidate:$PATH"
             break
