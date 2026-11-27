@@ -878,16 +878,16 @@ public sealed partial class M68000
         switch (mode)
         {
             case 4:                                            // the predecrement block's own `m_pc = m_au`
-                _fetchStateAddress = _opcodeAddress + 4;
+                _pc = _opcodeAddress + 4;
                 break;
             case 6:                                            // aixl1 — never moves `m_pc`
-                _fetchStateAddress = _opcodeAddress + 2;
+                _pc = _opcodeAddress + 2;
                 break;
             case 7 when reg <= 1:                              // adr16/adr32 — `m_pc = m_au` twice
-                _fetchStateAddress = _fetchPointer - 2;
+                _pc = _fetchPointer - 2;
                 break;
             case 7:                                            // dpc/axpc — `m_pc` is the operand's own base
-                _fetchStateAddress = _opcodeAddress + 2;
+                _pc = _opcodeAddress + 2;
                 break;
         }
     }
@@ -2234,7 +2234,7 @@ public sealed partial class M68000
         // b + mmrw3 — `m_pc = m_au`, then the one fetch that lands the queue at the target
         _flowTransferred = true;
         _ird = first;
-        _fetchStateAddress = address + 2;
+        _pc = address + 2;
         _ir = await ReadProgramAsync(address + 2);
         if (_busFaulted) return;
         _ircValid = false;
@@ -2346,7 +2346,7 @@ public sealed partial class M68000
         // b + mmrw3 — `m_pc = m_au` at the target's successor, `m_ird = m_ir` (the target's own word)
         _flowTransferred = true;
         _ird = first;
-        _fetchStateAddress = address + 2;
+        _pc = address + 2;
         _ir = await ReadProgramAsync(address + 2);
         if (_busFaulted) return;
         _ircValid = false;
@@ -2551,7 +2551,7 @@ public sealed partial class M68000
     /// `(xxx).w`, `opcode + 6` for `(xxx).l` — the same +2 the old handlers were high by on all 1 459
     /// faulting records.
     /// </summary>
-    void FrameSavesFirstExtensionWord() => _fetchStateAddress = _opcodeAddress + 2;
+    void FrameSavesFirstExtensionWord() => _pc = _opcodeAddress + 2;
 
     /// <summary>
     /// The source operand of MULU/MULS/DIVU/DIVS/CHK: MAME's word-EA blocks, in the states' own order,

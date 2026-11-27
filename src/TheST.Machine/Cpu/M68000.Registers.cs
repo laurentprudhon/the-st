@@ -19,9 +19,10 @@
 //     `M68000.Emulator.cs` (ADR 0015 §5.1). A script's charge is a local in the script's frame.
 //
 // What is deliberately *not* here: the prefetch queue's bookkeeping (`_fetchPointer`,
-// `_fetchStateAddress`, `_streamStart`, `_opcodeAddress`, `_trailingFetched`, `_queueShort`) — those are
-// the queue's software position, not latches the patents name; and `_own`/`_eaCharged`, which are
-// durations and "has happened" bits and die with `M68000.Timing.cs` (#90).
+// `_streamStart`, `_opcodeAddress`, `_trailingFetched`, `_queueShort`) — those are the queue's software
+// position, not latches the patents name; and `_own`/`_eaCharged`, which are durations and "has happened"
+// bits and die with `M68000.Timing.cs` (#90). `PC` *is* here: it is one of the register file's own cells
+// (§5.2), and the queue's positions are expressions over it, not counters beside it.
 // ============================================================================================
 
 namespace TheST.Machine.Cpu;
@@ -49,6 +50,16 @@ public sealed partial class M68000
     /// next word to be fetched at a boundary (tutorial §1.4). `PC` is this cell's public view.
     /// </summary>
     uint _au;
+
+    /// <summary>
+    /// `PC` — the program counter register, one cell of the register file (§5.2 lists it among the
+    /// twenty-one 32-bit registers; `AU` is the adder beside it). It is **`AU`'s registered copy**:
+    /// the die writes it at the states that name `m_pc = m_au` — a fetch state, a jump's refill — and the
+    /// decode pins it in between, so its value is where the instruction stream has been fetched up to,
+    /// which is what a group-0 frame saves (§9). It is *not* the boundary view: at a boundary the two
+    /// cells differ by the pipeline's depth, which is why `PC` reads `_au` and the frames read this.
+    /// </summary>
+    uint _pc;
 
     /// <summary>`PSW` — the status word (tutorial §1.2). `SR` and `CCR` are views over it.</summary>
     ushort _sr;

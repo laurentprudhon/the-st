@@ -88,6 +88,16 @@ microcoded instruction can branch on `auz`/`nz`/`d4`/`enl`. Our scripts are that
    identical to the parent, G8 median +0.12 ms against `3343c0b` at n 751.
 3. the **AU/PC split** (`C3`) then the **narrow FTU** (`C2`) then the **AU as the MUL/DIV counter** (`B1`),
    then `AUH`/`AUL` (`B2`) and the constants ROM.
+   - [x] first half: **`PC` is a register-file entry** (`_pc`), `_fetchStateAddress` is gone, and every
+     frame reads the register. `CopyAuToPc()` (`m_pc ← m_au`) exists but is *not* what the fetch states
+     may write yet: the die's `m_pc = m_au` written that way costs **4 277 records**, because on this tree
+     the adder does not hold the access's address — an extension-word read moves the queue's position and
+     not `AU`. That measurement is the rest of the split's price.
+   - [ ] the adder's position: a fetch state must be able to say `m_pc = m_au`, which needs the stream's
+     position to be *derived* from `AU`/`AT`/the pipeline (`_fetchPointer`'s rule re-derived) rather than
+     kept beside them. Blocked on nothing but that derivation; it is #87's own subject.
+   - [ ] then `B1` (the AU as the MUL/DIV counter), which cannot precede it: counting in `_au` while the
+     stream's position is `_au + depth` would clobber the fetch.
 4. the **access label** (`A7`) — an enum over the script calls.
 5. `#88`: the `S0`…`S7` **view** from the cycle's position (the wait-stretch is already the answer
    instant), the byte lane, DTACK/BERR sampling.

@@ -35,15 +35,6 @@ public sealed partial class M68000 : Chip
     uint _fetchPointer;
 
     /// <summary>
-    /// The address of the last read issued in a <em>fetch state</em> — the words that fill the queue
-    /// (`FetchAsync`'s refill, the trailing fetch, the absolute-long pair's read, `PrefetchAsync`,
-    /// `RefillAsync`). MAME's microcode sets `m_pc` only there (`roml1`), so this is the depth a
-    /// group-0 data fault's frame saves; an extension-word read (`ReadProgramAsync`) leaves it alone
-    /// (#76: the +2 class, 19 791 records).
-    /// </summary>
-    uint _fetchStateAddress;
-
-    /// <summary>
     /// The fetch pointer when the current instruction began: `_fetchPointer` still being this value says
     /// the instruction has fetched no word of its own yet. It is #76's instrument, not a rule — the frame
     /// columns of <c>cpu-tests --clocks</c> report it beside the frame's saved program counter, because
@@ -638,7 +629,11 @@ public sealed partial class M68000 : Chip
         }
 
         uint address = _fetchPointer;
-        _fetchStateAddress = address;
+        // `roml1` says `m_pc = m_au`, and it is written as the address it reads: the adder does not
+        // hold that address on this tree (measured — writing `CopyAuToPc()` here costs 4 277 records),
+        // because AU still carries the program counter's own arithmetic between states. Positioning the
+        // adder at the access is the rest of #87's split, and this line becomes the atom then.
+        _pc = address;
         BusResult result = await Cycle(address, 1, false, 0, isProgram: true);
         if (result.Faulted)
         {
@@ -829,7 +824,7 @@ public sealed partial class M68000 : Chip
 
         uint address = _fetchPointer;
         _at = address - 2;
-        _fetchStateAddress = address;
+        _pc = address;                            // m_pc = m_au, with AU not at the access — see PrefetchAsync
 
         BusResult result = await Cycle(address, 1, false, 0, isProgram: true);
         if (result.Faulted)
@@ -862,7 +857,7 @@ public sealed partial class M68000 : Chip
         }
 
         _ir = await ReadProgramAsync(target + 2);
-        _fetchStateAddress = target + 2;
+        _pc = target + 2;
         _ircValid = false;
 
         // the boundary convention: `_au` is the address of the opcode the queue has fetched, and the
@@ -958,7 +953,7 @@ public sealed partial class M68000 : Chip
 
         _ircValid = false;
         _fetchPointer = _au + 4;
-        _fetchStateAddress = _au + 2;
+        _pc = _au + 2;
         _busFaulted = false;
     }
 
@@ -1160,7 +1155,7 @@ public sealed partial class M68000 : Chip
         uint returnPc = group0
             ? _faultIsFetch
                 ? _frameFetchPcDeclared ? _frameFetchPc : _fetchPointer - 2
-                : _fetchStateAddress
+                : _pc
             : SavesInstructionAddress(vector) ? _opcodeAddress : _au;
 
 #if DEBUG

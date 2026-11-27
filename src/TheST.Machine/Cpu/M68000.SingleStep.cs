@@ -76,7 +76,7 @@ public sealed partial class M68000
             cpu._ircValid = false;
             cpu._at = state.Pc;
             cpu._fetchPointer = state.Pc + 4;
-            cpu._fetchStateAddress = state.Pc + 2;
+            cpu._pc = state.Pc + 2;
             cpu._streamStart = cpu._fetchPointer;
             cpu._flowTransferred = false;
             cpu._trailingFetched = false;

@@ -216,12 +216,26 @@ public sealed partial class M68000
     }
 
     /// <summary>
+    /// `m_pc ← m_au` — the die's copy of the address adder into the program counter register: the states
+    /// that issue a fetch (`roml1`'s refill, a jump's <c>m_pc = m_au</c>) do it, and nothing else writes
+    /// `PC`. The adder is the *address being accessed* at that instant, which is the whole rule: an
+    /// extension word the queue already holds is not an access, so it does not move the register.
+    /// </summary>
+    void CopyAuToPc() => _pc = _au;
+
+    /// <summary>
     /// A state that begins a prefetch — the microcode's <c>m_pc = m_au</c> (<c>roml1</c>, <c>abww1</c>,
     /// <c>ablw2</c>, <c>e#w1</c>). The address it is about to read becomes the frame's saved program
     /// counter, which is why a group-0 frame's depth is decided per script and not by an expression on
     /// the queue: a state that merely pops a word (<c>adsl1</c>, <c>aixw2</c>) does not move it.
+    /// <para>
+    /// It reads the queue's fetch position rather than the adder for the reason above: on this tree the
+    /// adder still carries the program counter's own arithmetic between states, so the position the die
+    /// would have in `AU` is <see cref="_fetchPointer"/>. The atom is here so that the day the adder's
+    /// position is the access's, this method is `CopyAuToPc()` and nothing else changes (#87).
+    /// </para>
     /// </summary>
-    void BeginFetchState() => _fetchStateAddress = _fetchPointer;
+    void BeginFetchState() => _pc = _fetchPointer;
 
     /// <summary>
     /// Where MAME's <c>m_pc</c> stands when the fetch that is about to happen faults, for the group-0 frame
