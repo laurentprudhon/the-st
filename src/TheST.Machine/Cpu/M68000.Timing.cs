@@ -159,7 +159,10 @@ public sealed partial class M68000
 
                 if (op == 0x4E70)
                 {
-                    return 128;                                     // RESET: the pin's asserted clocks
+                    // RESET is scripted (MiscAsync, M68000.Instructions.cs): rset1/rset2's four clocks and
+                    // rset3/rset4's countdown are the script's own, so nothing is charged here — the
+                    // pin's hold is a loop on the adder in the microcode, not a table constant
+                    return 0;
                 }
 
                 if ((op & 0xFFC0) == 0x4E40)

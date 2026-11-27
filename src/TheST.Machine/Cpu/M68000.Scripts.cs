@@ -3417,6 +3417,15 @@ public sealed partial class M68000
     /// <para>Six clocks clean and four on the trap path: <c>chkr2</c> branches straight to <c>trap1</c>,
     /// so the trap never runs <c>chkr3</c>. Charging three states on both paths made 924 records two
     /// clocks long, and the old table's flat six was the same error from the other side.</para>
+    /// <para><b>And this family has no loop, so `B1` has nothing to convert here.</b> The listing is
+    /// <c>chkr1</c>, <c>chkr2</c>, then <c>chkr3</c> (clean) or <c>trap1</c> — four states and no
+    /// counter. Its adder traffic is a net-zero transfer pair: <c>chkr1</c> steps it down one word
+    /// (<c>m_au = m_au - 2</c>) and <c>chkr2</c> takes the fetch-state copy and steps it back
+    /// (<c>m_pc = m_au; m_au = m_au + 2</c>), which is the counter the trap's frame is built from.
+    /// Our script expresses no adder arithmetic at all and the frame's counter is <c>_pc</c>'s, which
+    /// the corpus measures directly: 2 500/2 500 state and exact-clock, with **both** paths present —
+    /// 1 447 records carry vector 6 (the trap) and 1 053 vector 3 (an address error on a memory
+    /// operand), so CHK's trap path is <em>not</em> latent, unlike the trace exception's.</para>
     /// </remarks>
     async ValueTask CheckAsync(ushort op)
     {
