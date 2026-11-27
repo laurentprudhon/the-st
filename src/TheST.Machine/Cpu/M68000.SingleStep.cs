@@ -85,6 +85,7 @@ public sealed partial class M68000
             cpu._eaCharged = false;
             cpu._frameFetchPcDeclared = false;
             cpu._frameInstructionWordDeclared = false;
+            cpu.SetFtu(state.Prefetch0);
 
             cpu._halted = false;
             cpu._stopped = false;
@@ -139,6 +140,7 @@ public sealed partial class M68000
 
             cpu.Emulator.Instructions++;
             cpu._opcode = opcode;
+            cpu.SetFtu(opcode);
             cpu.Emulator.Observer?.Invoke(cpu.Clock, opcode, cpu._au - 2);
             await cpu.ExecuteAsync(opcode);
 

@@ -1038,6 +1038,10 @@ public sealed partial class M68000 : Chip
 
             Emulator.Instructions++;
             _opcode = opcode;
+
+            // the decode's own write: the three encoding fields into the FTU (`A2`/`A3`'s terms over
+            // `IRD`), so every script below reads the field instead of re-shifting the opcode
+            SetFtu(opcode);
             Emulator.Observer?.Invoke(Clock, opcode, _au - 2);
             await ExecuteAsync(opcode);
 
@@ -1164,6 +1168,7 @@ public sealed partial class M68000 : Chip
     async ValueTask EnterExceptionAsync(int vector, int level)
     {
         Emulator.Exceptions++;
+        VectorToFtu(vector);    // `tvn_to_ftu`: the entry's vector lands in the field register first
         _tpend = false;         // the exception owed is taken; the trace bit itself is the handler's to clear
 
         // the entry's own clocks, before the frame is written: every entry in the corpus's traces is an
@@ -1240,7 +1245,7 @@ public sealed partial class M68000 : Chip
             return;
         }
 
-        uint newPc = await ReadLongAsync((uint)(vector * 4));
+        uint newPc = await ReadLongAsync((uint)(FtuVector * 4));
         if (_busFaulted)
         {
             _halted = true;

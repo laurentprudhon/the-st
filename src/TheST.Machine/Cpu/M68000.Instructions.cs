@@ -366,9 +366,9 @@ public sealed partial class M68000
 
     async ValueTask Line0Async(ushort op)
     {
-        int size = (op >> 6) & 0x3;
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
+        int size = FtuSize;
+        int mode = FtuMode;
+        int reg = FtuRegister;
         int operation = (op >> 9) & 0x7;
 
         if ((op & 0x0100) == 0 && mode == 7 && reg == 4 && size <= 1 && (operation == 0 || operation == 1 || operation == 5))
@@ -674,9 +674,9 @@ public sealed partial class M68000
 
     async ValueTask Line4Async(ushort op)
     {
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
-        int size = (op >> 6) & 0x3;
+        int mode = FtuMode;
+        int reg = FtuRegister;
+        int size = FtuSize;
 
         // MOVE to SR / to CCR — the 0x46xx and 0x44xx blocks otherwise collide with NOT and NEG/CLR.
         // Scripted (M68000.Scripts.cs): both read their operand, idle 4 clocks and refill the queue;
@@ -756,7 +756,7 @@ public sealed partial class M68000
             {
                 int destinationMode = (op >> 3) & 0x7;
                 int destinationReg = op & 0x7;
-                int sz = (op >> 6) & 0x3;
+                int sz = FtuSize;
 
                 if (sz != 3)   // NEGX: 0 - operand - X
                 {
@@ -1020,8 +1020,8 @@ public sealed partial class M68000
     {
         int size = (op & 0x0040) != 0 ? 2 : 1;   // the helper's vocabulary: 1 = word, 2 = long
         int bytes = size == 2 ? 4 : 2;
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
+        int mode = FtuMode;
+        int reg = FtuRegister;
 
         // register-direct, and the predecrement form, do not exist for this direction. The test comes
         // **before** the mask's fetch because the part decodes the opcode first: an illegal form raises
@@ -1166,8 +1166,8 @@ public sealed partial class M68000
     {
         int size = (op & 0x0040) != 0 ? 2 : 1;
         int bytes = size == 2 ? 4 : 2;
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
+        int mode = FtuMode;
+        int reg = FtuRegister;
 
         // register-direct, the postincrement form and the PC-relative/immediate forms are not in this
         // direction — `movem <list>,(An)+` (0x48D8/0x48F8) is illegal on the part, and MAME's decode
@@ -1258,8 +1258,8 @@ public sealed partial class M68000
 
     async ValueTask MiscAsync(ushort op)
     {
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
+        int mode = FtuMode;
+        int reg = FtuRegister;
 
         switch (op)
         {
@@ -1466,9 +1466,9 @@ public sealed partial class M68000
         int data = (op >> 9) & 0x7;
         if (data == 0) data = 8;
 
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
-        int size = (op >> 6) & 0x3;
+        int mode = FtuMode;
+        int reg = FtuRegister;
+        int size = FtuSize;
 
         if (size == 3)
         {
@@ -1690,9 +1690,9 @@ public sealed partial class M68000
 
     async ValueTask Line8Async(ushort op)   // OR / DIVU / DIVS / SBCD
     {
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
-        int size = (op >> 6) & 0x3;
+        int mode = FtuMode;
+        int reg = FtuRegister;
+        int size = FtuSize;
 
         if ((op & 0xF1F0) == 0x8100)   // SBCD
         {
@@ -1756,9 +1756,9 @@ public sealed partial class M68000
 
     async ValueTask Line9Async(ushort op)   // SUB / SUBX / SUBA
     {
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
-        int size = (op >> 6) & 0x3;
+        int mode = FtuMode;
+        int reg = FtuRegister;
+        int size = FtuSize;
 
         if ((op & 0xF130) == 0x9100 && size != 3)   // SUBX
         {
@@ -1821,7 +1821,7 @@ public sealed partial class M68000
 
     async ValueTask ExchangeArithmeticAsync(ushort op, bool subtract)
     {
-        int size = (op >> 6) & 0x3;
+        int size = FtuSize;
         int sourceReg = op & 0x7;
         int destinationReg = (op >> 9) & 0x7;
         bool predecrement = (op & 0x0008) != 0;
@@ -1919,9 +1919,9 @@ public sealed partial class M68000
 
     async ValueTask LineBAsync(ushort op)   // CMP / CMPA / EOR / CMPM
     {
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
-        int size = (op >> 6) & 0x3;
+        int mode = FtuMode;
+        int reg = FtuRegister;
+        int size = FtuSize;
 
         if ((op & 0xF138) == 0xB108 && size != 3)   // CMPM — scripted (M68000.Scripts.cs)
         {
@@ -1992,9 +1992,9 @@ public sealed partial class M68000
 
     async ValueTask LineCAsync(ushort op)   // AND / MULU / MULS / ABCD / EXG
     {
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
-        int size = (op >> 6) & 0x3;
+        int mode = FtuMode;
+        int reg = FtuRegister;
+        int size = FtuSize;
 
         if ((op & 0xF1F0) == 0xC100)   // ABCD
         {
@@ -2165,9 +2165,9 @@ public sealed partial class M68000
 
     async ValueTask LineDAsync(ushort op)   // ADD / ADDX / ADDA
     {
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
-        int size = (op >> 6) & 0x3;
+        int mode = FtuMode;
+        int reg = FtuRegister;
+        int size = FtuSize;
 
         if ((op & 0xF130) == 0xD100 && size != 3)   // ADDX
         {
@@ -2232,14 +2232,14 @@ public sealed partial class M68000
 
     async ValueTask LineEAsync(ushort op)
     {
-        int size = (op >> 6) & 0x3;
+        int size = FtuSize;
         bool left = (op & 0x0100) != 0;
 
         if (size != 3)
         {
             // a register shift: bits 5-3 are 000 (count in the opcode) or 100 (count in a data
             // register), and the operation is bits 4-3
-            int reg = op & 0x7;
+            int reg = FtuRegister;
             bool registerCount = (op & 0x0020) != 0;
             int kind = (op >> 3) & 0x3;
 
@@ -2256,7 +2256,7 @@ public sealed partial class M68000
         }
 
         // a memory shift is one word, by one: bits 5-3 are the addressing mode and bits 10-9 the kind
-        int mode = (op >> 3) & 0x7;
+        int mode = FtuMode;
         int memoryKind = (op >> 9) & 0x3;
         await MemoryShiftAsync(mode, op & 0x7, memoryKind, left);
     }

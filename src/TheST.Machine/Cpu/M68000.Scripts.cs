@@ -239,8 +239,8 @@ public sealed partial class M68000
     {
         int opmode = (op >> 6) & 0x7;
         int rx = (op >> 9) & 0x7;
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
+        int mode = FtuMode;
+        int reg = FtuRegister;
 
         if (opmode == 2)                                   // <ea>, Dn — the destination is a data register
         {
@@ -553,8 +553,8 @@ public sealed partial class M68000
     async ValueTask CompareLongAsync(ushort op)
     {
         int rx = (op >> 9) & 0x7;
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
+        int mode = FtuMode;
+        int reg = FtuRegister;
 
         // CMPA.l compares against an address register: its opmode 7 is the operation, not a mode
         bool toAddressRegister = ((op >> 6) & 0x7) == 7;
@@ -632,7 +632,7 @@ public sealed partial class M68000
     {
         int rx = (op >> 9) & 0x7;                          // the destination: the second An
         int ry = op & 0x7;                                 // the source
-        int size = (op >> 6) & 0x3;
+        int size = FtuSize;
 
         BeginFetchState();                                 // cmmw1 / cmml1 — `m_pc = m_au`
 
@@ -756,8 +756,8 @@ public sealed partial class M68000
     /// </summary>
     async ValueTask MoveToStatusAsync(ushort op)
     {
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
+        int mode = FtuMode;
+        int reg = FtuRegister;
         bool fromStatus = (op & 0xFFC0) == 0x40C0;
         bool toStatus = (op & 0xFFC0) == 0x46C0;
 
@@ -921,8 +921,8 @@ public sealed partial class M68000
     async ValueTask ImmediateLongAsync(ushort op)
     {
         int operation = (op >> 9) & 0x7;
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
+        int mode = FtuMode;
+        int reg = FtuRegister;
 
         uint? immediate = await ReadLongImmediateAsync();
         if (immediate is null)
@@ -988,8 +988,8 @@ public sealed partial class M68000
             data = 8;
         }
 
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
+        int mode = FtuMode;
+        int reg = FtuRegister;
         AluLong kind = (op & 0x0100) != 0 ? AluLong.Sub : AluLong.Add;
 
         if (mode == 1)                                     // raql1 — An, no flags, two set_16 writes
@@ -1101,8 +1101,8 @@ public sealed partial class M68000
     {
         SingleOperand kind = SingleOperandKindOf(op);
 
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
+        int mode = FtuMode;
+        int reg = FtuRegister;
 
         if (mode == 0)                                     // nnrl1, nnrl2, roal4 / tsrl1, tsrl2
         {
@@ -1183,8 +1183,8 @@ public sealed partial class M68000
     {
         SingleOperand kind = SingleOperandKindOf(op);
 
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
+        int mode = FtuMode;
+        int reg = FtuRegister;
 
         if (mode == 0)                                     // nnrw1, roaw2 / tsrw1, mmrw3
         {
@@ -1403,8 +1403,8 @@ public sealed partial class M68000
         int line = op >> 12;
         int opmode = (op >> 6) & 0x7;
         int rx = (op >> 9) & 0x7;
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
+        int mode = FtuMode;
+        int reg = FtuRegister;
 
         bool comparison = line == 0xB;
         AluLong kind = line switch
@@ -1483,8 +1483,8 @@ public sealed partial class M68000
     async ValueTask ImmediateWordAsync(ushort op)
     {
         int operation = (op >> 9) & 0x7;
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
+        int mode = FtuMode;
+        int reg = FtuRegister;
 
         BeginFetchState();                                         // o#w1 — m_pc = m_au
         ushort immediate = await FetchAsync();                     // o#w1 — the one read
@@ -1542,8 +1542,8 @@ public sealed partial class M68000
             data = 8;
         }
 
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
+        int mode = FtuMode;
+        int reg = FtuRegister;
         AluLong kind = (op & 0x0100) != 0 ? AluLong.Sub : AluLong.Add;
 
         if (mode == 1)                                             // raql1, roal2, roal3, roal4
@@ -2158,8 +2158,8 @@ public sealed partial class M68000
     /// </summary>
     async ValueTask JumpAsync(ushort op)
     {
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
+        int mode = FtuMode;
+        int reg = FtuRegister;
         long target;
 
         switch (mode)
@@ -2257,8 +2257,8 @@ public sealed partial class M68000
     /// </summary>
     async ValueTask JumpSubroutineAsync(ushort op)
     {
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
+        int mode = FtuMode;
+        int reg = FtuRegister;
         long target;
 
         switch (mode)
@@ -2363,7 +2363,7 @@ public sealed partial class M68000
     /// </summary>
     async ValueTask UnlinkAsync(ushort op)
     {
-        int reg = op & 0x7;
+        int reg = FtuRegister;
 
         BeginFetchState();                                 // unlk1 — `m_pc = m_au`
         uint address = GetA(reg);                          // m_at = m_da[ry]; m_aob = m_da[ry]
@@ -2708,8 +2708,8 @@ public sealed partial class M68000
     {
         bool signed = (op & 0x0100) != 0;
         int rx = (op >> 9) & 0x7;
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
+        int mode = FtuMode;
+        int reg = FtuRegister;
 
         FrameSavesFirstExtensionWord();
 
@@ -2868,8 +2868,8 @@ public sealed partial class M68000
     async ValueTask DivideUnsignedAsync(ushort op)
     {
         int rx = (op >> 9) & 0x7;
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
+        int mode = FtuMode;
+        int reg = FtuRegister;
 
         FrameSavesFirstExtensionWord();
 
@@ -3035,8 +3035,8 @@ public sealed partial class M68000
     async ValueTask DivideSignedAsync(ushort op)
     {
         int rx = (op >> 9) & 0x7;
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
+        int mode = FtuMode;
+        int reg = FtuRegister;
 
         FrameSavesFirstExtensionWord();
 
@@ -3381,8 +3381,8 @@ public sealed partial class M68000
     async ValueTask CheckAsync(ushort op)
     {
         int rx = (op >> 9) & 0x7;
-        int mode = (op >> 3) & 0x7;
-        int reg = op & 0x7;
+        int mode = FtuMode;
+        int reg = FtuRegister;
 
         FrameSavesFirstExtensionWord();
 

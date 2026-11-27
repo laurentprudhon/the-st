@@ -396,7 +396,45 @@ public sealed partial class M68000
     }
 
     /// <summary>
-    /// `reset pren` on the predecrement list, which the encoder reads from its other end: the list is
+    // ---- NanoStore: the FTU, the fields a script reads instead of re-shifting the opcode -----------
+    // ADR 0015 §10 lists `FTU` as what replaces "the `size`/`mode`/`reg` locals", and §5.2 gives the die's
+    // register F four sources: SR, IR, IPL and a vector. The narrow FTU of the owner's ruling holds the
+    // three encoding fields and the vector; the decode writes the fields once per instruction (from
+    // `IRD`, which is what the PLAs key on) and a script reads them, so nothing below re-derives
+    // `(op >> 6) & 3`.
+
+    /// <summary>The instruction's size field, as decoded (`IRD`'s bits 7–6).</summary>
+    int FtuSize => (_ftu >> 14) & 0x3;
+
+    /// <summary>The instruction's effective-address mode field, as decoded (`IRD`'s bits 5–3).</summary>
+    int FtuMode => (_ftu >> 11) & 0x7;
+
+    /// <summary>The instruction's register field, as decoded (`IRD`'s bits 2–0).</summary>
+    int FtuRegister => (_ftu >> 8) & 0x7;
+
+    /// <summary>`m_ftu` as the exception logic reads it: the vector a `TRAP`, a fault or an interrupt supplied.</summary>
+    int FtuVector => _ftu & 0xFF;
+
+    /// <summary>
+    /// The decode's write: the instruction's three encoding fields — `A2`/`A3`'s terms over `IRD` — into
+    /// the field register. They are the encoding's **low byte in order** (size 7–6, mode 5–3, register
+    /// 2–0), so the PLA's output is that byte and the latch is one shift into the high half; the layout
+    /// above is exactly this packing, which is why the accessors are masks and not re-derivations. One
+    /// instruction, one shift — the cost G8 can see.
+    /// </summary>
+    void SetFtu(ushort opcode) => _ftu = (ushort)(opcode << 8);
+
+    /// <summary>`vector → FTU` — the exception's vector latched where the entry reads it (`tvn_to_ftu`).</summary>
+    void VectorToFtu(int vector) => _ftu = (ushort)((_ftu & 0xFF00) | (vector & 0xFF));
+
+    /// <summary>
+    /// `const → FTU` — the constants ROM into the field register (`const_to_ftu`: MAME's `m_ftu = 0x0f`
+    /// before a `MUL`'s loop). The die loads a loop's trip count *from here*, which is why `B1`'s counter
+    /// is "loaded from the FTU" rather than a literal, and why this atom exists before its first caller.
+    /// </summary>
+    void ConstToFtu(int value) => _ftu = (ushort)value;
+
+    /// <summary>`reset pren` on the predecrement list, which the encoder reads from its other end:
     /// stored **reversed** (`movem.l d2-d7/a2-a6,-(sp)` is `0x48E7 0x3F3E` where the other modes write
     /// `0x7CFC`), so line 0 is register 15 and the line's complement *is* the register. MAME's
     /// `step_movem_predec` and its `r ^ 0xf` — one encoder, one list, two directions of travel.

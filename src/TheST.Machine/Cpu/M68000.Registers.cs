@@ -154,6 +154,18 @@ public sealed partial class M68000
     // priority encoder PREN, which is one of the ten 16-bit registers.
 
     /// <summary>
+    /// `FTU` — the field translation unit (§5.2, §6.2, "register F"): the register a field goes through
+    /// when it is *translated* rather than computed — the instruction's own size, mode and register, an
+    /// exception's vector, and the constants ROM's value for a loop's trip count (the `const_to_ftu`
+    /// nanocode field, which is why a `MUL`'s counter is "loaded from the FTU" and not written as 15).
+    /// The owner's ruling names the **narrow** FTU: these four fields, sixteen bits, no translation
+    /// logic of its own (`C2`).
+    /// <para>One word, so the layout is stated once: bits 15–14 size, 13–11 mode, 10–8 register, 7–0
+    /// vector.</para>
+    /// </summary>
+    ushort _ftu;
+
+    /// <summary>
     /// `PREN` — the priority encoder that walks `MOVEM`'s register list (`List` / `next bit in list`
     /// on Gigasoft's sheet, §5.2, §6.2). It holds **the list itself** — the 16-bit mask — and the
     /// nanocode's `reset pren` reads its lowest set line and clears that line, so the walk needs no

@@ -88,6 +88,12 @@ microcoded instruction can branch on `auz`/`nz`/`d4`/`enl`. Our scripts are that
    identical to the parent, G8 median +0.12 ms against `3343c0b` at n 751.
 3. the **AU/PC split** (`C3`) then the **narrow FTU** (`C2`) then the **AU as the MUL/DIV counter** (`B1`),
    then `AUH`/`AUL` (`B2`) and the constants ROM.
+   - [x] `C2`, the **narrow FTU**: `_ftu` holds the instruction's size/mode/register (the encoding's low
+     byte, so the decode's write is one shift) and an exception's vector; the decode writes it at the
+     boundary and in the seam, and the 69 script locals that re-derived `(op >> 6) & 3` and friends now
+     read `FtuSize`/`FtuMode`/`FtuRegister`. `ConstToFtu` is the constants ROM's atom, waiting for `B1`.
+     The `IsScripted*` ledger predicates stay op-based by construction: they are static and answer for
+     *any* encoding.
    - [x] first half: **`PC` is a register-file entry** (`_pc`), `_fetchStateAddress` is gone, and every
      frame reads the register. `CopyAuToPc()` (`m_pc ← m_au`) exists but is *not* what the fetch states
      may write yet: the die's `m_pc = m_au` written that way costs **4 277 records**, because on this tree
