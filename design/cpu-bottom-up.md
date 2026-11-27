@@ -129,6 +129,11 @@ microcoded instruction can branch on `auz`/`nz`/`d4`/`enl`. Our scripts are that
      columns, folds the blessed pair, G8 median +0.11 ms. What the restore rests on: `_pc` is a fetch
      state's address and a loop issues no fetch, so the register is intact when the loop ends — the
      PC-register landing (`eb5768f`) is what makes this possible without the full split.
+     `DIVU` is landed by the same two atoms plus `AtEqualsAu()`: its fetch comes *after* the loop, so
+     `_pc` is not the position — the die latches it in `AT` (`m_at = m_au`) and copies it back, which is
+     what `AuEqualsAt()` restores (restoring from `_pc` there costs **649 records**). `DIVS`, `CHK` and
+     `RESET`'s countdown remain: `DIVS`'s epilogue decrements at `dvs12` and reaches the shared tails
+     (`leaa2`, `dvuma`), so its restore point has to be chosen with the tail in hand.
      **An option that may unblock `B1` without the full split** (for the owner to rule on, since it changes
      the ticket's premise): the die counts in `AU` because `AU` is *idle* during a `MUL`/`DIV` loop — no
      address is in play, the stream's position is in `m_pc`. On this tree the cell that holds "the address
