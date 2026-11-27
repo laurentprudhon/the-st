@@ -96,6 +96,17 @@ microcoded instruction can branch on `auz`/`nz`/`d4`/`enl`. Our scripts are that
    - [ ] the adder's position: a fetch state must be able to say `m_pc = m_au`, which needs the stream's
      position to be *derived* from `AU`/`AT`/the pipeline (`_fetchPointer`'s rule re-derived) rather than
      kept beside them. Blocked on nothing but that derivation; it is #87's own subject.
+     **What is now known about the two cells, measured and read off the tree** — take it as the design's
+     starting point, not as a guess: at a boundary (the seam's `Load`) `_fetchPointer = _au + 4`,
+     `_pc = _au + 2`, `_at = _au`; the decode step advances `_au` by 2 and moves neither of the others,
+     so mid-instruction `_fetchPointer = _au + 2` until a prefetch adds 2 (`_ircValid`) or an
+     extension-word read moves `_fetchPointer` without moving `_au` — that last case is the whole of the
+     4 277 measurement. `_pc` is the **live** program counter (the die's `m_pc`: what a fetch state copies
+     and what the class pins of `FrameCounterForExtensionShape` state), while `_au` is the *consumption*
+     counter with the PC's role bolted on (`_au − 2` as the PC-relative base, `_au = target` at a refill,
+     `_au & 1` as the odd-PC test). So the slice is: give every one of those PC readings to `_pc`, derive
+     `_au` (the adder) at each access from what the access needs, then delete `_fetchPointer` — and only
+     then is `CopyAuToPc()` the die's statement rather than a convenience.
    - [ ] then `B1` (the AU as the MUL/DIV counter), which cannot precede it: counting in `_au` while the
      stream's position is `_au + depth` would clobber the fetch.
 4. the **access label** (`A7`) — an enum over the script calls.
