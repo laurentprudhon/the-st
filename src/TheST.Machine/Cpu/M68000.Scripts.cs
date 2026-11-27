@@ -382,7 +382,7 @@ public sealed partial class M68000
         {
             ushort displacement = await FetchAsync();
             if (_busFaulted) return false;
-            await ReadLongOperandFromStreamAsync(_au - 2 + Ext32(displacement));
+            await ReadLongOperandFromStreamAsync(ConsumedAddress + Ext32(displacement));
             return !_busFaulted;
         }
 
@@ -391,7 +391,7 @@ public sealed partial class M68000
         ushort extension = await FetchAsync();
         if (_busFaulted) return false;
         await ReadLongOperandFromStreamAsync(
-            _au - 2 + (uint)ExtensionDisplacement(extension) + IndexValue(extension));
+            ConsumedAddress + (uint)ExtensionDisplacement(extension) + IndexValue(extension));
         return !_busFaulted;
     }
 
@@ -2644,7 +2644,7 @@ public sealed partial class M68000
                     {
                         ushort displacement = await FetchAsync();
                         if (_busFaulted) return null;
-                        value = await ReadOperandProgramAsync(_au - 2 + Ext32(displacement));
+                        value = await ReadOperandProgramAsync(ConsumedAddress + Ext32(displacement));
                         break;
                     }
 
@@ -2654,7 +2654,7 @@ public sealed partial class M68000
                         ushort extension = await FetchAsync();
                         if (_busFaulted) return null;
                         value = await ReadOperandProgramAsync(
-                            _au - 2 + (uint)ExtensionDisplacement(extension) + IndexValue(extension));
+                            ConsumedAddress + (uint)ExtensionDisplacement(extension) + IndexValue(extension));
                         break;
                     }
 

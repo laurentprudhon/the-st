@@ -355,6 +355,18 @@ public sealed partial class M68000
     /// <summary>`AOB ← address` — the address buffer taking what goes out on `A1–A23`.</summary>
     void LatchAob(uint address) => _aob = address;
 
+    /// <summary>
+    /// The address of the word the instruction has just consumed — **the PC-relative operand's base**,
+    /// and the one fact this tree takes from the consumption counter where the die takes it from
+    /// `m_pc`. Measured, and it is why the base cannot simply become the register: writing these seven
+    /// sites as `_pc` costs **604 records over 13 files** (`ADD.b`, `AND.b`, `BTST`, `CMP.b`, `LEA`,
+    /// `MOVE.b`, `MOVEM.l`/`.w`, `MOVEtoCCR`, `MOVEtoSR`, `OR.b`, `PEA`, `SUB.b`) — the shapes that
+    /// prefetch before they compute the operand, so `_pc` is already a word ahead of the word in hand.
+    /// Our counter advances on **consumption** where the die's advances on **fetch**, and that is the
+    /// whole of #87's remaining split: replacing this body is its last step.
+    /// </summary>
+    uint ConsumedAddress => _au - 2;
+
     // ---- NanoStore: PREN, the encoder that walks MOVEM's list --------------------------------
     // MOVEM is not a loop over a counter: the **list is the loop's state**. PREN holds the mask, its
     // lowest set line is the register this turn transfers, and the nanocode's `reset pren` clears that

@@ -107,6 +107,15 @@ microcoded instruction can branch on `auz`/`nz`/`d4`/`enl`. Our scripts are that
      `_au & 1` as the odd-PC test). So the slice is: give every one of those PC readings to `_pc`, derive
      `_au` (the adder) at each access from what the access needs, then delete `_fetchPointer` — and only
      then is `CopyAuToPc()` the die's statement rather than a convenience.
+     **And the base is the exception the measurement found**: writing the seven PC-relative bases as
+     `_pc` costs **604 records over 13 files** (`ADD.b`, `AND.b`, `BTST`, `CMP.b`, `LEA`, `MOVE.b`,
+     `MOVEM.l`/`.w`, `MOVEtoCCR`, `MOVEtoSR`, `OR.b`, `PEA`, `SUB.b` — the shapes that prefetch before
+     they compute the operand, where `_pc` is already a word ahead). So on this model the base is the
+     **consumption** position and not the **fetch** position: our counter advances per word consumed, the
+     die's `m_pc` per fetch. The base now lives in one place (`ConsumedAddress`, `M68000.ControlStores.cs`)
+     so the replacement is that one body — and it is the last step, because it needs the queue's fill
+     discipline (when the prefetch happens relative to the operand's computation) to be re-derived, not a
+     new expression.
    - [ ] then `B1` (the AU as the MUL/DIV counter), which cannot precede it: counting in `_au` while the
      stream's position is `_au + depth` would clobber the fetch.
 4. the **access label** (`A7`) — an enum over the script calls.

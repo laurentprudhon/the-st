@@ -148,14 +148,14 @@ public sealed partial class M68000
                     case 2:
                     {
                         short displacement = (short)await FetchAsync();
-                        return _au - 2 + (uint)displacement;
+                        return ConsumedAddress + (uint)displacement;
                     }
 
                     case 3:
                     {
                         ushort extension = await FetchAsync();
                         if (_busFaulted) return 0;
-                        return _au - 2 + (uint)ExtensionDisplacement(extension) + IndexValue(extension);
+                        return ConsumedAddress + (uint)ExtensionDisplacement(extension) + IndexValue(extension);
                     }
                 }
 
@@ -1496,7 +1496,7 @@ public sealed partial class M68000
                         // fault there saves that word (`_fetchPointer - 2`): the pop consumes the word
                         // without a read, and the counter moves with it — 632 faulting records measured it
                         _fetchPointer = _au + 2;
-                        uint target = _au - 2 + (uint)displacement;
+                        uint target = ConsumedAddress + (uint)displacement;
                         await RefillAsync(target);
                         if (_busFaulted)
                         {
