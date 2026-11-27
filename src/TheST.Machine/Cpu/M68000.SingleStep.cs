@@ -164,6 +164,18 @@ public sealed partial class M68000
                 cpu._au = cpu._opcodeAddress;
             }
 
+            // the boundary's sample of the queue (#87's derivation): the four columns are otherwise
+            // written only inside an exception's entry, so on a clean record the two folds would see
+            // nothing but the previous record's leftovers
+#if DEBUG
+            cpu.Emulator.LastFramePcCounter = cpu._au;
+            cpu.Emulator.LastFrameFetchPointer = cpu._fetchPointer;
+            cpu.Emulator.LastFrameIrAddress = cpu._at;
+            cpu.Emulator.LastFrameTrailing = cpu._trailingFetched;
+            cpu.Emulator.LastFrameRefetched = cpu._fetchPointer != cpu._streamStart;
+            cpu.Emulator.LastFrameVector = 0;
+#endif
+
             // the prefetch's own address error, exactly as the machine's loop takes it
             if ((cpu._au & 1) != 0)
             {

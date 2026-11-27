@@ -1061,6 +1061,19 @@ public sealed partial class M68000 : Chip
                 continue;
             }
 
+            // the boundary's own sample of the queue: `_au` is the next opcode's address and
+            // `_fetchPointer` the word behind it, so the two name the pipeline's depth for *every*
+            // record, not only the faulting ones (#87's derivation reads it — a fetch state can only
+            // say `m_pc = m_au` once this difference is known per shape)
+#if DEBUG
+            Emulator.LastFramePcCounter = _au;
+            Emulator.LastFrameFetchPointer = _fetchPointer;
+            Emulator.LastFrameIrAddress = _at;
+            Emulator.LastFrameTrailing = _trailingFetched;
+            Emulator.LastFrameRefetched = _fetchPointer != _streamStart;
+            Emulator.LastFrameVector = 0;
+#endif
+
             // the prefetch's own address error: the word the queue fetched after the instruction
             // landed on an odd program counter (a branch or a jump to an odd address)
             if ((_au & 1) != 0)

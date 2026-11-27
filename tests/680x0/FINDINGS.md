@@ -213,7 +213,12 @@ are 16-bit and arrive byte-split from upstream's `decode.py`; `re`/`we` are abor
 cycles). `--clocks` dumps one line per record — the corpus's length, our bus cycles, internal clocks
 and their sum — and, in a Debug build, the frame's saved `pc` beside the three quantities it could be
 (`fetch_ptr`, `pc_counter`, `ir_addr`) plus whether the instruction had fetched a word of its own.
-That dump is what rows 60 and 61 were read off.
+That dump is what rows 60 and 61 were read off. On a **faulting** record the four are the exception
+entry's (a frame is being written); on a clean one they are the **boundary's** sample — `pc_counter` is
+`_au` (the next opcode's address), `fetch_ptr` the word behind it and `ir_addr` the address temporary as
+the instruction left it — so `fetch_ptr − pc_counter` is the pipeline's depth per record, which is what
+#87's derivation reads (4 on 260 664 of 261 894 clean records, 6 on the 1 230 `STOP` records, whose
+counter is the seam's rollback to the opcode's own address).
 
 `--out` writes the per-file table; `--failures` writes up to 20 detail lines per opcode file, tab
 separated: opcode file, test name, first difference. Sort by the first column to see which file a fix
