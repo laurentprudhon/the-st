@@ -2296,7 +2296,7 @@ public sealed partial class M68000
                 // jsal2 also commits `m_pc = m_au`, and that read moved `m_au` by 2 — so this shape's
                 // counter is the only one that a queue read *does* advance (or the return address and
                 // the frame are both a word low: 90 records)
-                _au += 2;
+                AuPlusTwo();
                 target = (high << 16) | low;
                 break;
             }

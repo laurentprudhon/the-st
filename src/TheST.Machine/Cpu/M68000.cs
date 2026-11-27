@@ -504,7 +504,7 @@ public sealed partial class M68000 : Chip
 
         // the pads' buffers: AOB is the level the address lines take, DOB what the part drives for a
         // write (and nothing for a read, where the slave owns the lanes)
-        _aob = address;
+        LatchAob(address);
         _dob = isWrite ? writeData : (ushort)0;
 
         ushort control = (ushort)(
@@ -717,7 +717,7 @@ public sealed partial class M68000 : Chip
         ushort word = _ir;
         _ir = _irc;
         _ircValid = false;
-        _au += 2;
+        AuPlusTwo();
         return word;
     }
 
@@ -897,7 +897,7 @@ public sealed partial class M68000 : Chip
         if (_busFaulted) return 0;
 
         uint low = _ir;
-        _au += 2;               // the low word is consumed here, not by a pop of its own
+        AuPlusTwo();               // the low word is consumed here, not by a pop of its own
         _queueShort = true;
         return (high << 16) | low;
     }
@@ -988,7 +988,7 @@ public sealed partial class M68000 : Chip
             // the opcode is in the decode register — the queue fetched it before the instruction
             // started, so decoding costs no bus cycle of its own
             ushort opcode = _ird;
-            _au += 2;
+            AuPlusTwo();
             _opcodeAddress = _au - 2;
             _streamStart = _fetchPointer;
             _flowTransferred = false;

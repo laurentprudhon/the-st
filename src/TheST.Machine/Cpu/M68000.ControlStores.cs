@@ -316,6 +316,31 @@ public sealed partial class M68000
         }
     }
 
+    // ---- NanoStore: the bit-number decoder and the address adder's transfers ------------------
+    // Both are the die's, and both are *derived* in ADR 0015 §4's sense: a decoder has no state, and
+    // an adder transfer is a verb, not a latch. They are methods so that the scripts say "the bit
+    // number became a one-hot line" and "the adder stepped by two" instead of open-coding a shift and
+    // an increment.
+
+    /// <summary>
+    /// `DCR` — the bit-number decoder: four bits in, one line of sixteen out (sheet 01's `BIT#`/`BIT`).
+    /// The word it drives is the sixteen-bit operand's; a data-register bit operation is 32 bits wide and
+    /// shifts its own value, which is why this is not used there.
+    /// </summary>
+    static ushort Decoder4To16(int bit) => (ushort)(1 << (bit & 15));
+
+    /// <summary>`AU ← AU + 2` — the adder advancing past one word (tutorial §1.4's next fetch).</summary>
+    void AuPlusTwo() => _au += 2;
+
+    /// <summary>`AU ← AU + n` — the adder's other constant steps (an extension word, a long operand).</summary>
+    void AuPlus(int words) => _au += (uint)(2 * words);
+
+    /// <summary>`AU ← AT` — the adder taking the address temporary (a jump's target, a refill).</summary>
+    void AuEqualsAt() => _au = _at;
+
+    /// <summary>`AOB ← address` — the address buffer taking what goes out on `A1–A23`.</summary>
+    void LatchAob(uint address) => _aob = address;
+
     // ---- NanoStore: the sixteen-bit ALU of the variable-time families --------------------------
     //
     // MULU, MULS, DIVU and DIVS are not operations, they are *algorithms the sequencer iterates*. The

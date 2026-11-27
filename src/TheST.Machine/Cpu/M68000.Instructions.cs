@@ -594,9 +594,9 @@ public sealed partial class M68000
 
         byte updated = operation switch
         {
-            1 => (byte)(current ^ (1 << position)),
-            2 => (byte)(current & ~(1 << position)),
-            3 => (byte)(current | (1 << position)),
+            1 => (byte)(current ^ Decoder4To16(position)),
+            2 => (byte)(current & ~Decoder4To16(position)),
+            3 => (byte)(current | Decoder4To16(position)),
             _ => current,
         };
 
