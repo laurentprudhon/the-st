@@ -118,6 +118,15 @@ microcoded instruction can branch on `auz`/`nz`/`d4`/`enl`. Our scripts are that
      new expression.
    - [ ] then `B1` (the AU as the MUL/DIV counter), which cannot precede it: counting in `_au` while the
      stream's position is `_au + depth` would clobber the fetch.
+     **An option that may unblock `B1` without the full split** (for the owner to rule on, since it changes
+     the ticket's premise): the die counts in `AU` because `AU` is *idle* during a `MUL`/`DIV` loop — no
+     address is in play, the stream's position is in `m_pc`. On this tree the cell that holds "the address
+     in play" is `_au`, but the stream's position is `_fetchPointer`, and *that* cell is the one that is
+     idle during a loop (the loop issues no read). So the faithful mapping may be "count in the adder's
+     cell, which on this model is `_fetchPointer`, and restore it at the loop's exit" — two facts, the same
+     arithmetic, and `PC` untouched. It is cheaper than the split and it is what `#92` actually asks for
+     ("the loops are counted by data flowing through the address adder"): decide it by measurement, with
+     the clocks as the witness, before spending a session on the swap.
 4. the **access label** (`A7`) — an enum over the script calls.
    - [x] first half: the class is a value — `AccessClass` (`Data`/`Program`/`CpuSpace`, MAME's
      `SSW_DATA`/`SSW_PROGRAM`/`SSW_CPU`), passed by the access instead of the two booleans `isProgram` /
