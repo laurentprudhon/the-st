@@ -102,6 +102,13 @@ microcoded instruction can branch on `auz`/`nz`/`d4`/`enl`. Our scripts are that
    - [ ] the adder's position: a fetch state must be able to say `m_pc = m_au`, which needs the stream's
      position to be *derived* from `AU`/`AT`/the pipeline (`_fetchPointer`'s rule re-derived) rather than
      kept beside them. Blocked on nothing but that derivation; it is #87's own subject.
+     **The instrument is in place** (`61f4080`): `--clocks`' `frame_pc`/`fetch_ptr`/`pc_counter`/`ir_addr`
+     are now sampled at the boundary as well as at an exception entry, so `fetch_ptr − pc_counter` is the
+     pipeline's depth for every record. Measured over MAME's 261 894 clean records: **4** on 260 664 and
+     **6** on exactly the 1 230 `STOP` records (the seam's rollback of the counter to the opcode's own
+     address) — the boundary's depth is a constant with one named exception, and `ir_addr − pc_counter` is
+     0 / −2 / −4 (171 355 / 88 636 / 673), i.e. the address temporary's own placement still varies by the
+     last access, which is the part the derivation has to reproduce.
      **What is now known about the two cells, measured and read off the tree** — take it as the design's
      starting point, not as a guess: at a boundary (the seam's `Load`) `_fetchPointer = _au + 4`,
      `_pc = _au + 2`, `_at = _au`; the decode step advances `_au` by 2 and moves neither of the others,
@@ -131,9 +138,21 @@ microcoded instruction can branch on `auz`/`nz`/`d4`/`enl`. Our scripts are that
      PC-register landing (`eb5768f`) is what makes this possible without the full split.
      `DIVU` is landed by the same two atoms plus `AtEqualsAu()`: its fetch comes *after* the loop, so
      `_pc` is not the position — the die latches it in `AT` (`m_at = m_au`) and copies it back, which is
-     what `AuEqualsAt()` restores (restoring from `_pc` there costs **649 records**). `DIVS`, `CHK` and
-     `RESET`'s countdown remain: `DIVS`'s epilogue decrements at `dvs12` and reaches the shared tails
-     (`leaa2`, `dvuma`), so its restore point has to be chosen with the tail in hand.
+     what `AuEqualsAt()` restores (restoring from `_pc` there costs **649 records**). `DIVS` (`3ed9aca`)
+     is the same shape with two exits, which is what its tail asked for: `dvumz` (the loop's overflow
+     exit, `dvs08`'s no-borrow) leaves before any decrement and restores from the latch itself, and
+     `dvs14` is the first state after the loop's last decrement (`dvs12`'s dead `m_au = m_au - 1`), so
+     one `AuEqualsAt()` there covers `dvuma`, `dvum4` and `leaa2`. 2 500/2 500 both columns and a
+     `--clocks` dump byte-identical to the parent's.
+     `RESET` (`3a02b3b`) is a countdown, not a family: `rset2` starts the adder a word below the
+     constants ROM's zero, `rset3`/`rset4` step it down by two and branch on the same six low bits, and
+     thirty-one passes are the pin's 128 clocks — now `4 + 4 × passes` derived from the loop instead of
+     the table's flat 128. **Two of its placements stay the table's and are the owner's to rule on**
+     (comment on #92, with the three measured pairs): the read is issued before the hold where the die
+     issues it after it (`rset5`), and the 62 micro-states are charged as one wait, because the
+     separation moves `run.digest` alone. `CHK` has **no loop** — four states (`chkr1`, `chkr2`, then
+     `chkr3` or `trap1`) and a net-zero adder transfer pair — so `B1` had nothing to convert there; the
+     reading is in `CheckAsync`'s doc comment. `B1` is therefore closed except for that ruling.
      **An option that may unblock `B1` without the full split** (for the owner to rule on, since it changes
      the ticket's premise): the die counts in `AU` because `AU` is *idle* during a `MUL`/`DIV` loop — no
      address is in play, the stream's position is in `m_pc`. On this tree the cell that holds "the address
