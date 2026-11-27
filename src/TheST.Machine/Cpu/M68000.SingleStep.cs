@@ -112,6 +112,8 @@ public sealed partial class M68000
     public async ValueTask StepAsync()
     {
         ushort opcode = _ird;
+        Emulator.ExecutingWord = opcode;
+        Emulator.InInstruction = true;
         _au += 2;
         _opcodeAddress = _au - 2;
         _streamStart = _fetchPointer;

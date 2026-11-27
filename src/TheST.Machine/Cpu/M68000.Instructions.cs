@@ -14,6 +14,10 @@ public sealed partial class M68000
 
     async ValueTask ExecuteAsync(ushort op)
     {
+        // the emulator's own view of "the instruction being executed" (ADR 0015 §1.1): set here and
+        // cleared at the closing steps, so Instruments.Instruction/Family are never a word behind
+        Emulator.ExecutingWord = op;
+        Emulator.InInstruction = true;
         // the internal clock (M68000.Timing.cs): the family's own work, charged before the closing
         // fetch — or before the instruction's first access, for the families whose clocks lead
         int own = InstructionOwnClocks(op);
@@ -68,6 +72,8 @@ public sealed partial class M68000
             case 0xE: await LineEAsync(op); break;
             default: await EnterExceptionAsync(11, 0); break;
         }
+
+        Emulator.InInstruction = false;   // the boundary: Family is null, Instruction reads "—" (§1.1)
     }
 
     // ---- effective addressing -------------------------------------------------------------

@@ -101,18 +101,150 @@ internal static class SurfaceCommand
     internal static int Run(string[] args)
     {
         bool audit = false;
-        foreach (string argument in args)
+        string? familiesDirectory = null;
+        for (int index = 0; index < args.Length; index++)
         {
-            switch (argument)
+            switch (args[index])
             {
                 case "--audit":
                     audit = true;
                     break;
+                case "--families":
+                    if (++index >= args.Length) return Program.Unknown(args[index - 1]);
+                    familiesDirectory = args[index];
+                    break;
                 default:
-                    return Program.Unknown(argument);
+                    return Program.Unknown(args[index]);
             }
         }
 
+        if (familiesDirectory is not null)
+        {
+            return FamilyAudit(familiesDirectory);
+        }
+
+
+        /// <summary>
+        /// <c>--families DIR</c> — the decode's witness. For every corpus record whose own name carries
+        /// its file's mnemonic (an <c>ADDQ</c> record inside <c>ADD.b</c> does not), the decoder must
+        /// answer that family for the record's opcode word. Legality is not its business: that is the
+        /// <c>.lst</c>'s 65 536-opcode golden (#89).
+        /// </summary>
+        static bool familyIsTwoOperand(string mnemonic) =>
+            mnemonic is "ADD" or "SUB" or "AND" or "OR" or "EOR" or "CMP";
+
+        static int FamilyAudit(string directory)
+        {
+            if (!Directory.Exists(directory))
+            {
+                Console.Error.WriteLine($"cpu-surface: no corpus at {directory}");
+                return 1;
+            }
+
+            long total = 0, checkedRecords = 0, mismatched = 0;
+            var byFamily = new SortedDictionary<string, (long Checked, long Bad)>(StringComparer.Ordinal);
+            var examples = new List<string>();
+            var perFamily = new Dictionary<string, int>(StringComparer.Ordinal);
+
+            foreach (string path in Directory.GetFiles(directory)
+                         .Where(p => p.EndsWith(".json", StringComparison.Ordinal)
+                                     || p.EndsWith(".json.gz", StringComparison.Ordinal))
+                         .OrderBy(p => p, StringComparer.Ordinal))
+            {
+                string file = Path.GetFileName(path);
+                if (file.EndsWith(".gz", StringComparison.Ordinal)) file = file[..^3];
+                file = file[..^5];
+                int dot = file.IndexOf('.');
+                string fileMnemonic = (dot < 0 ? file : file[..dot]).ToUpperInvariant();
+                string fileSuffix = dot < 0 ? string.Empty : file[dot..].ToUpperInvariant();
+
+                // a file's own name is not always its family's: `MOVE.q` is MOVEQ, `UNLINK` is UNLK,
+                // `ANDItoCCR`/`ANDItoSR` are ANDI, and the two USP directions are MOVEUSP
+                string expected = fileMnemonic switch
+                {
+                    "MOVE" when fileSuffix == ".Q" => "MOVEQ",
+                    "UNLINK" => "UNLK",
+                    "MOVEFROMUSP" or "MOVETOUSP" => "MOVEUSP",
+                    "ANDITOCCR" or "ANDITOSR" => "ANDI",
+                    "ORITOCCR" or "ORITOSR" => "ORI",
+                    "EORITOCCR" or "EORITOSR" => "EORI",
+                    _ => fileMnemonic,
+                };
+
+                using Stream stream = File.OpenRead(path);
+                using Stream input = path.EndsWith(".gz", StringComparison.Ordinal)
+                    ? new System.IO.Compression.GZipStream(stream, System.IO.Compression.CompressionMode.Decompress)
+                    : stream;
+                using var document = System.Text.Json.JsonDocument.Parse(input);
+                if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Array) continue;
+
+                foreach (System.Text.Json.JsonElement test in document.RootElement.EnumerateArray())
+                {
+                    total++;
+                    string name = test.GetProperty("name").GetString() ?? string.Empty;
+                    int space = name.IndexOf(' ');
+                    if (space < 0 || name.Length < space + 2) continue;
+                    string body = name[(space + 1)..].TrimStart();
+                    int end = 0;
+                    while (end < body.Length && (char.IsLetter(body[end]) || body[end] == '.')) end++;
+                    if (end == 0) continue;
+                    string mnemonic = body[..end];
+                    int suffix = mnemonic.IndexOf('.');
+                    string bare = (suffix < 0 ? mnemonic : mnemonic[..suffix]).ToUpperInvariant();
+                    if (bare != fileMnemonic) continue;
+
+                    ushort opcode = (ushort)test.GetProperty("initial").GetProperty("prefetch")[0].GetUInt32();
+
+                    // the additive families share their file with the quick and immediate forms
+                    // (`ADD.b` carries ADDQ and ADDI records, which MAME names "ADD.b 2, …"): those are
+                    // other families by construction, and this filter is what says so — it is not a
+                    // decode rule, and the set is named here rather than derived from the decoder
+                    if (familyIsTwoOperand(bare) && (opcode >> 12) is 0x5 or 0x0) continue;
+                    if (bare == "CMP" && (opcode & 0xF138) == 0xB108) continue;   // the CMPM records MAME names "CMP"
+                    string want = expected;
+                    if (want == "BCC")
+                    {
+                        want = ((opcode >> 8) & 0xF) switch { 0x0 => "BRA", 0x1 => "BSR", _ => "BCC" };
+                    }
+                    TheST.Machine.Cpu.M68000.Decode.TryDecode(opcode, out TheST.Machine.Cpu.M68000.Decoded decoded);
+                    string family = decoded.Family.ToString().ToUpperInvariant();
+                    checkedRecords++;
+                    var entry = byFamily.TryGetValue(want, out var seen) ? seen : default;
+                    if (family != want)
+                    {
+                        mismatched++;
+                        entry.Bad++;
+                        int shown = perFamily.TryGetValue(want, out int already) ? already : 0;
+                        if (shown < 3)
+                        {
+                            examples.Add($"    {want,-10} opcode {opcode:x4} line {opcode >> 12:X} -> {family,-10} {name}");
+                            perFamily[want] = shown + 1;
+                        }
+                    }
+
+                    entry.Checked++;
+                    byFamily[want] = entry;
+                }
+            }
+
+            Console.WriteLine($"cpu-surface --families {directory}");
+            foreach ((string family, (long checkedCount, long bad)) in byFamily)
+            {
+                Console.WriteLine($"  {family,-12} {checkedCount - bad,7}/{checkedCount,-7}"
+                                  + (bad == 0 ? " ok" : $"  {bad} MISMATCHED"));
+            }
+
+            if (examples.Count > 0)
+            {
+                Console.WriteLine("  the first mismatches:");
+                foreach (string line in examples) Console.WriteLine(line);
+            }
+
+            Console.WriteLine();
+            Console.WriteLine($"decode: {checkedRecords - mismatched} / {checkedRecords} of {total} records "
+                              + $"whose name carries their file's mnemonic decode to it, {mismatched} mismatched");
+            return mismatched == 0 ? 0 : 1;
+        }
         Type cpu = typeof(TheST.Machine.Cpu.M68000);
         var report = new StringBuilder();
         int divergences = 0;

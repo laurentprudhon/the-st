@@ -1,6 +1,33 @@
 namespace TheST.Machine.Cpu;
 
 /// <summary>
+/// The two control stores' vocabulary — the words a script is written in (ADR 0015 §10, `design/cpu-silicon.md`).
+///
+/// <para>
+/// The die has two control stores, read at the same address: the **microcode** (544 × 17 bits), which
+/// is a script — what state runs next and which bus access it declares — and the **nanocode**
+/// (336 × 68 bits), which is one microstate's datapath work. This file is their vocabulary, in two
+/// blocks:
+/// </para>
+///
+/// <list type="bullet">
+/// <item><b>MicroStore</b> — the sequencing half: the idle state (<c>IdleAsync</c>, one microword's two
+/// clocks), the charge a script spends (<c>ClocksAsync</c>, and the access it declares), and the
+/// instruction stream's three reads (<c>FetchAsync</c>, <c>TrailingFetchAsync</c>, <c>RefillAsync</c>).
+/// A statement from this block is a microstate; it never computes a value.</item>
+/// <item><b>NanoStore</b> — the datapath half: the transfers between the register file and the ALU, the
+/// AU's constant select (<c>AuPlusTwo</c> and friends), the ALU mode and its flag update
+/// (<c>SetNzvc</c>, <c>SetAddFlags</c>), the size masks, and the sixteen-bit ALU of the variable-time
+/// families. A statement from this block is one nanoword's worth of work.</item>
+/// </list>
+///
+/// <para>
+/// The third layer is not here: the PLA bank keyed on <c>IRD</c> — which register file <c>RX</c>/<c>RY</c>
+/// mean, the operand size, the vector — is `M68000.Decode.cs`, because those are *decode* facts about an
+/// instruction, not datapath atoms.
+/// </para>
+///
+/// <para>
 /// The chip's elementary operations — the vocabulary an instruction's script is written in.
 ///
 /// <para>
@@ -42,6 +69,12 @@ public sealed partial class M68000
     // The ALU's latches (ALUO, ALUB, ALUE, ISR, the width field) and the read latch DBIN are storage:
     // they live in M68000.Registers.cs (ADR 0015 §4). Everything below is an *atom* — one nanoword's
     // worth of datapath work — and goes through those latches.
+
+    // ============================================================================================
+    // NanoStore — the datapath's atoms: transfers, the AU's constant select, the ALU mode and its
+    // flag update, the size masks. Each is one nanoword's field set; a script calls them and computes
+    // nothing itself.
+    // ============================================================================================
 
     /// <summary>
     /// The ALU's operation select for the two-operand long families — MAME's <c>r=</c> field
@@ -283,7 +316,7 @@ public sealed partial class M68000
         }
     }
 
-    // ---- the sixteen-bit ALU of the variable-time families --------------------------------------
+    // ---- NanoStore: the sixteen-bit ALU of the variable-time families --------------------------
     //
     // MULU, MULS, DIVU and DIVS are not operations, they are *algorithms the sequencer iterates*. The
     // 68000 has no multiplier and no divider — a 16x16->32 array multiplier and a 32/16 divider would

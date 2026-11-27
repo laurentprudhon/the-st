@@ -78,6 +78,208 @@ public sealed partial class M68000
         /// <summary>Why it stopped, as the harness reports it — a string, not a latch.</summary>
         public string? HaltReason { get; private set; }
 
+        // ---- the manual's state as text (§1.1) -------------------------------------------------
+        // Each is *composed on read* from what the part holds — never built per instruction, because a
+        // string per instruction in the Release boot is a G8 cost with no owner. `Family` is null and
+        // `Instruction` reads "—" at an instruction boundary, so an instrument never shows the previous
+        // instruction's value (the `--clocks` frame-columns bug, refused by name in §1.1).
+
+        /// <summary>The word being executed, and whether the part is inside an instruction at all.</summary>
+        internal ushort ExecutingWord;
+
+        /// <summary>True between an instruction's decode and its closing steps.</summary>
+        internal bool InInstruction;
+
+        /// <summary>The family of the instruction being executed, or null at a boundary (§1.1).</summary>
+        public M68000.Family? Family =>
+            InInstruction && M68000.Decode.TryDecode(ExecutingWord, out M68000.Decoded decoded)
+                ? decoded.Family
+                : null;
+
+        /// <summary>
+        /// The instruction being executed, in the manual's own syntax — `"MOVE.W D0,(A1)+"` — or "—" at a
+        /// boundary. Operands are composed from the encoding; a displacement or an immediate that lives
+        /// in an extension word reads as `d16(An)` or `#…`, because the extension word is the queue's, not
+        /// the opcode's.
+        /// </summary>
+        public string Instruction
+        {
+            get
+            {
+                if (!InInstruction || !M68000.Decode.TryDecode(ExecutingWord, out M68000.Decoded decoded))
+                {
+                    return "—";
+                }
+
+                return Format(ExecutingWord, decoded);
+            }
+        }
+
+        /// <summary>The bus cycle's state (§0.5, §8.2): `S0` idle, `S2` with the strobes asserted.</summary>
+        public string BusState => _cpu.Pads.AS ? "S2" : "S0";
+
+        /// <summary>The exception entry's step (§6), empty outside an entry (the sequencer is #93's).</summary>
+        public string EntryStep => string.Empty;
+
+        /// <summary>The interrupt's disposition (§7), from the level the pads show against the mask.</summary>
+        public string Interrupt
+        {
+            get
+            {
+                int level = (_cpu.Pads.IPL2 ? 4 : 0) | (_cpu.Pads.IPL1 ? 2 : 0) | (_cpu.Pads.IPL0 ? 1 : 0);
+                if (level == 0) return "none";
+                int mask = (_cpu.I2 ? 4 : 0) | (_cpu.I1 ? 2 : 0) | (_cpu.I0 ? 1 : 0);
+                return level > mask || level == 7 ? "taken" : "masked";
+            }
+        }
+
+        // ---- the syntax (the manual's own spelling, tutorial §5) --------------------------------
+
+        static string SizeSuffix(int size) => size switch { 0 => ".B", 1 => ".W", 2 => ".L", _ => string.Empty };
+
+        static string Ea(int mode, int register) => mode switch
+        {
+            0 => $"D{register}",
+            1 => $"A{register}",
+            2 => $"(A{register})",
+            3 => $"(A{register})+",
+            4 => $"-(A{register})",
+            5 => $"d16(A{register})",
+            6 => $"d8(A{register},Xn)",
+            7 => register switch
+            {
+                0 => "abs.W",
+                1 => "abs.L",
+                2 => "d16(PC)",
+                3 => "d8(PC,Xn)",
+                4 => "#…",
+                _ => "?",
+            },
+            _ => "?",
+        };
+
+        static string Format(ushort opcode, M68000.Decoded d)
+        {
+            string name = d.Family.ToString().ToUpperInvariant();
+            string size = SizeSuffix(d.Size);
+            string one = Ea(d.Mode, d.Register);
+            string two = Ea(d.SourceMode, d.SourceRegister);
+
+            switch (d.Family)
+            {
+                case M68000.Family.Move:
+                case M68000.Family.Movea:
+                    return $"{name}{size} {Ea((opcode >> 3) & 0x7, opcode & 0x7)},{Ea((opcode >> 6) & 0x7, (opcode >> 9) & 0x7)}";
+
+                case M68000.Family.Moveq:
+                    return $"MOVEQ #{opcode & 0xFF},D{(opcode >> 9) & 0x7}";
+
+                case M68000.Family.Add:
+                case M68000.Family.Sub:
+                case M68000.Family.And:
+                case M68000.Family.Or:
+                case M68000.Family.Eor:
+                case M68000.Family.Cmp:
+                    return ((opcode >> 6) & 0x7) == 4
+                        ? $"{name}{size} D{(opcode >> 9) & 0x7},{one}"
+                        : $"{name}{size} {two},D{(opcode >> 9) & 0x7}";
+
+                case M68000.Family.Adda:
+                case M68000.Family.Suba:
+                case M68000.Family.Cmpa:
+                    return $"{name}{size} {two},A{(opcode >> 9) & 0x7}";
+
+                case M68000.Family.Addq:
+                case M68000.Family.Subq:
+                {
+                    int quick = (opcode >> 9) & 0x7;
+                    return $"{name}{size} #{(quick == 0 ? 8 : quick)},{one}";
+                }
+
+                case M68000.Family.Addx:
+                case M68000.Family.Subx:
+                case M68000.Family.Cmpm:
+                case M68000.Family.Abcd:
+                case M68000.Family.Sbcd:
+                    return $"{name}{size} {two},{one}";
+
+                case M68000.Family.Btst:
+                case M68000.Family.Bchg:
+                case M68000.Family.Bclr:
+                case M68000.Family.Bset:
+                    return (opcode & 0x0100) != 0
+                        ? $"{name} D{(opcode >> 9) & 0x7},{one}"
+                        : $"{name} #…,{one}";
+
+                case M68000.Family.Bcc:
+                    return $"B{ConditionName((opcode >> 8) & 0xF)} <label>";
+
+                case M68000.Family.Scc:
+                    return $"S{ConditionName((opcode >> 8) & 0xF)} {one}";
+
+                case M68000.Family.Dbcc:
+                    return $"DB{ConditionName((opcode >> 8) & 0xF)} D{opcode & 0x7},<label>";
+
+                case M68000.Family.Asl:
+                case M68000.Family.Asr:
+                case M68000.Family.Lsl:
+                case M68000.Family.Lsr:
+                case M68000.Family.Rol:
+                case M68000.Family.Ror:
+                case M68000.Family.Roxl:
+                case M68000.Family.Roxr:
+                    if (d.Size == 3) return $"{name} {one}";
+                    if ((opcode & 0x0020) != 0) return $"{name}{size} D{(opcode >> 9) & 0x7},D{opcode & 0x7}";
+                    {
+                        int count = (opcode >> 9) & 0x7;
+                        return $"{name}{size} #{(count == 0 ? 8 : count)},D{opcode & 0x7}";
+                    }
+
+                case M68000.Family.Trap:
+                    return $"TRAP #{opcode & 0xF}";
+
+                case M68000.Family.Exg:
+                    return (opcode & 0xFFF8) == 0xC140
+                        ? $"EXG D{(opcode >> 9) & 0x7},D{opcode & 0x7}"
+                        : (opcode & 0xFFF8) == 0xC148
+                            ? $"EXG A{(opcode >> 9) & 0x7},A{opcode & 0x7}"
+                            : $"EXG D{(opcode >> 9) & 0x7},A{opcode & 0x7}";
+
+                case M68000.Family.Ext:
+                    return $"EXT{size} D{opcode & 0x7}";
+
+                case M68000.Family.Swap:
+                    return $"SWAP D{opcode & 0x7}";
+
+                case M68000.Family.Lea:
+                case M68000.Family.Pea:
+                case M68000.Family.Jmp:
+                case M68000.Family.Jsr:
+                case M68000.Family.Neg:
+                case M68000.Family.Negx:
+                case M68000.Family.Clr:
+                case M68000.Family.Not:
+                case M68000.Family.Tst:
+                case M68000.Family.Tas:
+                case M68000.Family.Nbcd:
+                case M68000.Family.Movem:
+                case M68000.Family.MoveFromSr:
+                case M68000.Family.MoveToSr:
+                case M68000.Family.MoveToCcr:
+                    return $"{name} {one}";
+
+                default:
+                    return name;
+            }
+        }
+
+        static string ConditionName(int condition) => condition switch
+        {
+            0x2 => "HI", 0x3 => "LS", 0x4 => "CC", 0x5 => "CS", 0x6 => "NE", 0x7 => "EQ",
+            0x8 => "VC", 0x9 => "VS", 0xA => "PL", 0xB => "MI", 0xC => "GE", 0xD => "LT",
+            0xE => "GT", 0xF => "LE", 0x0 => "RA", _ => "SR",
+        };
+
 #if DEBUG
         // ---- the per-record instruments (--trace / --clocks print them) --------------------------
         /// <summary>

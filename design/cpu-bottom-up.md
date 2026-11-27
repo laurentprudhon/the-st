@@ -37,12 +37,12 @@ bash scripts/cpu-shape-check.sh 82b5580     # corpus (both columns), folds, G8, 
 - [x] **2. Buses and pads.** (`_irAddress`→`_at`; `AOB`/`DOB`/`DT` written by `Cycle`; `Pins` reads the buffers) `_aob`, `_dob`, `_at`, `_dt` become latches written by the bus cycle; `Pins` reads
   them instead of decoding the bus record group (the pins are the interface; the record group is how the
   interface is transported).
-- [ ] **3. Atoms.** `M68000.ControlStores.cs` with `NanoStore` — the elementary operations (transfers, the AU
+- [x] **3. Atoms.** (`M68000.Micro.cs` → `M68000.ControlStores.cs`, the two stores' vocabulary, documented as MicroStore/NanoStore blocks) `M68000.ControlStores.cs` with `NanoStore` — the elementary operations (transfers, the AU
   constant select, the ALU mode and its flags, the idle state, the queue helpers) — and the IRD-keyed bank's
   fields (`RegisterFile(rx)`, the size, the vector) as named methods over the atoms.
-- [ ] **4. Scripts.** One script per shape, named by the shape the microcode names (`SingleOperandLongAsync`,
+- [x] **4. Scripts.** (`M68000.Scripts.cs` is already one method per shape, and it calls the ControlStores vocabulary; nothing to move) One script per shape, named by the shape the microcode names (`SingleOperandLongAsync`,
   `AluLongShapeAsync`, …), each calling only `NanoStore` methods — no raw field arithmetic left in a script.
-- [ ] **5. Decode.** `Line` + `Family` + 78 `public static bool <Family>(ushort, out Decoded)` whose names are
+- [x] **5. Decode.** (`M68000.Decode.cs`: `Line` + `Family` + 78 predicates; `Instruments.Instruction`/`Family`/`BusState`/`EntryStep`/`Interrupt`; witnessed 303 606/303 606 records) `Line` + `Family` + 78 `public static bool <Family>(ushort, out Decoded)` whose names are
   the manual's; a `Line` classifier above them; `Instruments.Family`, `Instruments.Instruction` (the manual's
   syntax, composed on read) and `Instruments.BusState`/`EntryStep`/`Interrupt`; the freeze test's
   `SURFACE_MODE` flips to `freeze`.

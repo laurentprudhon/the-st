@@ -77,7 +77,9 @@ internal static class Program
                                                  compare two runs' digest streams: the first differing
                                                  batch, the instant it drained at, and each run's tail
                                                  (G1/G2's one-line diff)
-              cpu-surface [--audit]              #85: the chip's public surface against ADR 0015 §1
+              cpu-surface [--audit] [--families DIR]
+                                                 #85: the chip's public surface against ADR 0015 §1;
+                                                 --families grades Decode against a corpus's own names
                                                  — the default is the freeze (non-zero on a divergence),
                                                  --audit prints the same report and exits 0 while the
                                                  surface is still being converted
