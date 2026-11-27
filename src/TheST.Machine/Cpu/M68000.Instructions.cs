@@ -991,10 +991,12 @@ public sealed partial class M68000
     /// <b>The loop, and why this family has no clock to charge.</b> MAME's class is
     /// <c>movem_l_aips_list</c>, and its own footer reads “10 bus accesses, <b>0 idle states</b>”: every
     /// state in it is a bus access at 4 clocks, so a MOVEM's whole timing is its reads and its
-    /// <c>length</c> is <c>4 × accesses</c>. Three pieces of machine state drive it — <c>m_movemr</c>
-    /// (the mask, drained one bit a turn; <c>m_t = !m_movemr</c> is the loop's exit test),
-    /// <c>m_movems</c> (this turn's register) and <c>m_at</c> (**the address of the access just
-    /// issued**) — beside <c>m_au</c>, the base's shadow: the real <c>An</c> is written once, at the end.
+    /// <c>length</c> is <c>4 × accesses</c>. Three pieces of machine state drive it — **`PREN`** (MAME's
+    /// <c>m_movemr</c>: the list itself, whose lowest set line is this turn's register and which loses that
+    /// line each turn, so <c>PREN == 0</c> *is* the loop's exit test and nothing counts),
+    /// <c>m_movems</c> (this turn's register, the encoder's answer) and <c>m_at</c> (**the address of the
+    /// access just issued**) — beside <c>m_au</c>, the base's shadow: the real <c>An</c> is written once,
+    /// at the end.
     /// </para>
     /// <para>
     /// The long form takes two reads per register (<c>popm2</c> reads the high word at the base,
@@ -1056,9 +1058,16 @@ public sealed partial class M68000
         // 73 records. It is not a fetch: the saved counter does not move.
         bool programBus = mode == 7 && reg is 2 or 3;
 
-        for (int bit = 0; bit < 16; bit++)
+        // **The walk is the encoder, not a scan.** `stmr1` puts the list into PREN (`m_movemr = m_dbin`)
+        // and every state that publishes a register also spends a `reset pren`: the register is PREN's
+        // lowest set line, and that line leaves the list. So the loop's carrier is the list itself —
+        // `while (!PrenEmpty)`, not `for (bit = 0 … 16)` — and a mask that empties ends the transfer with
+        // no counter to disagree with it.
+        LoadPren(mask);
+
+        while (!PrenEmpty)
         {
-            if ((mask & (1 << bit)) == 0) continue;
+            int bit = StepPren();                            // reset pren: the line taken, cleared
 
             // one register a turn: `popm2` + `popm3` + `popm5` for a long (`set_16h` then `set_16l`,
             // high word first), `popm2` + `popm4` for a word (`ext32`)
@@ -1185,28 +1194,30 @@ public sealed partial class M68000
 
         if (predecrement)
         {
-            // `push4` then `push5`, per register: bit upwards (the address travels downwards, so the
-            // first store is the highest address) and the register reversed — `step_movem_predec`'s
-            // `r ^ 0xf`, so bit 0 is A7 and bit 15 is D0. A long goes out **low word first, at the
-            // higher address** (`push4` at A − 2, `push5` at A − 4): memory still reads high-then-low,
-            // but the access order is inverted, which is why an odd base faults on the low word.
-            for (int bit = 0; bit < 16; bit++)
+            // `push4` then `push5`, per register: the address travels downwards, so the first store is the
+            // highest address — and the list is stored reversed, so **the encoder's line *is* the
+            // register** (`step_movem_predec`'s `r ^ 0xf`: line 0 is A7, line 15 is D0). A long goes out
+            // **low word first, at the higher address** (`push4` at A − 2, `push5` at A − 4): memory still
+            // reads high-then-low, but the access order is inverted, which is why an odd base faults on
+            // the low word.
+            LoadPren(mask);
+
+            while (!PrenEmpty)
             {
-                if ((mask & (1 << bit)) == 0) continue;
+                int register = StepPrenReversed();           // reset pren: the line taken, cleared
 
                 // A long store into -(An) steps down a word at a time, so an odd base faults on the low
                 // word at A − 2 rather than on the long at A − 4 — the same rule the plain MOVE's store
                 // follows (FINDINGS row 44). The corpus measures it: the frame's access address is A − 2.
                 if (size == 2 && (address & 1) != 0)
                 {
-                    int faulting = 15 - bit;
-                    ushort low = (ushort)(faulting < 8 ? _d[faulting] : GetA(faulting - 8));
+                    ushort low = (ushort)(register < 8 ? _d[register] : GetA(register - 8));
                     await WriteWordAsync(address - 2, low);
                     if (_busFaulted) return;
                 }
 
                 address -= (uint)bytes;
-                await StoreMovemAsync(address, 15 - bit, size);
+                await StoreMovemAsync(address, register, size);
                 if (_busFaulted) return;
             }
 
@@ -1218,11 +1229,13 @@ public sealed partial class M68000
             // `stmr4` (high word) then `stmr6` (low word) per long register, `stmr4` alone for a word:
             // 2n writes and two reads for n longs, and no read-ahead — which is why this direction's
             // clock column was already right before row 78
-            for (int bit = 0; bit < 16; bit++)
-            {
-                if ((mask & (1 << bit)) == 0) continue;
+            LoadPren(mask);
 
-                await StoreMovemAsync(address, bit, size);
+            while (!PrenEmpty)
+            {
+                int register = StepPren();                   // reset pren: the line taken, cleared
+
+                await StoreMovemAsync(address, register, size);
                 if (_busFaulted) return;
 
                 address += (uint)bytes;

@@ -341,6 +341,42 @@ public sealed partial class M68000
     /// <summary>`AOB ← address` — the address buffer taking what goes out on `A1–A23`.</summary>
     void LatchAob(uint address) => _aob = address;
 
+    // ---- NanoStore: PREN, the encoder that walks MOVEM's list --------------------------------
+    // MOVEM is not a loop over a counter: the **list is the loop's state**. PREN holds the mask, its
+    // lowest set line is the register this turn transfers, and the nanocode's `reset pren` clears that
+    // line — so the exit test is the mask's own zero (MAME's `m_t = !m_movemr`) and there is no counter
+    // to get wrong. Measured on the family: both files, 5 000 records, were already green on both
+    // columns before the walk was expressed this way, and the expression moved nothing — which is the
+    // proof that the mask *was* the whole state (#92).
+
+    /// <summary>`PREN ← list` — the list word off the bus into the encoder (`stmr1`'s `m_movemr = m_dbin`).</summary>
+    void LoadPren(ushort list) => _pren = list;
+
+    /// <summary>Whether the walk is over: every line of the list has been taken (`m_t = !m_movemr`).</summary>
+    bool PrenEmpty => _pren == 0;
+
+    /// <summary>
+    /// `reset pren` — the encoder answers the number of its **lowest set line** and clears that line from
+    /// the list: the register this turn transfers. An empty list answers line 0 (MAME's `countr_zero`
+    /// clamps the 32 it returns), which the walk's own exit test has already excluded — the clamp is kept
+    /// here so the atom is the encoder and not a caller's convention.
+    /// </summary>
+    int StepPren()
+    {
+        int line = System.Numerics.BitOperations.TrailingZeroCount(_pren);
+        if (line > 15) line = 0;
+        _pren = (ushort)(_pren & ~(1 << line));
+        return line;
+    }
+
+    /// <summary>
+    /// `reset pren` on the predecrement list, which the encoder reads from its other end: the list is
+    /// stored **reversed** (`movem.l d2-d7/a2-a6,-(sp)` is `0x48E7 0x3F3E` where the other modes write
+    /// `0x7CFC`), so line 0 is register 15 and the line's complement *is* the register. MAME's
+    /// `step_movem_predec` and its `r ^ 0xf` — one encoder, one list, two directions of travel.
+    /// </summary>
+    int StepPrenReversed() => StepPren() ^ 0xF;
+
     // ---- NanoStore: the sixteen-bit ALU of the variable-time families --------------------------
     //
     // MULU, MULS, DIVU and DIVS are not operations, they are *algorithms the sequencer iterates*. The

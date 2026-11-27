@@ -83,7 +83,9 @@ microcoded instruction can branch on `auz`/`nz`/`d4`/`enl`. Our scripts are that
 1. [x] `INL`/`TPEND` (`C1`) — landed: `_inl` latched at the boundary sample and read by both sampling
    sites; `_tpend` set from `T` at the boundary and consumed by the trace exception (vector 9), which
    now exists. The folds did not move (the boot never sets `T`), so the trace path is latent and correct.
-2. `PREN` — the MOVEM walk (5 000 green records; one direction at a time).
+2. [x] `PREN` — the MOVEM walk. `_pren` holds the list, `StepPren`/`StepPrenReversed` are its `reset
+   pren`, and both directions are `while (!PrenEmpty)`: 5 000 records green on both columns, sample
+   identical to the parent, G8 median +0.12 ms against `3343c0b` at n 751.
 3. the **AU/PC split** (`C3`) then the **narrow FTU** (`C2`) then the **AU as the MUL/DIV counter** (`B1`),
    then `AUH`/`AUL` (`B2`) and the constants ROM.
 4. the **access label** (`A7`) — an enum over the script calls.

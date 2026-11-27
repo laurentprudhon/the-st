@@ -113,7 +113,10 @@ public sealed partial class M68000
     /// <summary>`DT` — the data temporary: the last operand transferred, in either direction.</summary>
     ushort _dt;
 
-    /// <summary>
+    // ---- the exception logic's two latches, and the status word the frame saves -------------
+    // §5.3: the status word is not one register — its pending level and its trace bit are latched
+    // beside it, and SSW is a word of its own.
+
     /// <summary>
     /// `INL` — the pending interrupt level (3 bits), latched from `IPL0–IPL2` at the boundary, which is
     /// when this core looks at the pins. The part holds them continuously; the value at the boundary is
@@ -127,12 +130,25 @@ public sealed partial class M68000
     /// </summary>
     bool _tpend;
 
-
+    /// <summary>
     /// `SSW` — the microinstruction's bus-status word, saved into a group-0 frame so a faulting
     /// instruction can be resumed or diagnosed (§5.3, §9). The die latches it per microinstruction; here
-    /// the bus cycle is what writes it, and the frame reads it (`BusStatusWord`).
+    /// the frame is what writes it (`ComposeSsw`), and the frame reads it (`BusStatusWord`).
     /// </summary>
     ushort _ssw;
+
+    // ---- the special units of the DATA section (§5.2, §6.2) --------------------------------
+    // The Data section holds the ALU proper and, beside it, the two units that *encode* rather than
+    // compute: the bit-number decoder (a PLA over four bits, so no storage — `Decoder4To16`) and the
+    // priority encoder PREN, which is one of the ten 16-bit registers.
+
+    /// <summary>
+    /// `PREN` — the priority encoder that walks `MOVEM`'s register list (`List` / `next bit in list`
+    /// on Gigasoft's sheet, §5.2, §6.2). It holds **the list itself** — the 16-bit mask — and the
+    /// nanocode's `reset pren` reads its lowest set line and clears that line, so the walk needs no
+    /// counter: the mask emptying *is* the loop's exit (`PrenEmpty`).
+    /// </summary>
+    ushort _pren;
 
     // ---- the section accessors (ADR 0015 §3, tutorial §1.1) --------------------------------
     // A word write to a 32-bit register changes the low half and leaves the rest; the High section's
