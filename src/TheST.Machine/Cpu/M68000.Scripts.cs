@@ -2918,7 +2918,6 @@ public sealed partial class M68000
         // sixteen iterations, because sixteen quotient bits are what has to be produced.
         bool borrow = (_isr & FlagC) != 0;
         at = Set16L(at, (ushort)(High16(dividend)));
-        uint counter = 16;                                    // au = ftu + 1
         AluAnd16(High16(dividend), 0xFFFF);
         SrNzvc();
         await IdleAsync();
@@ -2935,6 +2934,13 @@ public sealed partial class M68000
         }
 
         // dvum3 falls into dvum5's shift with a 0, which is the first "bring down a bit" of the divide.
+        // The counter is the address adder again, one above the field register's constant (`au = ftu + 1`
+        // — sixteen iterations for sixteen quotient bits), and the adder is free for it for the same
+        // reason as the multiply's: the loop forms no address and issues no fetch.
+        AtEqualsAu();          // m_at = m_au — the position the adder is about to spend
+        ConstToFtu(15);
+        AuEqualsFtu();
+        AuPlusOne();
         bool shiftOne = false;
         while (true)
         {
@@ -2943,7 +2949,7 @@ public sealed partial class M68000
             // the bottom (1 for "the subtraction stood", 0 for "it was restored"). The sign the previous
             // subtract left is what chooses between the two, so a reader should follow N, not a variable.
             bool negative = (_isr & FlagN) != 0;
-            counter--;
+            AuMinusOne();
             AluSla(shiftOne ? 1u : 0u);
             SrNzvcU();
             await IdleAsync();
@@ -2952,7 +2958,7 @@ public sealed partial class M68000
             // half minus the divisor, and at the same time the copy of the pre-subtract remainder into
             // the working register (the value the restore path will want). The counter's zero test is the
             // last bit's exit, taken after the subtract so the final quotient bit is decided.
-            bool last = (counter & 0x3F) == 0;
+            bool last = AuZeroOnSixBits;
             at = Set16L(at, (ushort)(_aluo));
             AluSub16(_alub, _aluo);
             SrNzvc();
@@ -3011,6 +3017,9 @@ public sealed partial class M68000
             await IdleAsync();
             shiftOne = false;
         }
+
+        // the adder was the counter; the position it latched at the loop's entry comes back
+        AuEqualsAt();
 
         // dvum0 — the quotient into Dn's low word (the pair's low half after sixteen shifts *is* the
         // quotient), and the flags from a subtract of zero: so N and Z are the quotient's, V and C are

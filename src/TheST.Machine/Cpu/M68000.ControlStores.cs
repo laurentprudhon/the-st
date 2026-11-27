@@ -353,6 +353,14 @@ public sealed partial class M68000
     void AuEqualsAt() => _au = _at;
 
     /// <summary>
+    /// `AT ← AU` — the address temporary latching the adder (`mulr1`'s <c>m_at = m_au</c>), which is how
+    /// a loop saves the position it is about to spend on counting: the die protects the program counter by
+    /// keeping it in AT and copying it back into `m_pc` inside the loop (<c>mulm4</c>'s
+    /// <c>set_16l(m_pc, m_at)</c>); this core keeps it in `_at` and puts it back in the adder at the exit.
+    /// </summary>
+    void AtEqualsAu() => _at = _au;
+
+    /// <summary>
     /// `AU ← ext32(FTU)` — the adder taking the field register's value, which is how the die loads a
     /// loop's trip count into its counter (`mulr1`'s <c>m_au = ext32(m_ftu)</c>, fed by the constants
     /// ROM). The narrow FTU gives the constant its one home, so a loop's 15 is a transfer and not a
@@ -365,6 +373,11 @@ public sealed partial class M68000
     /// *words*, and a loop counts in units.
     /// </summary>
     void AuMinusOne() => _au--;
+
+    /// <summary>`m_au = m_au + 1` — the unit step's other direction: a divide loads `ftu + 1` (sixteen
+    /// iterations for sixteen quotient bits), which is the adder's arithmetic on the field register's
+    /// constant and not a second literal.</summary>
+    void AuPlusOne() => _au++;
 
     /// <summary>
     /// The branch variable `auz`: the adder's **six low bits** are zero (`mulm4`'s <c>!(m_au &amp; 0x3f)</c>).
