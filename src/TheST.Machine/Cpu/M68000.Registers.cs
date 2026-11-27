@@ -114,6 +114,20 @@ public sealed partial class M68000
     ushort _dt;
 
     /// <summary>
+    /// <summary>
+    /// `INL` — the pending interrupt level (3 bits), latched from `IPL0–IPL2` at the boundary, which is
+    /// when this core looks at the pins. The part holds them continuously; the value at the boundary is
+    /// the only one any consumer here can see, and the STOP wait's second sample reads it too (§7).
+    /// </summary>
+    int _inl;
+
+    /// <summary>
+    /// `TPEND` — trace pending: `T` was set when an instruction completed, so an exception is owed at the
+    /// boundary (§5.3, §7). Written where the boundary reads `T`; taking the exception is #93's.
+    /// </summary>
+    bool _tpend;
+
+
     /// `SSW` — the microinstruction's bus-status word, saved into a group-0 frame so a faulting
     /// instruction can be resumed or diagnosed (§5.3, §9). The die latches it per microinstruction; here
     /// the bus cycle is what writes it, and the frame reads it (`BusStatusWord`).

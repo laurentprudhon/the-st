@@ -1037,6 +1037,15 @@ public sealed partial class M68000 : Chip
                 continue;
             }
 
+            // TPEND: the trace bit is read at the boundary, and the trace exception (vector 9) is owed
+            // before any interrupt — the manual's order (§7)
+            _tpend = T;
+            if (_tpend)
+            {
+                await EnterExceptionAsync(9, 0);
+                continue;
+            }
+
             await CheckInterruptAsync();
         }
     }
@@ -1052,7 +1061,8 @@ public sealed partial class M68000 : Chip
         while (true)
         {
             long seq = Engine.Log(Wires.Ipl).Count > 0 ? Engine.Log(Wires.Ipl)[^1].Seq : long.MinValue;
-            int level = Engine.ValueAt(Wires.Ipl, Clock) & 0x7;
+            _inl = Engine.ValueAt(Wires.Ipl, Clock) & 0x7;
+            int level = _inl;
             bool takeable = level != 0 && (level > InterruptMask || level == 7);
             await WaitFor(takeable ? Clock + 4 * Instruments.TicksPerCpuClock : long.MaxValue, Wires.Ipl, seq);
 
@@ -1074,7 +1084,9 @@ public sealed partial class M68000 : Chip
     /// </summary>
     async ValueTask<bool> CheckInterruptAsync()
     {
-        int level = Engine.ValueAt(Wires.Ipl, Clock) & 0x7;
+        // INL: the pins, latched at this boundary (the part holds them; the boundary is when we look)
+        _inl = Engine.ValueAt(Wires.Ipl, Clock) & 0x7;
+        int level = _inl;
         if (level == 0)
         {
             return false;
@@ -1123,6 +1135,7 @@ public sealed partial class M68000 : Chip
     async ValueTask EnterExceptionAsync(int vector, int level)
     {
         Emulator.Exceptions++;
+        _tpend = false;         // the exception owed is taken; the trace bit itself is the handler's to clear
 
         // the entry's own clocks, before the frame is written: every entry in the corpus's traces is an
         // `n 4` there, then the frame, the vector, `n 2`, the handler's two fetches (M68000.Timing.cs)

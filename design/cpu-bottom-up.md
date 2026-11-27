@@ -80,7 +80,9 @@ microcoded instruction can branch on `auz`/`nz`/`d4`/`enl`. Our scripts are that
 
 **Still to take, in this order**
 
-1. `INL`/`TPEND` (`C1`) — the only rulings that change *behaviour*; gate on the folds.
+1. [x] `INL`/`TPEND` (`C1`) — landed: `_inl` latched at the boundary sample and read by both sampling
+   sites; `_tpend` set from `T` at the boundary and consumed by the trace exception (vector 9), which
+   now exists. The folds did not move (the boot never sets `T`), so the trace path is latent and correct.
 2. `PREN` — the MOVEM walk (5 000 green records; one direction at a time).
 3. the **AU/PC split** (`C3`) then the **narrow FTU** (`C2`) then the **AU as the MUL/DIV counter** (`B1`),
    then `AUH`/`AUL` (`B2`) and the constants ROM.
