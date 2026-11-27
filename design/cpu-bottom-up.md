@@ -42,7 +42,7 @@ bash scripts/cpu-shape-check.sh 82b5580     # corpus (both columns), folds, G8, 
   fields (`RegisterFile(rx)`, the size, the vector) as named methods over the atoms.
 - [x] **4. Scripts.** (`M68000.Scripts.cs` is already one method per shape, and it calls the ControlStores vocabulary; nothing to move) One script per shape, named by the shape the microcode names (`SingleOperandLongAsync`,
   `AluLongShapeAsync`, …), each calling only `NanoStore` methods — no raw field arithmetic left in a script.
-- [x] **5. Decode.** (`M68000.Decode.cs`: `Line` + `Family` + 78 predicates; `Instruments.Instruction`/`Family`/`BusState`/`EntryStep`/`Interrupt`; witnessed 303 606/303 606 records) `Line` + `Family` + 78 `public static bool <Family>(ushort, out Decoded)` whose names are
+- [x] **5. Decode.** (+ the seam nested as `M68000.SingleStep`, the freeze row live in `validate.sh` and `SURFACE_MODE=freeze`, 0 divergences) (`M68000.Decode.cs`: `Line` + `Family` + 78 predicates; `Instruments.Instruction`/`Family`/`BusState`/`EntryStep`/`Interrupt`; witnessed 303 606/303 606 records) `Line` + `Family` + 78 `public static bool <Family>(ushort, out Decoded)` whose names are
   the manual's; a `Line` classifier above them; `Instruments.Family`, `Instruments.Instruction` (the manual's
   syntax, composed on read) and `Instruments.BusState`/`EntryStep`/`Interrupt`; the freeze test's
   `SURFACE_MODE` flips to `freeze`.

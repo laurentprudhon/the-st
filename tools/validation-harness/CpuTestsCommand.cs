@@ -399,7 +399,7 @@ internal static class CpuTestsCommand
                 (ushort)prefetch[0].GetUInt32(),
                 (ushort)prefetch[1].GetUInt32());
 
-            cpu.Load(state);
+            M68000.SingleStep.Load(cpu, state);
 
             long cyclesBefore = cpu.Emulator.BusCycles;
             long internalBefore = cpu.Emulator.InternalClocks;
@@ -486,7 +486,7 @@ internal static class CpuTestsCommand
                 bus.Poke(pair[0].GetUInt32(), (byte)pair[1].GetUInt32());
             }
 
-            cpu.Load(new M68000.SingleStepState(
+            M68000.SingleStep.Load(cpu, new M68000.SingleStepState(
                 Registers(initial, "d"),
                 Registers(initial, "a", 7),
                 initial.GetProperty("usp").GetUInt32(),
@@ -575,7 +575,7 @@ internal static class CpuTestsCommand
             bus.Poke(pair[0].GetUInt32(), (byte)pair[1].GetUInt32());
         }
 
-        cpu.Load(new M68000.SingleStepState(
+        M68000.SingleStep.Load(cpu, new M68000.SingleStepState(
             Registers(initial, "d"),
             Registers(initial, "a", 7),
             initial.GetProperty("usp").GetUInt32(),
@@ -662,7 +662,7 @@ internal static class CpuTestsCommand
     /// </summary>
     static string? Step(M68000 cpu, Engine engine, SingleStepBus bus, JsonElement final, Corpus corpus)
     {
-        ValueTask step = cpu.StepAsync();
+        ValueTask step = M68000.SingleStep.StepAsync(cpu);
         int guard = 0;
 
         while (!step.IsCompleted)
@@ -687,7 +687,7 @@ internal static class CpuTestsCommand
 
         step.GetAwaiter().GetResult();
 
-        M68000.SingleStepResult state = cpu.Capture();
+        M68000.SingleStepResult state = M68000.SingleStep.Capture(cpu);
 
         for (int index = 0; index < 8; index++)
         {

@@ -111,6 +111,17 @@ else
     printf '%s\n' "$boundary"
 fi
 
+# ---- the core's public surface (ADR 0015 §1, #85) ---------------------------------------
+# The chip's declared surface is the programmer's model, four nested types and one verb — asserted by
+# reflection against the ADR's list, in both directions (a member it names and the type lacks, a public
+# member it does not name). It costs nothing and it is the only witness a rename has.
+step "cpu-surface — the core's public surface is ADR 0015 §1's, exactly and only"
+if harness Debug cpu-surface | tee "$stampdir/cpu-surface.log"; then
+    ok "cpu-surface: $(grep -oE '[0-9]+ divergence' "$stampdir/cpu-surface.log" | tail -1)"
+else
+    bad "cpu-surface: the surface has diverged from ADR 0015 §1 — see $stampdir/cpu-surface.log"
+fi
+
 # ---- G1 / G2 on the synthetic trace ------------------------------------------------------
 step "G1 — two runs of the synthetic trace, same N, byte-identical run.digest"
 harness Debug run --frames 100 --out "$stampdir/g1-a" >"$stampdir/g1-a.log" 2>&1 \
