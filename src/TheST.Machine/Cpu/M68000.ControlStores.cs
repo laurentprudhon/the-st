@@ -352,6 +352,37 @@ public sealed partial class M68000
     /// <summary>`AU ← AT` — the adder taking the address temporary (a jump's target, a refill).</summary>
     void AuEqualsAt() => _au = _at;
 
+    /// <summary>
+    /// `AU ← ext32(FTU)` — the adder taking the field register's value, which is how the die loads a
+    /// loop's trip count into its counter (`mulr1`'s <c>m_au = ext32(m_ftu)</c>, fed by the constants
+    /// ROM). The narrow FTU gives the constant its one home, so a loop's 15 is a transfer and not a
+    /// literal in the microcode's text.
+    /// </summary>
+    void AuEqualsFtu() => _au = (uint)(short)_ftu;
+
+    /// <summary>
+    /// `m_au = m_au - 1` — the counter's own step (`mulm4`). Not <see cref="AuPlus"/>: that one steps in
+    /// *words*, and a loop counts in units.
+    /// </summary>
+    void AuMinusOne() => _au--;
+
+    /// <summary>
+    /// The branch variable `auz`: the adder's **six low bits** are zero (`mulm4`'s <c>!(m_au &amp; 0x3f)</c>).
+    /// Six, not sixteen, because the loop counter is an address: the die tests the bits a small address
+    /// would carry, which is why a loop of sixteen iterations starts at 15 and ends when the low six bits
+    /// wrap.
+    /// </summary>
+    bool AuZeroOnSixBits => (_au & 0x3F) == 0;
+
+    /// <summary>
+    /// The adder taking back the **consumed** position after a loop has used it as a counter: the PC
+    /// register's copy, less one word. `_pc` is where the instruction stream had fetched up to when the
+    /// loop began (a fetch state, measured as the consumed position + 2), and the loop issues no fetch,
+    /// so it is intact when the loop ends — which is what makes the adder free for `B1` (see the plan's
+    /// §8 item 3 and the two measurements that bound the full split: 4 277 and 604 records).
+    /// </summary>
+    void AuEqualsConsumed() => _au = _pc - 2;
+
     /// <summary>`AOB ← address` — the address buffer taking what goes out on `A1–A23`.</summary>
     void LatchAob(uint address) => _aob = address;
 

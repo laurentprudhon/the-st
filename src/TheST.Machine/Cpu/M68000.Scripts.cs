@@ -2761,11 +2761,15 @@ public sealed partial class M68000
             await IdleAsync();
         }
 
-        // m_au = ext32(m_ftu) — the loop's trip count is the instruction's timing constant, not a literal
-        // in the microcode: it is 15 for all five variable-time families, and the sixteen rotates it
-        // gives are the multiply's sixteen bits. (Found by brute force against the corpus's clocks: no
-        // vendored file sets it, and 15 is the value that reproduces every non-faulting record.)
-        uint counter = 15;
+        // m_au = ext32(m_ftu) — **the loop counts in the address adder**, loaded from the field register by
+        // the constants ROM's select (`const_to_ftu`), because the trip count is the instruction's timing
+        // constant and not a literal in the microcode: 15 for all five variable-time families, and the
+        // sixteen rotates it gives are the multiply's sixteen bits. (Found by brute force against the
+        // corpus's clocks: no vendored file sets it, and 15 is the value that reproduces every
+        // non-faulting record.) The adder is free here because a loop forms no address and issues no
+        // fetch; `AuEqualsConsumed()` at the exit puts the instruction's own position back.
+        ConstToFtu(15);
+        AuEqualsFtu();
         while (true)
         {
             // mulm4 — the branch is decided *before* the rotate, on the bits the register holds now. For
@@ -2774,7 +2778,7 @@ public sealed partial class M68000
             // between the two instructions' clock columns. The counter's zero test comes first, so the
             // sixteenth rotate is the one that ends the loop.
             int branch;
-            if ((counter & 0x3F) == 0)
+            if (AuZeroOnSixBits)
             {
                 branch = 0;
             }
@@ -2787,7 +2791,7 @@ public sealed partial class M68000
                 branch = (_alue & 2) != 0 ? 1 : 2;
             }
 
-            counter--;
+            AuMinusOne();
 
             // the half-step of the recurrence: the pair shifts right one bit, with the previous add's
             // carry (MULU) or the accumulator's sign (MULS) entering at bit 31. The counter has already
@@ -2829,6 +2833,11 @@ public sealed partial class M68000
                 await IdleAsync();
             }
         }
+
+        // the adder was the counter; the instruction's position comes back from the PC register, which the
+        // loop left alone (it fetches nothing) — the one statement that makes `B1` possible before the
+        // full split
+        AuEqualsConsumed();
 
         // mulm6 — the pair read whole is the product: the high half is the accumulator, the low half what
         // is left of the multiplier (which is why the product's low sixteen bits were never a separate

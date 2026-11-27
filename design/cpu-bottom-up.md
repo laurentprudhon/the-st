@@ -122,8 +122,13 @@ microcoded instruction can branch on `auz`/`nz`/`d4`/`enl`. Our scripts are that
      so the replacement is that one body — and it is the last step, because it needs the queue's fill
      discipline (when the prefetch happens relative to the operand's computation) to be re-derived, not a
      new expression.
-   - [ ] then `B1` (the AU as the MUL/DIV counter), which cannot precede it: counting in `_au` while the
-     stream's position is `_au + depth` would clobber the fetch.
+   - [~] `B1`, the **adder as the loop counter** — started with the multiplies: `MULU`/`MULS` now
+     `ConstToFtu(15)` → `AuEqualsFtu()` → the loop tests `AuZeroOnSixBits` (`auz`, the six low bits) and
+     steps with `AuMinusOne()`, and `AuEqualsConsumed()` (`_au = _pc - 2`) puts the instruction's
+     position back at the exit. Both files **2 500/2 500 state and exact-clock**; corpus 317 500 on both
+     columns, folds the blessed pair, G8 median +0.11 ms. What the restore rests on: `_pc` is a fetch
+     state's address and a loop issues no fetch, so the register is intact when the loop ends — the
+     PC-register landing (`eb5768f`) is what makes this possible without the full split.
      **An option that may unblock `B1` without the full split** (for the owner to rule on, since it changes
      the ticket's premise): the die counts in `AU` because `AU` is *idle* during a `MUL`/`DIV` loop — no
      address is in play, the stream's position is in `m_pc`. On this tree the cell that holds "the address
