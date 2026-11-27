@@ -113,6 +113,13 @@ public sealed partial class M68000
     /// <summary>`DT` — the data temporary: the last operand transferred, in either direction.</summary>
     ushort _dt;
 
+    /// <summary>
+    /// `SSW` — the microinstruction's bus-status word, saved into a group-0 frame so a faulting
+    /// instruction can be resumed or diagnosed (§5.3, §9). The die latches it per microinstruction; here
+    /// the bus cycle is what writes it, and the frame reads it (`BusStatusWord`).
+    /// </summary>
+    ushort _ssw;
+
     // ---- the section accessors (ADR 0015 §3, tutorial §1.1) --------------------------------
     // A word write to a 32-bit register changes the low half and leaves the rest; the High section's
     // accessor is the same rule from the other end. These are the *only* legal way to write half of a

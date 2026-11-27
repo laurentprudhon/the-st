@@ -1231,11 +1231,12 @@ public sealed partial class M68000 : Chip
     static bool SavesInstructionAddress(int vector) => vector is 4 or 8 or 10 or 11;
 
     /// <summary>
-    /// The group-0 frame's first word: the instruction being executed, its low five bits replaced by
-    /// the access's own detail — read/write, program or data, supervisor or user (design/cpu-core.md
-    /// §7). The corpus is the oracle for the bit layout, which the 68000 manuals leave implicit.
+    /// `SSW` for one access: the instruction being executed, its low five bits replaced by the access's
+    /// own detail — read/write, program or data, supervisor or user (design/cpu-core.md §7). The corpus
+    /// is the oracle for the bit layout, which the 68000 manuals leave implicit; the bus cycle is the
+    /// only writer, so the latch and this composition cannot disagree.
     /// </summary>
-    ushort BusStatusWord(ushort statusBefore)
+    ushort ComposeSsw(ushort statusBefore)
     {
         ushort status = (ushort)((_frameInstructionWordDeclared ? _frameInstructionWord : _opcode) & ~0x1Fu);
 
@@ -1269,5 +1270,19 @@ public sealed partial class M68000 : Chip
         }
 
         return status;
+    }
+
+    /// <summary>
+    /// The group-0 frame's first word: the latch, which the last bus cycle composed (see
+    /// <see cref="ComposeSsw"/>). `statusBefore` is kept because the caller has it and #93 will read the
+    /// mode from the frame's own order; the latch already carries it.
+    /// </summary>
+    ushort BusStatusWord(ushort statusBefore)
+    {
+        // the latch is written here today. The die writes SSW per microinstruction (#93 owns moving
+        // that write site); what this ticket needed was for the word to *be* a latch the frame reads,
+        // and for the rule to have one home instead of being spelled inside the frame's builder.
+        _ssw = ComposeSsw(statusBefore);
+        return _ssw;
     }
 }

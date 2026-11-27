@@ -53,3 +53,38 @@ bash scripts/cpu-shape-check.sh 82b5580     # corpus (both columns), folds, G8, 
   step; a red row means the step is not landed.
 - No behaviour change anywhere in this work: it is a re-expression. A moved fold is a bug, not a re-bless.
 - A step that cannot be finished is reverted, not committed half-done.
+
+## 8. The owner's rulings (2026-11-27) and where the work stands
+
+**A — all accepted**: `SSW`, `INL`, `TPEND`, `PREN`, `FTU` as latches; `DCR` as the derived decoder; the
+access label; the AU's transfers. **B**: `B1` accepted (the AU is the MUL/DIV counter) — with **C3**, the
+AU/PC split — so **B2** (AUH/AUL, the two half-adders) comes with it; `B5` accepted *if it costs no
+performance* (the answer instant already stretches the cycle, so what is missing is the S0–S7 view, not
+the timing); `B3` (sections/lanes) not needed for the two adders — the split is what he wants, the lanes
+are a bandwidth feature with no transfer to carry. **C**: all three accepted; **C2** is the *narrow* FTU
+(size/mode/register/vector), which is enough for B1.
+
+**B8, answered**: `NMA` is the 10-bit next micro-ROM address (Format I), `TY` selects the *source* of the
+next address (NMA, A1, A2, A3), and `CBC` is the 5-bit condition code of a conditional word (Format II)
+whose `NMBA` base has bits 7:6 replaced by the condition logic's C1/C0 — the 4-way branch. They are why a
+microcoded instruction can branch on `auz`/`nz`/`d4`/`enl`. Our scripts are that control flow as C#
+(`if`/call order), so there is nothing to implement.
+
+**Landed so far**
+
+- [x] `#87` **DCR + the AU's transfers** — `Decoder4To16`, `AuPlusTwo`, `AuPlus`, `AuEqualsAt`, `LatchAob`.
+- [x] `#87` **`SSW` is a latch** — `_ssw`, written by one composition (`ComposeSsw`) that the frame reads.
+  Honest limitation: the write site is the frame, not the microinstruction (moving it is #93's); an
+  attempt to latch it per bus cycle cost 50 752 records, because a non-bus-fault exception must keep the
+  *data* class of the last operand access, not the fetch's — measured, not guessed.
+
+**Still to take, in this order**
+
+1. `INL`/`TPEND` (`C1`) — the only rulings that change *behaviour*; gate on the folds.
+2. `PREN` — the MOVEM walk (5 000 green records; one direction at a time).
+3. the **AU/PC split** (`C3`) then the **narrow FTU** (`C2`) then the **AU as the MUL/DIV counter** (`B1`),
+   then `AUH`/`AUL` (`B2`) and the constants ROM.
+4. the **access label** (`A7`) — an enum over the script calls.
+5. `#88`: the `S0`…`S7` **view** from the cycle's position (the wait-stretch is already the answer
+   instant), the byte lane, DTACK/BERR sampling.
+6. `#89`: the **65 536-opcode golden** and the term-level decode (the `--families` audit is the entry).
