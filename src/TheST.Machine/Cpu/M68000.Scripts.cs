@@ -3066,7 +3066,6 @@ public sealed partial class M68000
 
         uint dividend = _d[rx];
         uint at = 0;
-        uint counter = 0;
         bool flag;
 
         // dvs02 — the divisor into m_alub and into the working register's high word, the dividend's low
@@ -3105,9 +3104,18 @@ public sealed partial class M68000
 
     dvs04:
         // dvs04 / dvs05 — the dividend's high word into the working register's low word (the loop's
-        // starting remainder) and the sixteen-bit counter.
+        // starting remainder) and the sixteen-iteration counter, which is **the address adder**: the
+        // die loads it from the field register (`m_au = merge_16_32(0, m_ftu) + 1`, the constants ROM's
+        // 15 plus the one bit the sixteen quotient bits need), exactly as DIVU does. `AT` keeps the
+        // position while the adder counts (`m_pc = m_au` at `dvs02` is the die's own latch; on this
+        // tree the fetch state's copy is not yet writable — see the plan §8 item 3 — so the latch is
+        // the measured equivalent DIVU uses), because this family's trailing fetch comes *after* the
+        // loop and `_pc` therefore does not hold the consumed position.
+        AtEqualsAu();          // m_at = m_au — the position the adder is about to spend
         at = Set16L(at, (ushort)(High16(dividend)));
-        counter = 16;
+        ConstToFtu(15);
+        AuEqualsFtu();
+        AuPlusOne();
         AluAnd16(High16(dividend), 0xFFFF);
         SrNzvc();
         await IdleAsync();
@@ -3154,20 +3162,27 @@ public sealed partial class M68000
         await IdleAsync();
         if (!flag)
         {
+            // dvumz — the quotient does not fit, so the loop never runs: the die restores the adder
+            // from its latch in this state (`m_au = m_pc + 2`) and reads at the latched position, which
+            // is why this exit is one state, not the loop's tail
+            AuEqualsAt();
             goto dvuma;
         }
 
     dvs09:
         // dvs09 — the loop's shift, 0 in at the bottom: entered from dvs08 with the first bit, and from
-        // dvs0f after a restore, so it is the same "bring down a bit" state DIVU calls dvum5.
-        counter--;
+        // dvs0f after a restore, so it is the same "bring down a bit" state DIVU calls dvum5. Its
+        // `m_au = m_au - 1` is the counter's step — the adder, counting down from the field register's
+        // constant plus one.
+        AuMinusOne();
         AluSla(0);
         await IdleAsync();
 
     dvs0c:
         // dvs0c — the comparison: remainder's high half minus divisor, the pre-subtract remainder copied
-        // into the working register, and the counter's zero test as the last bit's exit.
-        flag = (counter & 0x3F) == 0;
+        // into the working register, and the counter's zero test (`!(m_au & 0x3f)`, the six low bits —
+        // the adder is shaped like a small address) as the last bit's exit.
+        flag = AuZeroOnSixBits;
         at = Set16L(at, (ushort)(_aluo));
         AluSub16(_alub, _aluo);
         SrNzvc();
@@ -3193,7 +3208,7 @@ public sealed partial class M68000
 
     dvs0a:
         // dvs0a — the shift with a 1 at the bottom: the subtraction stood, so this quotient bit is a 1.
-        counter--;
+        AuMinusOne();
         AluSla(1);
         await IdleAsync();
         goto dvs0c;
@@ -3226,14 +3241,21 @@ public sealed partial class M68000
         goto dvs14;
 
     dvs12:
-        // dvs12 — the last bit was a 0: restore, and shift in a 0.
-        counter--;
+        // dvs12 — the last bit was a 0: restore, and shift in a 0. Its `m_au = m_au - 1` is a *dead*
+        // decrement the loop has already left — the counter is not read again — which is why the adder
+        // is restored at dvs14 and not at either of these two states.
+        AuMinusOne();
         AluSla(0);
         await IdleAsync();
         goto dvs14;
 
     dvs14:
-        // dvs14 — the remainder's sign, read off the working register's high word; then the quotient's,
+        // dvs14 — the division is over, and the adder gives the position back from its latch before any
+        // of the tails reads it: from here every exit (`dvuma`, `dvum4`, `leaa2`) is a closing read at
+        // the latched position. The die states the same restore at each tail (`m_au = m_pc + 2`), and
+        // one state earlier is the same machine because nothing between writes the adder or the bus.
+        AuEqualsAt();
+        // the remainder's sign, read off the working register's high word; then the quotient's,
         // read off the dividend's own sign. Those two bits are the whole of the epilogue's decision.
         AluAnd16(at >> 16, 0xFFFF);
         SrNzvc();
