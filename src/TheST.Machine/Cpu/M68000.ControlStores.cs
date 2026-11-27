@@ -205,7 +205,7 @@ public sealed partial class M68000
     /// </summary>
     async ValueTask<ushort> ReadOperandProgramAsync(uint address)
     {
-        BusResult result = await Cycle(address, 1, false, 0, isProgram: true);
+        BusResult result = await Cycle(address, 1, false, 0, AccessClass.Program);
         if (result.Faulted)
         {
             _busFaulted = true;
@@ -290,7 +290,7 @@ public sealed partial class M68000
     /// </summary>
     async ValueTask<ushort> ReadTargetAsync(uint address)
     {
-        BusResult result = await Cycle(address, 1, false, 0, isProgram: true);
+        BusResult result = await Cycle(address, 1, false, 0, AccessClass.Program);
         if (result.Faulted)
         {
             _busFaulted = true;

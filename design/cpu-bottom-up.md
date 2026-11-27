@@ -99,6 +99,12 @@ microcoded instruction can branch on `auz`/`nz`/`d4`/`enl`. Our scripts are that
    - [ ] then `B1` (the AU as the MUL/DIV counter), which cannot precede it: counting in `_au` while the
      stream's position is `_au + depth` would clobber the fetch.
 4. the **access label** (`A7`) — an enum over the script calls.
+   - [x] first half: the class is a value — `AccessClass` (`Data`/`Program`/`CpuSpace`, MAME's
+     `SSW_DATA`/`SSW_PROGRAM`/`SSW_CPU`), passed by the access instead of the two booleans `isProgram` /
+     `isCpuSpace`, with `FunctionCode(access)` as the one place `FC0–FC2` are decided; `ComposeSsw` reads
+     the same constants (`SswData`/`SswProgram`/`SswRead`/`SswSupervisor`/`SswNested`) instead of literals.
+   - [ ] the rest: the class is *recorded* (a latch for #89's consumer) and the byte lane gets its test
+     (`#88`: an odd byte writes `LDS` with `A1`=1, an even one `UDS`).
 5. `#88`: the `S0`…`S7` **view** from the cycle's position (the wait-stretch is already the answer
    instant), the byte lane, DTACK/BERR sampling.
 6. `#89`: the **65 536-opcode golden** and the term-level decode (the `--families` audit is the entry).

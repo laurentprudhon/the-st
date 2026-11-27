@@ -453,6 +453,35 @@ public sealed partial class M68000 : Chip
     }
 
     /// <summary>
+    /// The access class of one bus cycle (tutorial §8.1's function-code table; MAME's <c>m_base_ssw</c>
+    /// values <c>SSW_DATA</c>/<c>SSW_PROGRAM</c>/<c>SSW_CPU</c>). The die chooses it **per state**, and the
+    /// bus's <c>FC0–FC2</c> follow the class — never the other way round: the class is why the pins read
+    /// 6, 5, 2, 1 or 7, and it is the word a script's access names (#88, ADR 0015 §1).
+    /// </summary>
+    internal enum AccessClass
+    {
+        /// <summary><c>SSW_DATA</c> (`i` field clear): an operand, FC 5 in supervisor mode and FC 1 in user mode.</summary>
+        Data,
+
+        /// <summary><c>SSW_PROGRAM</c>: the instruction stream, FC 6 / FC 2 — a fetch or an operand read out of it.</summary>
+        Program,
+
+        /// <summary><c>SSW_CPU</c>: CPU space, FC 7 — the interrupt acknowledge's cycle, and nothing else here.</summary>
+        CpuSpace,
+    }
+
+    /// <summary>
+    /// The class's function code (tutorial §8.1): `FC2–FC0`. The supervisor bit is the mode the core is
+    /// in at the cycle, so the same class yields 6/5 in supervisor mode and 2/1 in user mode.
+    /// </summary>
+    int FunctionCode(AccessClass access) => access switch
+    {
+        AccessClass.CpuSpace => 7,
+        AccessClass.Program => Supervisor ? 6 : 2,
+        _ => Supervisor ? 5 : 1,
+    };
+
+    /// <summary>
     /// One bus cycle (ADR 0009 §1): the assertion record, the subscription to the answer, the stack
     /// sample, the release. The core advances to the answering instant because the engine sets its
     /// clock there when it resumes it.
@@ -462,8 +491,11 @@ public sealed partial class M68000 : Chip
     /// have boxed does not exist. Same records, same instants, same order.
     /// </para>
     /// </summary>
-    async ValueTask<BusResult> Cycle(uint address, int size, bool isWrite, ushort writeData, bool isCpuSpace = false, bool isProgram = false)
+    async ValueTask<BusResult> Cycle(uint address, int size, bool isWrite, ushort writeData,
+                                     AccessClass access = AccessClass.Data)
     {
+        bool isCpuSpace = access == AccessClass.CpuSpace;
+        bool isProgram = access == AccessClass.Program;
 
         // an address error is not a bus cycle: a word access at an odd address never reaches the
         // wire, and the group-0 frame records what it was trying to reach (ADR 0009 §7)
@@ -498,11 +530,13 @@ public sealed partial class M68000 : Chip
         LatchAob(address);
         _dob = isWrite ? writeData : (ushort)0;
 
+        // the control word: `R/W`, the size, the lane, and the class's function code — §8.1's pins as
+        // one record (the pins read it back; see `Pins`)
         ushort control = (ushort)(
             (isWrite ? 0x0100 : 0) |
             ((size == 0 ? 0 : 1) << 4) |
             ((address & 1) != 0 ? 1 : 0) |
-            ((isCpuSpace ? 7 : isProgram ? (Supervisor ? 6 : 2) : (Supervisor ? 5 : 1)) << 12));
+            (FunctionCode(access) << 12));
 
         Write(asserted, Wires.Bus, 0xFF00, (ushort)(address >> 16));
         Write(asserted, Wires.Bus, 0xFFFE, (ushort)(address & 0xFFFE));
@@ -527,7 +561,7 @@ public sealed partial class M68000 : Chip
         _dt = isWrite ? writeData : data;   // the last operand transferred, either direction
 
 #if DEBUG
-        Emulator.CycleObserver?.Invoke(isWrite, isCpuSpace ? 7 : isProgram ? (Supervisor ? 6 : 2) : (Supervisor ? 5 : 1), address, isWrite ? writeData : data);
+        Emulator.CycleObserver?.Invoke(isWrite, FunctionCode(access), address, isWrite ? writeData : data);
 #endif
 
         // the release: AS high, and Z on the data lanes — a record of its own, and the lane that
@@ -634,7 +668,7 @@ public sealed partial class M68000 : Chip
         // because AU still carries the program counter's own arithmetic between states. Positioning the
         // adder at the access is the rest of #87's split, and this line becomes the atom then.
         _pc = address;
-        BusResult result = await Cycle(address, 1, false, 0, isProgram: true);
+        BusResult result = await Cycle(address, 1, false, 0, AccessClass.Program);
         if (result.Faulted)
         {
             _busFaulted = true;
@@ -661,7 +695,7 @@ public sealed partial class M68000 : Chip
         // subtraction on the counter
         _at = address - 2;
 
-        BusResult result = await Cycle(address, 1, false, 0, isProgram: true);
+        BusResult result = await Cycle(address, 1, false, 0, AccessClass.Program);
         if (result.Faulted)
         {
             _busFaulted = true;
@@ -695,7 +729,7 @@ public sealed partial class M68000 : Chip
             uint address = _fetchPointer;
             _at = address - 2;
 
-            BusResult result = await Cycle(address, 1, false, 0, isProgram: true);
+            BusResult result = await Cycle(address, 1, false, 0, AccessClass.Program);
             if (result.Faulted)
             {
                 _busFaulted = true;
@@ -826,7 +860,7 @@ public sealed partial class M68000 : Chip
         _at = address - 2;
         _pc = address;                            // m_pc = m_au, with AU not at the access — see PrefetchAsync
 
-        BusResult result = await Cycle(address, 1, false, 0, isProgram: true);
+        BusResult result = await Cycle(address, 1, false, 0, AccessClass.Program);
         if (result.Faulted)
         {
             _busFaulted = true;
@@ -907,7 +941,7 @@ public sealed partial class M68000 : Chip
         uint address = _fetchPointer;
         _at = address - 2;
 
-        BusResult result = await Cycle(address, 1, false, 0, isProgram: true);
+        BusResult result = await Cycle(address, 1, false, 0, AccessClass.Program);
         if (result.Faulted)
         {
             _busFaulted = true;
@@ -1102,7 +1136,7 @@ public sealed partial class M68000 : Chip
 
         // the acknowledge is a CPU-space cycle: FC=111, A3–A1 = level
         int vector = 24 + level;
-        BusResult acknowledge = await Cycle(0xFFFFFFF0u | ((uint)level << 1), 1, false, 0, isCpuSpace: true);
+        BusResult acknowledge = await Cycle(0xFFFFFFF0u | ((uint)level << 1), 1, false, 0, AccessClass.CpuSpace);
         if (!acknowledge.Faulted && acknowledge.VectorProvided)
         {
             vector = acknowledge.Data & 0xFF;
@@ -1244,17 +1278,25 @@ public sealed partial class M68000 : Chip
     /// is the oracle for the bit layout, which the 68000 manuals leave implicit; the bus cycle is the
     /// only writer, so the latch and this composition cannot disagree.
     /// </summary>
+    // SSW's bits, as the die names them (MAME's `SSW_*`; the low five of a frame's first word carry
+    // the class the faulting access was in, research/mame-microcode-core.md §2).
+    const ushort SswData = 0x01;            // SSW_DATA — an operand access
+    const ushort SswProgram = 0x02;         // SSW_PROGRAM — the instruction stream
+    const ushort SswSupervisor = 0x04;      // SSW_S — the access was made in supervisor mode
+    const ushort SswNested = 0x08;          // SSW_N — the nested-fault marker, never a fetch's
+    const ushort SswRead = 0x10;            // SSW_R — the access was a read
+
     ushort ComposeSsw(ushort statusBefore)
     {
         ushort status = (ushort)((_frameInstructionWordDeclared ? _frameInstructionWord : _opcode) & ~0x1Fu);
 
         if (_faultIsFetch || _faultProgram)
         {
-            // a read, in program space — and *not* 0x08: that bit is MAME's nested-fault marker
-            // (`SSW_N`), set only on the frame's own writes, never on a fetch (microcode `bser1`
-            // composes the word from `m_base_ssw`). Measured: RTS record 002, corpus 0x4E72 vs
-            // 0x4E7A (research/mame-microcode-core.md §2).
-            status |= 0x10 | 0x02;
+            // a read, in program space — and *not* `SswNested`: that bit is MAME's nested-fault marker,
+            // set only on the frame's own writes, never on a fetch (microcode `bser1` composes the word
+            // from `m_base_ssw`). Measured: RTS record 002, corpus 0x4E72 vs 0x4E7A
+            // (research/mame-microcode-core.md §2).
+            status |= SswRead | SswProgram;
         }
         else
         {
@@ -1266,15 +1308,15 @@ public sealed partial class M68000 : Chip
             bool movemStore = (_opcode & 0xFF80) == 0x4880;
             if (!_faultWrite || !(plainMove || movemStore))
             {
-                status |= 0x10;
+                status |= SswRead;
             }
 
-            status |= 0x01;                 // data space
+            status |= SswData;              // the operand space
         }
 
         if ((statusBefore & 0x2000) != 0)
         {
-            status |= 0x04;                 // the access was made in supervisor mode
+            status |= SswSupervisor;        // the access was made in supervisor mode
         }
 
         return status;
