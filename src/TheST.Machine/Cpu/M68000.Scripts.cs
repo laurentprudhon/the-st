@@ -2230,13 +2230,25 @@ public sealed partial class M68000
         int reg = FtuRegister;
         long target;
 
+                // The seven scripts, one per addressing mode (`microcode-walk.py --op 4ed0`, `4ee8`, `4ef0`,
+        // `4ef8`, `4ef9`, `4efa`, `4efb`; `4efa` is `4ee8`'s listing and `4efb` is `4ef0`'s), and one shape: the
+        // target's address, its read, then the pair at its successor.
+        //
+        //   ours: the target's read is one call (`ReadTargetAsync`, below) where the listing gives it to `bbci3`
+        //   on every shape but the two absolutes — `(xxx).w` ends on `jmaw1`'s latch and `(xxx).l` on `jmal2`,
+        //   the state that builds the address and reads it, so that read is the tail's as well. The adder's
+        //   moves are the derivation's, and the pair is written inline here, not through `RefillAsync` — the
+        //   second site that expands it, named once at `CloseInstructionAsync`.
+        //
         switch (mode)
         {
             case 2:                                            // jmp_an — jmpa1: a read at the register
+                // jmpa1 (255)  m_aob = m_da[ry]; m_au = m_da[ry] + 2; read at m_aob                   4
                 target = GetA(reg);
                 break;
 
             case 5:                                            // jmp_das — jmpd1
+                // jmpd1 (2b4)  m_au = ext32(m_dbin) + m_da[ry]                                        2
                 await IdleAsync();
                 target = GetA(reg) + (uint)(short)await JumpWordAsync(0);
                 if (_busFaulted) return;
@@ -2244,14 +2256,21 @@ public sealed partial class M68000
 
             case 6:                                            // jmp_dais — jmpx0, jmpx1, jmpx2/jmpx3
             {
+                // jmpx0 (1f7)  alu_ext(m_dbin)                                                        2
                 await IdleAsync(2);                            // jmpx0 — `alu_ext` of the brief extension word
                 ushort extension = await JumpWordAsync(0);
+        //   jmpx1's `m_t` is the branch: jmpx2 is the word index (`ext32`), jmpx3 the long one, decided
+        //   inside `IndexValue`.
+                // jmpx1 (2b6)  m_t = m_irc & 0x0800; m_au = ext32(m_aluo) + m_da[ry]                  2
+                // jmpx2 (02d)  m_au = m_au + ext32(m_da[map_sp(m_irc >> 12)])                         2
+                // jmpx3 (0ed)  m_au = m_au + m_da[map_sp(m_irc >> 12)]                                2
                 await IdleAsync(4);                            // jmpx1 and the index state
                 target = GetA(reg) + (uint)ExtensionDisplacement(extension) + IndexValue(extension);
                 break;
             }
 
             case 7 when reg == 0:                              // jmp_adr16 — jmaw1
+                // jmaw1 (297)  m_at = ext32(m_dbin)                                                   2
                 await IdleAsync();
                 target = (uint)(short)await JumpWordAsync(0);
                 break;
@@ -2260,6 +2279,7 @@ public sealed partial class M68000
             {
                 // no idle run at all: `jmal1` merges the queue's word with the one read at the fetch pointer,
                 // and `jmal2` reads at the address it built (12 clocks, three reads, nothing between them)
+                // jmal1 (1f6)  m_aob = m_au; set_16h(m_at, m_dbin); m_au = m_au + 2; read at m_aob    4
                 uint high = await JumpWordAsync(0);             // jmal1 — the word the queue holds
                 uint low = await JumpWordAsync(1);              // jmal2 — one read at the fetch pointer
                 if (_busFaulted) return;
@@ -2291,6 +2311,9 @@ public sealed partial class M68000
 
         // bbci3 — the target's read, in program space and outside any fetch state. An odd target aborts
         // here: the frame saves the word the boundary left, and the state's own 4 is the port's to charge
+        // bbci3 (0c5)  m_aob = m_au; m_au = m_au + 2; read at m_aob                                   4
+        // jmal2 (2b3)  m_aob = merge_16_32(high16(m_at), m_dbin);
+        //              m_au = merge_16_32(high16(m_at), m_dbin) + 2; read at m_aob                    4
         FrameSavesOnFetch(_opcodeAddress + 2);
         ushort first = await ReadTargetAsync(address);
         if (_busFaulted)
