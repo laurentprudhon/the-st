@@ -35,9 +35,11 @@ bug: when you edit one, edit the other in the same session, and treat the **prof
 
 ```sh
 # refresh the repository copies from the profile after editing a skill there
-rsync -a --delete ~/.hermes/skills/the-st-68000-core/                          .hermes/skills/the-st-68000-core/
-rsync -a --delete ~/.hermes/skills/software-development/the-st-perf-measurement/ .hermes/skills/the-st-perf-measurement/
-rsync -a --delete ~/.hermes/skills/the-st-research-studies/                    .hermes/skills/the-st-research-studies/
+# (rsync is not installed in this image; cp -a over the target directory is equivalent)
+P=~/.hermes/skills
+cp -a "$P/the-st-68000-core/."                          .hermes/skills/the-st-68000-core/
+cp -a "$P/software-development/the-st-perf-measurement/." .hermes/skills/the-st-perf-measurement/
+cp -a "$P/the-st-research-studies/."                    .hermes/skills/the-st-research-studies/
 ```
 
 ## Tools
