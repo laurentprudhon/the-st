@@ -699,6 +699,16 @@ script states as missing until that method is converted and the pair as already 
 what the code does not contain: the `_own` charge before it (the clock table's residue, not a state) and
 `b`'s `m_au = m_au + 2` (the loop's `AuPlusTwo`, its decode step).
 
+**One pair of statements can be two states, and then both are named.** When the listing picks a state by
+a class the C# does not branch on, the two state lines sit above the pair in the listing's order and the
+`ours:` paragraph says which class selects which: `AluIntoDataRegisterAsync`'s `roml1`/`rorl1` (a memory
+source against a register one), and `MoveStoreAsync`'s `rrgw1`/`mrgw1` and `rrgl1`/`mrgl1` (a source that
+cost a bus cycle against one that did not). `--complete` reads both listings green that way, because the
+read they share keeps a line of its own (`roml3`, `rrgw2`). The same rule separates the immediates: line
+0's two reads are `o#l1`/`o#w1` (`ReadLongImmediateAsync`) and an operand's are `e#l1`/`e#w1`
+(`ReadLongStreamOrImmediateAsync`) — one shape, two pairs of states, because the ROM gives each family
+its own.
+
 **A shared part of two scripts is one method, and the method carries the states it expands — both
 listings'.** The die reuses tails the way a program reuses functions, so the C# must too, or a fix to one
 copy silently leaves the other wrong: `RefillAsync` is `malw3` + `b`/`mmrw3`, `RefillFromAsync` is that pair

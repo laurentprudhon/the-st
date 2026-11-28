@@ -386,8 +386,16 @@ public sealed partial class M68000
     {
         if (reg == 4)                                      // imm32 — e#l1, e#w1
         {
+            //   ours: both reads are `FetchAsync`, and neither is preceded by a `BeginFetchState()` — a
+            //   fault inside an immediate read is a fetch fault, whose frame `EnterExceptionAsync`
+            //   takes from `_au`, so the counter `e#w1`'s `m_pc = m_au` names is not consulted here;
+            //   `ReadLongImmediateAsync` states the same pair with the call.
+            //
+            // e#l1 (0a7)  m_aob = m_au; set_16h(m_dt, m_dbin); m_au = m_au + 2; read at m_aob         4
             _alub = await FetchAsync();
             if (_busFaulted) return false;
+            // e#w1 (0ea)  m_aob = m_au; m_pc = m_au; set_16h(m_at, m_dbin); set_16l(m_dt, m_dbin);
+            //             m_au = m_au + 2; read at m_aob                                              4
             _dbin = await FetchAsync();
             return !_busFaulted;
         }
@@ -1896,6 +1904,30 @@ public sealed partial class M68000
         switch (mode)
         {
             case 0:                                            // mrgw1 + mmrw3 / mrgl1 + mrgl2
+                //   ours: the head is the *source's* class — `rrgw1`/`rrgl1` when the source cost no
+                //   bus cycle (a register or an immediate: `--op 3000`, `303c`, `2000`) and
+                //   `mrgw1`/`mrgl1` when it did (`--op 3033`, `2033`); the read that follows is
+                //   `rrgw2`/`rrgl2` for the first class and the loop's closing pair for the second. The
+                //   long destination's flags are the listing's two updates (the low word's
+                //   `sr_nzvc`, then the high one's `sr_nz_u`) made as one 32-bit
+                //   `SetLogicFlags` in `MoveScriptAsync` — the same final word; `rrgw1`'s latch is
+                //   `m_at = m_dt` on an immediate and `m_at = m_da[ry]` on a register source, and
+                //   the byte shapes render the same heads with `set_8`/`alu_and8` (`--op 1000`).
+                //
+                // rrgw1 (121)  m_aob = m_au; m_ir = m_irc; m_pc = m_au; m_at = m_dt; m_au = m_au + 2;
+                //              alu_and(m_dt, 0xffff); sr_nzvc()                                       0
+                // mrgw1 (29b)  m_aob = m_au; m_ir = m_irc; m_pc = m_au; set_16l(m_da[rx], m_dbin);
+                //              m_au = m_au + 2; alu_and(m_dbin, 0xffff); sr_nzvc()                    0
+                // rrgw2 (27a)  m_ird = m_ir; set_16l(m_da[rx], m_aluo); m_au = m_pc + 2;
+                //              read at m_aob                                                          4
+                // rrgl1 (129)  m_aob = m_au; m_ir = m_irc; m_pc = m_au; m_at = m_da[ry];
+                //              m_au = m_au + 2; alu_and(m_da[ry], 0xffff); sr_nzvc()                  0
+                // rrgl2 (278)  m_ird = m_ir; alu_and(high16(m_da[ry]), 0xffff); sr_nz_u();
+                //              m_da[rx] = m_at; read at m_aob                                         4
+                // mrgl1 (29f)  m_aob = m_au; m_ir = m_irc; m_pc = m_au; set_16l(m_da[rx], m_dbin);
+                //              m_au = m_au + 2; alu_and(m_dbin, 0xffff); sr_nzvc()                    0
+                // mrgl2 (36f)  m_ird = m_ir; set_16h(m_da[rx], m_alue); alu_and(m_alub, 0xffff);
+                //              sr_nz_u(); read at m_aob                                               4
                 if (size == 2)
                 {
                     _d[reg] = value;
@@ -2900,6 +2932,13 @@ public sealed partial class M68000
                     }
 
                     default:                                   // imm16 — e#w1, one read in the stream
+                        //   ours: one read, and no `BeginFetchState()` before it — the fault this
+                        //   fetch can take is a fetch fault, whose frame is `_au`'s
+                        //   (`EnterExceptionAsync`). `MOVE.b #,Dn` expands this same state (`--op
+                        //   103c`).
+                        //
+                        // e#w1 (0ea)  m_aob = m_au; m_pc = m_au; set_16h(m_at, m_dbin);
+                        //             set_16l(m_dt, m_dbin); m_au = m_au + 2; read at m_aob           4
                         value = await FetchAsync();
                         break;
                 }
