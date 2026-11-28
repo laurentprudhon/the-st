@@ -491,13 +491,28 @@ public sealed partial class M68000
     // ---- the destination tails, one per place a result goes --------------------------------
 
     /// <summary>
-    /// roml1, roml2, 25e, 25d (rorl/roal/cprl for the other families) — the operand ALUed into Dn,
-    /// word by word: the low half and the instruction's own prefetch between the halves, then the high
-    /// half. <paramref name="clocks"/> is the shape's closing idle run (see
-    /// <see cref="ClosingIdleClocks"/>).
+    /// One helper over two listings: <c>roml1</c>/<c>roml2</c> for a memory source (<c>--op 8090</c>)
+    /// and <c>rorl1</c>/<c>rorl2</c>/<c>rorl3</c> for a register one (<c>--op c080</c>), both ending on
+    /// the shared tail <c>roml3</c> — the operand ALUed into Dn, word by word: the low half and the
+    /// instruction's own prefetch between the halves, then the high half. <paramref name="clocks"/> is
+    /// the shape's closing idle run (see <see cref="ClosingIdleClocks"/>).
     /// </summary>
     async ValueTask AluIntoDataRegisterAsync(int rx, AluLong kind, uint source, int clocks)
     {
+        //   ours: the long ALU is one `AluLongOp` where the listing splits it into a half per state —
+        //   `roml1`/`roml2`'s low and high halves for a memory source, `rorl1`/`rorl3`'s for a register
+        //   one — and the closing idle run (`clocks`, `ClosingIdleClocks`) belongs to the shape, not to
+        //   a state. `roml3` is the tail both listings end on (`m_ird = m_ir`, the high half's write).
+        //
+        // roml1 (1cb)  m_aob = m_au; m_ir = m_irc; m_pc = m_au; m_at = ext32(m_dbin);
+        //              alu_or(m_dbin, m_da[rx]); sr_nzvc()                                            0
+        // roml2 (25c)  set_16l(m_da[rx], m_aluo); alu_or(m_alub, high16(m_da[rx])); sr_nzvc_u();
+        //              read at m_aob                                                                  4
+        // rorl1 (1c5)  m_aob = m_au; m_ir = m_irc; m_pc = m_au; m_at = ext32(m_da[ry]);
+        //              alu_and(m_da[ry], m_da[rx]); sr_nzvc()                                         0
+        // rorl2 (3c0)  set_16l(m_da[rx], m_aluo); read at m_aob                                       4
+        // rorl3 (25e)  alu_and(high16(m_da[ry]), high16(m_da[rx])); sr_nzvc_u()                       2
+        // roml3 (25d)  m_ird = m_ir; set_16h(m_da[rx], m_aluo); m_au = m_pc + 2                       2
         uint destination = _d[rx];
 
         AluLongOp(source, destination, kind);              // roml1 — alu_or/alu_and/…(source, Dn)
