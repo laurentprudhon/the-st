@@ -686,7 +686,9 @@ Two things must be **said, never hidden**: a state fused into a helper names bot
 read is `mmrw3`'s, and the helper is `TrailingFetchAsync`), and a deliberate difference from the listing
 begins a second line `//   ours:` with what the code does and the measurement that made it necessary.
 `RESET`'s block (`MiscAsync`'s `0x4E70` case) is the worked example: the count is taken before the clocks
-are spent, and the block says so.
+are spent, and the block says so. `UNLK`'s (`UnlinkAsync`, `#94`'s first method) is the model for the two
+harder shapes: a read pair the code issues in one helper — named as the two states it is — and a closing
+fetch the *loop* issues, which the block says instead of pretending the script does it.
 
 The checker is `scripts/comment-states.py` (stdlib only, needs the pinned microcode):
 
