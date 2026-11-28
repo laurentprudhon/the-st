@@ -52,7 +52,7 @@ bucket is a hole in the partition, not a detail.
 | 7406 open-collector ×2 | U210, U305 | excluded — drive stage |
 | 74LS86, 74LS04 | U209, U211 | excluded — decode/combine glue |
 | 74LS74 ×2 | U304, U306 | excluded — DE/LOAD pipeline |
-| 74LS164 | U900 | **Controllers** (IKBD serialiser) |
+| 74LS164 | U900 | **no member — glue on Timers and events' `TAI` path** (the `SINT`→`TAI` delay, 8 shifts at 2 MHz). Corrected 2026-11-28: it is **not** an IKBD serialiser — the link is `TXD`/`RXD` straight between `U201` and the HD6301 (`research/standard-parts-implementation.md` §7, `research/ikbd-implementation.md` §8) |
 | 74LS244 ×5, 74LS245 ×2 | U307, U509, U510, U512, U632, U302 | excluded — buffers |
 | 74LS373, 74F374 ×2 | U511, U500, U501 | excluded — palette latch and pixel pipeline |
 | DRAM ×32 (16 per bank, 2 banks), SIMM sockets ×4 | C0101743-002, U600–U603 | the `Ram` **store** inside the System Control Unit — a data structure with no pins leaving the chip, not a member (ADR 0014) |

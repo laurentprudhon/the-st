@@ -272,11 +272,18 @@ What the session established, in the form the remaining chips can reuse:
 * Not worth a second session: what is left is three readings (`A8`/`A9`, the FDC's `CLK` net, `TAI`/`TBI`'s
   labels) and one counter, all in `design/emulator-limitations.md` §6.
 
-### IKBD (HD6301V1, on the keyboard PCB)
-* Not a die study: a 6801-family MCU running Atari firmware. Questions: the command set and its timing,
-  the scan matrix, mouse/joystick packet formats, and what the ACIA link does when the IKBD is busy.
-  MAME has a driver; our `design/board-inventory.md` has the wiring. **Brief written 2026-11-28:**
-  `docs/handoffs/ikbd-hd6301-study.md` — and it is the last chip, so the session after it is the closing audit.
+### IKBD (HD6301V1, on the keyboard PCB) — **done, 2026-11-28**, `research/ikbd-implementation.md`
+* Not a die study: a 6801-family MCU running a mask ROM nobody published, so it is a protocol study — the
+  interface, not the silicon. One document: a fifteen-step turn-taking walk first, then the command set as one
+  row per state, the two packet families (and the ten headers behind them), the matrix, the timing budget, and
+  the claim-by-claim comparison against the `Controllers` stub.
+* It answered more than the brief's seeds expected: the frame is **8N1** (not 7E1), the packet has **no
+  envelope** (a header and an implied length, not `$FF`+len+checksum), the matrix is **8 × 15** (not 8 × 7 —
+  which could not hold the 94 keys the same page claimed), make is the **plain** code and break carries bit 7,
+  and the two buffer depths are **7 usable in / 21 cells with 20 usable out**, settled from the ROM's own
+  comparisons rather than left as T3 numbers. Corrected in place: the component page, `design/virtual-chips.md`
+  §7 (and `U900` is not in the link at all), `design/subsystems-spec.md` §1's Controllers row, and
+  `design/emulator-limitations.md` §7. No tickets: what a board settles is two rows, both in that register.
 
 ---
 
@@ -333,8 +340,11 @@ nomenclature section (only if the part has internal names worth fixing), drawing
    read-modify-write, the 1772's force-interrupt corner), and what the **model already assumes** that neither
    says. It inherits one new fact: `BINT` is the blitter's busy/idle line on `GPIP3`, a level that needs `AER`
    to become an interrupt. No sheets unless earned.
-6. **IKBD** — half a session, behavioural only. Its brief is written: `docs/handoffs/ikbd-hd6301-study.md`
-   (2026-11-28), which also names the thread that follows the closing audit:
+6. **IKBD** — **done, 2026-11-28**, `research/ikbd-implementation.md`. Half a session, behavioural only, as
+   planned: the vendor's protocol document plus a published ROM disassembly answered nearly everything, and the
+   two rows a board would settle are in `design/emulator-limitations.md` §7. **The per-chip campaign is
+   therefore complete** — the session after this one is the closing audit (§6's stopping rule, walked over
+   every entry above), and the thread after the audit is
    `docs/handoffs/disk-media-and-image-formats-study.md`.
 
 **Stopping rule:** stop when every open question in our core has either a labelled claim or an explicit

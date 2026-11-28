@@ -36,7 +36,10 @@ densest single page of measured ST-link behaviour in the tree.
 * **The emulators are a checklist, and Hatari's is unusually detailed.** Its `ikbd.c` (3 258 lines) opens with a
   ROM analysis rather than a pin table: the serial delays in CPU cycles (`1 bit at 7812.5 baud = 1024 cpu cycles
   at 8 MHz`); an **input buffer of 8 bytes at `$CD`–`$D4`** whose overflow **drops the new bytes**; an **output
-  ring of 20 bytes at `$D9`–`$ED`** that drops a whole report it cannot fit; unknown commands treated as **NOPs**;
+  ring of 20 bytes at `$D9`–`$ED`** that drops a whole report it cannot fit *(corrected 2026-11-28: the ROM
+  refuses a command byte at counter 7, so **7 usable** in; the ring is **21 cells** — index `cmpa #$15` — and
+  its store test `needed >= free` reserves one byte, so **20 usable** out; `research/ikbd-implementation.md`
+  §7.5)*; unknown commands treated as **NOPs**;
   and a reset-window quirk where `$08 $14`, `$08 $0B $14`, `$12 $14`, `$12 $1A` received *during* reset put the
   IKBD in a mode reporting mouse and joystick together (Hatari names Barbarian 1 and Hammerfist as users). The
   full command table with parameter counts follows. NeoST and Steem SSE are the second and third models; none is
@@ -66,7 +69,9 @@ A reader who has the study must be able to do these without opening another docu
    (ST slow) and the IKBD's queue (IKBD slow, which is the case the ST's TOS documents as "lost keyboard").
 6. **Say what the model must own** and what it may stub: the Controllers stub's current contract (status
    `0x02`, no byte ever), and the minimum a model needs to type at the desktop — one scancode path, one mouse
-   path, and the two commands TOS sends at boot.
+   path, and the two commands TOS sends at boot *(corrected 2026-11-28: **one** command at boot — `$80 $01`,
+   answered `$F1` — and a family at desktop start-up: `$12`, `$08`, `$0B x x`, `$0F`/`$10`, `$07 x`, all
+   answered by silence; `research/ikbd-implementation.md` §4.5)*.
 7. **Compare the record with the model, claim by claim** — `design/cpu-silicon-todo.md`'s shape, with
    `src/TheST.Machine/Chips/Stubs.cs`'s `Controllers` and `design/virtual-chips.md` §7 named per row.
 
@@ -99,16 +104,26 @@ before writing the command table, and the table will then have one row per state
   rate; the guide's number and the ACIA's must agree to the bit, or one of the two is mis-set.
 * **128 µs a bit, 1.28 ms a character** — and therefore a mouse report at a 40 Hz sampling rate costs ~12 % of
   the link. If a packet is longer than three bytes, the sampling rate cannot be what the guide says.
+  *(Corrected 2026-11-28: **the guide claims no sampling rate at all** — the 40 Hz was ours. Its requirement is a
+  velocity, ~200 counts/inch at up to 10 in/s = 2 000 counts/s, which one record per count would price at 7.7
+  seconds of line per second; motion therefore **accumulates** and a record's delta is clamped at ±127. The
+  packet is three bytes, and the link's ceiling is 260 records a second; `research/ikbd-implementation.md`
+  §7.4.)*
 * **The mouse's header is `$F8` (motion) or `$F9` (buttons)** and the packet is three bytes; the joystick's is
   `$FE` and it is two. Both are Hatari's constants; the guide is the arbiter.
 * **Make/break polarity** — the repo says make = `$80 + n`, break = `n`. Verify with the guide *and* with TOS:
   a wrong polarity produces a keyboard that works upside down, which is a bug the desktop would hide.
 * **The scan matrix** — 8 rows × 7 columns on the ST's keyboard is the page's claim; the guide and the schematic
-  are the arbiters, and the number matters because it decides the scancode space.
+  are the arbiters, and the number matters because it decides the scancode space. *(Settled 2026-11-28:
+  **8 read lines × 15 driven** = 120 positions, from `DR1`'s eight bits and `DR3` bits 1–7 plus `DR4` bits
+  0–7, confirmed by the 120-byte scan-code table at `$F319`. 8 × 7 could not hold the 94 keys the same page
+  claimed.)*
 * **The command ACK** — the ST's `$80`/`$81` family answers with a byte (`$F1`?), and TOS waits for it at boot.
   If the model never answers, the machine still boots (it times out) — which is why the stub "works" and why the
   study must not read the stub as evidence.
-* **The buffer depths are already answered, at T3**: 8 bytes in, 20 out, both dropping on overflow. Treat these as
+* **The buffer depths are already answered, at T3**: 8 bytes in, 20 out, both dropping on overflow
+  *(refined 2026-11-28 from the ROM: **7 usable in**, **21 cells / 20 usable out**; the drop rules hold —
+  new command bytes are dropped, and a whole report is dropped — `research/ikbd-implementation.md` §7.5).* Treat these as
   the numbers to *verify* (against the guide and a ROM dump) rather than to discover — but keep the drop rule,
   because it is the mechanism a "busy IKBD" claim rests on, and a model that queues instead of dropping is wrong
   in a way no test will notice until the mouse is spun.
@@ -164,3 +179,17 @@ priced.
 per-chip plan set it: the four customs first because the record was thin and the drawings were the gold, then the
 standard parts because their datasheets are, and last the IKBD because nothing about it is silicon research at
 all.*
+
+---
+
+## Executed — 2026-11-28
+
+All five definition-of-done items landed. `research/ikbd-implementation.md` is the study (turn-taking walk,
+command table, the two packet families, the matrix, the timing budget, and the claim-by-claim comparison);
+`verify --min-coverage 0.30` is green. The corrections are in place and dated in
+`atari-st-hardware/components/02-ikbd-keyboard.md` (frame, packet envelope, command table, matrix, polarity,
+part sizes), `design/virtual-chips.md` §7 (`U900` is not the keyboard's serialiser and `U202`'s ports are not
+the matrix), `design/subsystems-spec.md` §1's Controllers row (`U201` settled, the IKBD's side made a member),
+and `design/emulator-limitations.md` §7 (the two buffer depths settled from the ROM; the scan cadence and a
+floating `RXD` as the two rows a board would still settle). No tickets were created. The per-chip campaign is
+**complete**, and the next session is the closing audit (§9 of this brief).

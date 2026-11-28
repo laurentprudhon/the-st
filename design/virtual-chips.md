@@ -154,12 +154,30 @@ the four counters A–D, the event selector, and the USART that carries the IKBD
 Timer B counts `DE` transitions — that is how the machine measures scanlines, and it is a crossing in
 its own right (`DE` from the System Control Unit to Timers and events), not a shortcut inside the video code.
 
-### 7. Controllers — U400 pad/pen/port logic + YM2149 ports + U900 + keyboard ACIA
+### 7. Controllers — U400 pad/pen/port logic + YM2149 ports + keyboard ACIA (and the IKBD behind it)
+
+> **Correction — 2026-11-28** (`research/ikbd-implementation.md` §8). Three statements in this section were
+> wrong and are replaced below. `U900` is **not** the keyboard's serialiser: the one 74LS164 is the
+> `SINT`→`TAI` delay (`research/standard-parts-implementation.md` §7), and the link is `TXD`/`RXD` between
+> `U201` and the HD6301, nothing else. The keyboard ACIA is `U201` (settled by Atari's own diagnostic: 500 kHz
+> on its pin 3), so the "U200 or U201" doubt is closed. And `U202`'s ports A/B are **not** the keyboard matrix
+> on this board — they carry the floppy selects and the parallel port (`design/board-inventory.md` §4.4); the
+> matrix belongs to the IKBD's own ports `DR1`/`DR3`/`DR4`, which is the far side of the link and is this
+> chip's business because it is what produces the bytes the ACIA receives.
 
 - `U400`: `JOYAH/JOYAL/JOYWE/JOYWL` (99–102), `BUTTON` 103, `PEN` 137, `PAD0X/PAD0Y` 94/95,
   `PAD1X/PAD1Y` 96/97, `PADRST` 98;
-- `U202`: `IOA0–IOA7` (keyboard matrix + joystick read), `IOB0–IOB3` (controller select, FDD side);
-- `U900` 74LS164 — keyboard/MIDI serialisation; the keyboard ACIA is `U201` at `$FFFC00`.
+- `U202`: `IOA0–IOA7` (floppy selects and RS-232/printer control), `IOB0–IOB3` (parallel port data) — the
+  PSG's ports are a *different* device from the keyboard on the STE;
+- `U201` — the keyboard MC6850 at `$FFFC00`/`$FFFC02`, ÷64 on the 500 kHz tap (7 812.5 baud, 8N1), its `IRQ`
+  meeting MIDI's at `GPIP4` → event channel 6;
+- `U900` 74LS164 — **not a member**: the `SINT`→`TAI` delay it performs is Timers and events' path, not this
+  one;
+- **the IKBD's side of the link**, which no board symbol carries because the chip sits in the keyboard case: a
+  command state machine keyed on parameter counts, an output ring that drops the whole report it cannot fit
+  (21 cells, 20 usable), and the make/break and mouse/joystick record encodings (`research/ikbd-implementation.md`
+  §3–§7). It has no timeline of its own in the model — it is driven by the ACIA's writes and by whatever the
+  host says the keyboard is doing — which is why it belongs to this chip rather than to a ninth one.
 
 ### 8. Blitter — U101 ST Blitter
 

@@ -142,7 +142,7 @@ Every package on the board that carries an active device, from the Section 7 par
 | U103 | sheet 1 | **C301164-002** IC TOS ROM 1.62 USA LO STE | 32-pin DIP | TOS 1.62 low ROM |
 | U202 | sheet 2 | **C025983** IC YM-2149 SOUND 40P | 40-pin DIP | PSG (3 tone + noise + envelope), 2 × 8-bit I/O ports |
 | U203 | sheet 2 | **C025984** IC 68901 MFP 48P | 48-pin DIP | MFP: timers, USART, interrupt controller, 8-bit GPIO |
-| U200, U201 | sheet 2 | **C025985** IC 6850 ACIA 24P | 24-pin DIP | Two 6850 ACIAs. **One is the keyboard/IKBD link at 7812.5 baud (÷64 of 500 kHz) and is in scope; the other is MIDI at 31250 baud (÷16) and is out of scope.** The parts list labels them "MIDI" and "RS-232", which is wrong on both counts — RS-232 is the MFP's USART, not an ACIA. Which reference is which is unresolved (§6). |
+| U200, U201 | sheet 2 | **C025985** IC 6850 ACIA 24P | 24-pin DIP | Two 6850 ACIAs. **One is the keyboard/IKBD link at 7812.5 baud (÷64 of 500 kHz) and is in scope; the other is MIDI at 31250 baud (÷16) and is out of scope.** The parts list labels them "MIDI" and "RS-232", which is wrong on both counts — RS-232 is the MFP's USART, not an ACIA. Which reference is which is unresolved (§6) — **closed 2026-11-28: `U201` is the keyboard ACIA and `U200` is MIDI** (§3.10; Atari's own keyboard diagnostic checks 500 kHz on `U201` pin 3). |
 | U208 | sheet 2 | **C025988** IC PC900 PHOTO COUPLER 6P | 6-pin DIP | MIDI input opto-isolator (out of scope) |
 
 ### 2.2 Standard parts

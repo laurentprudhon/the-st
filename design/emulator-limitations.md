@@ -133,7 +133,22 @@ tool measures it per disk; the model fixes the nominal drive and records the res
 | A5 | The preamp/AGC transfer curve and the DPLL's capture range | **`open`** | The WD1772's inspection window is 2 µs nominal; the part's *analogue* capture range and the drive's slicer are not in the datasheet. A bit-error-rate sweep against cell width would settle them; the model stops at the digital cell. |
 | A6 | Write splice and erase behaviour when a sector is rewritten | **`open`** | IPF's own document says the analyzer cannot archive modified disks because a sector rewrite leaves undefined bytes in the gaps and a slight drift of the sector against the track (the write splice).[48] The model has no disk-write path yet. |
 
-## 7. What the 2026-11-28 search changed
+## 7. The IKBD (HD6301V1)
+
+Study: [`research/ikbd-implementation.md`](../research/ikbd-implementation.md). The part is a 6801-family MCU
+running a mask ROM, so the study is a protocol study and what is left for a board is small: one cadence, one
+floating line, and the rule behind a firmware quirk whose four known cases are already published. The two
+buffer depths that used to be T3 numbers are now settled by the firmware itself and are recorded here as a
+correction rather than as a question.
+
+| # | question | state | what settles it, and what is already known |
+|---|---|---|---|
+| K1 | The exact matrix scan period — one pass over the IKBD's fifteen drive lines | **`open`** | The firmware scans one column per pass of its main loop, so the period is its instruction count; the column block is about 44 machine cycles at E=1 MHz and a full pass is fifteen of them, which bounds a pass at roughly 0.7–5 ms (hundreds of hertz) and does not fix it. A scope on `DR1` during a key press, or a cycle-exact count of every loop path, would. |
+| K2 | The output ring's depth, and what is dropped | **settled 2026-11-28** — the row that used to say "8 in, 20 out, T3" | The ROM settles both: the command buffer is `$CD`–`$D4` with its counter `$CC` refusing a byte at 7 (**7 usable**), and the event/reply ring is `$D9`–`$ED` with its index wrapping at 21 (`cmpa #$15`) and a store test of `needed >= free` (**21 cells, 20 usable**) that drops the **whole report** it cannot fit. Hatari's "8 in, 20 out" is right in effect and wrong in size. |
+| K3 | What an unplugged keyboard's floating `RXD` reads as | **`open`** | `$FF` (a break condition) and noise are both plausible, and nothing published says which; whether the ST's ACIA reports `OVRN`, `FE` or silence is the same question one level up. Pull the cable mid-session on a real machine. |
+| K4 | The reset window: its length, and whether the four known command pairs are the whole rule | **`measured-elsewhere`** for the pairs, **`open`** for the rule | Hatari records `$08 $14`, `$08 $0B $14`, `$12 $14` and `$12 $1A` arriving during the self-test as the trigger for reporting mouse and joystick together, with *Barbarian* and *Hammerfist* named; nothing else in the record generalises it. A real machine with a timer between `$80 $01` and the second command would map the window. |
+
+## 8. What the 2026-11-28 search changed
 
 1. **The 63/64 conflict is closed** — three people (a demo coder with a real STE, Hatari's author, and the
    blitter's own reverse-engineer) published the answer, and the RTL shows the counter. Our study's §5.1 and
@@ -155,11 +170,13 @@ tool measures it per disk; the model fixes the nominal drive and records the res
 6. **Nothing has been published about the endmask's last pixel** — which, given that every working blitter
    routine uses Atari's own tables, is evidence that the tables are right and the derived rule was wrong.
 
-## 8. What is genuinely open, and nothing else
+## 9. What is genuinely open, and nothing else
 
-Twelve rows. Three are on the blitter (which our model does not implement at all yet), five on the disk path
-(three of them the media rows A4–A6), three on the GSTMCU (two of them on its stub), one is analogue, and one is
-the Shifter's sound FIFO.
+Fourteen rows. Two are on the blitter itself (B7's *coverage* is the third, counted in §1), two on the
+disk path's digital side, three on the medium (A4–A6), three on the GSTMCU (two of them on its stub), one
+is analogue, one is the Shifter's sound FIFO, and two are on the IKBD — its scan cadence and a floating
+`RXD`. Nothing in the list can be closed by work in this repository, and every one of them has the
+experiment written down.
 
 | row | question | the one thing that would close it |
 |---|---|---|
@@ -175,6 +192,8 @@ the Shifter's sound FIFO.
 | A4 | the reference drive's speed error and wow | a tachometer on a real drive |
 | A5 | the DPLL's analogue capture range | a bit-error-rate sweep against cell width |
 | A6 | the write splice of a rewritten sector | a write/rewrite test on hardware, then a flux capture |
+| K1 | the IKBD's matrix scan period | a scope on `DR1`, or a cycle count of the firmware's loop |
+| K3 | a floating `RXD` on an unplugged keyboard | pull the cable mid-session |
 
 Everything else in this document is a task with a route: implement it (`documented`), model it and cite the
 person who measured it (`measured-elsewhere`), read a crop (`read`), or test it in our own tree (`ours`).
@@ -214,3 +233,13 @@ person who measured it (`measured-elsewhere`), read a crop (`read`), or test it 
   <https://jsobola.atari8.info/DEREATARI/atarisch/1040ste_fsm.pdf>
 - Hatari — `src/psg.c` (the YM2149's 2 MHz clock and port A), `src/mfp.c` (the GPIP channel map),
   `src/dmaSnd.c` (the 74LS164 delay): <https://github.com/hatari/hatari>
+- Atari — *Intelligent Keyboard (IKBD) Protocol* (the command set, the packet formats and the default modes),
+  reproduced in the Linux kernel's input documentation: <https://docs.kernel.org/input/devices/atarikbd.html>
+- Hatari — `src/ikbd.c` (the ROM analysis of the IKBD's buffers, the command table, the measured reset and
+  reply delays, the reset-window quirk): <https://github.com/hatari/hatari/blob/master/src/ikbd.c>
+- EmuTOS — `bios/ikbd.c`, `bios/aciavecs.S`, `bios/mouse.c` (the ACIA set-up, the packet parser and the
+  mouse-mode commands): <https://github.com/emutos/emutos>
+- Steem SSE — the commented HD6301 ROM disassembly and RAM map of the Atari IKBD, vendored in this tree under
+  `steemsse-V4.2.0_R10/steem/doc/SSE/`: <https://sourceforge.net/projects/steemsse/>
+- Hitachi — *8-bit single-chip microcomputer data book* (HD6301V1: the SCI's `E/128` table, the E-clocked
+  free-running counter): <https://bitsavers.trailing-edge.com/components/hitachi/_dataBooks/1988_U71_8-bit_Single_Chip_Microcomputer_Data_Book.pdf>
