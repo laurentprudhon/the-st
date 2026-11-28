@@ -524,7 +524,7 @@ Sheet 4. Both edges resolved.
 | 30 | MWD | out | H | V |
 | 31 | MWK | out | ↑ | V |
 | 32 | VCC | pwr | — | V |
-| 33 | SCLK | out | ↑ | V |
+| 33 | SCLK | **in** | ↑ | V — driven by the 8.010613 MHz oscillator; also clocks `U301.18` (§3.5's note, 2026-11-28) |
 | 34 | FCLK | in | ↑ | V |
 | 36 | SREQ | out | L | V |
 | 37 | LOAD | in | ↑ | V |
@@ -645,14 +645,14 @@ Sheet 2 (printed p60).
 | 10 | RC | in | — | V |
 | 11 | VCC | pwr | — | V |
 | 12 | **N/C** | — | — | V (unnamed on the symbol; the package's one free pin) |
-| 13 | TAO | out | — | V |
-| 14 | TBO | out | — | V |
-| 15 | TCO | out | — | V |
+| 13 | TAO | out | — | V — no-connect cross (owner, 2026-11-28) |
+| 14 | TBO | out | — | V — no-connect cross |
+| 15 | TCO | out | — | V — no-connect cross |
 | 16 | TDO | out | — | V |
 | 17 | XTAL1 | in | 2.4576 MHz | V |
 | 18 | XTAL2 | out | 2.4576 MHz | V |
-| 19 | TAI | in | ↑ | V |
-| 20 | TBI | in | ↑ | V |
+| 19 | TAI | in | ↑ (← `U900` pin 13, `Q7`) | V |
+| 20 | TBI | in | ↑ (`DE`) | V |
 | 21 | RESET | in | L | V |
 | 22–29 | IO0 … IO7 | I/O | H | V |
 | 30 | TR | out | — | V |
@@ -835,7 +835,8 @@ without a pin (`U400.HSYNC`).
 | IACK | U400.83 · U203.45 · U200/U201 | interrupt acknowledge chain |
 | VPA / VMA | U400.25 · U100 · U101.23, .21 | MFP auto-vector / 6800 peripheral cycle |
 | BR / BG / BGACK | U400.29, .28, .27, .26 · U100 (unverified pins) · U101.13, .11 | bus arbitration for DMA and blitter |
-| CLK (8 MHz) | U303 (8.010613 MHz osc) → U100.34 · U400.CLK · U300.39 · U401.53 | |
+| CLK (8 MHz) | U303 (8.010613 MHz osc) → U100.34 · U400.CLK · U300.39 · U401.53 | the same oscillator's net is `SCLK` (below), so the CPU, the DMA, the Shifter's sound divider and the FDC share one 8 MHz clock |
+| SCLK | U303 → U401.33 (in) · **U301.18 (`CLK`)** | 8.010613 MHz. **Added 2026-11-28**: the FDC's clock, owner-traced on sheet 3 (`research/standard-parts-implementation.md` §4.2) |
 | CLK8 / CLK4 / CLK2 | U400.3, .4, .5 → U401.FCLK, U300, MFP | divided pixel clocks |
 | KHZ500 | U400.6 → the two 6850 ACIAs' `RXC`/`TXC` (and the floppy's timing) | 500 kHz reference. **Corrected 2026-11-28**: it does *not* reach the MFP — `TAI` is the delayed `SINT` and `TBI` is `DE` (`research/standard-parts-implementation.md` §3.1, §5.3) |
 | ROM0–ROM6 | U400.13, .12, .11, .10, .9, .8, .7 → U102.CE / U103.CE and the ROM jumper block | chip-select/segment decode |
@@ -851,7 +852,7 @@ without a pin (`U400.HSYNC`).
 | WE | U400.121 → SIMM sockets | write enable, common to both banks |
 | MWE / MWD / MWK | U401.29, .30, .31 → U508 (LMC1992) | the **Microwire** link: MicroWire Enable (active low), Data, and bit clocK, driving the LMC1992's volume/tone registers. **Correction 2026-11-11** (ticket #27, `research/ste-super-hires.md`): this row previously read `← U400` and "shifter memory write path for Super Hi-Res" — the direction is out of the Shifter, and there is no Super Hi-Res mode on this board |
 | MD0–MD15 | U401.56–71 | video data from RAM to shifter (16-bit fetch) |
-| DE | U400.141 → U401.54 | display enable, gates the video fetch slot. **Also reaches the MFP's `TBI` (U203.20)** per documentation, not per this redraw — see §6.15 |
+| DE | U400.141 → U401.54 **and U203.20 (`TBI`)** | display enable, gates the video fetch slot; the MFP's Timer B input carries the same net (owner's read of sheet 2, 2026-11-28 — §6.15 now closed) |
 | BLANK | U400.140 → U403 / video output stage | blanking |
 | HSYNC / VSYNC | U400.142 (VSYNC, V) · U400.HSYNC (U) → U403 and J600 | off-board at J600 |
 | LATCH | U400.131 → U511 (74LS373) / palette latch | |
@@ -897,6 +898,7 @@ without a pin (`U400.HSYNC`).
 | STEP / DIRC / WG / WD / MO / RD / DDEN | U301.16, .17, .21, .22, .20, .19, .26 → J303 (34-pin) and J306 (14-pin DIN) | **off-board** drive control |
 | TR00 / WPRT / IP | U301.23, .25, .24 ← J303/J306 | **off-board** drive status |
 | MR | U301.13 ← reset circuit | |
+| SCLK | U303 → U301.18 (`CLK`) | the FDC's 8 MHz clock; 0.13% above the datasheet's window and absorbed by MFM's self-clocking (2026-11-28) |
 | FDD POWER | J302 | **off-board**, 4-pin |
 
 ### 4.6 Controllers (sheets 2, 4, 5)
@@ -1094,7 +1096,7 @@ These are listed only because they occupy in-scope GSTMCU pins.
     into the Video Shifter", so `DCYC` is the video strobe and the redraw's single-ended net is
     incomplete: it must fan out to the Shifter as well as to `U300`. `SREQ`/`*SLOAD` remain the
     sound handshake per the ST Magazine article. See `research/schematic-evidence.md` §1.
-15. **`DE` reaches the MFP's Timer B input, but this redraw does not draw the net.** *Atari ST
+15. **`DE` reaches the MFP's Timer B input — closed 2026-11-28, the net is drawn.** *Status: the owner traced `U203.20` to the net labelled `DE` on sheet 2; `TAI` (19) goes to `U900` pin 13 (`Q7`).* The original note below is kept for its reasoning. *Atari ST
     Internals* (Abacus, §1.4) states it plainly: "Timer B is used for counting screen lines in
     conjunction with `DE` (Display Enable)". Hatari's MFP pin diagram records the same wiring for every
     machine it models — `TBI : connected to video DE` (ST, STE, TT). The connection list in §4.2 has

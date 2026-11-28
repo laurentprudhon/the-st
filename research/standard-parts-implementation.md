@@ -136,7 +136,7 @@ What is left over is genuinely one scope and one boot.[39][40][44]
 That split is why a part rated at 4.0 MHz maximum can sit on a machine whose crystals are 8 and 2.4576 MHz.[38]
 
 `derived` The 500 kHz reference does **not** reach this chip's timer inputs.
-The datasheet gives four timers and exactly two auxiliary inputs, `TAI` and `TBI`, and this session's reading assigns both: `TAI` to the delayed `SINT`, `TBI` to `DE`.[38][41][42]
+The datasheet gives four timers and exactly two auxiliary inputs, `TAI` and `TBI`, and the sheet settles both: `TAI` (19) is wired to **`U900` pin 13, its `Q7` output** — the shift register's last stage — and `TBI` (20) carries a net labelled **`DE`** (owner's read, 2026-11-28).[38][41]
 `inferred` `KHZ500`'s clients on sheet 2 are the two ACIAs, whose `RxC`/`TxC` pins divide it internally by 16 and 64 (§5.3).[41][40]
 
 `derived` Three of the four timer outputs are open: `TAO`, `TBO` and `TCO` reach no net, and `TDO` is wired back into `TC` and `RC` — which is the circuit Atari's own prose describes ("the 2.4576 MHz clock to the MFP is divided by the timer D (pin 16) output of the MFP to provide the basic clock for receiver and transmitter").[41][42]
@@ -243,7 +243,7 @@ The datasheet gives four timers and exactly two auxiliary inputs, `TAI` and `TBI
 | 1 | `CS` | `FDCS` from `U300.22` | 15 | `VCC` | — |
 | 2 | `R/W` | `CR/W` from `U300.25` | 16 | `STEP` | to the drive connector |
 | 3 | `A0` | `CA2` from `U300.27` | 17 | `DIRC` | to the drive connector |
-| 4 | `A1` | `CA1` from `U300.26` | 18 | `CLK` | 8 MHz (§4.2) |
+| 4 | `A1` | `CA1` from `U300.26` | 18 | `CLK` | `SCLK` — the 8.010613 MHz oscillator (§4.2) |
 | 5–12 | `DAL0`–`DAL7` | `CD0`–`CD7` (the DMA chip's device bus) | 19 | `RD` | from the drive |
 | 13 | `MR` | the reset network | 20 | `MO` | to the drive |
 | 14 | `GND` | — | 21 | `WG` | to the drive |
@@ -257,7 +257,10 @@ The datasheet gives four timers and exactly two auxiliary inputs, `TAI` and `TBI
 
 ### 4.2 What the datasheet leaves open, and the part's own numbers
 
-`documented` The clock requirement is a number the board can be checked against: the `CLK` input "requires a free-running 50% duty cycle clock... at 8 MHz ±0.1%".[44] `derived` The board's only 8 MHz-class source is `U303` at 8.010613 MHz — 0.133% high, i.e. just outside the datasheet's window — and the extraction did not pair `U301.18`'s net, so whether the FDC takes that oscillator directly is a **read**, not a measurement (§9.8).[41]
+`documented` The clock requirement is a number the board can be checked against: the `CLK` input "requires a free-running 50% duty cycle clock... at 8 MHz ±0.1%".[44]
+`documented` And the net is `SCLK` (owner's read of sheet 3, 2026-11-28): the 8 MHz clock the Shifter's sound divider runs on — the shifter study's "8 MHz input from a separate oscillator" — which is `U303`, the oscillator that also clocks the CPU, not one of the GSTMCU's divided taps.[41]
+`derived` Whether `SCLK` is that oscillator's net directly or a buffered copy through the two `74LS74` halves beside it (`U304A`/`U304B`) is not read; either way it is the same 8.010613 MHz.
+`derived` So the FDC runs **0.133% fast** against the datasheet's window: 8 010 613 Hz where ±0.1% allows 8 008 000. That is Atari's oscillator, not a transcription, and it works because MFM is self-clocked — the data separator locks to the data, so a 0.13% shift is absorbed. `derived` The arithmetic consequence is the bit rate: 8 010 613 ÷ 32 = **250.3 kbit/s**, 0.13% above the nominal 250.
 
 `documented` The command set is eleven commands in four types, and the flags are dense enough that a model should read them from the table rather than from a mnemonic: Type I carries `h` (motor-on), `v` (verify), and a two-bit rate field; Type II carries `m` (multiple), `h`, `e` (15 ms settling) and, for writes, `p` (precompensation) and `a0` (deleted data mark); Type IV is the Force Interrupt with a four-bit condition.[44]
 
@@ -407,6 +410,7 @@ The datasheet gives four timers and exactly two auxiliary inputs, `TAI` and `TBI
 | Atari's diagnostics (`P0`) | "check if the chip selects are being activated and the 2 MHz clock is present" |
 
 `derived` The frequency ceiling closes it arithmetically: 125 kHz is exactly 2 MHz ÷ 16, the noise generator's fastest setting (`NP` = 1); at 2.4576 MHz the same register would produce 153.6 kHz and the manual's own range would be wrong.[39][41]
+`derived` And so does the record's own old provenance, once `SCLK` is known to be the 8 MHz oscillator: `SCLK ÷ 4` is **2.0027 MHz**, not 2 — a third of a percent sharp, which is audible in a tuner and would have contradicted every published period table.[41]
 
 `derived` So `design/board-inventory.md` §2.3's crystal row — `Y200` "MFP / YM2149 clock" — is the stale record: `Y200` clocks the MFP's timers, and the PSG's clock is a *net* from the GSTMCU, not a crystal.[41][39]
 
@@ -483,7 +487,8 @@ The datasheet gives four timers and exactly two auxiliary inputs, `TAI` and `TBI
 
 `documented` Its role is not the one the parts list's description claims.[43] Hatari's `dmaSnd.c` states it plainly: "on early STE models the `XSINT` signal was directly connected to MFP `GPIP7` and to Timer A input (for event count mode). On later revisions, as well as on TT, the signal to Timer A input is now delayed by 8 shifts using a 74LS164 running at 2 MHz, which is equivalent to 32 CPU cycles when the CPU runs at 8 MHz."[43]
 
-`derived` That settles the count, the path and the delay in one sentence: **one part, eight stages, the `SINT`→`TAI` path, 4 µs** — 8 × 500 ns at `CLK2`, 32 CPU clocks at 8 MHz, and the same figure the STE article gives when it calls it a four-microsecond delay.[43][41]
+`derived` And the board's own wires confirm the path: `TAI` is on **`U900` pin 13, `Q7`** — the eighth stage — and `Q7` is the last tap of the chain (owner's read, 2026-11-28).[41]
+`derived` So the count, the path and the delay agree in one sentence: **one part, eight stages, the `SINT`→`TAI` path, 4 µs** — 8 × 500 ns at `CLK2`, 32 CPU clocks at 8 MHz, and the same figure the STE article gives when it calls it a four-microsecond delay.[43][41][38]
 
 `derived` So `design/board-inventory.md` §6.16's either/or resolves in favour of the delay, and the parts list's "keyboard/MIDI serialisation" is a description rather than a circuit: the keyboard link needs no shift register (the 6850's `TXD` and `RXD` are the link, §5.1), and no other part on this board is an eight-stage delay.[40][41]
 
@@ -537,7 +542,7 @@ So if 24 were `A9`, this board would hold `A9` high, the programme would never m
 5. **One 74LS164 or two.** *The record:* the parts list has one and describes it as a serialiser; the STE article describes one added to delay `*SINT`. *Settled:* one part, on the delay, 8 shifts at 2 MHz, 4 µs — and the serialiser deserves no circuit, because the ACIA's `TXD`/`RXD` are the keyboard link.[43][40][41]
 6. **`KHz500` into the MFP.** *The record:* "MFP timer input; which of `TAI`/`TBI` it reaches is not legible". *Settled:* neither — `TAI` is `SINT`, `TBI` is `DE`, and the reference's clients are the ACIAs' clock pins.[38][41][42]
 7. **The FDC's pin 28.** *The record:* "name illegible... a supply/test pin on this package". *Settled:* `INTRQ`, an output, and Atari's own disk diagnostics poll it.[44][41]
-8. **The FDC's clock.** *The datasheet:* 8 MHz ±0.1%. *The board:* one 8.010613 MHz oscillator, and the `CLK` pin's net was not paired. *Narrowed:* the part is 0.133% over the datasheet's window if it takes that oscillator directly, which is a **read** of sheet 3 at the oscillator and at pin 18 — not a scope.[44][41]
+8. **The FDC's clock — settled, and 0.13% over spec.** *The datasheet:* 8 MHz ±0.1%. *The board:* pin 18's net is `SCLK`, the 8.010613 MHz oscillator (owner's read), so the part runs 0.133% fast.[44][41] *Why it works:* MFM carries its own clock, so the separator locks to the data and a 0.13% offset costs nothing — the bit rate becomes 250.3 kbit/s instead of 250.[44] The number stays in the record because a drive whose spindle is *also* off would push the sum past what the separator tolerates.
 9. **The PSG's port assignment.** *The record:* `board-inventory.md` §4.4 puts the FDD select on `IOB0–IOB3`. *Atari's diagnostics* put drive A and B selects on pins 20 and 19 — `IOA1`/`IOA2` — and the programming guide refines it to the three low bits of register 14: bit 0 the side, bit 1 drive 0, bit 2 drive 1.[41][23]
 *Corrected in place* in §4.4's row, with the diagnostic's sentence beside it.[41][39]
 
@@ -545,7 +550,7 @@ So if 24 were `A9`, this board would hold `A9` high, the programme would never m
 
 ## 10. What stays unknown, and where it lives
 
-`documented` Nothing new became a ticket this session (owner's ruling, 2026-11-28): every row that only a board could settle is a row in `design/emulator-limitations.md`, and three of them changed state here.[41][38][40]
+`documented` Nothing new became a ticket this session (owner's ruling, 2026-11-28): every row that only a board could settle is a row in `design/emulator-limitations.md`, and **six** of them changed state here — three readings the owner settled on the sheet, and three datasheet closures.[41][38][40]
 
 | row | was | now | what closed it |
 |---|---|---|---|
@@ -554,10 +559,10 @@ So if 24 were `A9`, this board would hold `A9` high, the programme would never m
 | `D5`/`D6` — the DMA counter's readback and the DMA chip's power-on state | `open` | **`open`** | `D6` is `U300`'s, and this study does not narrow it; the **FDC is not that case** — its `MR` (pin 13) is on the reset network, so a chip with no reset pin is the DMA controller's distinction alone[44][41] |
 | `S7` — the sound FIFO's depth | `open` | **`open`** | unchanged; it is the Shifter's pins, not the PSG's |
 | the PSG's `A8`/`A9` numbering | `open` | **closed 2026-11-28** | the owner's read of the straps (`24 → VCC`, `25 → VSS`) plus the working-machine argument puts the transposition in Yamaha's figure, not in the board (§9.4) |
-| new: the FDC's `CLK` source | — | **`read`** | one crop of sheet 3 at `U303` and at `U301.18` (§9.8) |
-| new: `TAI`'s and `TBI`'s net labels | — | **`read`** | the same sheet, at pins 19/20 — the alignment succeeded for the other pins, so the labels exist[41] |
+| the FDC's `CLK` source | `read` | **closed 2026-11-28** | `SCLK`, the 8.010613 MHz oscillator — the owner traced pin 18 (§4.2, §9.8); the part runs 0.13% fast and MFM absorbs it |
+| `TAI`'s and `TBI`'s net labels | `read` | **closed 2026-11-28** | `TAI` is `U900` pin 13 (`Q7`), `TBI` is `DE` — the owner traced both (§3.1, §7) |
 
-`derived` The remaining `read` rows are readings, not measurements: each is one crop and the owner's eyes, which is why they sit beside the register's `read` state rather than in the `open` list.
+`derived` All three `read` rows are now closed, which is the shape this study was expected to have: for a standard part the residue is a *reading*, and a reading is an afternoon with the owner and a crop, not a session. `derived` What is left is one `open` row this session did not touch (`D5`), the machine-level rows above it, and one number that only a scope can confirm — the 74LS164's 4 µs.[43]
 
 ---
 
