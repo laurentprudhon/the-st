@@ -681,11 +681,12 @@ What is elided is the engine's, not the state's: `m_base_ssw`, `m_edb = m_opcode
 `m_icount -= 4`, the `if(m_icount <= 0)` suspension block, the odd-address branch (ADR 0009's coroutine
 style, `Cycle`'s abort), `set_ftu_const()`, and `m_inst_state = m_decode_table[m_ird]`.
 
-Two things must be **said, never hidden**: a state fused into a helper names both (`// b (363) + mmrw3
-(34c)`, charge `4+4`, `TrailingFetchAsync`), and a deliberate difference from the listing begins a second
-line `//   ours:` with what the code does and the measurement that made it necessary. `RESET`'s block
-(`MiscAsync`'s `0x4E70` case) is the worked example: the count is taken before the clocks are spent, and
-the block says so.
+Two things must be **said, never hidden**: a state fused into a helper names both on one line (`// b (363)
++ mmrw3 (34c)`, charge `0+4` — one part per state, in the pair's order: `b` is uncharged bookkeeping, the
+read is `mmrw3`'s, and the helper is `TrailingFetchAsync`), and a deliberate difference from the listing
+begins a second line `//   ours:` with what the code does and the measurement that made it necessary.
+`RESET`'s block (`MiscAsync`'s `0x4E70` case) is the worked example: the count is taken before the clocks
+are spent, and the block says so.
 
 The checker is `scripts/comment-states.py` (stdlib only, needs the pinned microcode):
 

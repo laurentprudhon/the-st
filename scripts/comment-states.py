@@ -17,8 +17,9 @@ What it checks, and nothing else:
 
   · the `(name, addr)` pair is a state the generator knows (a pair the ROM does not have is a
     finding, not a typo to fix by eye);
-  · the charge is the state's **own** — 2 for a state, 4 for a state that touches the bus, and a
-    fused pair's `4+4`;
+  · the charge is the state's **own** — 2 for a state, 4 for a state that touches the bus, 0 for
+    one the listing leaves uncharged — and a fused pair's is the sum of its parts, in the pair's
+    order (`b (363) + mmrw3 (34c)` is `0+4`: `b` is uncharged and the read is `mmrw3`'s);
   · the line ends at column 104 (the charge right-aligned there), and continuation lines of the
     same state carry no name of their own;
   · a state is not commented twice inside one method;
@@ -50,6 +51,8 @@ WIDTH = 104
 
 # `// <name> (<addr>)  <statements>  <charge>` — the charge is the last token of the line.
 STATE = re.compile(r"^\s*//\s+([a-z][a-z0-9_]*)\s+\(([0-9a-f]{3})\)\s*(.*)$")
+# A state fused into a helper names both: `// b (363) + mmrw3 (34c)  …  0+4`.
+FUSED = re.compile(r"^\+\s*([a-z][a-z0-9_]*)\s+\(([0-9a-f]{3})\)\s*")
 CHARGE = re.compile(r"(\d+(?:\+\d+)?)\s*$")
 CONTINUATION = re.compile(r"^\s*//\s{2,}\S")
 OURS = re.compile(r"^\s*//\s+ours:")
@@ -102,11 +105,24 @@ def opcode_listing(opcode):
     return found
 
 
+def fused_pairs(state):
+    """Every `(name, addr)` one state line names — one, or a fused pair's two (`+ name (addr)`)."""
+    pairs = [(state.group(1), state.group(2))]
+    rest = state.group(3)
+    while True:
+        fused = FUSED.match(rest)
+        if not fused:
+            return pairs
+        pairs.append((fused.group(1), fused.group(2)))
+        rest = rest[fused.end():]
+
+
 def blocks(lines):
-    """Group the file's comment lines into state blocks: (line number, name, addr, text, lines).
+    """Group the file's comment lines into state blocks: (line number, pairs, text, lines).
 
     A block is a state line plus the continuation lines that wrap its statements; the charge is the
-    last token of the block's **last** line (the format right-aligns it at column 104 there).
+    last token of the block's **last** line (the format right-aligns it at column 104 there). A
+    fused line names both states, and its charge has one part per state, in the same order.
     """
     number = 0
     while number < len(lines):
@@ -119,7 +135,7 @@ def blocks(lines):
         while number + 1 < len(lines) and CONTINUATION.match(lines[number + 1]):
             number += 1
             text.append(lines[number])
-        yield start + 1, state.group(1), state.group(2), " ".join(part.strip(" \t/") for part in text), text
+        yield start + 1, fused_pairs(state), " ".join(part.strip(" \t/") for part in text), text
         number += 1
 
 
@@ -129,31 +145,37 @@ def check_file(path, index, findings):
 
     method_no = 0
     seen = set()
-    blocks_by_start = {start: (name, addr, text, block) for start, name, addr, text, block in blocks(lines)}
+    blocks_by_start = {start: (pairs, text, block) for start, pairs, text, block in blocks(lines)}
     for number, line in enumerate(lines, start=1):
         if METHOD.match(line) and "(" in line:
             method_no += 1
         if number not in blocks_by_start:
             continue
 
-        name, addr, text, block = blocks_by_start[number]
-        pair = (name, addr)
+        pairs, text, block = blocks_by_start[number]
+        named = " + ".join(f"{name} ({addr})" for name, addr in pairs)
         charge = CHARGE.search(text)
         if charge is None:
-            findings.append(f"{path}:{number}: `{name} ({addr})` carries no charge")
+            findings.append(f"{path}:{number}: `{named}` carries no charge")
         else:
             stated = charge.group(1)
-            total = sum(int(part) for part in stated.split("+"))
-            if pair not in index:
-                findings.append(f"{path}:{number}: `{name} ({addr})` is not a state of the ROM")
-            elif index[pair] != total:
-                findings.append(f"{path}:{number}: `{name} ({addr})` charges {stated}, the state's own is {index[pair]}")
+            parts = [int(part) for part in stated.split("+")]
+            if len(parts) != len(pairs):
+                findings.append(f"{path}:{number}: `{named}` names {len(pairs)} state(s) and its charge "
+                                f"`{stated}` has {len(parts)} part(s)")
+            for (name, addr), part in zip(pairs, parts):
+                if (name, addr) not in index:
+                    findings.append(f"{path}:{number}: `{name} ({addr})` is not a state of the ROM")
+                elif index[(name, addr)] != part:
+                    findings.append(f"{path}:{number}: `{name} ({addr})` charges {part}, the state's own is "
+                                    f"{index[(name, addr)]}")
         for offset, part in enumerate(block):
             if len(part) > WIDTH:
                 findings.append(f"{path}:{number + offset}: line is {len(part)} wide, the format's column is {WIDTH}")
-        if (method_no, name, addr) in seen:
-            findings.append(f"{path}:{number}: `{name} ({addr})` is commented twice in one method")
-        seen.add((method_no, name, addr))
+        for name, addr in pairs:
+            if (method_no, name, addr) in seen:
+                findings.append(f"{path}:{number}: `{name} ({addr})` is commented twice in one method")
+            seen.add((method_no, name, addr))
     return findings
 
 
@@ -167,7 +189,7 @@ def check_complete(path, index, opcode, findings):
     for line in text.splitlines():
         state = STATE.match(line)
         if state:
-            found.append((state.group(1), state.group(2)))
+            found.extend(fused_pairs(state))
     for pair in wanted:
         if pair not in found:
             findings.append(f"{path}: the listing's `{pair[0]} ({pair[1]})` is not commented")
