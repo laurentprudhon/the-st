@@ -712,3 +712,9 @@ git diff -U0 -- 'src/TheST.Machine/Cpu/*.cs' | grep -E '^[+-]' \
 
 The checker joins `cpu-shape-check.sh`'s interface row when it reads 0 across the whole core — that is
 `#94`'s landing, not this convention's (`#102`); a checker with findings in the gate is a red gate.
+
+Two things a converter pays for once, and neither is the checker's to catch. An `ours:` paragraph belongs
+**above** the state lines it qualifies, with a bare `//` line between: a paragraph placed after a state block
+is read as that block's continuation, and its last token then becomes the "charge". And the guard above is
+line-shaped — it cannot see a trailing comment edited in place — so a conversion adds whole comment lines and
+leaves every code line as it stands, trailing comments included.
