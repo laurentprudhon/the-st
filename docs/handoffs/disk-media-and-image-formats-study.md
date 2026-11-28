@@ -1,5 +1,26 @@
 # Handoff — the drive, the media, and the image formats: what our five readers carry and what they lose
 
+> **Status — executed 2026-11-28.** Study: [`research/floppy-media-and-images.md`](../../research/floppy-media-and-images.md)
+> (465 lines; `verify --min-coverage 0.30` green at **47 %**).
+>
+> - [x] §2's criteria 1–7: the chain and its faults (§3), the geometry and the 9/10/11/12 budget (§4), the
+>   format × feature table (§5.1), every container and its physical format (§6), the protection classes (§7.1),
+>   the priced deferral (§8), the loader contract and the decision (§10).
+> - [x] §7's experiments: the byte budget was run (9 → 5 586, 10 → 6 200, 11 → 6 814 at the standard 614-byte
+>   sector; the "11 does not fit" is corrected to "not at the recommended gaps" — Steem's 566-byte layout fits
+>   at 6 256); a real `.stx`'s track 0 was range-read (The Pawn 2.1: 9 sectors, flags `0x61`, a **6 283-byte
+>   track image**, read times 16 306/16 346 µs); the ten-title sample was read; the preservation community's
+>   notes were searched (KFAnalyze, the DM encyclopaedia, Copylock).
+> - [x] §8's definition of done: the study with its two tables; `design/disk-path.md` §1, §3, §6.1 and §7
+>   updated; the `.STX` body replaced with a dated correction; `design/emulator-limitations.md` §6.1 gains
+>   A1–A6. Commits `1674030` and `5dc2953` on `origin/main`, from `/opt/data/the-st-wt/media`; shared tree
+>   fast-forwarded.
+> - [x] **The decision**: the flux defer is **re-affirmed**, and the deferral is **cheaper than the brief
+>   assumed** — every preserved-original title in the ten-title sample has an `.stx`/Pasti master, and STX
+>   carries the sample's documented classes (Copylock's long sector, Dungeon Master's fuzzy sector and 247,
+>   Turrican's overlap). The watch list is the ten plus the Pasti-only remainder; the trigger is a title whose
+>   *only* preserving master is `.ipf`/`.scp`/`.hfe`.
+
 **Goal of the session.** Write `research/floppy-media-and-images.md`: an in-depth study of the *media* side of the
 disk path — the physical drive and the 3.5" diskette, the recording formats an Atari ST actually meets, the five
 image formats the emulator reads and the four it defers, and — the deliverable that makes it a study rather than a
