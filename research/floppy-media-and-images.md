@@ -115,6 +115,7 @@ The WD1772 has no analogue front end of its own: the drive's PCB amplifies the h
 
 `documented` The WD177x specification states the *minimum* variations: the `4E` part of the post-ID gap must be **22 bytes**, the `00` part **12 bytes**; the `4E` part after the data must be at least **24 bytes** and the `00` part at least **8**; the leading and trailing gaps at least **2**.[44]
 `derived` The ST's own formatter is looser at the index (60 `4E` before the first ID) and uses 40 after the data; that is the layout Hatari, IPF's Atari example and Steem all build.[60][48][61]
+`derived` The "80-byte gap before each ID" sometimes quoted for MFM is the IBM 3740/System 34 **gap 4a at the index**, not a per-sector gap: the ST's index gap is 60 `4E`, and every ID is preceded by 12 `00` (the PLL lock-up) plus the 3-byte sync.[44][60]
 
 ### 4.3 Why 9 fit, 10 fit tightly, and 11 only by breaking the recommendation
 
