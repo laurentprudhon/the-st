@@ -167,7 +167,7 @@ to the hardware, because every TOS service ends on a register or a pin that Part
 **The evidence, stated once here because every chapter inherits it.** EmuTOS is in the tree as source (GPLv2,
 `roms/emutos-1.4/emutos-src-1.4.tar.gz`) and it is the *readable* implementation of this API. Real TOS 1.62 is not
 public as source: its implementation is read from the **disassembly of a user-supplied image** — the project ships
-EmuTOS and never distributes a real TOS (ADR 0010) — plus the published Srecords/documentation of the era. So each
+EmuTOS and never distributes a real TOS (ADR 0010) — plus the era's published documentation and the community's disassembly notes. So each
 function gets up to three columns: *what the interface promises* (documented), *what EmuTOS does* (`path:line`, a
 reading), *what TOS 1.62 does* (a disassembly address, or `inferred` from observed behaviour, or `unknown` with the
 reason). No chapter of this part may present an EmuTOS implementation as if it were Atari's.
