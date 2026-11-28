@@ -216,7 +216,7 @@ What the session established, and what later parts can reuse:
   requester, FIFO and byte split the Shifter's, and the board article says so in as many words. What
   remains for this chip is the disk/ACSI path and the grant relay — read the brief before re-litigating.
 
-### U101 Blitter (C101643)
+### U101 Blitter (C101643) — **next**, brief: [`u101-blitter-study.md`](u101-blitter-study.md)
 * **Questions:** register semantics (source/dest/X-count/Y-count/hop/op/skew/mask), the three passes and
   how the mask register is consumed, halftone RAM, line mode (Bresenham variant), and the busy/IRQ timing.
 * **Evidence:** Atari's blitter documentation, Hatari `blitter.c`, MAME. A blitter is small enough that a
@@ -275,9 +275,10 @@ nomenclature section (only if the part has internal names worth fixing), drawing
    one: the sound path is not in this chip, so the work was the disk/ACSI path and the grant relay. It found
    that the chip is a port with a FIFO — no address pins, no interrupt, no reset — and that the counter and
    every memory cycle belong to the GSTMCU.
-4. **Blitter** — **next**; one session. The two questions this campaign hands it: whether its `BR`/`BG`/`BGACK`
-   are truly direct (the DMA's are not), and the 63-or-64 bus cycle non-HOG window the U400 study filed
-   (§6.6).
+4. **Blitter** — **next**; one session, brief written: [`u101-blitter-study.md`](u101-blitter-study.md). It is
+   the last chip with a recovered design (`ST-4082 "BLT CELL"`, 21 image-only sheets, plus `4082.LST`'s gate
+   list), and it inherits two questions: whether its `BR`/`BG`/`BGACK` are truly direct (the DMA's are not), and
+   the 63-or-64 bus cycle non-HOG window the U400 study filed (§6.6).
 5. **MFP / WD1772 / ACIA / PSG** — one combined session.
 6. **IKBD** — half a session, behavioural only.
 
