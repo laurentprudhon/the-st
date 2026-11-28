@@ -691,8 +691,8 @@ Sheet 2. Complete.
 | 14–21 | IOA7 … IOA0 | I/O | H | V |
 | 22 | CLOCK | in | 2 MHz (`CLK2`) | V |
 | 23 | RESET | in | L | V |
-| 24 | A8 (as printed; the datasheet numbers this pin `A9`) | in | tied low | V |
-| 25 | A9 (as printed; the datasheet numbers this pin `A8`) | in | tied high | V |
+| 24 | A8 | in | tied high (`VCC`) | V — owner read 2026-11-28 |
+| 25 | A9 | in | tied low (`VSS`) | V — owner read 2026-11-28 |
 | 26 | SEL | in | H (pull-up; clock not divided) | U — not drawn on the symbol |
 | 27 | BDIR | in | H | V |
 | 28 | BC2 | in | H (tied to VCC) | U (not paired; wired per Hatari's table) |
@@ -718,10 +718,12 @@ handshake lines, which is why the drive-select diagnostics name PSG pins 19 and 
 > it also read port B as the "controller select / FDD side select" byte. The pin numbers
 > now come from the same offset pairing as the MFP's, and the YM2149 datasheet prints the
 > same layout. Two things to keep straight: the **clock is the GSTMCU's `CLK2` at 2 MHz**,
-> not `Y200` (§2.3's crystal row is corrected with it), and the **redraw transposes `A8`
-> and `A9`** against the datasheet and Hatari's board table — a reading question, recorded
-> in `design/emulator-limitations.md`, and immaterial to register access because the part
-> is selected by `BC1`/`BDIR`.
+> not `Y200` (§2.3's crystal row is corrected with it), and the **`A8`/`A9` numbering is the
+> redraw's, not the datasheet's** — the owner read the straps on 2026-11-28 (`24 → VCC`,
+> `25 → VSS`), and that is what a working machine requires, because the datasheet's own
+> select programme is `A8` = 1 / `A9` = 0 and a swapped strap would leave the PSG's data bus
+> high-impedance. The datasheet's figure prints `25 A8`, and is the suspect
+> (`research/standard-parts-implementation.md` §9.4).
 
 ### 3.10 U200 / U201 — 6850 ACIA, 24-pin DIP (C025985)
 

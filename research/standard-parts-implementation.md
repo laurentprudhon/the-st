@@ -63,7 +63,7 @@ That is an error every musician would have noticed in 1989.[41]
 | part | pins paired | cross-check | verdict |
 |---|---|---|---|
 | `U203` MC68901 | 45 of 47 by offset, plus `VCC`/`GND` drawn as power symbols | the datasheet's §8.1 pin figure, read by the same count rule, reproduces 46 of them and prints `N/C` at 12[38] | **complete**, and pin 12 is the package's one unnamed pin: 47 + 1 = 48 |
-| `U202` YM2149 | 36 of 40 | the datasheet's pin layout prints the same 36 plus `N/C` 2 and 5, `SEL` 26 and `TEST1` 39[39] | **complete**, with `A8`/`A9` transposed against the datasheet (§9.4) |
+| `U202` YM2149 | 36 of 40 | the datasheet's pin layout prints the same 36 plus `N/C` 2 and 5, `SEL` 26 and `TEST1` 39[39] | **complete**, and its `A8`/`A9` numbering is the one a working machine confirms (§9.4) |
 | `U200`, `U201` MC6850 | 24 of 24 each | the datasheet's expanded block diagram prints the same numbers[40] | **complete**, and §6.4's "could not be paired" is closed |
 | `U301` WD1772 | 28 of 28 | the datasheet's pin table matches on all 27 named pins[44] | **complete**, and pin 28 is `INTRQ`, not "a supply/test pin" |
 | `U900` 74LS164 | 14 of 14 | the standard 74164 assignment[43] | **complete** |
@@ -414,7 +414,7 @@ The datasheet gives four timers and exactly two auxiliary inputs, `TAI` and `TBI
 |---|---|---|---|---|---|
 | 40, 1 | `VCC`, `VSS` | power | 13–6 | `IOB0`–`IOB7` | the parallel port's data lines `D0`–`D7` |
 | 3, 4, 38 | `ANALOG B`, `A`, `C` | the three channel outputs | 21–14 | `IOA0`–`IOA7` | side select, drive 0, drive 1, `RTS`, `DTR`, `STROBE`, GPO, n/c |
-| 22 | `CLOCK` | `CLK2`, **2 MHz** | 24, 25 | `A9`, `A8` | `A9` tied low, `A8` tied high (§9.4) |
+| 22 | `CLOCK` | `CLK2`, **2 MHz** | 24, 25 | `A8`, `A9` | `A8` (24) to `VCC`, `A9` (25) to `VSS` — the datasheet prints the pair the other way round (§9.4) |
 | 23 | `RESET` | `XRESET` | 26 | `SEL` | open: pull-up, so no divide by two |
 | 27 | `BDIR` | `SNDIR` (GSTMCU pin 18) | 29 | `BC1` | `SNDCS` (GSTMCU pin 19) |
 | 28 | `BC2` | tied to `VCC` | 30–37 | `DA7`–`DA0` | `SD0`–`SD7` |
@@ -529,9 +529,11 @@ Each carries the date and the sentence that settles it.[39][41]
 1. **The PSG's clock: 2 MHz or 2.4576 MHz.** *The record:* `board-inventory.md` §2.3 tags `Y200` "MFP / YM2149 clock"; `virtual-chips.md` §4 and `ADR 0001` say 2 MHz. *Settled for 2 MHz* on five counts — the board's net on pin 22 is `CLK2`; Atari's prose says "the clock input is 2 MHz"; the diagnostic says "the 2 MHz clock"; Hatari's pin table records `CLOCK : connected to 2 MHz`; and the datasheet's own maximum with `SEL` high is 2 MHz, with the 125 kHz ceiling equal to 2 MHz ÷ 16.[41][39][45]
 2. **One crystal tagged for two parts.** *The record:* the `Y200` row names two loads. *It powers one:* the MFP's timers on `X1`/`X2`, and the PSG's clock is a GSTMCU net — the campaign's own warning about a 1.23× error in a seed, made concrete.[41][42]
 3. **The MFP's pin rows.** *The record:* pins 21 and 46 "illegible", and an `IOA`/`IOB` block that "could not be reconciled". *Settled:* 21 is `RESET`, 46 is `DTACK`, 47 is `DS`, 12 is `N/C`, and the `IOA`/`IOB` block is the YM2149's, read at another symbol's offset.[38][41]
-4. **The YM2149's `A8`/`A9`.** *The board's redraw* prints `A8` 24, `A9` 25; *the datasheet's pin layout* prints `A9` 24, `A8` 25, and Hatari's pin table agrees with the datasheet (`A8` 25 `: connected to VCC`, `A9(INV)` 24 `: connected to VSS/GND`).[39][45]
-*Settled in the datasheet's favour*, because the tie-offs are load-bearing and the datasheet states the select programme they implement: "A8 has pullup resistance while A9 has pulldown ... connect A8 and A9 to +5 V and ground respectively when not in use".[39]
-What remains is a **read** of the redraw to see which pin the two straps land on; the consequence of getting it wrong is a silent machine, which is why the record's "immaterial" note is withdrawn.[41]
+4. **The YM2149's `A8`/`A9` — here the datasheet is the suspect.** *The board's redraw* prints `A8` 24, `A9` 25, and the straps are **24 → `VCC`, 25 → `VSS`** (owner's read of the sheet, 2026-11-28).[41]
+*The datasheet's pin layout* prints `25 A8`, `24 A9`, and Hatari's table copies that numbering.[39][45]
+*Settled for the board*, on the strongest witness there is — a machine that works: the datasheet's own select programme is `A9` = 0, `A8` = 1, and "when the value set in the upper addresses is different from the program value, the bidirectional bus formed from `DA7` through `DA0` is driven to high impedance".[39]
+So if 24 were `A9`, this board would hold `A9` high, the programme would never match, and the PSG's data bus would be dead — no sound, and no floppy drive select, which goes through the same chip's port A.[41][23]
+*What would falsify it:* a continuity check from pin 24 to the `VCC` rail, or a second copy of Yamaha's pin layout that prints `24 A8`. This is the campaign's one case where the datasheet loses to the board on a **pinout** rather than on a net.
 5. **One 74LS164 or two.** *The record:* the parts list has one and describes it as a serialiser; the STE article describes one added to delay `*SINT`. *Settled:* one part, on the delay, 8 shifts at 2 MHz, 4 µs — and the serialiser deserves no circuit, because the ACIA's `TXD`/`RXD` are the keyboard link.[43][40][41]
 6. **`KHz500` into the MFP.** *The record:* "MFP timer input; which of `TAI`/`TBI` it reaches is not legible". *Settled:* neither — `TAI` is `SINT`, `TBI` is `DE`, and the reference's clients are the ACIAs' clock pins.[38][41][42]
 7. **The FDC's pin 28.** *The record:* "name illegible... a supply/test pin on this package". *Settled:* `INTRQ`, an output, and Atari's own disk diagnostics poll it.[44][41]
@@ -551,11 +553,11 @@ What remains is a **read** of the redraw to see which pin the two straps land on
 | `G2`/`G4`–`G6` — the GSTMCU's own | unchanged | unchanged | not this session's (§6.1's clock tap is `documented` in the recovered design)[42] |
 | `D5`/`D6` — the DMA counter's readback and the DMA chip's power-on state | `open` | **`open`** | `D6` is `U300`'s, and this study does not narrow it; the **FDC is not that case** — its `MR` (pin 13) is on the reset network, so a chip with no reset pin is the DMA controller's distinction alone[44][41] |
 | `S7` — the sound FIFO's depth | `open` | **`open`** | unchanged; it is the Shifter's pins, not the PSG's |
-| new: the PSG's `A8`/`A9` numbering | — | **`read`** | one 600 dpi crop of the YM2149 symbol with both labels legible (§9.4) |
+| the PSG's `A8`/`A9` numbering | `open` | **closed 2026-11-28** | the owner's read of the straps (`24 → VCC`, `25 → VSS`) plus the working-machine argument puts the transposition in Yamaha's figure, not in the board (§9.4) |
 | new: the FDC's `CLK` source | — | **`read`** | one crop of sheet 3 at `U303` and at `U301.18` (§9.8) |
 | new: `TAI`'s and `TBI`'s net labels | — | **`read`** | the same sheet, at pins 19/20 — the alignment succeeded for the other pins, so the labels exist[41] |
 
-`derived` The three `read` rows are readings, not measurements: each is one crop and the owner's eyes, which is why they sit beside the register's `read` state rather than in the `open` list.
+`derived` The remaining `read` rows are readings, not measurements: each is one crop and the owner's eyes, which is why they sit beside the register's `read` state rather than in the `open` list.
 
 ---
 
