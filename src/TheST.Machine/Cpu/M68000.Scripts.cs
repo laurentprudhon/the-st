@@ -2329,13 +2329,28 @@ public sealed partial class M68000
         int reg = FtuRegister;
         long target;
 
+                // The seven scripts, one per addressing mode (`microcode-walk.py --op 4e90`, `4ea8`, `4eb0`,
+        // `4eb8`, `4eb9`, `4eba`, `4ebb`; `4eba` is `4ea8`'s listing and `4ebb` is `4eb0`'s, off the counter),
+        // and one shape throughout: the target's address, the target's read, the return address's two words
+        // high word first, then the pair at the target.
+        //
+        //   ours: the read is one call for every mode (`ReadTargetAsync`, below) where the listing gives it to
+        //   the mode's last address state — `jsra1`, `jsrd3`, `jsaw1`, `jsal2` — so each block below is that
+        //   state's address half and the tail is its read. The adder's moves are the derivation's
+        //   (`FetchPosition`) except the one the code pays for explicitly: `jsal2`'s queue read moves the
+        //   counter by 2. And the pair at the target is written inline here, not through `RefillAsync` — the
+        //   second site that expands it, named once at `CloseInstructionAsync`.
+        //
         switch (mode)
         {
             case 2:                                            // jsr_ais — jsra1, no idle run
+                // jsra1 (273)  m_aob = m_da[ry]; m_at = m_da[ry]; m_au = m_da[m_sp] - 4; read at m_aob;
+                //                                                                                     4
                 target = GetA(reg);
                 break;
 
             case 5:                                            // jsr_das — jsrd1
+                // jsrd1 (2b0)  m_au = ext32(m_dbin) + m_da[ry]                                        2
                 await IdleAsync();
                 target = GetA(reg) + (uint)(short)await JumpWordAsync(0);
                 if (_busFaulted) return;
@@ -2343,21 +2358,34 @@ public sealed partial class M68000
 
             case 6:                                            // jsr_dais — jsrx0, jsrx1, jsrx2/jsrx3
             {
+                // jsrx0 (1f3)  alu_ext(m_dbin)                                                        2
                 await IdleAsync(2);                            // jsrx0 — `alu_ext` of the brief extension word
                 ushort extension = await JumpWordAsync(0);
+                //   jsrx1's `m_t` is the branch: jsrx2 is the word index (`ext32`), jsrx3 the long one,
+                //   decided inside `IndexValue`; one of the two, with jsrx1's 2, is the clocks below.
+                //   (Prose above the block: a paragraph after a state line would take its charge.)
+                //
+                // jsrx1 (2b2)  m_t = m_irc & 0x0800; m_au = ext32(m_aluo) + m_da[ry]                  2
+                // jsrx2 (029)  m_au = m_au + ext32(m_da[map_sp(m_irc >> 12)])                         2
+                // jsrx3 (0e9)  m_au = m_au + m_da[map_sp(m_irc >> 12)]                                2
                 await IdleAsync(4);                            // jsrx1 and the index state
                 target = GetA(reg) + (uint)ExtensionDisplacement(extension) + IndexValue(extension);
                 break;
             }
 
             case 7 when reg == 0:                              // jsr_adr16 — one idle state
+                // jsaw0 (293)  m_at = ext32(m_dbin)                                                   2
+                // jsaw1 (270)  m_aob = m_at; m_pc = m_au; m_au = m_da[m_sp] - 4; read at m_aob        4
                 await IdleAsync();
                 target = (uint)(short)await JumpWordAsync(0);
                 break;
 
             case 7 when reg == 1:                              // jsr_adr32 — jsal1, jsal2, no idle run
             {
+                // jsal1 (1f2)  m_aob = m_au; set_16h(m_at, m_dbin); m_au = m_au + 2; read at m_aob    4
                 uint high = await JumpWordAsync(0);            // jsal1 — the word the queue holds
+                // jsal2 (256)  m_aob = merge_16_32(high16(m_at), m_dbin); m_pc = m_au;
+                //              set_16l(m_at, m_dbin); m_au = m_da[m_sp] - 4; read at m_aob            4
                 uint low = await JumpWordAsync(1);             // jsal2 — one read at the fetch pointer
                 if (_busFaulted) return;
 
@@ -2393,6 +2421,10 @@ public sealed partial class M68000
 
         // jsra1/jsrd3 — the target's read, before the push, and the state that advanced `m_pc` past the
         // last extension word is also the one an odd target's frame saves
+        //   `jsr_dpc`'s two states are `jsrd1`'s listing again, named once in `case 5`; the indexed mode's
+        //   four are `case 6`'s.
+        // jsrd2 (274)  m_aob = m_au; m_at = m_au; m_au = m_pc + 2                                     0
+        // jsrd3 (2b1)  m_pc = m_au; m_au = m_da[m_sp] - 4; read at m_aob                              4
         FrameSavesOnFetch(_au);
         ushort first = await ReadTargetAsync(address);
         if (_busFaulted)
@@ -2403,11 +2435,15 @@ public sealed partial class M68000
 
         // jsaw2, jsaw3 — the return address's two words, high first, the stack pointer committed with
         // the first one (as `m_da[m_sp] = m_au` does)
+        // jsaw2 (271)  m_aob = m_au; m_dbout = high16(m_pc); m_da[m_sp] = m_au; m_au = m_au + 2;
+        //              write m_dbout at m_aob                                                         4
         uint returnAddress = _au;
         uint stack = A7 - 4;
         A7 = stack;
         await WriteWordAsync(stack, (ushort)High16(returnAddress));
         if (_busFaulted) return;
+        // jsaw3 (272)  m_aob = m_au; m_ir = m_irc; m_dbout = m_pc; m_au = m_at + 2;
+        //              write m_dbout at m_aob                                                         4
         await WriteWordAsync(stack + 2, (ushort)Low16(returnAddress));
         if (_busFaulted) return;
 
