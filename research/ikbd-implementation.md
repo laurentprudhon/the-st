@@ -471,21 +471,21 @@ always, no received byte ever), a data read answers `0x00`, and no byte is ever 
 design's own words are the reason it may stay that way for now: delivering one IKBD byte "feeds TOS a
 fabricated keyboard version string, and a phantom key changes the desktop state with no input path behind it".
 
-| claim | code | verdict |
-|---|---|---|
-| the keyboard ACIA is `$FFFC00`/`$FFFC02` and MIDI is `$FFFC04`/`$FFFC06` | one `Controllers` object over `$FFFC00`–`$FFFC07` | **difference** — one register file for two chips |
-| the status byte reports `RDRF`/`TDRE`/`OVRN` and bit 7 mirrors `IRQ` | `AciaStatus = 0x02` | **by ruling** (stub contract) |
-| `TDRE` is set, so TOS's send loop exits | `0x02` | **aligned** with the stub contract |
-| `IRQ` → `GPIP4` → channel 6, shared with MIDI | nothing: `N6850` is a declared wire with no producer | **difference** — the interrupt path is dark |
-| ÷64 and 8N1 framing, 128 µs a bit | nothing | **difference** |
-| one-byte receive buffer, `OVRN`, drop-the-new-byte | nothing | **difference** |
-| a receive timeout is TOS's, not the model's | the stub's silence makes TOS wait its 300 ms | **aligned in effect** |
-| the reset ACK (`$F1`) | nothing | **difference** |
-| a command state machine with parameter counts and NOPs | nothing: writes are stored and discarded | **difference** |
-| make/break bytes | nothing | **difference** |
-| 3-byte mouse records with the Y origin's sign | nothing | **difference** |
-| the IKBD's own buffers and drop rules | nothing | **difference** — and the mechanism a "busy IKBD" claim rests on |
-| the matrix, debounce and scan cadence | nothing | **by ruling** — a model that owns the packets does not need the matrix |
+| claim | code | verdict | `design/virtual-chips.md` §7 says |
+|---|---|---|---|
+| the keyboard ACIA is `$FFFC00`/`$FFFC02` and MIDI is `$FFFC04`/`$FFFC06` | one `Controllers` object over `$FFFC00`–`$FFFC07` | **difference** — one register file for two chips | §7 lists **one** ACIA member, `U201` |
+| the status byte reports `RDRF`/`TDRE`/`OVRN` and bit 7 mirrors `IRQ` | `AciaStatus = 0x02` | **by ruling** (stub contract) | §7 promises the status bits; the stub is the ruling |
+| `TDRE` is set, so TOS's send loop exits | `0x02` | **aligned** with the stub contract | — |
+| `IRQ` → `GPIP4` → channel 6, shared with MIDI | nothing: `N6850` is a declared wire with no producer | **difference** — the interrupt path is dark | §7's pin list and `TimersAndEvents`'s `GPIP` bit 4 |
+| ÷64 and 8N1 framing, 128 µs a bit | nothing | **difference** | §7 ("the IKBD serial link at 7 812.5 baud") |
+| one-byte receive buffer, `OVRN`, drop-the-new-byte | nothing | **difference** | §7's "ACIA transmit/receive registers and framing counters" |
+| a receive timeout is TOS's, not the model's | the stub's silence makes TOS wait its 300 ms | **aligned in effect** | — |
+| the reset ACK (`$F1`) | nothing | **difference** | §7's IKBD side, as corrected 2026-11-28 |
+| a command state machine with parameter counts and NOPs | nothing: writes are stored and discarded | **difference** | §7's IKBD side, as corrected 2026-11-28 |
+| make/break bytes | nothing | **difference** | §7's IKBD side ("the matrix belongs to the IKBD's ports") |
+| 3-byte mouse records with the Y origin's sign | nothing | **difference** | §7's IKBD side |
+| the IKBD's own buffers and drop rules | nothing | **difference** — and the mechanism a "busy IKBD" claim rests on | §7's IKBD side ("an output ring that drops the whole report") |
+| the matrix, debounce and scan cadence | nothing | **by ruling** — a model that owns the packets does not need the matrix | §7 keeps the matrix **inside** the IKBD side, not as a ninth chip |
 
 **The minimum a model needs to type at the desktop, in five parts.**
 
