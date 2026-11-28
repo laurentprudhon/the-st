@@ -310,6 +310,12 @@ public sealed partial class M68000
     /// </remarks>
     async ValueTask ReadLongOperandAsync(uint address)
     {
+        // adrl1, adrl2 — the operand's two words, each state one read (`microcode-walk.py --op 8090`).
+        //
+        //   ours: adrl2's latch (`m_alub = m_dbin; m_alue = m_dbin`) is bound to the *first* read's
+        //   result here, because that read is what fills `m_dbin`; the adder's moves are the derivation's.
+        //
+        // adrl1 (00b)  m_aob = m_da[ry]; m_au = m_da[ry] + 2; alu_and(m_dbin, 0xffff); read at m_aob  4
         _alub = await ReadWordAsync(address);              // adrl1 — m_dbin -> m_alub, m_alue
         if (_busFaulted)
         {
@@ -317,6 +323,8 @@ public sealed partial class M68000
             return;
         }
 
+        // adrl2 (005)  m_aob = m_au; m_alub = m_dbin; m_alue = m_dbin; m_at = m_au; m_au = m_pc + 2;
+        //              read at m_aob                                                                  4
         _dbin = await ReadWordAsync(address + 2);          // adrl2 — m_dbin
     }
 
@@ -326,6 +334,10 @@ public sealed partial class M68000
     /// </summary>
     async ValueTask ReadLongOperandFromStreamAsync(uint address)
     {
+        // adsl2, adsl3 — the PC-relative shapes' pair: the same two reads, the first one a program read
+        // so a fault frames an access class (`--op 80b1`).
+        //
+        // adsl2 (00c)  m_aob = m_au; m_au = m_au + 2; alu_and(m_dbin, 0xffff); read at m_aob          4
         _alub = await ReadOperandProgramAsync(address);    // adsl2 — SSW_PROGRAM | SSW_R
         if (_busFaulted)
         {
@@ -333,6 +345,8 @@ public sealed partial class M68000
             return;
         }
 
+        // adsl3 (026)  m_aob = m_au; m_alub = m_dbin; m_alue = m_dbin; m_at = m_au; m_au = m_pc + 4;
+        //              read at m_aob                                                                  4
         _dbin = await ReadWordAsync(address + 2);          // adsl3 — SSW_DATA | SSW_R
     }
 
@@ -530,6 +544,8 @@ public sealed partial class M68000
     /// </summary>
     async ValueTask AluIntoMemoryLongAsync(uint source, uint address, AluLong kind)
     {
+        // morl1 (29d)  m_aob = m_au; m_ir = m_irc; m_pc = m_au; m_au = m_at; alu_or(m_da[rx], m_dbin);
+        //              sr_nzvc(); read at m_aob                                                       4
         await TrailingFetchAsync();                        // morl1 — m_aob = m_au, the one read
         if (_busFaulted) return;
 
@@ -539,8 +555,12 @@ public sealed partial class M68000
         SetLongFlags(kind, source, destination, _aluo, extend: kind is AluLong.Add or AluLong.Sub);
         uint result = _aluo;
 
+        // morl2 (34d)  m_aob = m_au; m_dbout = m_aluo; m_au = m_au - 2;
+        //              alu_or(high16(m_da[rx]), m_alue); sr_nzvc_u(); write m_dbout at m_aob          4
         await WriteWordAsync(address + 2, (ushort)Low16(result));   // morl2 — m_aob = m_at + 2
         if (_busFaulted) return;
+        // morw2 (38d)  m_aob = m_au; m_ird = m_ir; m_dbout = m_aluo; m_au = m_pc + 2;
+        //              write m_dbout at m_aob                                                         4
         await WriteWordAsync(address, (ushort)High16(result));      // morw2 — m_au -= 2, the high word
     }
 
