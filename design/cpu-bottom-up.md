@@ -165,12 +165,19 @@ microcoded instruction can branch on `auz`/`nz`/`d4`/`enl`. Our scripts are that
      `RESET` (`3a02b3b`) is a countdown, not a family: `rset2` starts the adder a word below the
      constants ROM's zero, `rset3`/`rset4` step it down by two and branch on the same six low bits, and
      thirty-one passes are the pin's 128 clocks — now `4 + 4 × passes` derived from the loop instead of
-     the table's flat 128. **Two of its placements stay the table's and are the owner's to rule on**
-     (comment on #92, with the three measured pairs): the read is issued before the hold where the die
-     issues it after it (`rset5`), and the 62 micro-states are charged as one wait, because the
-     separation moves `run.digest` alone. `CHK` has **no loop** — four states (`chkr1`, `chkr2`, then
+     the table's flat 128.     **Its two placements were the owner's to rule on, and he ruled them** (`#92`, 2026-11-28, verbatim:
+     *"1. model the /RESET line and Pin (the rationale is we don't care to emulate the 6800 compatibility
+     features, but the reset line could be useful in a machine contemporary with the atari st) 2. await
+     each 2 cycle during the loop to give other chips the opportunity to react to the reset signal 3. move
+     the read where the silicon does it, and fix the folds if necessary"*). Landed in `78d53cd`: `rset1`…`rset4` each wait 2 clocks (62 waits, one per micro-state),
+     `m_reset_cb(1)`/`m_reset_cb(0)` are two records on `Wires.Reset` (asserted at +4 clocks, released at
+     +128, **the line low for exactly 124 clocks** — measured), `Pins.RESET` reads the level, and the read
+     is issued in `rset5` after the hold. The folds were re-blessed by that answer: `run.digest`
+     `f8d39bf1…` / `run.stream` `9e362791…`, desktop 602 and 34 122.2 pops unchanged (FINDINGS row 82).
+     The peripherals do not *react* yet — the line, its edges and the per-state waits are what the ruling
+     asked for; a subscriber per chip is its own ticket (`#95`). `CHK` has **no loop** — four states (`chkr1`, `chkr2`, then
      `chkr3` or `trap1`) and a net-zero adder transfer pair — so `B1` had nothing to convert there; the
-     reading is in `CheckAsync`'s doc comment. `B1` is therefore closed except for that ruling.
+     reading is in `CheckAsync`'s doc comment.     `B1` is therefore **closed**, with `#92`'s ruling landed.
      **An option that may unblock `B1` without the full split** (for the owner to rule on, since it changes
      the ticket's premise): the die counts in `AU` because `AU` is *idle* during a `MUL`/`DIV` loop — no
      address is in play, the stream's position is in `m_pc`. On this tree the cell that holds "the address

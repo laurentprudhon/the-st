@@ -9,8 +9,8 @@
 # four hold:
 #
 #   1. the corpus — MAME (the gate) 317 500 / 317 500 state AND exact-clock over 127 files.
-#   2. the folds — a Debug `boot --frames 800` from the repo root, run.digest `4eac06dc…` /
-#      run.stream `1693218a…`, with the desktop frame and the pops a frame quoted.
+#   2. the folds — a Debug `boot --frames 800` from the repo root, run.digest `f8d39bf1…` /
+#      run.stream `9e362791…`, with the desktop frame and the pops a frame quoted.
 #   3. G8 — two Release builds (the parent's in a `git worktree`), three interleaved pairs at
 #      equal frame_n, the rule `parent + 0.3 ms` and never above 10 ms.
 #   4. the interface — #85's freeze test (`validation-harness cpu-surface`) if it exists, else a
@@ -44,8 +44,8 @@ cd "$root" || exit 1
 EXPECT_MAME_TOTAL=317500
 EXPECT_MAME_EXACT=317500
 EXPECT_MAME_FILES=127
-EXPECT_DIGEST=4eac06dc
-EXPECT_STREAM=1693218a
+EXPECT_DIGEST=f8d39bf1
+EXPECT_STREAM=9e362791
 EXPECT_DESKTOP=602
 G8_SLACK=0.3
 G8_BUDGET=10.0

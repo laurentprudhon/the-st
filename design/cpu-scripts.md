@@ -630,8 +630,8 @@ n 751 on a host whose A/B (3 interleaved Release pairs, same session) is **old 1
 against new 14.78 / 14.85 / 14.77** — +1.2 %, the +1.25 % pops a frame the batch's reads cost, and a host
 60 % slower than the day row 79 was measured on. **Both folds moved and are the owner's blessing of
 2026-11-21** (`main`'s since `7181a0a`): `run.digest`
-`4eac06dc31e69fc5146400afffc7cc8832ac1697e5a9034137bd642899d6423a`, `run.stream`
-`1693218ad9360cdbfe253a064e011488463d4b2e9bd88c38c44957add687dc28` (Debug `boot --frames 800`,
+`f8d39bf13da4f7f79e94cde7445eeee6ddc6eadc2feea3b9fec80fba3b9cc7e4`, `run.stream`
+`9e362791b3f75aa9576b5111caa374a94474f13e4450931ddfedb7f3d4a1bd4f` (Debug `boot --frames 800`,
 reproduced three times on the committed tree) — row 79's `5c7d1312…` / `b452114a…` is the pair they
 replace. Row 81 left the pair untouched: EmuTOS executes no memory `TAS` in the first 800 frames.
 

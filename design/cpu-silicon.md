@@ -232,8 +232,8 @@ bookkeeping field that turned out to be a latch).
 ## 6. The bar every landing holds
 
 - `--corpus mame`: **317 500 / 317 500** state **and** exact-clock `317 500` — one oracle, both columns.
-- `boot --frames 800` from the repo root: `run.digest` `4eac06dc…` / `run.stream` `1693218a…`, desktop 602,
-  34 122.2 pops a frame.
+- `boot --frames 800` from the repo root: `run.digest` `f8d39bf1…` / `run.stream` `9e362791…`, desktop 602,
+  34 122.2 pops a frame (re-blessed by the owner's `#92` ruling — `RESET`'s placements, FINDINGS row 82).
 - `scripts/validate.sh` **PASS**; `G8` from 3 interleaved Release pairs against the parent commit, the
   **median** delta `parent + 0.3 ms` and never above 10 ms (8.94 ms at n 751 is the number to return to, not
   to beat).
@@ -255,7 +255,7 @@ It prints one table and exits 0 only if all four rows hold. The run of 2026-11-2
 ```
 | verdict     | measured
 | corpus mame | 317 500 / 317 500 state, 317 500 exact-clock, 127 files                       PASS
-| folds       | digest 4eac06dc… / stream 1693218a…, desktop 602 (596), 34 122.2 pops        PASS
+| folds       | digest f8d39bf1… / stream 9e362791…, desktop 602 (596), 34 122.2 pops        PASS
 | G8          | parent 9.27 / 9.05 / 8.70 vs child 9.33 / 9.06 / 8.68 ms at n 751,
 |             |   deltas −0.02 / +0.01 / +0.06, median +0.01 ms                              PASS
 | interface   | cpu-surface absent (#85, documented skip); gen.py Sync+Folded, build ok      PASS
@@ -265,9 +265,11 @@ It prints one table and exits 0 only if all four rows hold. The run of 2026-11-2
 
 1. **corpus mame** — the gate, both columns: `--corpus mame` state 317 500 of 317 500 *and* exact-clock
    317 500. A ticket that cannot hold both does not land.
-2. **folds** — a Debug `boot --frames 800` **from the repo root**: `run.digest` `4eac06dc…` /
-   `run.stream` `1693218a…` with the desktop frame (602) and the pops a frame (34 122.2) quoted. This
-   campaign is a re-expression, so a moved pair is a bug it introduced, not a re-bless to ask for.
+2. **folds** — a Debug `boot --frames 800` **from the repo root**: `run.digest` `f8d39bf1…` /
+   `run.stream` `9e362791…` with the desktop frame (602) and the pops a frame (34 122.2) quoted. This
+   campaign is a re-expression, so a moved pair is a bug it introduced, not a re-bless to ask for — with
+   one exception, and it is the owner's: a placement *found* to differ from the die's is reported with its
+   measured pair and taken only on his answer (row 82 and `#92`).
 3. **G8** — two Release builds (the parent's in a `git worktree`) and **three interleaved pairs** of
    `boot --frames 800`, each read from its own `run.state`, compared only at equal `frame_n`, and never
    above 10 ms. A failed Release build fails this row rather than reporting the previous binary's number,

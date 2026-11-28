@@ -122,7 +122,7 @@ resumes).
 | `DTACK` (71) | System Control Unit | CPU | single-driver | 2 | the answering instant arrives | ≤ 40 000 | computed from the slot schedule; the CPU's wait state is its clock advancing to this record |
 | `BERR` (23) | System Control Unit | CPU | single-driver | 2 | a bus fault | ~0 | should never fire on valid TOS software |
 | `VPA` (25), `VMA` (24) | System Control Unit / CPU | System Control Unit / CPU | single-driver | 2 | a 6800-style peripheral cycle | per MFP access | the MFP's cycle shape, not an event |
-| `RESET` (66) | reset network | CPU, System Control Unit, Disk, Timers and events | single-driver | 1 | power-on | 1 per boot | the reset network is not a chip; modelled as a host event |
+| `RESET` (66) | the CPU (`RESET`'s `rset2`/`rset5`) and the reset network (power-on) | System Control Unit, Video, Timers and events, Disk, Controllers | two drivers, one level; **1 = asserted** | 1 | an edge | 2 per `RESET` instruction, 1 per boot | **`#92`'s ruling**: the line is low for exactly 124 clocks (measured at 496 ticks), `Pins.RESET` reads it, and the instruction's states wait 2 clocks each so a peripheral can be woken inside the hold. The network is not a chip, so its power-on pull stays the host's, and no peripheral subscribes yet (`#95`) |
 
 ## 4. Interrupts
 

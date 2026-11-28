@@ -34,7 +34,8 @@ silicon* ([#82](https://github.com/laurentprudhon/the-st/issues/82)). Shape:
 - **The campaign is a re-expression under a closed corpus.** The gate is closed on both columns — MAME
   `317 500 / 317 500` state *and* exact-clock, 127 of 127 files — and CLK stands beside it at 863 265
   state / 819 372 exact-clock with its residue classes measured to be conventions, at its ceiling. The
-  blessed fold pair is `run.digest` `4eac06dc…` / `run.stream` `1693218a…`, desktop at frame 602,
+  blessed fold pair is `run.digest` `f8d39bf1…` / `run.stream` `9e362791…` (re-blessed by the `#92`
+  ruling), desktop at frame 602,
   `_frclock_at_desktop` 596, 34 122.2 pops a frame; `validate.sh` PASS with **G8 8.94 ms at n 751**.
   Those are the numbers this ADR is bound to: a restructuring that moves any of them is a bug report,
   not a new baseline.
@@ -553,8 +554,9 @@ Three layers, three kinds of code, and none of them a table:
 - **A public member outside the frozen list** — added, renamed, or missing — fails #85's reflection test.
 - **Any corpus record moves**: MAME must hold `317 500 / 317 500` on state *and* exact-clock, CLK must
   hold 863 265 with an identical red-file set, at every landing.
-- **The fold pair moves** (`4eac06dc…` / `1693218a…`, desktop 602, 34 122.2 pops) — a bug report, on the
-  spot, not a re-bless.
+- **The fold pair moves** (`f8d39bf1…` / `9e362791…`, desktop 602, 34 122.2 pops) — a bug report, on the
+  spot, not a re-bless (a placement the *die* has differently is the one exception, and it is the owner's
+  to bless: `#92`, row 82).
 - **G8 above `parent + 0.3 ms`** at equal `frame_n` over 3 interleaved Release pairs, or above 10 ms —
   the re-expression cost more than the machine can pay.
 - **A field that cannot be cited** to a patent section, the silicon record, the instrument boundary of §6,
