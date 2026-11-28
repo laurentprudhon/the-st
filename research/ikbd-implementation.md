@@ -456,11 +456,15 @@ report needs four bytes free, so at most eighteen bytes of records are ever queu
 carried "8 in, 20 out" as three T3 numbers to verify: the input side is 7 usable rather than 8, and the output
 side is right in effect and wrong in size.
 
-`documented` The IKBD's *receive* overflow has a third rule that is pure firmware: on an SCI overrun it reads
-`RDR`, sets the wake-up bit, spins, and — if the line is still idle after ten ones — re-arms; the RAM map's
-`$D4` and the flags byte's bit 4 both move, and Steem's own note records that "the ROM sets the chip in
-stand-by mode when it detects an overrun".[72] `inferred` This is why an IKBD that has lost a command byte
-can look deaf for a moment: it is waiting for an idle line, and the ST's next command supplies it[72].
+`documented` The IKBD's *receive* overflow has a third rule, and here the chip's own data book supplies the
+mechanism the firmware only uses: on an SCI overrun the ROM reads `RDR`, sets the wake-up bit `WU`, spins, and
+re-arms — and while `WU` is set "RDRF and ORFE flags are not set even if data are received or errors are
+detected. Therefore received data are ignored", with the hardware clearing the bit "on receipt of ten
+consecutive '1's", i.e. on an idle line.[69][72] `derived` So an IKBD that has just lost a command byte is
+**deaf for ten bit times — 1.28 ms of silent line** — and every byte the ST writes inside that window is
+discarded rather than queued: the way back is silence, not a retry.[69] `documented` The ROM's flags byte and
+`$D4` both move when it happens, and Steem's note records the same shape from the other side ("the ROM sets the
+chip in stand-by mode when it detects an overrun").[72]
 
 ---
 
