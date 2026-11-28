@@ -175,7 +175,7 @@ microcoded instruction can branch on `auz`/`nz`/`d4`/`enl`. Our scripts are that
      is issued in `rset5` after the hold. The folds were re-blessed by that answer: `run.digest`
      `f8d39bf1…` / `run.stream` `9e362791…`, desktop 602 and 34 122.2 pops unchanged (FINDINGS row 82).
      The peripherals do not *react* yet — the line, its edges and the per-state waits are what the ruling
-     asked for; a subscriber per chip is its own ticket (`#95`). `CHK` has **no loop** — four states (`chkr1`, `chkr2`, then
+     asked for; a subscriber per chip is its own ticket (`#101`). `CHK` has **no loop** — four states (`chkr1`, `chkr2`, then
      `chkr3` or `trap1`) and a net-zero adder transfer pair — so `B1` had nothing to convert there; the
      reading is in `CheckAsync`'s doc comment.     `B1` is therefore **closed**, with `#92`'s ruling landed.
      **An option that may unblock `B1` without the full split** (for the owner to rule on, since it changes
