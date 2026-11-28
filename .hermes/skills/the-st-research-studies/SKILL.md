@@ -83,22 +83,45 @@ position · `## Sources`.
 - **The last chip's study is this project's protocol-study template** (`research/ikbd-implementation.md`): turn-taking
   walk first, then the command table with parameter counts, then the packets, the timing budget, and the drop rules.
 
-## The book: `reference/`
+## The owner validates the plan first — no exceptions
 
-**`reference/` is the reader's entry point and the only authoritative statement of the machine and the model.** A new
-study does not become the truth by existing: it becomes a *source* the book cites. The book's chapter map, its source
-policy and the phase's tickets are in `docs/handoffs/documentation-phase.md` (map #104).
+**Nothing is written before the owner has validated its detailed plan.** A plan is *detailed*: the sections in order,
+what each will claim, the sources each will name, the figures it will draw — posted as a comment on the ticket that
+owns the work (or in chat when there is no ticket) and answered there. Silence is not approval, and "obviously
+right" is not an exemption: the owner's corrections have changed a chapter's order, the project's vocabulary and a
+chapter's sources more than once, and a chapter written on an unvalidated plan is a chapter that gets rewritten.
+
+The rule scales down to one study's outline and up to a phase's map — and it covers the things that are expensive to
+undo: a move of files, a register of rows, a design document, a renumbering. **Ask first, in writing, with the plan
+attached.**
+
+## The book: `book/`
+
+**`book/` is the reader's entry point and the only authoritative statement of the machine and the model.** A new study
+does not become the truth by existing: it becomes a *source* the book cites. The book's chapter map, its source policy
+and the phase's tickets are in `docs/handoffs/documentation-phase.md` (map #104). It is not `docs/`: `docs/` already
+carries the project's records (`adr/`, `handoffs/`, `agents/`) and stays that way — the book got its own directory at
+the root.
 
 - **A study keeps doing what it did** — evidence, labels, tiers, the register — and it gains a header line naming the
   chapters it feeds, so a reader can follow evidence → book in one hop.
 - **The book's rule is stronger than the gate's**: every paragraph names its sources on its own line
   (`*Sources: `research/<study>.md` §x; ledger [n].*`), the claim's label travels with it, and every chapter is read a
-  second time against those sources with a verdict per paragraph in `<chapter>.audit.md`. `scripts/verify-reference.sh`
-  is the mechanical half; the second read is not optional.
+  second time against those sources with a verdict per paragraph in `<chapter>.audit.md`. `scripts/verify-book.sh` is
+  the mechanical half; the second read is not optional.
 - **When the book and a study disagree, that is a bug in one of them** — fix it in place with a date and land the
   correction in both, per the landing rules above. Never leave the reader with two answers.
 - **`design/` is not the book.** It is the implementation record (ADRs, the partition, the scheduler, the register);
   the book cites it per claim. Do not fold design prose into a chapter without re-sourcing it as a claim.
+- **Part 6 (TOS) has one extra rule**: a claim about an implementation says *which* code — EmuTOS by `src/…:line`, real
+  TOS by function and disassembly address, or `inferred from behaviour` when it is not legible. EmuTOS's routine is
+  never presented as Atari's.
+- **The chapter procedure is `references/book-chapter.md`** — the provenance line's five forms, the checker's five
+  failures, the audit table's verdict vocabulary, and the two-pass rule. Load it before writing a chapter; it is the
+  difference between a chapter that passes the checker and one that can be trusted.
+- **A plan's totals are computed, not typed.** A chapter map that claims a count ("43 chapters") must sum its parts
+  wherever the number appears — brief, map body, ticket bodies — because the next session quotes it and a wrong total
+  costs a correction commit. Generate the number from the list, or assert it against the list before publishing.
 
 ## The register, and what is not a ticket
 
