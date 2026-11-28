@@ -124,7 +124,9 @@ encoder, not the machine's.
 ### 4. Sound — U202 YM2149 `C025983` + U508 LMC1992
 
 - `U202`: `SD0–SD7` (the sample bus to the DACs, 8 lanes), register interface `$FF8800`/`$FF8802`,
-  `ACC` (paddle A/D input), and its own 2 MHz clock derived from `SCLK/4`;
+  `ACC` (paddle A/D input), and its own **2 MHz clock from the GSTMCU's `CLK2` net** — corrected
+  2026-11-28: it is not a divider on the Shifter's `SCLK` (`research/standard-parts-implementation.md`
+  §6.1);
 - `U508`: volume, bass, treble and mixing, driven over Microwire **from the Shifter**;
 - **the sound-DMA requester side: the 4-word sample FIFO, `SREQ`, and the split of each fetched word
   into two bytes on `SD0–SD7`.** The pins are physically on the Shifter, the demand is this chip's —

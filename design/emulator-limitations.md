@@ -40,7 +40,7 @@ model does not do yet, whatever its state.
 | B4 | The pin numbers and directions | **`documented`, closed 2026-11-28** | Read off the drawing, not measured. The service manual's sheet 1 is a **vector** page whose text layer carries the symbol's own pin numbers and names; aligning them by count (23 addresses ↔ 23 pins, 16 data ↔ 16, 13 control ↔ 13) gave the table, and the **owner confirmed the arbitration block off a 600 dpi crop**: `BGI` 28 in, `BGO` 37 out, `BGACK` 29 out, `BGKI` 40 in, `BERR` 38 in, `RESET` 39, `INT` 41, `FC0–2` 45/44/43, `AS/UDS/LDS/R/W` 23/24/25/26, `DTACK` 27, `BR` 30, `CLK` 34, `VCC` 1/33, `GND` 5/35, and **eight `N/C`** (22, 31, 32, 36, 42, 55, 60, 68) — 60 named + 8 unnamed = 68. The board's two grant nets, `XCPUBG` and `XBLTBG`, are the relay's two segments. `design/board-inventory.md` §3.2 carries the corrected table. He also read pins 1 and 33 as `VCC` — which falsifies the published DOIT_ST table's `VSS` on 33. A vision read of the same crop came back **shifted by one pin**, which is why the owner's eyes were the instrument. |
 | B5 | Does the last pixel of a line get written — Atari's appendix table against its own prose | **`ours`** | Nobody has published anything about it; the widest-read references (The Paranoid's *BLiTTER in brief*, ray's page, the STE FAQ) repeat the manual's prose and copy Atari's `lf_endmask`/`rt_endmask` tables verbatim without discussing the edge. The tables are what every working Atari blitter routine uses, so **the arithmetic must be right and the derived rule in the study's §4.7 is what is suspect**. Route: compare our mask arithmetic against a known-good implementation on the same input — NeoST's etalons, or a screenshot of a TOS fill — with the published tables as the oracle. A one-pixel difference is findable in software. |
 | B6 | Is `BINT` a pulse or a level, and where does it go? | **`documented`** | Atari: *"The interrupt line is a duplicate of this bit [BUSY]"*. Info-Coach, from the board: *"The Pin 60 \*BINT is the interrupt sent by the Blitter… based on the configuration of the MFP, it seems that this signal is still not taken into account on **I03** pin"*. Hatari's MFP names the source: *"3 : STF/STE : blitter, active low"*, `MFP_INT_GPIP3`. A homebrew blitter board wires its `BIRQ` to *"pin 25 of 68901"* and calls it *"blitter interrupt (INT3)"*. So: level, from U101's `INT` through U400 to `BINT` (U400.60) to MFP GPIP3/I3, and software must take it as an **edge** (68901 `AER` bit 3) because a level cannot interrupt twice. |
-| B7 | `xcount = 1` with `NFSR`: the "strange results" | **`measured-elsewhere`**, coverage `open` | Hatari's header still calls it the case no model covered, then notes the September 2020 fix from Cwik's Verilog; the EmuTOS-devel list has the real-hardware observation that fixed it (Christian Zietz could *not* reproduce the wrong icons in Hatari but *could* in Steem SSE 3.9.1, from a program that uses `X COUNT 1`, `Y COUNT 32`, negative increments and `ENDMASK 0xffff-ffff-0000`). Cwik's RTL has the rule: `skipNextSrc = XC2 & (bltState == ST_WDEST) & Nfsr`, `nfsrCycle = bltActive & writeCycle & Nfsr & XC1`, and the source increment picks Y instead of X when `XC1 | (XC2 & Nfsr)`. What remains open is *coverage*: an exhaustive sweep of the four sign/FXSR/NFSR combinations at `X COUNT = 1` has not been published, and `hatari/tests/blitter/blitemu.c` is the harness to run it in. |
+| B7 | `xcount = 1` with `NFSR`: the "strange results" | **`measured-elsewhere`**, coverage `open` | Hatari's header still calls it the case no model covered, then notes the September 2020 fix from Cwik's Verilog; the EmuTOS-devel list has the real-hardware observation that fixed it (Christian Zietz could *not* reproduce the wrong icons in Hatari but *could* in Steem SSE 3.9.1, from a program that uses `X COUNT 1`, `Y COUNT 32`, negative increments and `ENDMASK 0xffff-ffff-0000`). Cwik's RTL has the rule: `skipNextSrc = XC2 & (bltState == ST_WDEST) & Nfsr`, `nfsrCycle = bltActive & writeCycle & Nfsr & XC1`, and the source increment picks Y instead of X when `XC1 \| (XC2 & Nfsr)`. What remains open is *coverage*: an exhaustive sweep of the four sign/FXSR/NFSR combinations at `X COUNT = 1` has not been published, and `hatari/tests/blitter/blitemu.c` is the harness to run it in. |
 | B8 | What a bus error does to a blit in flight | **`open`** | Cwik's RTL terminates the cycle (`busEnd = !rBerr \| !rDtack \| !busOe`), and nothing else says anything: no vendor sentence, no forum measurement, and the EmuTOS-devel threads show emulators disagreeing about whether the blitter generates bus errors at all. Recorded, not chased: provoking it needs a cartridge or a hardware fault. |
 | B9 | The design's `XCS`/`XIDS` pads against the board's symbol — the symbol has neither | **`open`**, and it is now a documented-vs-design conflict rather than a missing measurement | The board's symbol names 60 pins and there is **no `CS` and no `DS`** among them, while the design's pad ring has `XCS` and `XIDS`. So either those pads are tied off on this board (the decode runs from `FC0–2` + address, which is why `FC` is on the symbol at all) or the symbol omits them. A read of pad sheet 11 at 600 dpi shows whether each is an `IPAD`, an `OPAD` or a `TS` driver — and a continuity beep on a board would settle it outright. |
 | B10 | Which of the three revisions is the shipped mask | **`unmeasurable`** | `TA-4021` (Oct 1986), `ST-4051` (Mar 1988), `ST-4082` (Sep 1988); the Mega ST (1987) and the STE (1989) bracket them. A decap, which no STE custom has. It matters only for B1's `TMOUT` location, since the block structure is identical. |
@@ -78,7 +78,7 @@ Study: [`research/gst-shifter-implementation.md`](../research/gst-shifter-implem
 | S5 | The ladder's per-bit resistor values | **`open`**, and it is an **analogue** question | A meter on `U405`'s outputs. Four weighted resistors per channel are established; their values are not, and the model stops at the digital pin, so nothing depends on them. |
 | S6 | The Microwire frame's length and rate | **`documented`** | The board article and Atari's example: 1 Mbit/s, a mask that decides which bits clock out, 11 clocks for `$07FF`. A model task. |
 | S7 | The sound DMA FIFO's depth (carried as four words from Steem) | **`open`** — the row that ticket [#26](https://github.com/laurentprudhon/the-st/issues/26) has been carrying | `SREQ` is the chip's own output, so software cannot starve the buffer to count its depth: it needs a logic analyser on U401 pin 36 under a frame written to overrun, or a franker reading of the reconstruction's own comment (which argues only that two words is too few). Nothing else in the machine depends on the figure — it changes when a sound word is dropped, not whether the path works. |
-| S8 | What the ACIA does when the IKBD holds the line busy (ticket [#21](https://github.com/laurentprudhon/the-st/issues/21)) | **`documented`** in part | The 6850's own data sheet and the IKBD's firmware protocol: the 6850 has an overrun flag and a one-byte receive register, so "busy" is an overrun, not a stall. The link's ÷64 clocking to 7812.5 baud is arithmetic on the 500 kHz reference (already in `design/timers-and-events.md`). |
+| S8 | What the ACIA does when the IKBD holds the line busy (ticket [#21](https://github.com/laurentprudhon/the-st/issues/21)) | **`documented`**, closed 2026-11-28 | The 6850's data sheet states all three cases: a one-byte receive register with an overrun flag ("neither the receive buffer nor the `RSR` is overwritten"), `CTS` high inhibiting `TDRE` ("the Transmit Data Register Empty bit is inhibited"), and `DCD` high inhibiting the receiver — so "busy" costs *bytes*, not time, and costs the transmitter only its status bit. The ÷64 clocking to 7812.5 baud is arithmetic on the 500 kHz reference (`design/timers-and-events.md`; `research/standard-parts-implementation.md` §5.2–§5.3). |
 
 ## 4. The DMA controller (U300)
 
@@ -105,7 +105,21 @@ document that the study did not use.
 | M3 | The peripherals' `/RESET` receivers ([#101](https://github.com/laurentprudhon/the-st/issues/101)) | **`documented`** in part | The CPU's own hold is captured in the corpus (124 clocks); which chips subscribe is a schematic question (`read`) plus the design's pad rings — the blitter has `XRESET` and one `INT`, and the GSTMCU takes `/RESET` to re-initialise its counters (Info-Coach). |
 | M4 | The DMA-chip relay versus the blitter's direct request | **`documented`** | Both studies plus Info-Coach: the DMA asserts `RDY` and the GSTMCU performs the cycles; the blitter drives addresses and takes the grant. This row exists because it is the one contrast every summary of the machine gets wrong. |
 
-## 6. What the 2026-11-28 search changed
+## 6. The four standard parts (U203, U301, U200/U201, U202)
+
+Study: [`research/standard-parts-implementation.md`](../research/standard-parts-implementation.md). These
+parts are the campaign's opposite case — complete datasheets — so almost nothing here is `open`: a
+datasheet answer is a *task*, and a wiring answer is a *reading*. What is left for a board is only the
+pin-level reading of two nets and one strap.
+
+| # | question | state | what settles it, and what is already known |
+|---|---|---|---|
+| P1 | Which of the YM2149's pins 24/25 is `A8` and which `A9` | **`read`** | The redraw prints `A8` 24, `A9` 25; the datasheet and Hatari's board table both print `A9` 24, `A8` 25, and the datasheet states the select programme (`A8` high, `A9` low) the straps implement. One 600 dpi crop of the symbol with both labels legible settles which way the transposition runs — no meter, and nothing in the register model depends on it. |
+| P2 | What clocks the WD1772 (`CLK`, pin 18) | **`read`** | The datasheet wants "8 MHz ±0.1%"; the board's only 8 MHz-class source is `U303` at 8.010613 MHz, which is 0.133% high, and the extraction did not pair pin 18's net. One crop of sheet 3 at the oscillator and at the pin says whether the FDC takes it directly — the difference between "in spec" and "0.13% over" is a reading, not a measurement. |
+| P3 | Which nets reach the MFP's `TAI` (19) and `TBI` (20) | **`read`** | Atari's prose, Hatari's pin table and the 74LS164 story all agree on *what* they carry (`SINT` through the delay, and `DE`), and the offset pairing that resolved 45 of the MFP's pins should resolve these two labels the same way. A crop of the two pins closes it; a scope on the pins would confirm the delay to the microsecond. |
+| P4 | The `XSINT`→`TAI` delay's exact value on *this* build | **`derived`**, one measurement away | 8 stages at `CLK2`'s 2 MHz is 4 µs = 32 CPU clocks, and the STE article and Hatari's comment agree. A frequency counter on `TAI` against a DMA-sound frame end would show it; until then Timer A's pending instant is 128 master ticks late, one constant (`design/timers-and-events.md` §10.1). |
+
+## 7. What the 2026-11-28 search changed
 
 1. **The 63/64 conflict is closed** — three people (a demo coder with a real STE, Hatari's author, and the
    blitter's own reverse-engineer) published the answer, and the RTL shows the counter. Our study's §5.1 and
@@ -127,7 +141,7 @@ document that the study did not use.
 6. **Nothing has been published about the endmask's last pixel** — which, given that every working blitter
    routine uses Atari's own tables, is evidence that the tables are right and the derived rule was wrong.
 
-## 7. What is genuinely open, and nothing else
+## 8. What is genuinely open, and nothing else
 
 Nine rows. Three are on the blitter (which our model does not implement at all yet), two on the disk path, three
 on the GSTMCU (two of them on its stub), one is analogue, and one is the Shifter's sound FIFO.
@@ -170,3 +184,15 @@ person who measured it (`measured-elsewhere`), read a crop (`read`), or test it 
   <https://sourceforge.net/p/emutos/mailman/message/35829134/>,
   <https://sourceforge.net/p/emutos/mailman/message/35883014/>
 - The Paranoid / Paradox — *The Atari ST(E) BLiTTER in brief*: <http://beyondbrown.d-bug.me/post/blitter-faq/>
+- Motorola — *MC68901 Multi-Function Peripheral*, advance information ADI-984, January 1984:
+  <https://www.bitsavers.org/components/motorola/68000/MC68901_Multi-Function_Peripheral_Jan84.pdf>
+- Western Digital — *WD1772 Floppy Disk Controller Specification* V1.1 (J.-L. Guérin's edition):
+  <https://hxc2001.com/download/datasheet/floppy/thirdparty/FDC/WesternDigital/WD1772-JLG-V11.pdf>
+- Motorola — *MC6850/MC68A50/MC68B50* data sheet:
+  <http://www.sprow.co.uk/bbc/hardware/extraserial/6850datasheet.pdf>
+- Yamaha — *YM2149 Software-Controlled Sound Generator* (LSI-2121492, September 1992):
+  <https://www.bitsavers.org/components/yamaha/YM2149_199209.pdf>
+- Atari — *STe 520/1040 Computer Field Service Manual*, C302481-001 Rev A, August 1991 (2017 redraw):
+  <https://jsobola.atari8.info/DEREATARI/atarisch/1040ste_fsm.pdf>
+- Hatari — `src/psg.c` (the YM2149's 2 MHz clock and port A), `src/mfp.c` (the GPIP channel map),
+  `src/dmaSnd.c` (the 74LS164 delay): <https://github.com/hatari/hatari>

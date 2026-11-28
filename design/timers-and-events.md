@@ -273,15 +273,19 @@ them here. A second source would fire twice and the digest would not see it (two
 
 ## 10. Open points
 
-1. **The 74LS164's 4 µs is `derived`, not measured.** 128 master ticks = 8 stages × 500 ns at `CLK2`. If it
-   is wrong, only Timer A's pending instant moves — one constant.
-2. **The 74LS164 story is doubled** (`board-inventory.md` §6.16): the 1991 parts list has one at `U900` for
-   keyboard/MIDI serialisation, while the STE hardware article describes one added to delay `*SINT`. Either
-   one part serves both paths or the delay part is not in this parts list. The model takes the delayed copy
-   (Q3); a scan of a mature board settles it.
-3. **Which timer input `KHZ500` reaches is illegible in the inventory** (§4.3: "which of `TAI`/`TBI` it
-   reaches is not legible"). v1 drives neither: nothing in the skeleton reads a 500 kHz reference, and
-   `KHZ500`'s other job — the floppy's — is Disk's.
+1. **The 74LS164's 4 µs — closed 2026-11-28.** Still `derived` (128 master ticks = 8 stages × 500 ns at
+   `CLK2`), now with two witnesses that agree: the STE article's four-microsecond figure and Hatari's
+   `dmaSnd.c` comment ("delayed by 8 shifts using a 74LS164 running at 2 MHz, which is equivalent to
+   32 CPU cycles"). If it is wrong, only Timer A's pending instant moves — one constant
+   (`research/standard-parts-implementation.md` §7).
+2. **The 74LS164 story is doubled — resolved 2026-11-28** (`board-inventory.md` §6.16,
+   `research/standard-parts-implementation.md` §7): **one part**, on the `SINT`→`TAI` delay, eight stages at
+   2 MHz. The keyboard link needs no shift register. The model takes the delayed copy (Q3), which is the
+   mature-board wiring.
+3. **Which timer input `KHZ500` reaches — resolved 2026-11-28: neither.** `TAI` (19) is the delayed
+   `SINT` and `TBI` (20) is `DE`, and the 500 kHz reference's clients are the two 6850 ACIAs' clock pins
+   and the floppy timing (`research/standard-parts-implementation.md` §3.1, §5.3). v1 drives neither input
+   from a 500 kHz source, which is correct.
 4. **`SINT`'s driver is the System Control Unit in the catalogue, and the sound-DMA frame end is Sound's fact.** The split
    stays as catalogued (#26 keeps the sound side); if #26 re-homes the record, only the `Driver` cell moves.
 5. **the chip's `nextDeadline` gained and lost a counter in one ticket:** §2's list is three (A, B, C) rather

@@ -1,5 +1,8 @@
 # Handoff — U203, U301, U200/U201, U202: the four standard parts
 
+**Executed 2026-11-28** — the study is `research/standard-parts-implementation.md`. Four of the bullets
+below were corrected by what the session found; each correction is dated in place.
+
 **Goal of the next session.** Write `research/standard-parts-implementation.md`: the MFP, the floppy controller,
 the two ACIAs and the PSG studied to the standard the four customs reached — **but with the method reversed**,
 because these parts are the opposite case. The customs had a thin record and a recovered design to mine; these
@@ -43,7 +46,8 @@ deliverable — it is the one artefact that makes a study actionable).
 * **The disk path's register split is settled**: `$FF8604`/`$FF8606` are U300's, `$FF8609/0B/0D` are the
   GSTMCU's 24-bit counter, and every memory cycle of a burst is the GSTMCU's (`research/
   dma-controller-implementation.md` §4, and `design/disk-path.md` §4).
-* **Three of the four parts have unresolved pin rows in our own inventory** — and that is a *reading* task with
+* **Three of the four parts have unresolved pin rows in our own inventory** *(2026-11-28: **none does now** —
+  all four pin families are complete in `design/board-inventory.md` §§3.7–3.10)* — and that is a *reading* task with
   a known technique, not a research question: `board-inventory` §3.8 says the MFP's `IOA`/`IOB` rows could not
   be reconciled with the main table (pins 21 and 46 are illegible), §3.9 has only two YM2149 ports resolved,
   and §3.10's 6850 numbers were "not resolved … the pairing produced duplicates". The technique that settled
@@ -73,7 +77,11 @@ A reader who has the study must be able to do these without opening another docu
    corner and the `IACK` chain (`U400.83 · U203.45 · U200/U201`).
 4. **Draw one disk sector as a timetable**: command → command latency → the 32-byte prefill → `RDY` bursts of
    eight words → `INTRQ`, with the data rate, the step rate, `DDEN`, `HLD`/`HLT`, and the force-interrupt
-   corner named — and the double strobe shown where it happens.
+   corner named — and the double strobe shown where it happens. *(2026-11-28: three corrections — the prefill
+   is the DMA chip's **sixteen**-byte FIFO, so a sector is 32 bursts (`research/dma-controller-implementation.md`
+   §4.2); the WD1772 has **no `HLD`/`HLT` pins at all**, only the motor-on wait of 6 revolutions; and the
+   double strobe is a documented Atari caution whose own guide says "in practice not following this
+   recommendation seems to work fine".)*
 5. **State the two serial links' arithmetic**: 500 kHz ÷ 64 = 7812.5 baud (keyboard) and ÷ 16 = 31 250
    (MIDI), the framing, `TDRE`/`RDRF`/overrun, and what the ACIA does when the other end is busy.
 6. **State the PSG's arithmetic and its clock**: master clock, tone period → frequency, the noise LFSR, the
@@ -94,7 +102,7 @@ A reader who has the study must be able to do these without opening another docu
 | Atari's own prose (ST Internals `[15]`, the FD/HD guide `[23]`) | the board-level semantics, the register addresses as software knows them | silicon truth |
 | Hatari / NeoST / Steem SSE (`mfp.c`, `fdc.c`, `MFP`, `psg`) | a checklist of quirks nobody sourced: prescaler edges, `GPIP` RMW, force interrupt, the spurious-interrupt reports | evidence — T3 by definition |
 | our own model — `TimersAndEvents` (real), `Disk` (real), `Sound`/`Controllers` (stubs) | every place the study can land as a task rather than as prose | nothing about the parts |
-| the board | the only instrument, and the owner has none — so the register in `design/emulator-limitations.md` governs |
+| the board | the only instrument, and the owner has none — so the register in `design/emulator-limitations.md` governs | — |
 
 ## 4. Method rules this campaign earned — inherited, plus two new ones
 
@@ -122,7 +130,14 @@ New, from the last two sessions:
 * **The MFP's clock is the 2.4576 MHz crystal** (`Y200`, X1/X2 on pins 17/18) — a third crystal, not `CLK4`
   (`design/timers-and-events.md` §3). 2 457 600 ÷ 16 = 153 600; a 20 ms frame is 49 152 MFP clocks; the
   prescale ladder is 1/4/10/16/50/64/100/200, so a Timer A period of 625 at ÷200 is one PAL line.
-* **The PSG's clock is 2 MHz in our records and 2.4576 MHz in our inventory** — `design/virtual-chips.md`'s
+  *(2026-11-28: **this seed fails its own arithmetic** — 625 × 200 ÷ 2 457 600 = 50.9 ms, not 64 µs; no
+  (prescaler, data) pair gives a line exactly, because one line is 157.29 crystal clocks. That is why
+  Timer B counts `DE` edges instead of timing lines, and why the only exact relationship in the ladder is
+  the 200 Hz tick: 12 288 clocks, or ÷64 with data 192.)*
+* **The PSG's clock is 2 MHz in our records and 2.4576 MHz in our inventory** *(2026-11-28: **settled for
+  2 MHz** — the board's net on pin 22 is the GSTMCU's `CLK2`, Atari's prose says "the clock input is 2 MHz",
+  the diagnostic says "the 2 MHz clock", and the datasheet's maximum with `SEL` high is 2 MHz. The
+  inventory's `Y200` row is the stale record; the question below is closed.)* — `design/virtual-chips.md`'s
   chip table and `ADR 0001` say 2 MHz; `board-inventory`'s crystal row (`Y200`, 2.4576 MHz) is tagged
   "MFP / YM2149 clock". **This is the
   first thing to settle**, from the board's net at `U202`'s `CLK` pin: at 2 MHz a tone period of 254 is 492 Hz
@@ -137,6 +152,8 @@ New, from the last two sessions:
   wrong, not the drive.
 * **The 74LS164**: eight stages at 500 ns = 4 µs (`design/timers-and-events.md` §10.1 says it is `derived`,
   not measured). If that is wrong, only Timer A's pending instant moves — one constant, and worth saying so.
+  *(2026-11-28: confirmed — Hatari's `dmaSnd.c` states "8 shifts using a 74LS164 running at 2 MHz ...
+  equivalent to 32 CPU cycles", and the part is on the `SINT`→`TAI` path, one part not two.)*
 
 ## 6. What must stay `unknown` until measured
 
@@ -150,7 +167,8 @@ than opening a ticket:
   they share this session's register and should not be re-litigated here.
 * **Whether the 6850's pin rows can be read at all** — the manual's symbol is drawn with the pin-name text at
   zero offset, and the pairing produced duplicates. That is a text-layer problem, not a hardware one: try the
-  other sheets of the schematic before declaring it unreadable.
+  other sheets of the schematic before declaring it unreadable. *(2026-11-28: **readable**, and the fix is a
+  per-edge offset — 1.8 pt along the pin axis, 8.3 pt across it. All 24 pins pair, for both ACIAs.)*
 
 ## 7. The experiments that would settle the rest
 

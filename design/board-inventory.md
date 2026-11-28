@@ -115,10 +115,11 @@ signal is obviously present but its pin number could not be resolved, the pin nu
 written `unverified`.
 
 **Whole-section limitation.** Sheet 3 (DMA/FDC) and sheet 4 (MCU/shifter) were fully
-extractable. Sheet 2 (I/O) was only partly extractable: the YM2149's data/control pins and
-both 6850 ACIAs sit in symbol rows whose pin-name text is drawn at a different offset and
-could not be paired — those pin numbers are marked `unverified` and only their port pins
-are given. Sheet 5 (sound) and sheet 6 (RAM) were read at signal level only. A sharper
+extractable. Sheet 2 (I/O) was only partly extractable when this inventory was written: the
+YM2149's data/control pins and both 6850 ACIAs sit in symbol rows whose pin-name text is
+drawn at a different offset, and a single global offset could not pair them. **Updated
+2026-11-28:** the offset is per symbol edge, and §3.8–§3.10 are now complete
+(`research/standard-parts-implementation.md` §2.2). Sheet 5 (sound) and sheet 6 (RAM) were read at signal level only. A sharper
 scan of the 1989 sheets, or the original 1991 D-size plots, would be needed to close the
 remaining gaps.
 
@@ -164,7 +165,7 @@ Every package on the board that carries an active device, from the Section 7 par
 | U209 | **C101611-086** IC 74LS86 DIP 14P | 14-pin DIP | Quad XOR — address decode / video combine |
 | U211 | **C101611-004** IC 74LS04 DIP 14P | 14-pin DIP | Hex inverter |
 | U304, U306 | **C101611-074** IC 74LS74 DIP 14P | 14-pin DIP | Dual D flip-flop — clock/DE pipeline |
-| U900 | **C101611-164** IC 74LS164 DIP 14P | 14-pin DIP | 8-bit shift register — keyboard/MIDI serialisation |
+| U900 | **C101611-164** IC 74LS164 DIP 14P | 14-pin DIP | 8-bit shift register — the parts list calls it "keyboard/MIDI serialisation"; on later STE revisions it is the **8-stage `SINT`→`TAI` delay** (corrected 2026-11-28, §6.16) |
 | U307, U509, U510, U512, U632 | **C101611-244** IC 74LS244 DIP 20P | 20-pin DIP | Octal buffer — address/control buffering |
 | U302 | **C101611-245** IC 74LS245 DIP 20P | 20-pin DIP | Octal bus transceiver — data bus buffer |
 | U511 | **C101611-373** IC 74LS373 DIP 20P | 20-pin DIP | Octal latch — video/palette address latch |
@@ -177,7 +178,7 @@ Every package on the board that carries an active device, from the Section 7 par
 
 | Ref | Part | Value | Notes |
 |---|---|---|---|
-| Y200 | C025993 | 2.4576 MHz crystal | MFP / YM2149 clock |
+| Y200 | C025993 | 2.4576 MHz crystal | **MFP timer clock only** (`XTAL1`/`XTAL2`, pins 17/18). The YM2149's clock is the GSTMCU's `CLK2` net at 2 MHz — **corrected 2026-11-28** (`research/standard-parts-implementation.md` §6.1, §9.1) |
 | U303 | C398066-001 | 8.010613 MHz oscillator | 68000 clock (32.042454/4) |
 | U402 | C398068-001 | 32.215905 MHz oscillator | NTSC master clock |
 | U402 | C398097-001 | 32.084988 MHz oscillator | **Peritel/PAL master clock** — one of the two is fitted, never both |
@@ -628,7 +629,7 @@ Sheet 3. Complete.
 | 25 | WPRT | in | L | V |
 | 26 | DDEN | out | H | V |
 | 27 | DRQ | out | H | V |
-| 28 | name illegible on the drawing (a supply/test pin on this package) | — | — | U |
+| 28 | INTRQ | out | H | V |
 
 ### 3.8 U203 — MFP 68901, 48-pin DIP (C025984)
 
@@ -638,59 +639,113 @@ Sheet 2 (printed p60).
 |---|---|---|---|---|
 | 1 | R/W | in | H=read | V |
 | 2–6 | RS1 … RS5 | in | H | V |
+| 7 | TC | out | — | V |
+| 8 | SO | out | — | V |
+| 9 | SI | in | — | V |
 | 10 | RC | in | — | V |
 | 11 | VCC | pwr | — | V |
+| 12 | **N/C** | — | — | V (unnamed on the symbol; the package's one free pin) |
 | 13 | TAO | out | — | V |
 | 14 | TBO | out | — | V |
 | 15 | TCO | out | — | V |
 | 16 | TDO | out | — | V |
-| 17 | X1 | in | 2.4576 MHz | V |
-| 18 | X2 | out | 2.4576 MHz | V |
+| 17 | XTAL1 | in | 2.4576 MHz | V |
+| 18 | XTAL2 | out | 2.4576 MHz | V |
 | 19 | TAI | in | ↑ | V |
 | 20 | TBI | in | ↑ | V |
+| 21 | RESET | in | L | V |
 | 22–29 | IO0 … IO7 | I/O | H | V |
 | 30 | TR | out | — | V |
 | 31 | RR | in | — | V |
 | 32 | IRQ | out | L | V |
 | 33 | IEO | out | L | V |
 | 34 | IEI | in | L | V |
-| 35 | CLK | in | ↑ | V |
+| 35 | CLK | in | ↑ (4 MHz, `CLK4`) | V |
 | 36 | GND | pwr | — | V |
 | 37–44 | D0 … D7 | I/O | H | V |
 | 45 | IACK | in | L | V |
+| 46 | DTACK | out | L | V |
 | 47 | DS | in | L | V |
 | 48 | CS | in | L | V |
-| 21, 46 | present on symbol, names illegible | — | — | U |
 
-Port A/B pins (`IOA0–IOA7` = 21,20,19,18,17,16,15,14; `IOB0–IOB7` = 13,12,11,10,9,8,7,6)
-appear on the sheet as a separate block at a different pin-number offset and are **not**
-included above: the 68901's GPIO ports are on the same pins as that block only if the
-symbol is read differently, and I could not reconcile the two rows. Treat the IOA/IOB
-numbers as `unverified`.
+> **Correction — 2026-11-28** (`research/standard-parts-implementation.md` §3.1, §9.3). This
+> table previously left pins **7, 8, 9, 12, 21 and 46** unresolved and carried a separate
+> "port A/B" block that could not be reconciled. The block is **the YM2149's**: its pins
+> sit at `21…14` and `13…6` with the same 1.8 pt number/name offset, on the symbol drawn
+> beside this one, and re-read against its own symbol the MFP's six gaps close as `TC` 7,
+> `SO` 8, `SI` 9, `N/C` 12, `RESET` 21 and `DTACK` 46. The check is arithmetic: 47 named
+> pins plus the unnamed 12 is 48, which is the package. The 68901's §8.1 pin figure prints
+> the same assignment, `NC` included.
 
 ### 3.9 U202 — YM2149, 40-pin DIP (C025983)
 
-Sheet 2. Only the two 8-bit ports resolved.
+Sheet 2. Complete.
 
 | Pin | Signal | Dir | Active | Tag |
 |---|---|---|---|---|
-| 38 | ACC | out | — | V |
-| 21, 20, 19, 18, 17, 16, 15, 14 | IOA0 … IOA7 | I/O | H | V |
-| 13, 12, 11, 10 | IOB0 … IOB3 | I/O | H | V |
-| 9, 8, 7, 6 | IOB4 … IOB7 | I/O | H | U (same block, offset unresolved) |
-| — | DA0–DA7, BC1, BC2, BDIR, CLK, IRQ, CS, R/W, TEST | — | — | U |
+| 1 | VSS | pwr | — | V |
+| 2, 5 | N/C | — | — | V |
+| 3 | ANALOG CHANNEL B | out | — | V |
+| 4 | ANALOG CHANNEL A | out | — | V |
+| 6–13 | IOB7 … IOB0 | I/O | H | V |
+| 14–21 | IOA7 … IOA0 | I/O | H | V |
+| 22 | CLOCK | in | 2 MHz (`CLK2`) | V |
+| 23 | RESET | in | L | V |
+| 24 | A9 | in | tied low | V (name as printed; the datasheet numbers it `A9`) |
+| 25 | A8 | in | tied high | V (name as printed; the datasheet numbers it `A8`) |
+| 26 | SEL | in | H (pull-up; clock not divided) | V |
+| 27 | BDIR | in | H | V |
+| 28 | BC2 | in | H (tied to VCC) | U (not paired; wired per Hatari's table) |
+| 29 | BC1 | in | H | V |
+| 30–37 | DA7 … DA0 | I/O | H | V |
+| 38 | ANALOG CHANNEL C | out | — | V |
+| 39 | TEST1 | — | — | V (open) |
+| 40 | VCC | pwr | — | V |
 
-Port A is the **keyboard/joystick read port** and port B the **controller select/write
-port** on the STE, which is why they are in scope; the sound pins are in scope as well but
-their numbers are not resolved.
+Port A is the **control port** on the STE — `IOA0` the floppy side select, `IOA1`/`IOA2`
+drives 0 and 1, `IOA3`/`IOA4` the RS-232 `RTS`/`DTR` outputs, `IOA5` the parallel
+`STROBE` — and port B is the **parallel port's data bus**, `D0–D7`. Port A's keyboard and
+joystick reads are the ST-era use; on this board the same pins carry the floppy and
+handshake lines, which is why the drive-select diagnostics name PSG pins 19 and 20.
+
+> **Correction — 2026-11-28** (`research/standard-parts-implementation.md` §6.1, §9.4,
+> §9.9). This table previously resolved only the ports and called the rest `unverified`;
+> it also read port B as the "controller select / FDD side select" byte. The pin numbers
+> now come from the same offset pairing as the MFP's, and the YM2149 datasheet prints the
+> same layout. Two things to keep straight: the **clock is the GSTMCU's `CLK2` at 2 MHz**,
+> not `Y200` (§2.3's crystal row is corrected with it), and the **redraw transposes `A8`
+> and `A9`** against the datasheet and Hatari's board table — a reading question, recorded
+> in `design/emulator-limitations.md`, and immaterial to register access because the part
+> is selected by `BC1`/`BDIR`.
 
 ### 3.10 U200 / U201 — 6850 ACIA, 24-pin DIP (C025985)
 
-Sheet 2. Out of scope (MIDI / RS-232) except that the ACIA drives `N6850` from U400 pin 48
-and both share the MFP's interrupt structure. Pin numbers were **not** resolved: the 6850
-symbol rows in this redraw place the pin-name text at zero offset, and the pairing produced
-duplicates. Signals legible: `CS0`, `CS1`, `CS2`, `R/W`, `RS`, `D0–D7`, `IRQ`, `RXD`,
-`TXD`, `RXC`, `TXC`, `RTS`, `CTS`, `DCD`, `CLK`, `GND`, `VCC`.
+Sheet 2. Complete, and in scope: `U201` is the **keyboard** ACIA (the field manual's
+keyboard test checks for 500 kHz on its pin 3), `U200` is MIDI.
+
+| Pin | Signal | Dir | Active | Tag |
+|---|---|---|---|---|
+| 1 | GND | pwr | — | V |
+| 2 | RXD | in | — | V |
+| 3 | RXC | in | ↑ (500 kHz) | V |
+| 4 | TXC | in | ↑ (500 kHz) | V |
+| 5 | RTS | out | L | V |
+| 6 | TXD | out | — | V |
+| 7 | IRQ | out | L (open drain) | V |
+| 8, 10 | CS0, CS1 | in | H | V |
+| 9 | CS2 | in | L | V |
+| 11 | RS | in | H = data | V |
+| 12 | VCC | pwr | — | V |
+| 13 | R/W | in | H = read | V |
+| 14 | E | in | ↑ | V |
+| 15–22 | D7 … D0 | I/O | H | V |
+| 23 | DCD | in | L | V |
+| 24 | CTS | in | L | V |
+
+> **Correction — 2026-11-28** (`research/standard-parts-implementation.md` §5.1). §6.4's note that the 6850 rows could not be paired is closed: the rows are readable once the offset is taken **per symbol edge**
+> (1.8 pt along the pin axis, 8.3 pt across it), and the result is the datasheet's DIP-24
+> assignment on all 24 pins. Both ACIAs' `IRQ` outputs meet at `GPIP4`, which is why the
+> MFP's channel 6 names the pair rather than either chip.
 
 ### 3.11 U302 — 74LS245 octal transceiver, 20-pin
 
@@ -775,7 +830,7 @@ without a pin (`U400.HSYNC`).
 | BR / BG / BGACK | U400.29, .28, .27, .26 · U100 (unverified pins) · U101.13, .11 | bus arbitration for DMA and blitter |
 | CLK (8 MHz) | U303 (8.010613 MHz osc) → U100.34 · U400.CLK · U300.39 · U401.53 | |
 | CLK8 / CLK4 / CLK2 | U400.3, .4, .5 → U401.FCLK, U300, MFP | divided pixel clocks |
-| KHZ500 | U400.6 · MFP timer input (net label `KHZ500` on sheets 1 and 2; which of `TAI`/`TBI` it reaches is not legible) | 500 kHz reference for MFP timers / floppy |
+| KHZ500 | U400.6 → the two 6850 ACIAs' `RXC`/`TXC` (and the floppy's timing) | 500 kHz reference. **Corrected 2026-11-28**: it does *not* reach the MFP — `TAI` is the delayed `SINT` and `TBI` is `DE` (`research/standard-parts-implementation.md` §3.1, §5.3) |
 | ROM0–ROM6 | U400.13, .12, .11, .10, .9, .8, .7 → U102.CE / U103.CE and the ROM jumper block | chip-select/segment decode |
 
 ### 4.2 RAM access, refresh and video fetch (sheets 1, 4, 6)
@@ -815,8 +870,8 @@ without a pin (`U400.HSYNC`).
 | SNDCS | U400.19 → U508, U502/U503 | sound chip select (PSG or DMA DACs) |
 | SNDIR | U400.18 → U508 | LMC1992 serial data/clock direction |
 | SD0–SD7 | U401.28…21 → U502/U503 (DAC0802) and U202 (YM2149 data) | 8-bit sound sample bus |
-| IOA0–IOA7 | U202.21…14 → keyboard matrix / joystick read | **in scope for controllers** |
-| IOB0–IOB3 | U202.13…10 → controller select / FDD side select | |
+| IOA0–IOA7 | U202.21…14 → floppy side/drive selects, RS-232 `RTS`/`DTR`, printer `STROBE` | **corrected 2026-11-28** (`research/standard-parts-implementation.md` §6.1, §9.9): port A is the control port on this board; the keyboard/joystick matrix is the ST-era use of the same pins |
+| IOB0–IOB7 | U202.13…6 → the parallel port's data lines `D0`–`D7` | corrected 2026-11-28 with the row above |
 | ACC | U202.38 | A/D converter input (paddles) |
 
 ### 4.5 Disk and storage (sheet 3)
@@ -846,7 +901,7 @@ without a pin (`U400.HSYNC`).
 | PEN | U400.PEN ← light pen / J500 pin 4 | **off-board** |
 | PAD0X / PAD0Y / PAD1X / PAD1Y | U400 → 74LS244 → J500/J501 | analogue paddle inputs into the GSTMCU ADC |
 | PADRST | U400.98 | paddle/pad reset |
-| IOA0–IOA7 | U202.21…14 ↔ keyboard + joystick matrix | shared with sound port |
+| IOA0–IOA7 | U202.21…14 ↔ floppy selects, `RTS`/`DTR`, `STROBE` | see §4.4's correction: port A is the control port on the STE |
 
 ### 4.7 System coordination, reset, power
 
@@ -961,8 +1016,11 @@ These are listed only because they occupy in-scope GSTMCU pins.
 3. **`HSYNC` on U400 — resolved 2026-11-02: pin 143.** The earlier extraction produced 146,
    which does not exist on a 144-pin package; the 600 dpi scan shows `HSYNC` at 143, between
    `VSYNC` (142) and `VCC` (144), which is where the symbol draws it.
-4. **YM2149 data/control pins and both 6850 ACIA pin numbers could not be paired.** The
-   redraw draws those symbol rows with zero text offset, which defeats the pairing rule.
+4. **YM2149 data/control pins and both 6850 ACIA pin numbers — resolved 2026-11-28.** The
+   rows are readable: the number/name offset is per symbol *edge* (1.8 pt along the pin axis,
+   8.3 pt across it), and a single global offset is what produced duplicates. §3.9 and §3.10
+   now carry the complete tables; `research/standard-parts-implementation.md` §2.2 has the
+   recipe and §5.1 the 6850's.
 5. **Designator disagreements between the two documents:**
    * 555 timer: **U104** in the 1991 parts list and on the 1991 sheet 1, **U106** in the
      1989 BOM.
@@ -1034,14 +1092,18 @@ These are listed only because they occupy in-scope GSTMCU pins.
     conjunction with `DE` (Display Enable)". Hatari's MFP pin diagram records the same wiring for every
     machine it models — `TBI : connected to video DE` (ST, STE, TT). The connection list in §4.2 has
     `DE` (`U400.141`) going only to `U401.54`, so either the CAD redraw dropped the MFP branch or it is
-    routed under a label the extraction did not pair. **Status: documented at the signal level,
-    unverified at the pin level** (the MFP's `TBI` is pin 20, §3.8). Consequence for the model: one
+    routed under a label the extraction did not pair. **Status: documented at the signal level;**
+    the pin is `TBI` 20 (§3.8), and on 2026-11-28 the field manual's own prose joined the two
+    witnesses — "Timer B ... external input can be used to count horizontal display lines"
+    (`research/standard-parts-implementation.md` §3.1). The net itself is still a `read`. Consequence for the model: one
     `System Control Unit → Timers and events` crossing per display line, which is how the machine counts
     scanlines. (The chip's name was settled on 2026-11-11 — `GLOSSARY.md`, *Timers and events*.)
-16. **Two 74LS164 stories do not fit one part.** The 1991 parts list has a single 74LS164 at `U900`
-    ("keyboard/MIDI serialisation"), while the STE hardware article describes a 74LS164 **added on
-    production boards to delay `*SINT` before it reaches the MFP's `TAI`** (a four-microsecond delay so
-    the timer sees an edge the MFP can count). Either one part serves both paths, or the added delay
-    part is fitted separately and is not in this parts list. Affects only the timing of the
-    sound-frame-end → Timer A path, so it is a Level-2 detail — but it decides whether `TAI`'s edge is
-    the `*SINT` edge or a delayed copy.
+16. **Two 74LS164 stories do not fit one part — resolved 2026-11-28, in favour of the delay.**
+    The parts list has a single 74LS164 at `U900` and calls it "keyboard/MIDI serialisation";
+    Hatari's `dmaSnd.c` states what it is on later STE revisions — "the signal to Timer A input is
+    now delayed by 8 shifts using a 74LS164 running at 2 MHz, which is equivalent to 32 CPU cycles"
+    — and nothing in the keyboard link needs a shift register, because the 6850's `TXD`/`RXD` *are*
+    the link. So: **one part, eight stages, the `SINT`→`TAI` path, 4 µs**, and the parts list's
+    description is prose rather than a circuit (`research/standard-parts-implementation.md` §7).
+    Early STE revisions connect `SINT` to `TAI` directly, so the delay is a *board* fact, not a
+    chip one.

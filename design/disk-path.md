@@ -69,7 +69,7 @@ The arithmetic, all consistent with this ticket's own DCYC figure:
 | byte rate | **31,250 B/s → 32 µs/byte** | 6,250 × 5; 256 CPU cycles at 8 MHz |
 | sector read | **16.4 ms** | 512 bytes × 32 µs |
 | DCYC answers | **312 per frame** | 31,250 ÷ 50 frames = 625 bytes/frame, one answer per 2 bytes |
-| seek | `steps × step_rate` | WD1772 rates: 6 / 12 / 20 / 30 ms per step |
+| seek | `steps × step_rate` | WD1772 rates: **6 / 12 / 2 / 3 ms** per step (corrected 2026-11-28 — the datasheet's `r1 r0` field in order, `research/standard-parts-implementation.md` §4.2) |
 
 So the FDC's byte position is `(now − sector_start) × 31,250 B/s`, computed on demand; a DRQ or a DCYC answer
 costs no wake; the chip wakes **once per sector boundary** plus the burst's wakes.

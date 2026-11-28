@@ -262,14 +262,15 @@ What the session established, in the form the remaining chips can reuse:
   (study §4.6); the register question is answered by Atari's own manual, which survives complete at the 2020
   Wayback timestamp, and the "behavioural model plus a handful of cases" is what now exists on both sides.
 
-### U203 MFP 68901, U301 WD1772, U200/U201 6850, U202 YM2149 — **next**, brief:
-[`u203-standard-parts-study.md`](u203-standard-parts-study.md)
-* Datasheet-led, short studies. Only research what the datasheet does not settle: MFP timer prescaler
-  edges and the I/O port's read-modify-write behaviour; WD1772 command timing and the "force interrupt"
-  corner; the ACIA's ÷64 clocking to 7812.5 baud and the 74LS164 serialiser's role; the PSG's envelope
-  and timer periods against the 2.4576 MHz crystal.
-* One combined document is acceptable here — but keep a section per part, so a future session can find the
-  answer without reading the whole thing.
+### U203 MFP 68901, U301 WD1772, U200/U201 6850, U202 YM2149 — **done, 2026-11-28**, `research/standard-parts-implementation.md`
+* One document, a section per part, and the method inverted as the brief predicted: the datasheets were the
+  primary source (`ADI-984`, the WD1772 specification, the MC6850 sheet, the YM2149 catalogue) and the board
+  supplied only the wiring. It closed all four pin families the inventory had left `unverified`, settled the
+  PSG's clock at **2 MHz** (the GSTCMU's `CLK2` net, not `Y200`'s 2.4576 MHz), identified the one 74LS164 as
+  the `SINT`→`TAI` delay, and turned the model comparison into twelve rows — four of them code differences,
+  including the `GPIP`-bit-to-channel map, which the code gets wrong for four bits.
+* Not worth a second session: what is left is three readings (`A8`/`A9`, the FDC's `CLK` net, `TAI`/`TBI`'s
+  labels) and one counter, all in `design/emulator-limitations.md` §6.
 
 ### IKBD (HD6301V1, on the keyboard PCB)
 * Not a die study: a 6801-family MCU running Atari firmware. Questions: the command set and its timing,
@@ -322,8 +323,9 @@ nomenclature section (only if the part has internal names worth fixing), drawing
    the blit's burst is a real ownership transfer through a daisy-chain station; and the non-HOG window is 64
    by Atari's own wording, with the 63 a measured anomaly that the drawings cannot arbitrate because the
    standalone revisions carry no timeout net at all.
-5. **MFP / WD1772 / ACIA / PSG** — **next**; one combined session, brief written:
-   [`u203-standard-parts-study.md`](u203-standard-parts-study.md). The method inverts here: the datasheets are
+5. **MFP / WD1772 / ACIA / PSG** — **done, 2026-11-28**, `research/standard-parts-implementation.md`.
+   One combined session, and the brief's own seeds were the thing it corrected most (the PSG's clock, the
+   `KHZ500` input, and one arithmetic figure that could not be right). The method inverts here: the datasheets are
    the primary source and the board is the only thing that outranks them, so the session is three questions
    rather than one — what the **wiring** adds (three of the four parts still have unresolved pin rows, and the
    PSG's own clock contradicts our inventory), what the **datasheet leaves open** (prescaler edges, `GPIP`'s
