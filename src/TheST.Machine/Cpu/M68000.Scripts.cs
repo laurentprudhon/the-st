@@ -2354,17 +2354,27 @@ public sealed partial class M68000
     }
 
     /// <summary>
-    /// `UNLK An` — unlk1, unlk2, unlk3, unlk4. The two words are read at the stack pointer the register
-    /// names, the new stack pointer is committed to `m_da[m_sp]` **after** both are in (an odd `An`
-    /// therefore enters the address error with the stack pointer untouched — 1 115 records, whose first
-    /// differing field was `ssp`/`usp`), and the instruction's one trailing fetch is `unlk4`'s read at
-    /// `m_pc`. That `m_pc = m_au` of unlk1 is also the frame's saved counter for an odd `An`:
-    /// `opcode + 4`, the boundary's word, not the word before it.
+    /// `UNLK An` — "tears the frame down: `SP` = `An`, then pops `An`" (§5.1). The die's script is
+    /// `unlk1`..`unlk4`: the two words are read at the frame pointer the register names, the new stack
+    /// pointer is committed to `m_da[m_sp]` **after** both are in (an odd `An` therefore enters the
+    /// address error with the stack pointer untouched — 1 115 records, whose first differing field was
+    /// `ssp`/`usp`), and the instruction's one trailing fetch is `unlk4`'s read at `m_pc`. That
+    /// `m_pc = m_au` of unlk1 is also the frame's saved counter for an odd `An`: `opcode + 4`, the
+    /// boundary's word, not the word before it.
     /// </summary>
     async ValueTask UnlinkAsync(ushort op)
     {
         int reg = FtuRegister;
 
+        // unlk_as (the prologue: `int ry = map_sp((m_irdi & 7) | 8)` — the FTU's register field)
+        //
+        //   ours: the two states' accesses are one helper — `ReadLongAsync` reads at An and at An + 2
+        //   and merges them, so unlk1's `m_aob`/`m_au` bookkeeping and unlk2's are the call's halves.
+        //
+        // unlk1 (119)  m_aob = m_da[ry]; m_pc = m_au; m_at = m_da[ry]; m_au = m_da[ry] + 2;
+        //              read at m_aob                                                                  4
+        // unlk2 (1fe)  m_aob = m_au; m_ir = m_irc; set_16h(m_at, m_dbin); m_au = m_au + 2;
+        //              read at m_aob                                                                  4
         BeginFetchState();                                 // unlk1 — `m_pc = m_au`
         uint address = GetA(reg);                          // m_at = m_da[ry]; m_aob = m_da[ry]
         uint value = await ReadLongAsync(address);         // unlk1 then unlk2, at An and An + 2
@@ -2374,7 +2384,14 @@ public sealed partial class M68000
             return;
         }
 
+        //   ours: unlk3's `m_aob`/`m_au` pair and unlk4's read are the loop's closing fetch
+        //   (`CloseInstructionAsync`'s trailing fetch, which the script lets fall through), so a
+        //   fault above cancels it, as the die's own abort does.
+        //
+        // unlk3 (27c)  m_aob = m_pc; m_da[m_sp] = m_au; m_au = m_pc + 2                               0
         A7 = address + 4;                                  // unlk3 — m_da[m_sp] = m_au
+        // unlk4 (27d)  m_ird = m_ir; m_da[ry] = merge_16_32(high16(m_at), m_dbin);
+        //              read at m_aob                                                                  4
         SetA(reg, value);                                  // unlk4 — merge_16_32 of the two words
     }
 
