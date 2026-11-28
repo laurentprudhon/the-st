@@ -1360,6 +1360,10 @@ public sealed partial class M68000
 
             case 5:                                        // das — adsw1, out of the queue
             {
+                //   adsw2, the latch step that follows, charges 0 — it is named in the indexed
+                //   case below, where the same two statements are the shape's.
+                //
+                // adsw1 (1c2)  m_aob = m_au; m_au = ext32(m_dbin) + m_da[ry]; read at m_aob           4
                 ushort displacement = await FetchAsync();
                 if (_busFaulted) return null;
                 address = GetA(reg) + Ext32(displacement);
@@ -1367,10 +1371,26 @@ public sealed partial class M68000
             }
 
             case 6:                                        // dais — aixw0 (2 clocks), then the refill
+                //   aixl1's `m_irc & 0x0800` is the branch: aixl2 (`ext32` of the register) or
+                //   aixl5 follows, decided inside `IndexValue`; `step_movem()` there is MOVEM's
+                //   walk, named where this core steps it. And adsw2 charges 0 — it is the latch
+                //   and the counter (`m_at`, `m_au = m_pc + 4`) that `address` derives.
+                //   aixl2/aixl5 end on the operand's read, which this core issues once, at the
+                //   closing `ReadWordAsync` (adrw2) — one access where the listing has two states.
+                //
+                // aixl0 (1e3)  alu_ext(m_dbin)                                                        2
                 await IdleAsync();
                 {
+                    // aixl1 (3e2)  m_aob = m_au; m_t = m_irc & 0x0800;
+                    //              m_au = m_da[ry] + ext32(m_aluo)                                    0
                     ushort extension = await FetchAsync();
                     if (_busFaulted) return null;
+                    // aixl2 (120)  m_au = ext32(m_da[map_sp(m_irc >> 12)]) + m_au; read at m_aob;
+                    //              step_movem()                                                       4
+                    // aixl5 (1e0)  m_au = m_da[map_sp(m_irc >> 12)] + m_au; read at m_aob;
+                    //              step_movem()                                                       4
+                    // adsw2 (02a)  m_aob = m_au; m_at = m_au; m_au = m_pc + 4;
+                    //              alu_and8(m_dbin, 0xffff)                                           0
                     address = GetA(reg) + (uint)ExtensionDisplacement(extension) + IndexValue(extension);
                 }
 
@@ -1380,15 +1400,23 @@ public sealed partial class M68000
                 if (reg == 0)
                 {
                     BeginFetchState();                     // abwl1 — m_pc = m_au
+                    // abwl1 (00a)  m_aob = m_au; m_pc = m_au; m_dcr = m_da[rx];
+                    //              m_at = ext32(m_dbin); m_au = ext32(m_dbin);
+                    //              alu_or8(m_da[rx], m_dbin); read at m_aob                           4
                     ushort absolute = await FetchAsync();
                     if (_busFaulted) return null;
                     address = Ext32(absolute);
                 }
                 else
                 {
+                    // abll1 (1e2)  m_aob = m_au; set_16h(m_at, m_dbin); m_au = m_au + 2;
+                    //              read at m_aob                                                      4
                     ushort high = await FetchAsync();      // abll1 — no m_pc of its own
                     if (_busFaulted) return null;
                     BeginFetchState();                     // abll2 — m_pc = m_au
+                    // abll2 (009)  m_aob = m_au; m_pc = m_au; m_dcr = m_da[rx];
+                    //              set_16l(m_at, m_dbin); m_au = merge_16_32(high16(m_at), m_dbin);
+                    //              alu_or8(m_da[rx], m_dbin); read at m_aob                           4
                     ushort low = await FetchAsync();
                     if (_busFaulted) return null;
                     address = Merge16_32(high, low);
@@ -1404,7 +1432,12 @@ public sealed partial class M68000
             SetA(reg, address + (uint)step);               // pinw2 — the increment, before the read
         }
 
+        //   abll3 is both absolutes' operand read (`(xxx).w` after abwl1, `(xxx).l` after
+        //   abll1 and abll2) — the statement the data shapes read through adrw2.
+        //
         // adrw2 (024)  m_dcr = m_da[rx]; read at m_aob, m_aob & 1 ? 0x00ff : 0xff00; m_edb >>= 8      4
+        // abll3 (004)  m_aob = m_at; m_au = m_pc + 2; alu_and8(m_dbin, 0xffff);
+        //              read at m_aob, m_aob & 1 ? 0x00ff : 0xff00; m_edb >>= 8                        4
         _dbin = size == 0
             ? await ReadByteAsync(address)                 // adrw2 / abll3, in the byte's own lane
             : await ReadWordAsync(address);
