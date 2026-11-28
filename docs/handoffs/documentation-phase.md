@@ -31,7 +31,7 @@ it is called done. §5 is the mechanism; it is the most important section of thi
 plan is *detailed*: the chapter's sections in order, what each section will claim, the sources it will name, the
 figures it will draw. It is posted as a comment on the ticket that owns the chapter, and the owner answers there —
 approval, corrections, or a different shape. A chapter written on an unvalidated plan is a chapter that gets
-rewritten, and the phase has thirty-odd chapters: this is the cheapest rule in it.
+rewritten, and the phase has forty-three chapters: this is the cheapest rule in it.
 
 The same rule governs everything else in the repository that is expensive to undo: a study's outline, a move of
 files, a register of rows, a design document. **Ask first, in writing, with the plan attached.** Silence is not
@@ -177,8 +177,8 @@ reason). No chapter of this part may present an EmuTOS implementation as if it w
 | `6.1-tos-as-a-product.md` | what TOS is: the ROMs, the five layers (BIOS, XBIOS, GEMDOS, VDI, AES), the traps, the cookie jar, the system variables, and which version this book describes | `research/tos-rom-sourcing.md`, ADR 0010, `atari-st-software/rom-system/01`, EmuTOS's `doc/` |
 | `6.2-the-trap-interface.md` | how a program calls the system: trap 13/14/1/2, the parameter conventions per layer, the error returns, and the dispatcher | `atari-st-software/rom-system/02`, the M68000 user's manual (trap/exception model), EmuTOS's trap tables |
 | `6.3-the-boot-in-code.md` | the ROM's start to the desktop, in code: hardware init, memory detection, GEMDOS init, the AES/desktop start, the AUTO folder | `research/tos-rom-sourcing.md`, EmuTOS `bios/`, `atari-st-software/boot-os/01`, `design/disk-path.md` (the boot sector) |
-| `6.4-bios.md` | every BIOS function, one row each: what it promises, what EmuTOS does, what TOS 1.62 does, the hardware it touches | `atari-st-software/rom-system/02`, EmuTOS `bios/`, the trap table |
-| `6.5-xbios.md` | the same for XBIOS — screen base and palette, `Initmous`, `Vsetmode`, `Kbdvbase`, `Mfpint`, `Giaccess`, `Dosound`, the floppy calls | `atari-st-software/rom-system/02`, EmuTOS `bios/`, Parts 2.5–2.8 of this book |
+| `6.4-bios.md` | every BIOS function, one row each: what it promises, what EmuTOS does, what TOS 1.62 does, the hardware it touches | `atari-st-software/apis/01`, `atari-st-software/rom-system/02`, EmuTOS `bios/`, the trap table |
+| `6.5-xbios.md` | the same for XBIOS — screen base and palette, `Initmous`, `Vsetmode`, `Kbdvbase`, `Mfpint`, `Giaccess`, `Dosound`, the floppy calls | `atari-st-software/apis/01`, `atari-st-software/rom-system/02`, EmuTOS `bios/`, Parts 2.5–2.8 of this book |
 | `6.6-gemdos.md` | the file, memory and process services, the descriptor table, the BIOS device layer, and the disk path to the FDC | `atari-st-software/boot-os/*`, EmuTOS `gemdos/`, `design/disk-path.md`, Part 2.7 |
 | `6.7-vdi.md` | the workstation, the screen as a bitmap, and the drawing primitives — which are TOS's own code and which reach the Shifter or the blitter | `atari-st-software/games-demos/04` (the VDI reference), EmuTOS `vdi/`, Parts 2.5 and 3.2 |
 | `6.8-aes-and-the-desktop.md` | the AES calls, the resource files, and the event loop (mouse, keyboard, timed events) that the desktop runs | `atari-st-software/rom-system/02`, EmuTOS `aes/`, `research/ikbd-implementation.md` §5 |
