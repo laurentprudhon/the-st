@@ -598,7 +598,9 @@ reason a `MULU` after the start write is cheaper than it looks.[33]
 ## 7. The experiments that would settle the rest
 
 Each is a TOS program — `hatari/tests/blitter/blitemu.c` is already in the tree — on the real 1040STE, with a
-scope on a named pin or a read-back through a named register.[34]
+scope on a named pin or a read-back through a named register.[34] Tests 1, 2, 4 and 7 are filed as **#103**
+("U101's four open measurements"), which is where a result is recorded; nothing in this study changes without
+one.
 
 1. **The window.** Start a non-HOG blit with a known word count and scope U101's `AS` (one of pins 6–9) or
    `BGACK`; count blitter-held accesses between releases.
