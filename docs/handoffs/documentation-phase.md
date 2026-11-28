@@ -77,7 +77,7 @@ it. A chapter that needs a term the glossary lacks adds it to the glossary in th
 
 ## 3. The book: chapter map
 
-`reference/` holds 30 chapters in five parts and four appendices. Each row below is a file, its job, and its
+`reference/` holds **33 chapters in five parts** (4 + 9 + 5 + 8 + 7) and four appendices. Each row below is a file, its job, and its
 principal sources today — the evidence exists for every one of them or the row says what is missing.
 
 ### Part 1 — the machine as a product (4 chapters)
@@ -345,7 +345,7 @@ A reader of the finished book can do all of these without opening a document out
 
 ## 10. Definition of done for the phase
 
-1. `reference/` holds the 30 chapters and 4 appendices of §3, each with its `In one page` box, its provenance lines,
+1. `reference/` holds the 33 chapters and 4 appendices of §3, each with its `In one page` box, its provenance lines,
    its `Where this comes from`, and its `.audit.md` with zero `not found` rows.
 2. `scripts/check-reference-sources.py` and `scripts/verify-reference.sh` are green over the whole directory, and the
    manifest lists every chapter with its audit state.
