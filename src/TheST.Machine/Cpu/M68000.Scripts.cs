@@ -442,7 +442,7 @@ public sealed partial class M68000
 
             case 5:                                        // das — adsl1, out of the queue
             {
-            // adsl1 (1c6)  m_aob = m_au; m_au = ext32(m_dbin) + m_da[ry]; read at m_aob               4
+                // adsl1 (1c6)  m_aob = m_au; m_au = ext32(m_dbin) + m_da[ry]; read at m_aob           4
                 ushort displacement = await FetchAsync();
                 if (_busFaulted) return null;
                 address = GetA(reg) + Ext32(displacement);
@@ -450,10 +450,24 @@ public sealed partial class M68000
             }
 
             case 6:                                        // dais — aixw0 (2 clocks), then the refill
+                //   ours: `aixw0` is the extension word's `alu_ext` — the shape's own idle run — and
+                //   the index is one call, `IndexValue`, where the listing leaves two alternatives:
+                //   `aixw1` tests `m_irc & 0x0800` and `aixw2` (`ext32` of the register) or `aixw4`
+                //   follows. `step_movem()` in those two states is MOVEM's walk, named where this
+                //   core steps it. `aixw1`'s base is the shape's: `--op 81b3` renders it `m_da[ry]`,
+                //   `--op 80bb` `m_pc` — the same script.
+                //
+                // aixw0 (1e7)  alu_ext(m_dbin)                                                        2
                 await IdleAsync();
                 {
+                    // aixw1 (3e6)  m_aob = m_au; m_t = m_irc & 0x0800;
+                    //              m_au = m_da[ry] + ext32(m_aluo)                                    0
                     ushort extension = await FetchAsync();
                     if (_busFaulted) return null;
+                    // aixw2 (124)  m_au = ext32(m_da[map_sp(m_irc >> 12)]) + m_au; read at m_aob;
+                    //              step_movem()                                                       4
+                    // aixw4 (1e4)  m_au = m_da[map_sp(m_irc >> 12)] + m_au; read at m_aob;
+                    //              step_movem()                                                       4
                     address = GetA(reg) + (uint)ExtensionDisplacement(extension) + IndexValue(extension);
                 }
 
