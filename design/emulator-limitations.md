@@ -116,7 +116,8 @@ document that the study did not use.
    `BR` — not by ranking.
 3. **The interrupt path is corroborated three times** (Atari's "duplicate of BUSY", Info-Coach's `I03` pin,
    Hatari's `GPIP3`), and a homebrew board wires it to the same pin.
-4. **Two DMA questions are answered by a vendor document the study did not have** (D1, D2 — including the
+4. **Two DMA questions are answered by a vendor document the study already cited but had not quoted** — a
+   reminder that a source in a source list is not a source read (D1, D2, including the
    status bit's polarity, which the study had as a 5-vs-2 conflict).
 5. **A published blitter pinout exists and does not settle the pin numbers** — it is 68000-shaped, has `BG`
    and `BGACK` twice, and disagrees with our transcription; the authority is a 600 dpi read, and the original
