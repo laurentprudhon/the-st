@@ -2123,19 +2123,41 @@ public sealed partial class M68000
             displacement -= 0x100;      // the byte form's displacement is signed (0xEC is −20, not 236)
         }
 
+        // The script, in the listing's order (`microcode-walk.py --op 6100`; `61ec` is the same six states
+        // for the byte form). The two writes push the return address high word first, the target's read is
+        // `malw3` — a fetch state, so an odd target's frame saves itself — and the loop's pair follows.
+        //
+        //   ours: the word form's displacement is a free pop (`JumpWordAsync(0)`): the listing's `bsrw3`
+        //   takes `ext32(m_dbin)`, the word the previous instruction's closing fetch already landed, and a
+        //   branch never refills the slot behind it. `alu_and(m_au, 0xffff)` is the constants ROM's route to
+        //   `m_aluo` (bsrw3's `m_dbout`), so the low word here is `Low16` of the latched address. And the
+        //   two reads after `malw3`, with the `b`/`mmrw3` behind them, are `RefillAsync`'s — named once at
+        //   `CloseInstructionAsync` — where `b`'s `m_pc = m_au` is the frame's counter, declared before
+        //   either read lands.
+        //
+        // bsrw1 (0a9)  m_at = m_au; alu_and(m_au, 0xffff); m_au = m_da[m_sp] - 4                      2
         await IdleAsync();                                 // bsrw1 — `alu r=0 c=1`, the transfer's own 2
 
         uint returnAddress = _au;                          // the latch: bsrw1's `m_at = m_au`
         uint stack = A7 - 4;
         A7 = stack;
 
+        // `A7 = stack` above is bsrw2's `m_da[m_sp] = m_au`: the stack pointer is a register here, so the
+        // commit is a plain write and it lands before the first store, as the listing has it.
+        //
+        // bsrw2 (10e)  m_aob = m_au; m_dbout = high16(m_at); m_da[m_sp] = m_au; m_au = m_au + 2;
+        //              write m_dbout at m_aob                                                         4
         await WriteWordAsync(stack, (ushort)High16(returnAddress));      // bsrw2 — high word first
         if (_busFaulted) return;
+        // bsrw3 (0aa)  m_aob = m_au; m_dbout = m_aluo; m_au = ext32(m_dbin) + m_pc;
+        //              write m_dbout at m_aob                                                         4
         await WriteWordAsync(stack + 2, (ushort)Low16(returnAddress));   // bsrw3
         if (_busFaulted) return;
 
         long target = (long)_opcodeAddress + 2 + displacement;
         FrameSavesOnFetch((uint)target);                   // `b`: `m_pc = m_au` = the target
+        // malw3 (1e1)  m_aob = m_au; m_movemr = m_dbin; m_pc = m_au; m_ftu = m_dbin; m_au = m_au + 2;
+        //              read at m_aob                                                                  4
         await RefillAsync((uint)target);                   // malw3 then `b`/`mmrw3`: the target's pair
 
         // an odd target aborts on that fetch, and this family is scripted: the aborting state's own 4 is the
