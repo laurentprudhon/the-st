@@ -196,7 +196,11 @@ def check_complete(paths, index, opcode, findings):
     between the two are the same check. The files are read in the order they are given and each in
     line order.
 
-    The order test reads only the states that are named **once** in the files: a state shared with
+    **Order is checked per method**, because the code mirrors the microcode's own reuse: a tail two
+    scripts share is one helper (`RefillFromAsync`, `PushReturnAddressAsync`), so a listing's states
+    are named where each is expanded and the file's global order is not the listing's. Within one
+    method the states must still follow the listing — that is what catches a block pasted one state
+    too high. And the test reads only the states named **once** in the files: a state shared with
     another method (`mmrw3` is also a script's own last state) is named where that other method needs
     it, so its position says nothing about this listing's; its presence still counts.
     """
@@ -204,27 +208,39 @@ def check_complete(paths, index, opcode, findings):
     if not wanted:
         sys.exit(f"comment-states: --op {opcode} has no states in the listing")
 
-    found = []
-    for path in paths:
+    found = []      # (segment, pair): segment = (file index, method number)
+    for file_index, path in enumerate(paths):
         with open(path, "r", encoding="utf-8") as f:
-            for line in f.read().splitlines():
-                state = STATE.match(line)
-                if state:
-                    found.extend(fused_pairs(state))
+            lines = f.read().splitlines()
+        method_no = 0
+        for line in lines:
+            if METHOD.match(line) and "(" in line:
+                method_no += 1
+            state = STATE.match(line)
+            if state:
+                for pair in fused_pairs(state):
+                    found.append(((file_index, method_no), pair))
 
     label = " ".join(paths)
     seen = {}
-    for pair in found:
+    for _, pair in found:
         seen[pair] = seen.get(pair, 0) + 1
 
     for pair in wanted:
         if pair not in seen:
             findings.append(f"{label}: the listing's `{pair[0]} ({pair[1]})` is not commented")
 
-    order = [pair for pair in found if pair in wanted and seen[pair] == 1]
-    if order != [pair for pair in wanted if seen.get(pair) == 1]:
-        findings.append(f"{label}: `{opcode}`'s states are not in listing order")
+    position = {pair: index_of for index_of, pair in enumerate(wanted)}
+    by_method = {}
+    for segment, pair in found:
+        if pair in position and seen[pair] == 1:
+            by_method.setdefault(segment, []).append(position[pair])
+    for segment, positions in by_method.items():
+        if positions != sorted(set(positions)):
+            findings.append(f"{label}: `{opcode}`'s states are not in listing order in "
+                            f"{paths[segment[0]]} (method {segment[1]})")
     return findings
+
 
 
 def main():

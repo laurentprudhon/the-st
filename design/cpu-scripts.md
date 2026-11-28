@@ -723,8 +723,10 @@ It builds the state index from the generator's whole-ROM dump (`m68000gen.py sdf
 the `(name, addr)` pair is a state the ROM has, the charge is that state's own, the line ends at column
 104, and a state is not commented twice inside one method; `--complete` additionally requires an opcode's
 whole script, once each and in listing order — **read across every file it is given**, in the order given,
-because a listing is not always one file's. A state's name may carry `#` (`e#w1`, `o#w1`): a name the
-label pattern cannot match is not a name the index has, and the state *before* such a block then absorbs
+because a listing is not always one file's, and **one method at a time**, because a tail two scripts share is
+one helper (so a listing's states are named where each is expanded, and the file's global order is not the
+listing's; within one method the order must still hold). A state's name may carry `#` (`e#w1`, `o#w1`): a name
+the label pattern cannot match is not a name the index has, and the state *before* such a block then absorbs
 its charge — `chkr4`, `dvs1c`, `roml3` and five more read 4 that charge 0 or 2 until the pattern took the
 `#`. It cannot check that the C# *is* the state — no instrument
 reads a comment (`design/cpu-silicon.md` §5) — which is why the comments-only verdict is the identity
