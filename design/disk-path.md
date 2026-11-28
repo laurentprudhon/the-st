@@ -165,6 +165,20 @@ and the only way to know the real design does that is to let the FDC's own timeo
 than special-casing the empty drive. A title polling `IP`/`TR00` while waiting for a disk then sees what a real
 ST with an empty drive shows.
 
+> ### Correction and proposal — 2026-11-28 (`research/floppy-drive-mechanics.md` §4.3; `design/disk-drive-model.md` §2.1, §8.1)
+>
+> The second bullet's "no image" is **not** the same state as a drive with **no disk**. The TEAC FD-235HF
+> specification (§12.2(1)) says the spindle **does not rotate at any condition while no disk is installed**;
+> a real empty drive has no index pulses and `READY` is false.[104] The rule above is right for
+> **`DiskWithoutImage`** — a blank or unformatted cartridge is present, the motor spins and the FDC's search
+> times out — and wrong for **`NoDisk`**, where the visual would show a spinning empty drive.
+>
+> The drive model therefore has **two states**: `NoDisk` (motor off, no index, `READY` false) and
+> `DiskWithoutImage` (motor on, index, blank media, FDC record-not-found). The FDC-timeout rule for `NoDisk`
+> is the owner's decision: with no index the FDC's four-revolution search cannot count, so either the model
+> gives the FDC a synthetic index, or the host/TOS timeout is the one that ends the poll. The write path and
+> the visual contract are in `design/disk-drive-model.md` §5–§6.
+
 ### 5.1 The stub contract (#10 takes this before the real design exists)
 
 The stub models **no pins**. It answers the boot poll with the FDC's "record not found" status, never asserts

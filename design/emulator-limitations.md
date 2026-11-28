@@ -138,10 +138,12 @@ pin-level reading of two nets and one strap.
 | P3 | Which nets reach the MFP's `TAI` (19) and `TBI` (20) | **closed 2026-11-28** | `TAI` is wired to **`U900` pin 13 (`Q7`)** — the shift register's last stage, so the delay is in the path — and `TBI` carries a net labelled **`DE`**. The owner traced both, which is also the board-level confirmation of the 74LS164 story (§7 of the study). |
 | P4 | The `XSINT`→`TAI` delay's exact value on *this* build | **`derived`**, one measurement away | 8 stages at `CLK2`'s 2 MHz is 4 µs = 32 CPU clocks, and the STE article and Hatari's comment agree. A frequency counter on `TAI` against a DMA-sound frame end would show it; until then Timer A's pending instant is 128 master ticks late, one constant (`design/timers-and-events.md` §10.1). |
 
-### 6.1 The floppy drive and the medium (2026-11-28, `research/floppy-media-and-images.md` §3, §8)
+### 6.1 The floppy drive and the medium (2026-11-28, `research/floppy-media-and-images.md` §3, §8; `research/floppy-drive-mechanics.md` §4–§6, §12)
 
 The drive and the diskette are the disk path's **analogue** half. None of these is in an image, and no imaging
-tool measures it per disk; the model fixes the nominal drive and records the rest here.
+tool measures it per disk; the model fixes the nominal drive and records the rest here. A1–A6 are the media
+study's rows; A7–A11 are the drive study's, and the model/visual contract that consumes them is
+`design/disk-drive-model.md`.
 
 | # | question | state | what the record gives, and what the model does instead |
 |---|---|---|---|
@@ -150,7 +152,12 @@ tool measures it per disk; the model fixes the nominal drive and records the res
 | A3 | Media wear, dropout, and the marginal bits age produces | **`unmeasurable`** | An image can record the **instability observed at imaging time** (an STX fuzzy mask, an IPF `FZD`, SCP's raw flux), never the cause. The model reproduces the observed mask; it does not age the disk. |
 | A4 | The reference drive's speed error, wow and flutter | **`open`** | The model's spindle is exactly 300 RPM and its index exactly 5 Hz. A tachometer on a real drive would bound the tolerance; the target is the nominal machine, so the row is a bound, not a task. |
 | A5 | The preamp/AGC transfer curve and the DPLL's capture range | **`open`** | The WD1772's inspection window is 2 µs nominal; the part's *analogue* capture range and the drive's slicer are not in the datasheet. A bit-error-rate sweep against cell width would settle them; the model stops at the digital cell. |
-| A6 | Write splice and erase behaviour when a sector is rewritten | **`open`** | IPF's own document says the analyzer cannot archive modified disks because a sector rewrite leaves undefined bytes in the gaps and a slight drift of the sector against the track (the write splice).[48] The model has no disk-write path yet. |
+| A6 | Write splice and erase behaviour when a sector is rewritten | **`open`, partly modelled** | IPF's own document says the analyzer cannot archive modified disks because a sector rewrite leaves undefined bytes in the gaps and a slight drift of the sector against the track (the write splice).[48] `design/disk-drive-model.md` §5 now specifies the byte-level window and marks the splice; the exact extent and bit phase are **A9**. |
+| **A7** | **The spindle's spin-up/deceleration curve** | **`open`** | The specs give the endpoints (0 → 300 rpm in 480 ms; 505 ms to READY), not the shape. The model uses a linear ramp and 300 rpm constant; a logic analyser on `IP`/`MO` at power-on settles it (study E1). |
+| **A8** | **Actuator dynamics, resonance, micro-stepping, seek errors at the 2 ms step rate** | **`open`** | The model uses one track per `STEP`, 3/4 ms intervals and 15 ms settle; the FDC's 2 ms rate is below the drive's 3 ms spec. A scope on `STEP`/`TR00` and a step-settle sweep settles it (study E2). |
+| **A9** | **The write splice's exact extent and bit phase** | **`open`** | The model marks the gap 2/gap 3 window and the index gap; the first flux position varies with spindle speed and write timing. A write/rewrite test and a flux capture settle it (study E3). |
+| **A10** | **The ST drive's erase-head timing and current** | **`open`** | The model uses the MC3471's 500 µs / 1 ms and 40 mA examples as defaults; the drive's internal values are not in its public specification. A head-current probe or the drive's schematic settles it (study E4). |
+| **A11** | **The ST drive's index phase and burst tolerance** | **`open`** | ECMA's ±400 µs is a drive bound, not a measurement of the ST's drive; the model sets index at track byte 0. An index-vs-byte-0 capture settles it (study E1). |
 
 ## 7. The IKBD (HD6301V1)
 
@@ -239,6 +246,7 @@ route is a *reading* rather than a scope are named as such.
 | A5 | the preamp/AGC curve and the DPLL's capture range | a bit-error-rate sweep against cell width |
 | A6 | the write splice of a rewritten sector | a write/rewrite test on hardware, then a flux capture |
 | M5 | which slot each client actually occupies, and the STE's internal share | a cycle-counting program with `BGACK` and `AS` on a scope |
+| A7–A11 | the spindle curve, actuator dynamics, splice extent, erase timing, index phase | the drive study's E1–E4 |
 | K1 | the IKBD's matrix scan period | a scope on `DR1`, or a cycle count of the firmware's loop |
 | K3 | a floating `RXD` on an unplugged keyboard | pull the cable mid-session |
 | C6 | the 68000's test mode, exercised | a tester that drives the mode's stimulus and reads back what it observes |

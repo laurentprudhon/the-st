@@ -85,6 +85,17 @@ The ST reads these signals to determine if:
 | 11 | Write data | WD1772 pin 11 | |
 | 12 | Write gate | WD1772 pin 12 | |
 
+> ### Correction — 2026-11-28 (`research/floppy-drive-mechanics.md` §11.2; `research/standard-parts-implementation.md` §4, §9.9)
+>
+> The **function list** above is usable; the **driver column** and four details are not:
+>
+> - The **side select** and the two **drive selects** are driven by the **PSG's port A** — bit 0 side, bit 1 drive 0, bit 2 drive 1 — not by WD1772 pins 2/6/7. The WD1772's drive-side pins are `STEP` 16, `DIRC` 17, `RD` 19, `MO` 20, `WG` 21, `WD` 22, `TR00` 23, `IP` 24, `WPRT` 25, `DDEN` 26.
+> - **`MOTOR ON`** is the WD1772's `MO` (pin 20); the drive reaches rated speed in **480 ms** and `READY` in **505 ms** — not ~15 ms.
+> - **`TRACK 00`** prevents stepping **outward** beyond track 0: the drive ignores a step-out while `TR00` is true, and ignores a step-in from **track 81**.
+> - **`WRITE PROTECT`** is the drive's `WPRT` output, true when the write-inhibit hole is **open** (protected). The "low = writable" row is not established by the drive specification; treat the polarity as a board read, not a fact.
+>
+> The drive model uses logical signals, so these pin errors do not block it; the correction is recorded so a later session does not build a board net from the table. The full evidence is `research/floppy-drive-mechanics.md` §3–§6.
+
 ## Cross-References
 
 - `floppy/01-physical-format.md` — Physical format: PM3 encoding, sector layout, track geometry, flux recording
