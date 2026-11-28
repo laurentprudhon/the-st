@@ -280,7 +280,7 @@ the corrected table, and what it shows is worth stating here because three of th
 | 28, 37, 29, 40 | `BGI` in, `BGO` out, `BGACK` out, `BGKI` in | **the relay**, and with `XCPUBG`/`XBLTBG` the chain's two segments |
 | 30, 38, 39, 41 | `BR`, `BERR` in, `RESET` in, `INT` out | the request is direct; the abort, the reset and the interrupt are inputs/outputs as the design's pads say |
 | 34 | `CLK` | |
-| 1, 33 / 5, 35 | `VCC`, `VCC` / `GND`, `GND` | 33 is `VSS` in the published DOIT_ST table — the one pin where the two readings disagree |
+| 1, 33 / 5, 35 | `VCC`, `VCC` / `GND`, `GND` | both VCC pins read off the symbol; the published DOIT_ST table's `VSS` on 33 is the one place it is wrong |
 | 22, 31, 32, 36, 42, 55, 60, 68 | unnamed | 60 named + 8 unnamed = 68, and DOIT_ST calls the same eight `N/C` |
 
 `derived` Three corrections follow for `design/board-inventory.md`, all landed with the dated note: the rows
@@ -680,9 +680,10 @@ from a disputed reading into a measured one, which is the one place where the ve
 - **Which chip is first in the grant chain, on the board** — the relay exists in the design and three sources
   put the blitter first (§3.4); the net list still does not *order* it, so this is an inference a scope trace
   would confirm rather than a fact.[2][33]
-- **One pin, and one pad that is not on the symbol** — pin 33 reads `VCC` in the manual's text layer and `VSS`
-  in the published DOIT_ST table; and the design's `XCS`/`XIDS` pads have no counterpart on the board's symbol,
-  so one of the two is wrong (§3.4, `design/emulator-limitations.md` B9).[37][2]
+- **One pad that is not on the symbol** — the design's `XCS`/`XIDS` pads have no counterpart on the board's
+  symbol, which names no `CS` and no `DS`, so either they are tied off or the symbol omits them (§3.4,
+  `design/emulator-limitations.md` B9).[37][2] Pin 33 was the other half of this bullet and is now settled by
+  the owner's read: `VCC`, not the published table's `VSS`.[37]
 - **Atari's right-end-mask table against its own prose** — one pixel, and both readings are defensible (§4.7).[31]
 - **What `XIDS` is** — a `DS`-style strobe on the pad ring that no document mentions; either a 6800-cycle input
   or an internal `DS` formed from `UDS`/`LDS`.[2]

@@ -288,7 +288,7 @@ and is replaced by this one; every row here is `V`.
 | 39 | `RESET` | in | L | |
 | 41 | `INT` | out | L | net `XBLTINT`, pull-up `R118` 1 k, into U400 pin 60 `BINT` |
 | 34 | `CLK` | in | ↑ | 8 MHz |
-| 1, 33 | `VCC` | pwr | — | 33 also appears as `VSS` in the DOIT_ST table; unconfirmed |
+| 1, 33 | `VCC` | pwr | — | both read off the symbol and confirmed by the owner, 2026-11-28; the published DOIT_ST table's `VSS` on 33 is wrong |
 | 5, 35 | `GND` | pwr | — | |
 | 22, 31, 32, 36, 42, 55, 60, 68 | not named on the symbol | — | — | eight pins carry no name — 60 named + 8 unnamed = 68, and the published pinout calls the same eight `N/C` |
 
