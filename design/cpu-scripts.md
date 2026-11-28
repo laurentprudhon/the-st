@@ -660,3 +660,52 @@ replace. Row 81 left the pair untouched: EmuTOS executes no memory `TAS` in the 
    sees (the load direction's `-(An)`, `0x4CE0`, was already trapped — with the phantom read). No corpus
    record moves, because neither corpus carries a record for an illegal form; the boot is the witness,
    and it is unchanged.
+
+## The state above the code — the comment convention (`#102`)
+
+A block of C# that expands a micro-state carries **one comment line above it, in the listing's own
+syntax**:
+
+```
+// <name> (<addr>)  <statements>                                            <charge>
+```
+
+`<name>` is the state's label as `scripts/microcode-walk.py --op <opcode>` prints it, `(<addr>)` the
+micro-ROM address beside it (three hex digits, no `0x`), `<statements>` the listing's statements for that
+state verbatim and in order with the bus boilerplate elided to `read at <expr>` / `write <expr> at
+<expr>`, and `<charge>` the state's own `m_icount` decrement — 2 for a state, 4 for one that touches the
+bus, 0 for the states the listing leaves uncharged (`rorw1`, `adrw1`, `cpmm1`) — right-aligned so the line
+ends at column 104. A wrapped statement block keeps the charge on its **last** line.
+
+What is elided is the engine's, not the state's: `m_base_ssw`, `m_edb = m_opcodes.read_interruptible(…)`,
+`m_icount -= 4`, the `if(m_icount <= 0)` suspension block, the odd-address branch (ADR 0009's coroutine
+style, `Cycle`'s abort), `set_ftu_const()`, and `m_inst_state = m_decode_table[m_ird]`.
+
+Two things must be **said, never hidden**: a state fused into a helper names both (`// b (363) + mmrw3
+(34c)`, charge `4+4`, `TrailingFetchAsync`), and a deliberate difference from the listing begins a second
+line `//   ours:` with what the code does and the measurement that made it necessary. `RESET`'s block
+(`MiscAsync`'s `0x4E70` case) is the worked example: the count is taken before the clocks are spent, and
+the block says so.
+
+The checker is `scripts/comment-states.py` (stdlib only, needs the pinned microcode):
+
+```sh
+python3 scripts/comment-states.py --check FILE...              # every formatted comment in the file
+python3 scripts/comment-states.py --complete --op 4e70 FILE    # every state of that listing, in order
+python3 scripts/comment-states.py --index | grep rset          # the index it checks against
+```
+
+It builds the state index from the generator's whole-ROM dump (`m68000gen.py sdf`) and checks four things:
+the `(name, addr)` pair is a state the ROM has, the charge is that state's own, the line ends at column
+104, and a state is not commented twice inside one method; `--complete` additionally requires an opcode's
+whole script, once each and in listing order. It cannot check that the C# *is* the state — no instrument
+reads a comment (`design/cpu-silicon.md` §5) — which is why the comments-only verdict is the identity
+(the corpus, the folds, G8) plus a diff with no non-comment line:
+
+```sh
+git diff -U0 -- 'src/TheST.Machine/Cpu/*.cs' | grep -E '^[+-]' \
+  | grep -vE '^(\+\+\+|---) ' | grep -vE '^[+-][[:space:]]*//'    # expected: empty
+```
+
+The checker joins `cpu-shape-check.sh`'s interface row when it reads 0 across the whole core — that is
+`#94`'s landing, not this convention's (`#102`); a checker with findings in the gate is a red gate.

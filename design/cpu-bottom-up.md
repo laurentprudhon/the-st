@@ -73,6 +73,11 @@ microcoded instruction can branch on `auz`/`nz`/`d4`/`enl`. Our scripts are that
 **Landed so far**
 
 - [x] `#87` **DCR + the AU's transfers** — `Decoder4To16`, `AuPlusTwo`, `AuPlus`, `AuEqualsAt`, `LatchAob`.
+- [x] `#102` **the state above the code** — `scripts/comment-states.py`, the state index from the
+  generator's whole-ROM dump, the format's four checks and `--complete`, and `RESET`'s script converted to
+  it (comments-only: the corpus, the folds and G8 are the identity, and the diff carries no non-comment
+  line). `design/cpu-scripts.md`'s last section is the convention; `#94` extends the conversion and puts
+  the checker in the gate when it reads 0 across the core.
 - [x] `#87` **`SSW` is a latch** — `_ssw`, written by one composition (`ComposeSsw`) that the frame reads.
   Honest limitation: the write site is the frame, not the microinstruction (moving it is #93's); an
   attempt to latch it per bus cycle cost 50 752 records, because a non-bus-fault exception must keep the
@@ -120,6 +125,20 @@ microcoded instruction can branch on `auz`/`nz`/`d4`/`enl`. Our scripts are that
      **What the split still owes** (and it is now only this): the adder itself holding the access's address
      — the bare `CopyAuToPc()` — and with it `ConsumedAddress` (`_au − 2`, the PC-relative base, 604
      records over 13 files when written as `_pc`) and `AUH`/`AUL` (`B2`).
+     **And the inversion's first half was tried and refuted** (2026-11-28, measured, nothing landed):
+     writing `_pc` at `FetchPosition`'s four read sites — the pop refill (`FetchAsync`) was the one that
+     did not write it — and reading the `ram` column moves **15 552 framed records, every one of them by
+     −2 and every one of them a group-0 *read* fault** (all `ram`, state and clocks green otherwise). On
+     all 15 552 the value the corpus wants is the address temporary (`_at`), i.e. the queue head's own
+     address, and it is `_au − 2`; on the 28 400 read faults that stay green it is `_pc` — one word past
+     the head. So the pop refill is a read whose state does **not** say `m_pc = m_au` (the microcode's
+     extension-word pops, `adsl1`/`aixw2`), and `_pc` must keep the fetch-state discipline it has. The
+     tabulation that says no expression on the fill replaces it, with the derivation in place over all
+     74 201 framed records: the saved counter equals `_au` on 18 296 of the 43 952 read faults, the
+     derived fetch position on 10 047 and `_at` on 14 661 — three minorities, which is the earlier
+     finding ("a frame default is a state, not an expression") measured again on the new cells. The
+     remaining split is therefore `ConsumedAddress`'s own re-derivation (`#87`'s last step), not a
+     blanket write of the register.
      **The instrument that decided it** (`61f4080`): `--clocks`' `frame_pc`/`fetch_ptr`/`pc_counter`/`ir_addr`
      are now sampled at the boundary as well as at an exception entry, so `fetch_ptr − pc_counter` is the
      pipeline's depth for every record. Measured over MAME's 261 894 clean records: **4** on 260 664 and
@@ -147,7 +166,7 @@ microcoded instruction can branch on `auz`/`nz`/`d4`/`enl`. Our scripts are that
      so the replacement is that one body — and it is the last step, because it needs the queue's fill
      discipline (when the prefetch happens relative to the operand's computation) to be re-derived, not a
      new expression.
-   - [~] `B1`, the **adder as the loop counter** — started with the multiplies: `MULU`/`MULS` now
+   - [x] `B1`, the **adder as the loop counter** — started with the multiplies: `MULU`/`MULS` now
      `ConstToFtu(15)` → `AuEqualsFtu()` → the loop tests `AuZeroOnSixBits` (`auz`, the six low bits) and
      steps with `AuMinusOne()`, and `AuEqualsConsumed()` (`_au = _pc - 2`) puts the instruction's
      position back at the exit. Both files **2 500/2 500 state and exact-clock**; corpus 317 500 on both

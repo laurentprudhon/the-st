@@ -1274,25 +1274,26 @@ public sealed partial class M68000
                 }
 
                 // The die's script, one block per micro-state (`scripts/microcode-walk.py --op 4e70`;
-                // the states' own charge is 2 and an access is 4):
+                // the states' own charge is 2 and an access is 4). Thirty-one passes of rset3/rset4 take
+                // 0xFFFFFFFE to 0xFFFFFFC0 (six low bits zero), so the hold is `4 + 4 × 31 = 128` clocks
+                // derived from the loop and the line is low for 124 of them; the one read is issued where
+                // the die issues it — in rset5, after the hold.
                 //
-                //   rset1  m_ird = m_ir; m_pc = m_au; m_ftu = m_dbin; m_au = m_au + 2;
-                //          alu_and(m_dbin, 0);                                  m_icount -= 2
-                //   rset2  m_ir = m_irc; m_au = ext32(m_aluo) - 2; m_reset_cb(1);   m_icount -= 2
-                //   rset3  m_au = m_au - 2                                         m_icount -= 2
-                //   rset4  m_t = !(m_au & 0x3f); if(!m_t) goto rset3               m_icount -= 2
-                //   rset5  m_reset_cb(0); m_aob = m_pc; m_au = m_pc + 2;
-                //          read at m_aob                                          m_icount -= 4
+                //   ours: a state's statements are computed and then awaited in state order, so the count
+                //   is taken before the clocks are spent — `passes` is rset3/rset4's branch taken once and
+                //   the two waits further down repeat it (every state waits on its own, #92).
                 //
-                // Thirty-one passes of rset3/rset4 take 0xFFFFFFFE to 0xFFFFFFC0 (six low bits zero),
-                // so the hold is `4 + 4 × 31 = 128` clocks derived from the loop, and the line is low for
-                // 124 of them. Every state waits on its own (the owner's ruling on #92), so a peripheral
-                // sees the 2-clock steps and both edges at the instants the part makes them, and the one
-                // read is issued where the die issues it — in rset5, after the hold.
+                // rset1 (3a6)  m_ird = m_ir; m_movemr = m_dbin; m_pc = m_au; m_ftu = m_dbin;
+                //              m_au = m_au + 2; alu_and(m_dbin, 0)                                    2
                 AtEqualsAu();                    // rset1  m_pc = m_au — the position, kept in AT
                 ConstToFtu(0);                   // rset1  alu_and(m_dbin, 0) — the constants ROM's zero
+                //
+                // rset2 (27b)  m_ir = m_irc; m_au = ext32(m_aluo) - 2; m_reset_cb(1)                  2
                 AuEqualsFtu();
                 AuPlus(-1);                      // rset2  m_au = ext32(m_aluo) - 2
+                //
+                // rset3 (0e4)  m_au = m_au - 2                                                        2
+                // rset4 (114)  m_t = !(m_au & 0x3f); if(!m_t) goto rset3                              2
                 int passes = 0;
                 while (!AuZeroOnSixBits)         // rset4  m_t = !(m_au & 0x3f)
                 {
@@ -1300,6 +1301,10 @@ public sealed partial class M68000
                     passes++;
                 }
 
+                //
+                //   ours: the waits below are rset1's and rset2's clocks, hoisted out of the two blocks
+                //   above, and then the loop's own passes — and rset2's assert follows its 2 clocks, as
+                //   the listing has it (`m_icount -= 2` before `m_reset_cb(1)`).
                 await IdleAsync();               // rset1  2 clocks
                 await IdleAsync();               // rset2  2 clocks
                 DriveReset(asserted: true);      // rset2  m_reset_cb(1) — /RESET low
@@ -1309,6 +1314,9 @@ public sealed partial class M68000
                     await IdleAsync();           // rset4  2 clocks — one instant per state, not one run
                 }
 
+                //
+                // rset5 (064)  m_reset_cb(0); m_aob = m_pc; m_ird = m_ir; m_au = m_pc + 2;
+                //              read at m_aob                                                          4
                 DriveReset(asserted: false);     // rset5  m_reset_cb(0) — /RESET high
                 AuEqualsAt();                    // rset5  m_au = m_pc + 2 — the position comes back
                 await TrailingFetchAsync();      // rset5  read at m_pc (the instruction's one access)
