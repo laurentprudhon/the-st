@@ -392,6 +392,8 @@ public sealed partial class M68000
             return !_busFaulted;
         }
 
+        //   ours: the two PC-relative shapes' displacement read is the same state with `m_pc` for its
+        //   base — `adsl1` named in `ReadLongEaAsync`'s case 5, where the shape's own base is `m_da[ry]`
         if (reg == 2)                                      // dpc — adsl1
         {
             ushort displacement = await FetchAsync();
@@ -440,6 +442,7 @@ public sealed partial class M68000
 
             case 5:                                        // das — adsl1, out of the queue
             {
+            // adsl1 (1c6)  m_aob = m_au; m_au = ext32(m_dbin) + m_da[ry]; read at m_aob               4
                 ushort displacement = await FetchAsync();
                 if (_busFaulted) return null;
                 address = GetA(reg) + Ext32(displacement);
