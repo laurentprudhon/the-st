@@ -164,13 +164,29 @@ The part the other five cannot replace: **what a programmer can call, and how it
 somebody who wants to *use* the machine's software rather than its hardware — and its last chapter is the bridge back
 to the hardware, because every TOS service ends on a register or a pin that Parts 2 and 3 describe.
 
-**The evidence, stated once here because every chapter inherits it.** EmuTOS is in the tree as source (GPLv2,
-`roms/emutos-1.4/emutos-src-1.4.tar.gz`) and it is the *readable* implementation of this API. Real TOS 1.62 is not
-public as source: its implementation is read from the **disassembly of a user-supplied image** — the project ships
-EmuTOS and never distributes a real TOS (ADR 0010) — plus the era's published documentation and the community's disassembly notes. So each
-function gets up to three columns: *what the interface promises* (documented), *what EmuTOS does* (`path:line`, a
-reading), *what TOS 1.62 does* (a disassembly address, or `inferred` from observed behaviour, or `unknown` with the
-reason). No chapter of this part may present an EmuTOS implementation as if it were Atari's.
+**The evidence, stated once here because every chapter inherits it — and it is better than we planned for.**
+There are **two readable source trees**, and both are citable:
+
+| | what it is | how a claim names it |
+|---|---|---|
+| **real TOS 1.62** | `th-otto/tos1x` — Atari's own sources, with a build that reproduces the shipped ROM **byte for byte**: the 262 144-byte `tos162uk.img` it builds has the same SHA-256 as the retail dump (`research/tos-rom-sourcing.md` §2), which is what makes the source authoritative for the image a user actually runs. Pinned at commit `7c6680d`. | `bios/ikbdclk.S:412`, followed by the symbol map's address (`glue/tos162uk.map`) so a reader can find it in a debugger |
+| **EmuTOS 1.4** | in our tree as source (GPLv2), the free replacement the project ships | `src/…:line` |
+
+The module map, because it is how Part 6 navigates: **`bios/`** is BIOS and XBIOS (`biosext.S` for the trap-14 calls,
+`ikbdclk.S` for the IKBD and the clock, `floppy.S` and `blkdev.c` for the disk, `sounds.c`, `prt*.c`, `memtest.S`,
+`startup.S`); **`bdos/`** is GEMDOS (`bdosmain.c` for the trap dispatcher, `fs*.c` for the filesystem, `osmem.c`,
+`proc.c`, `time.c`); **`vdi/`** is the screen (`opnwk.c` for the workstation, `line1010.S` for the line-drawing A-line,
+and the blit families — `sbblit.S`, `hbbitblt.S`, `sbtxtblt.S`, `blaster.S` — which is where the "does TOS use the
+blitter" question is actually answered); **`aes/`** is the desktop API (`gemevlib.c` for the event loop, `geminput.c`,
+`gemdisp.c`); **`common/`**, **`desk/`** and **`system/`** hold the shared definitions, the desktop and the post-release
+patches.
+
+So each function gets three columns: *what the interface promises* (documented), *what TOS 1.62 does* (a `file:line` in
+`tos1x`), *what EmuTOS does* (`src/…:line`). Where the two implementations diverge, that divergence is itself a claim
+worth a paragraph — it tells a reader which behaviour is the contract and which is one implementation's accident.
+**Licence discipline**: `tos1x` carries no licence and is Atari-derived, so the book **cites** it by path and pinned
+commit and **never vendors it**; the ROM stays user-supplied and the project ships EmuTOS (ADR 0010). An `inferred`
+label is now needed only where neither tree says anything — not as a default.
 
 | file | answers | principal sources |
 |---|---|---|

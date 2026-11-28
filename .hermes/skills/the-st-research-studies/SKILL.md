@@ -113,9 +113,10 @@ the root.
   correction in both, per the landing rules above. Never leave the reader with two answers.
 - **`design/` is not the book.** It is the implementation record (ADRs, the partition, the scheduler, the register);
   the book cites it per claim. Do not fold design prose into a chapter without re-sourcing it as a claim.
-- **Part 6 (TOS) has one extra rule**: a claim about an implementation says *which* code — EmuTOS by `src/…:line`, real
-  TOS by function and disassembly address, or `inferred from behaviour` when it is not legible. EmuTOS's routine is
-  never presented as Atari's.
+- **Part 6 (TOS) has one extra rule**: a claim about an implementation says *which* tree — real TOS 1.62 by `file:line`
+  in `th-otto/tos1x` (pinned `7c6680d`; its build is byte-identical to the shipped ROM, which is what makes the source
+  authoritative), EmuTOS by `src/…:line`. EmuTOS's routine is never presented as Atari's, and `tos1x` (no licence,
+  Atari-derived) is cited, never vendored.
 - **The chapter procedure is `references/book-chapter.md`** — the provenance line's five forms, the checker's five
   failures, the audit table's verdict vocabulary, and the two-pass rule. Load it before writing a chapter; it is the
   difference between a chapter that passes the checker and one that can be trusted.
