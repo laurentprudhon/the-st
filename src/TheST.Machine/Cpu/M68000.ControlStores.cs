@@ -407,6 +407,17 @@ public sealed partial class M68000
     void LatchAob(uint address) => _aob = address;
 
     /// <summary>
+    /// `m_reset_cb(1)` / `m_reset_cb(0)` — the <c>RESET</c> instruction's drive of the part's `/RESET`
+    /// output: <c>rset2</c> asserts it when the countdown starts, <c>rset5</c> releases it in the state
+    /// that issues the instruction's one read, 124 clocks later. One record per edge, at the instant the
+    /// state makes it, so a peripheral's reset input is a level it can read (`Pins.RESET`) and a change
+    /// it can be woken by (owner's ruling on #92). The *input* side of the pin — the reset network
+    /// pulling the line at power-on — is still the host's, since that network is not a chip
+    /// (`design/crossings.md`).
+    /// </summary>
+    void DriveReset(bool asserted) => Write(Clock, Wires.Reset, 0x1, (ushort)(asserted ? 1 : 0));
+
+    /// <summary>
     /// The address of the word the instruction has just consumed — **the PC-relative operand's base**,
     /// and the one fact this tree takes from the consumption counter where the die takes it from
     /// `m_pc`. Measured, and it is why the base cannot simply become the register: writing these seven

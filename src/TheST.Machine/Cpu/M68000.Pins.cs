@@ -160,10 +160,11 @@ public sealed partial class M68000
         public bool HALT => _cpu._halted;
 
         /// <summary>
-        /// Reset: an input the System Control Unit drives, and an output to the peripherals — nothing
-        /// on this side models it, so the level reads false (the owner's ruling on undriven pins).
+        /// Reset: an input the reset network drives at power-on and an output to the peripherals, which
+        /// the <c>RESET</c> instruction asserts for 124 clocks (<c>rset2</c>…<c>rset5</c>). The level is
+        /// the wire's — the part's own drive is one of its records (owner's ruling on #92).
         /// </summary>
-        public bool RESET => false;
+        public bool RESET => (_cpu.Engine.ValueAt(Wires.Reset, _cpu.Clock) & 1) != 0;
 
         /// <summary>The CPU clock's phase: high in the first half of the four-tick window (ADR 0001).</summary>
         public bool CLK => _cpu.Clock % (2 * Instruments.TicksPerCpuClock) < Instruments.TicksPerCpuClock;

@@ -41,6 +41,14 @@ public static class Wires
     /// <summary>The CPU's interrupt acknowledge (class 2).</summary>
     public static readonly Channel Iack = Make("IACK");
 
+    /// <summary>
+    /// <c>/RESET</c>: the CPU's own drive, asserted for the 124 clocks a <c>RESET</c> instruction holds
+    /// it and released in the state that issues the instruction's one read (`rset2`/`rset5`, #92's
+    /// ruling). One record per edge, so a peripheral can react inside the hold; the power-on side is
+    /// still the host's (the reset network is not a chip, `design/crossings.md`).
+    /// </summary>
+    public static readonly Channel Reset = Make("RESET");
+
     /// <summary>The vector byte a device puts on <c>D0–D7</c> at the acknowledge.</summary>
     public static readonly Channel VectorByte = Make("vector");
 

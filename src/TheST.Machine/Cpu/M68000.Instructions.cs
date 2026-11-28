@@ -1273,41 +1273,45 @@ public sealed partial class M68000
                     return;
                 }
 
-                // rset1/rset2 — the pin's hold is counted in the adder, exactly as the multiplies count
-                // their bits: `alu_and(m_dbin, 0)` puts the constants ROM's *zero* in the field register,
-                // `m_au = ext32(m_aluo) - 2` starts the countdown one word below zero, and rset3/rset4
-                // step it down another word per pass and test the six low bits — the same `auz` branch
-                // the loops use, a different step. Thirty-one passes take 0xFFFFFFFE to 0xFFFFFFC0,
-                // whose low six bits are zero, so the hold is `2 + 2 + 4 × 31 = 128` clocks **derived
-                // from the loop** instead of a constant in the shape table.
+                // The die's script, one block per micro-state (`scripts/microcode-walk.py --op 4e70`;
+                // the states' own charge is 2 and an access is 4):
                 //
-                // Two placements are the shape table's, kept deliberately, and each is a measurement for
-                // the owner rather than a session's change (this campaign is a re-expression, and a moved
-                // fold is a re-bless):
-                // · the **read comes first**. `ClocksAsync(_own, prefetch: true)` issued RESET's one read
-                //   inside the hold; the die issues it after it (`rset5`, once `m_t` ends the countdown).
-                //   Moving the read to the die's place moves both folds — `1333d164…` / `0085e730…` with
-                //   the desktop at 602 and 34 122.2 pops a frame unchanged.
-                // · the **charge is one wait, not sixty-two**. Nothing but the engine's batching
-                //   separates rset3 from rset4 (no bus access sits between them), and 62 idle states
-                //   split one instant into 62, which moves `run.digest` alone (`88c7144f…`) while
-                //   `run.stream` stays **byte-identical** — #39's "more queue entries, same records"
-                //   class, not a behaviour change. `B1`'s subject is the counter, so the count is the
-                //   loop's and the states are fused until a re-bless says otherwise.
-                await TrailingFetchAsync();   // rset5's read, at the table's placement
-                AtEqualsAu();            // m_pc = m_au — the position the adder is about to spend
-                ConstToFtu(0);
+                //   rset1  m_ird = m_ir; m_pc = m_au; m_ftu = m_dbin; m_au = m_au + 2;
+                //          alu_and(m_dbin, 0);                                  m_icount -= 2
+                //   rset2  m_ir = m_irc; m_au = ext32(m_aluo) - 2; m_reset_cb(1);   m_icount -= 2
+                //   rset3  m_au = m_au - 2                                         m_icount -= 2
+                //   rset4  m_t = !(m_au & 0x3f); if(!m_t) goto rset3               m_icount -= 2
+                //   rset5  m_reset_cb(0); m_aob = m_pc; m_au = m_pc + 2;
+                //          read at m_aob                                          m_icount -= 4
+                //
+                // Thirty-one passes of rset3/rset4 take 0xFFFFFFFE to 0xFFFFFFC0 (six low bits zero),
+                // so the hold is `4 + 4 × 31 = 128` clocks derived from the loop, and the line is low for
+                // 124 of them. Every state waits on its own (the owner's ruling on #92), so a peripheral
+                // sees the 2-clock steps and both edges at the instants the part makes them, and the one
+                // read is issued where the die issues it — in rset5, after the hold.
+                AtEqualsAu();                    // rset1  m_pc = m_au — the position, kept in AT
+                ConstToFtu(0);                   // rset1  alu_and(m_dbin, 0) — the constants ROM's zero
                 AuEqualsFtu();
-                AuPlus(-1);              // m_au = ext32(m_aluo) - 2
+                AuPlus(-1);                      // rset2  m_au = ext32(m_aluo) - 2
                 int passes = 0;
-                while (!AuZeroOnSixBits) // rset4's branch
+                while (!AuZeroOnSixBits)         // rset4  m_t = !(m_au & 0x3f)
                 {
-                    AuPlus(-1);          // rset3: m_au = m_au - 2
+                    AuPlus(-1);                  // rset3  m_au = m_au - 2
                     passes++;
                 }
 
-                AuEqualsAt();            // rset5's tail: m_au = m_pc + 2 — the position comes back
-                await ClocksAsync(4 + 4 * passes);   // rset1 (2) + rset2 (2) + rset3/rset4 per pass
+                await IdleAsync();               // rset1  2 clocks
+                await IdleAsync();               // rset2  2 clocks
+                DriveReset(asserted: true);      // rset2  m_reset_cb(1) — /RESET low
+                for (int pass = 0; pass < passes; pass++)
+                {
+                    await IdleAsync();           // rset3  2 clocks
+                    await IdleAsync();           // rset4  2 clocks — one instant per state, not one run
+                }
+
+                DriveReset(asserted: false);     // rset5  m_reset_cb(0) — /RESET high
+                AuEqualsAt();                    // rset5  m_au = m_pc + 2 — the position comes back
+                await TrailingFetchAsync();      // rset5  read at m_pc (the instruction's one access)
                 return;
 
             case 0x4E73:   // RTE
