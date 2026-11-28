@@ -9,8 +9,8 @@ microcode state carries one line above it, in the listing's own syntax —
 — so a reader standing in the function sees which silicon state the code is, and a reviewer
 diffs the comment against `scripts/microcode-walk.py --op <opcode>` instead of trusting it.
 
-    scripts/comment-states.py --check FILE...              # every formatted comment in the file
-    scripts/comment-states.py --complete --op 4e70 FILE    # every state of that listing, in order
+    scripts/comment-states.py --check FILE...              # every formatted comment in the files
+    scripts/comment-states.py --complete --op 4e70 FILE... # every state of that listing, in order
     scripts/comment-states.py --index | grep rset          # the state index it checks against
 
 What it checks, and nothing else:
@@ -23,7 +23,9 @@ What it checks, and nothing else:
   · the line ends at column 104 (the charge right-aligned there), and continuation lines of the
     same state carry no name of their own;
   · a state is not commented twice inside one method;
-  · with `--complete`, every state of the opcode's listing appears, once, in listing order.
+  · with `--complete`, every state of the opcode's listing appears, once, in listing order —
+    read across **every** file given (the closing pair `b`/`mmrw3` is the loop's, in `M68000.cs`,
+    while the script that falls through to it is in `M68000.Scripts.cs`).
 
 It cannot check that the C# *is* the state — no instrument reads a comment (`design/cpu-silicon.md`
 §5). It checks the comment against the listing, which is what makes the comment checkable at all.
@@ -179,23 +181,43 @@ def check_file(path, index, findings):
     return findings
 
 
-def check_complete(path, index, opcode, findings):
+def check_complete(paths, index, opcode, findings):
+    """The opcode's whole listing, once each and in order — read across **every** file given.
+
+    A listing is not always one file's: the closing pair `b` (363) + `mmrw3` (34c) is the loop's
+    (`M68000.cs`), while the script that falls through to it is a method of `M68000.Scripts.cs`, so
+    `--complete --op 4e71 M68000.cs` (NOP is nothing but that pair) and a family's listing split
+    between the two are the same check. The files are read in the order they are given and each in
+    line order.
+
+    The order test reads only the states that are named **once** in the files: a state shared with
+    another method (`mmrw3` is also a script's own last state) is named where that other method needs
+    it, so its position says nothing about this listing's; its presence still counts.
+    """
     wanted = opcode_listing(opcode)
     if not wanted:
         sys.exit(f"comment-states: --op {opcode} has no states in the listing")
-    with open(path, "r", encoding="utf-8") as f:
-        text = f.read()
+
     found = []
-    for line in text.splitlines():
-        state = STATE.match(line)
-        if state:
-            found.extend(fused_pairs(state))
+    for path in paths:
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f.read().splitlines():
+                state = STATE.match(line)
+                if state:
+                    found.extend(fused_pairs(state))
+
+    label = " ".join(paths)
+    seen = {}
+    for pair in found:
+        seen[pair] = seen.get(pair, 0) + 1
+
     for pair in wanted:
-        if pair not in found:
-            findings.append(f"{path}: the listing's `{pair[0]} ({pair[1]})` is not commented")
-    ordered = [pair for pair in found if pair in wanted]
-    if ordered != [pair for pair in wanted if pair in ordered]:
-        findings.append(f"{path}: `{opcode}`'s states are not in listing order")
+        if pair not in seen:
+            findings.append(f"{label}: the listing's `{pair[0]} ({pair[1]})` is not commented")
+
+    order = [pair for pair in found if pair in wanted and seen[pair] == 1]
+    if order != [pair for pair in wanted if seen.get(pair) == 1]:
+        findings.append(f"{label}: `{opcode}`'s states are not in listing order")
     return findings
 
 
@@ -225,10 +247,11 @@ def main():
         if not os.path.exists(path):
             sys.exit(f"comment-states: no such file: {path}")
         check_file(path, index, findings)
-        if args.complete:
-            if not args.op:
-                parser.error("--complete needs --op <opcode>")
-            check_complete(path, index, args.op, findings)
+
+    if args.complete:
+        if not args.op:
+            parser.error("--complete needs --op <opcode>")
+        check_complete(args.files, index, args.op, findings)
 
     for finding in findings:
         print(finding)

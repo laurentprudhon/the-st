@@ -693,15 +693,16 @@ fetch the *loop* issues, which the block says instead of pretending the script d
 The checker is `scripts/comment-states.py` (stdlib only, needs the pinned microcode):
 
 ```sh
-python3 scripts/comment-states.py --check FILE...              # every formatted comment in the file
-python3 scripts/comment-states.py --complete --op 4e70 FILE    # every state of that listing, in order
+python3 scripts/comment-states.py --check FILE...              # every formatted comment in the files
+python3 scripts/comment-states.py --complete --op 4e70 FILE... # every state of that listing, in order
 python3 scripts/comment-states.py --index | grep rset          # the index it checks against
 ```
 
 It builds the state index from the generator's whole-ROM dump (`m68000gen.py sdf`) and checks four things:
 the `(name, addr)` pair is a state the ROM has, the charge is that state's own, the line ends at column
 104, and a state is not commented twice inside one method; `--complete` additionally requires an opcode's
-whole script, once each and in listing order. It cannot check that the C# *is* the state — no instrument
+whole script, once each and in listing order — **read across every file it is given**, in the order given,
+because a listing is not always one file's. It cannot check that the C# *is* the state — no instrument
 reads a comment (`design/cpu-silicon.md` §5) — which is why the comments-only verdict is the identity
 (the corpus, the folds, G8) plus a diff with no non-comment line:
 
