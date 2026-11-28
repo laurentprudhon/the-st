@@ -119,6 +119,20 @@ pin-level reading of two nets and one strap.
 | P3 | Which nets reach the MFP's `TAI` (19) and `TBI` (20) | **closed 2026-11-28** | `TAI` is wired to **`U900` pin 13 (`Q7`)** — the shift register's last stage, so the delay is in the path — and `TBI` carries a net labelled **`DE`**. The owner traced both, which is also the board-level confirmation of the 74LS164 story (§7 of the study). |
 | P4 | The `XSINT`→`TAI` delay's exact value on *this* build | **`derived`**, one measurement away | 8 stages at `CLK2`'s 2 MHz is 4 µs = 32 CPU clocks, and the STE article and Hatari's comment agree. A frequency counter on `TAI` against a DMA-sound frame end would show it; until then Timer A's pending instant is 128 master ticks late, one constant (`design/timers-and-events.md` §10.1). |
 
+### 6.1 The floppy drive and the medium (2026-11-28, `research/floppy-media-and-images.md` §3, §8)
+
+The drive and the diskette are the disk path's **analogue** half. None of these is in an image, and no imaging
+tool measures it per disk; the model fixes the nominal drive and records the rest here.
+
+| # | question | state | what the record gives, and what the model does instead |
+|---|---|---|---|
+| A1 | Head alignment and azimuth on a worn drive | **`unmeasurable`** | A per-drive mechanical error, not a property of the media. The image carries the track *number*; the model has no head geometry to misalign, and adding one would be a different project. |
+| A2 | Write current and the medium's coercivity | **`unmeasurable`** | Set by the mastering drive and the media batch; the copy-protection record uses it as the reason a weak bit cannot be copied, not as a number the model can consume.[51][52] |
+| A3 | Media wear, dropout, and the marginal bits age produces | **`unmeasurable`** | An image can record the **instability observed at imaging time** (an STX fuzzy mask, an IPF `FZD`, SCP's raw flux), never the cause. The model reproduces the observed mask; it does not age the disk. |
+| A4 | The reference drive's speed error, wow and flutter | **`open`** | The model's spindle is exactly 300 RPM and its index exactly 5 Hz. A tachometer on a real drive would bound the tolerance; the target is the nominal machine, so the row is a bound, not a task. |
+| A5 | The preamp/AGC transfer curve and the DPLL's capture range | **`open`** | The WD1772's inspection window is 2 µs nominal; the part's *analogue* capture range and the drive's slicer are not in the datasheet. A bit-error-rate sweep against cell width would settle them; the model stops at the digital cell. |
+| A6 | Write splice and erase behaviour when a sector is rewritten | **`open`** | IPF's own document says the analyzer cannot archive modified disks because a sector rewrite leaves undefined bytes in the gaps and a slight drift of the sector against the track (the write splice).[48] The model has no disk-write path yet. |
+
 ## 7. What the 2026-11-28 search changed
 
 1. **The 63/64 conflict is closed** — three people (a demo coder with a real STE, Hatari's author, and the
@@ -143,8 +157,9 @@ pin-level reading of two nets and one strap.
 
 ## 8. What is genuinely open, and nothing else
 
-Nine rows. Three are on the blitter (which our model does not implement at all yet), two on the disk path, three
-on the GSTMCU (two of them on its stub), one is analogue, and one is the Shifter's sound FIFO.
+Twelve rows. Three are on the blitter (which our model does not implement at all yet), five on the disk path
+(three of them the media rows A4–A6), three on the GSTMCU (two of them on its stub), one is analogue, and one is
+the Shifter's sound FIFO.
 
 | row | question | the one thing that would close it |
 |---|---|---|
@@ -157,6 +172,9 @@ on the GSTMCU (two of them on its stub), one is analogue, and one is the Shifter
 | G6 | `XSRQ` held low | a modified board |
 | S5 | the ladder's resistor values | a meter (analogue; nothing depends on it) |
 | S7 | the sound FIFO's depth | a logic analyser on `SREQ` under an overrunning frame |
+| A4 | the reference drive's speed error and wow | a tachometer on a real drive |
+| A5 | the DPLL's analogue capture range | a bit-error-rate sweep against cell width |
+| A6 | the write splice of a rewritten sector | a write/rewrite test on hardware, then a flux capture |
 
 Everything else in this document is a task with a route: implement it (`documented`), model it and cite the
 person who measured it (`measured-elsewhere`), read a crop (`read`), or test it in our own tree (`ours`).

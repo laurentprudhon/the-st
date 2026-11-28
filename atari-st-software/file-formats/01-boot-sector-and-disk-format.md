@@ -269,17 +269,26 @@ $0200       512B      Track 1, side 1
 - Side-by-side format: both sides stored sequentially
 - Used by copying utilities to preserve exact disk layout
 
-### .STX Format (XBIOS Raw Sector Image)
+### .STX Format (Pasti — track-level container)
 
-```
-Offset    Size      Content
-────────    ────      ───────
-$0000       2B      Sector count x 512
-$0002       ?B      Raw sector data x N (each sector = 512 bytes)
-```
-
-- Sector-by-sector raw data
-- Used by HxC, SD MFD for precise control
+> ### Correction — 2026-11-28 (`research/floppy-media-and-images.md` §5.2)
+>
+> The block formerly here described `.STX` as an "XBIOS raw sector image: a 2-byte sector count, then raw
+> sectors". That is wrong, and it was already wrong when the 2026-11-15 correction block above classified the
+> format as Pasti; this replaces the body rather than silently rewriting it.
+>
+> `.STX` is Pasti, a **track-level** container: a 16-byte file header (`RSY\0`, version 3, tool, reserved,
+> track count, revision, reserved); per track a 16-byte descriptor (`recordSize`, `fuzzyCount`, `sectorCount`,
+> `trackFlags`, `trackLength`, track/side, type); per sector a 16-byte descriptor (`dataOffset`,
+> `bitPosition`, `readTime`, the 6-byte ID field including its CRC, and `fdcFlags`). `fdcFlags` carries the
+> FDC's status after reading that sector — CRC error, record-not-found, deleted data — and a fuzzy-bit
+> indicator; the fuzzy mask is one byte per fuzzy sector byte. A track may also carry an **optional track
+> image** (what the WD1772's `Read Track` returns, gaps included) and, in revision 2, a timing table of two
+> bytes per 16 bytes of sector data.
+>
+> So it stores what the WD1772 sees, not a flat sector dump: IDs, CRCs, status, fuzzy bits, timings, and the
+> gaps when the imaging tool wrote a track image. It is decoded by Hatari's `src/floppies/stx.c` and Steem's
+> `diskman.cpp`; the full field table is in the study.
 
 ## 6. .PRG File Format (Program Image)
 
@@ -313,10 +322,10 @@ $001E       (N)     Segment map
 |--------|------|-----------|
 | .PRG | Program (load & execute) | Standard |
 | .TOS | TOS executable (same as .PRG) | Standard |
-| .MSA | MFM floppy image | MFM double-density |
-| .DIM | Double-density image | Both sides |
-| .ST  | Single-track image | MFM double-density |
-| .STX | XBIOS raw image | Sector by sector |
+| .MSA | Compressed sector dump (RLE) | Double-density, 9–11 spt, 512 B |
+| .DIM | Sector dump + 32-byte geometry header | DD or HD, 9–11 spt (18 at HD) |
+| .ST  | Raw sector dump | DD/HD, 9–11 spt, 512 B |
+| .STX | Pasti **track-level** container | IDs, status, fuzzy bits, timings, optional track image |
 | .GEM | GEM PIS (program info sheet) | Icon bitmap |
 | .RSC | Resource file | Fonts, icons, dialogs |
 | .INF | Configuration file | Desktop / system settings |

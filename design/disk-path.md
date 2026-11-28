@@ -35,6 +35,23 @@ and it is what Atarimania — the catalogue's spine — actually serves.
 stream — so the flux path is one piece of work for three formats, and the track model below is the layer it sits
 on rather than a thing it replaces.
 
+**Priced — 2026-11-28** (`research/floppy-media-and-images.md`). The defer was re-examined against the five
+readers' field sets and the twenty-title sample, and it is **re-affirmed**:
+
+- `.st`/`.msa`/`.dim` hold 512-byte sectors only; gaps, ID fields and CRCs are synthesised. `.stx` holds the
+  track bytes (an optional Read Track image), each sector's ID/CRC/FDC status, a fuzzy mask, a whole-sector
+  read time and a revision-2 timing table, and a per-track length; `.stt` holds the bytes and IDs but no
+  timing, fuzzy mask or status.
+- The classes the sample documents — Copylock's long sector (Populous, Xenon 2), Dungeon Master's fuzzy sector
+  and sector 247, Turrican's overlapping sectors — are expressible in `.stx`. What it cannot express is
+  sub-16-byte timing, timing in gaps and ID fields, flux the FDC re-decodes, a **mid-track** density change,
+  and per-revolution variation. The study prices the cell reader and names the analogue residue that even flux
+  cannot save.
+- The named watch list is the study §9.1: **Populous, Speedball 2, Shadow of the Beast, Robocop, Sensible
+  Soccer, Xenon 2, Leisure Suit Larry 1, F-19 Stealth Fighter, Turrican, Captain Blood**, plus the Pasti-only
+  remainder (Moktar, Jim Power, Game Over II, Navy Moves). Every one has an STX/Pasti rendition; the trigger
+  is a title whose *only* preserving master is `.ipf`/`.scp`/`.hfe`.
+
 **Correction that came with this ruling**: `atari-st-software/file-formats/01-boot-sector-and-disk-format.md`
 described `.ST` as raw MFM with IAM/IDAM, `.MSA` as "monochrome MFM, 16 spt, 4 MB", `.DIM` as side-by-side MFM
 and `.STX` as a raw sector dump. All four were wrong; corrected on `main` (`f8a41df`).
@@ -98,6 +115,14 @@ invents DRQ timing; two deadlines give one device two sources of truth about whi
 > above is a floor by a factor of 32 (≈ 8 640/s while streaming), and the FDC's 32 µs byte clock is what makes
 > the bursts cheap (4 µs of bus time each, §4.2's table).
 
+> ### Correction — 2026-11-28 (media study, `research/floppy-media-and-images.md` §4, §8)
+>
+> **The 32 µs byte clock is a nominal default, not a constant.** A preserved image can carry a different
+> cadence: STX's `ReadTime` for a whole sector, its revision-2 table for each 16 bytes, a track image longer
+> than 6 250 bytes, an IPF density description, an SCP per-revolution index time. The byte position must be
+> computed from the track's own cadence where the image supplies one, and from 32 µs where it does not.
+> The sector period stays the only *resumable* deadline and the burst arithmetic is unchanged.
+
 ## 4. The register file — Disk owns it, Sound is a client
 
 **Ruled** (owner: "*1*"): Disk owns `$FF8600`–`$FF860F`; Sound (#26) reads the counters through Disk's
@@ -159,9 +184,27 @@ synthesised one, and without the flag that failure looks like an emulator bug ra
 file. It is the same distinction the catalogue carries for renditions (`own-scan` / `archived-scan-degraded`),
 so the two layers agree instead of inventing separate vocabularies.
 
+### 6.1 The loader's provenance contract (2026-11-28, study §10.3)
+
+The loader hands the FDC a block stream **and its provenance**, because a failed check on a synthesised track is
+a property of the file, not a bug:
+
+| flag | values | why the FDC model needs it |
+|---|---|---|
+| `gaps` | `as-dumped` / `synthetic` | a gap check passes on a real disk and fails on a synthesised one |
+| `fdc-status` | `from-image` / `recomputed` | STX's CRC/RNF/deleted flags are data; a sector image's are arithmetic |
+| `fuzzy` | `mask` / `none` | a check that reads five times needs five different values |
+| `timing` | `measured` / `nominal` | a long sector, or a whole-track rate |
+| `geometry` | `declared` / `inferred` | a `.st`'s size is a guess; a `.stx`/`.stt`/`.dim` header is not |
+| `provenance` | `preserved-original` / `cracked` / `unknown` | a crack's clean CRC is not evidence about the original |
+
+The loader must **never repair a preserved track**: no recomputed CRC over a bad one, no renumbering a 247, no
+gap synthesis when a track image exists.
+
 ## 7. What this document does not decide
 
-- **The flux path** (`.ipf`, `.scp`, `.hfe`) — deferred with its reversal condition stated in §1.
+- **The flux path** (`.ipf`, `.scp`, `.hfe`) — deferred with its reversal condition stated in §1, and
+  **re-priced 2026-11-28**: the named watch list and the residual classes are §1's.
 - **The host file picker** (#12) — this document fixes the machine-side interface only.
 - **`BERR` on a valid TOS access** — the stub must never assert it; the real design's behaviour on an invalid
   access is not settled here.
@@ -174,7 +217,7 @@ so the two layers agree instead of inventing separate vocabularies.
 
 | falsifier | reopens |
 |---|---|
-| a title in the validation ladder needs `.ipf` or `.scp` | §1 — the flux path becomes v1 work. **The pricing session for that decision is briefed**: `docs/handoffs/disk-media-and-image-formats-study.md` (2026-11-28) builds the protection-class table this row needs to be argued from |
+| a title in the validation ladder needs `.ipf` or `.scp` | §1 — the flux path becomes v1 work. **Priced 2026-11-28** (`research/floppy-media-and-images.md`): every preserved-original title in the ten-title sample has an `.stx`/Pasti master; the condition fires only when a title's *only* preserving master is `.ipf`/`.scp`/`.hfe` |
 | a real sector read shows more than 6 wakes per transfer | §3 — the burst's wake accounting |
 | a protection fails on a synthesised-gap `.st` that passes on the same game's `.stx` | §6 — the loader's default layout |
 | the perf chain shows the disk's arithmetic dominating a frame | §3 — the deadline choice |
