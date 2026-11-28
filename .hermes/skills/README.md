@@ -9,6 +9,7 @@ gate, the register's rules, the push protocol for a remote another session also 
 | skill | when it loads |
 |---|---|
 | `the-st-68000-core/` | any work on `src/TheST.Machine/Cpu/`, the MAME/CLK corpus, or the comments pass — the gate, the measured rules, the pitfalls |
+| `the-st-perf-measurement/` | measuring frame time and the `G8` row — the harness, the instruments, and what a figure is allowed to mean |
 | `the-st-research-studies/` | writing or correcting a study under `research/`, running a chip's closing audit, or landing a study's corrections in `design/` |
 
 ## The rule for adding one
@@ -34,8 +35,9 @@ bug: when you edit one, edit the other in the same session, and treat the **prof
 
 ```sh
 # refresh the repository copies from the profile after editing a skill there
-rsync -a --delete ~/.hermes/skills/the-st-68000-core/        .hermes/skills/the-st-68000-core/
-rsync -a --delete ~/.hermes/skills/the-st-research-studies/  .hermes/skills/the-st-research-studies/
+rsync -a --delete ~/.hermes/skills/the-st-68000-core/                          .hermes/skills/the-st-68000-core/
+rsync -a --delete ~/.hermes/skills/software-development/the-st-perf-measurement/ .hermes/skills/the-st-perf-measurement/
+rsync -a --delete ~/.hermes/skills/the-st-research-studies/                    .hermes/skills/the-st-research-studies/
 ```
 
 ## Tools
