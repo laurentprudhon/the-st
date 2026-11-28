@@ -168,8 +168,10 @@ its extension word costs no read (`JumpWordAsync(0)`), its own clocks lead (`_ow
 closing fetch a transfer never runs), and the target's read is either a fetch state (`bsrw1`/`malw3`:
 `m_pc` = the target, so an odd target's frame saves the target) or not (`bbci3`: `m_pc` keeps the
 boundary's word, so `JMP` saves `opcode + 2` on every shape). That last distinction is
-`FrameSavesOnFetch` — a script-declared override, because `_fetchPointer − 2` (the default, #76) is right
-only for a fault inside an instruction's own trailing fetch.
+`FrameSavesOnFetch` — a script-declared override, because the default (#87) is `_au` — the word the
+pipeline's position names — and that is right only for a fault at the instruction stream's own read. The
+refill and `DBcc` each declare instead: a fault inside `RefillAsync`'s reads saves `_pc` (`b` commits the
+target to `m_pc` only after both land), and `dbcc3` saves `_au`.
 
 `JSR` is the same tail with a push in the middle, and it is the family a **dead predicate** hid: its
 shape row in `M68000.Timing.cs` was `(op & 0xFFC0) == 0x4E90`, and `0x4E90 & 0xFFC0` is `0x4E80`, so the
@@ -594,9 +596,10 @@ shape — never a family's pass count, because these files were all green on sta
    *fall-through* is not a transfer: it reads the word (`bbcw3` + `malw3`) — 9 records, and it is why the
    pop is peeked (`_ir`) and consumed twice, by kind.
 4. **A free pop still moves the pipeline depth.** `dbcc3` sets `m_pc = m_au` before it reads the target, so
-   an odd target's frame saves the word past the displacement — the pop must move `_fetchPointer` with it,
-   which is what a `FetchAsync` used to do for free (632 records), and the refill's aborted read is the
-   branch's own state, so it pays `ChargeAbortedReadAsync` (another 632, and 669 on `Bcc`).
+   an odd target's frame saves the word past the displacement — the shape declares it (`FrameSavesOnFetch
+   (_au)`), because the position no longer trails `_au` after a free pop (`_freePop`, #87) and the refill's
+   default would save `PC` (632 records). The refill's aborted read is the branch's own state, so it pays
+   `ChargeAbortedReadAsync` (another 632, and 669 on `Bcc`).
 5. **`LEA` and `PEA` have two idle states in their indexed shape** — `leax0`/`peax0` before the index
    word, `leax4`/`peax4` after the address is built (footers `idle states: 2`) — where `EaAddressAsync`
    charges one. `IndexedBlockIdleAsync` is the second, and it is the only place a *pure address* family

@@ -95,14 +95,32 @@ microcoded instruction can branch on `auz`/`nz`/`d4`/`enl`. Our scripts are that
      The `IsScripted*` ledger predicates stay op-based by construction: they are static and answer for
      *any* encoding.
    - [x] first half: **`PC` is a register-file entry** (`_pc`), `_fetchStateAddress` is gone, and every
-     frame reads the register. `CopyAuToPc()` (`m_pc ← m_au`) exists but is *not* what the fetch states
-     may write yet: the die's `m_pc = m_au` written that way costs **4 277 records**, because on this tree
-     the adder does not hold the access's address — an extension-word read moves the queue's position and
-     not `AU`. That measurement is the rest of the split's price.
-   - [ ] the adder's position: a fetch state must be able to say `m_pc = m_au`, which needs the stream's
-     position to be *derived* from `AU`/`AT`/the pipeline (`_fetchPointer`'s rule re-derived) rather than
-     kept beside them. Blocked on nothing but that derivation; it is #87's own subject.
-     **The instrument is in place** (`61f4080`): `--clocks`' `frame_pc`/`fetch_ptr`/`pc_counter`/`ir_addr`
+     frame reads the register. `CopyAuToPc()` (`m_pc ← m_au`) written as the bare adder copy costs
+     **4 277 records** while the adder is the consumption counter — that measurement is why the copy takes
+     the derived position below, and it stays the price of the adder holding an access itself.
+   - [x] **the adder's position — `_fetchPointer` is deleted and the position is derived** (`df5dc0b`).
+     `FetchPosition` (`M68000.ControlStores.cs`, beside `ConsumedAddress`) is the pipeline's next read
+     address from the two cells that hold it: `_au`, which names the word the instruction consumes next,
+     and the queue's fill — `_au + 2`, or `_au + 4` once a prefetch has filled the slot behind the head
+     (`_ircValid`). Two states consumed a queue word with **no read behind it** and leave the position on
+     `_au` itself: a control transfer's free pop (`_freePop`) and the absolute-long pair's second word
+     (`_queueShort`). `BoundaryPosition` is the boundary's own state — the closing shift moved `_irc` into
+     the head without moving `_au`, so it is `_au + 4` (`_au + 6` on the seam's `STOP` rollback).
+     Measured before the swap at every site that read the field: **exact on 104 527 prefetches, 88 177
+     pops, 135 864 trailing fetches, 29 075 fetch states**; the trailing/queue residues were exactly the
+     two named states. The fetch states now write the die's statement, `CopyAuToPc(FetchPosition)`.
+     **One reading that had to move with it**: a fetch fault's saved `pc` is `_au` at the stream's own
+     read, but two classes are a different state and say so where the die does — a fault inside a refill
+     saves `_pc` (`b` commits the target to `m_pc` only after both reads land: RTS/RTR/RTE's odd return
+     address, 3 066 records), and `DBcc`'s taken branch declares `_au` (its `dbcc3` = `m_pc = m_au`, 632).
+     Verdict: corpus 317 500 both columns, the blessed fold pair (no re-bless), G8 −0.13 ms median at
+     n 751, `cpu-surface` frozen, and the `--clocks` dump identical on **all 261 894 clean records**
+     (8 434 faulting records' `fetch_ptr`/`refetched` move by one word: the entry's sample now reports the
+     derived position, not the address of the last stream read).
+     **What the split still owes** (and it is now only this): the adder itself holding the access's address
+     — the bare `CopyAuToPc()` — and with it `ConsumedAddress` (`_au − 2`, the PC-relative base, 604
+     records over 13 files when written as `_pc`) and `AUH`/`AUL` (`B2`).
+     **The instrument that decided it** (`61f4080`): `--clocks`' `frame_pc`/`fetch_ptr`/`pc_counter`/`ir_addr`
      are now sampled at the boundary as well as at an exception entry, so `fetch_ptr − pc_counter` is the
      pipeline's depth for every record. Measured over MAME's 261 894 clean records: **4** on 260 664 and
      **6** on exactly the 1 230 `STOP` records (the seam's rollback of the counter to the opcode's own
