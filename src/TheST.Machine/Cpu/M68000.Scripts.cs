@@ -634,6 +634,19 @@ public sealed partial class M68000
         int ry = op & 0x7;                                 // the source
         int size = FtuSize;
 
+        // Two listings, one per width (`microcode-walk.py --op b108` for the byte and the word,
+        // `--op b188` for the long) and the same shape: the source's word(s), stepped before the read,
+        // then the destination's, then the flags with the closing read.
+        //
+        //   ours: the adder's moves (`m_au = m_da[ry] + 1|2`, `m_au = m_au + 2`, `m_au = m_pc + 2`) are
+        //   the derivation's here — `FetchPosition` — because each access is passed its own address; what
+        //   the states decide and this code keeps is each *commit* (`m_da[ry]`, `m_da[rx]`) and where it
+        //   sits. The instruction register's shift (`m_ird = m_ir`) is the closing pair's, which the loop
+        //   runs after this read, and the long form's two ALU halves (`alu_sub`, then `alu_subc` in
+        //   cmml7) are one `AluLongOp`: no bus cycle separates them in the listing either.
+        //
+        // cmmw1 (06b)  m_aob = m_da[ry]; m_pc = m_au; m_au = m_da[ry] + (ry < 15 ? 1 : 2)             0
+        // cmml1 (06f)  m_aob = m_da[ry]; m_pc = m_au; m_au = m_da[ry] + 2                             0
         BeginFetchState();                                 // cmmw1 / cmml1 — `m_pc = m_au`
 
         // a byte steps by one, except on A7, whose byte forms move a whole word (row 48)
@@ -650,6 +663,7 @@ public sealed partial class M68000
 
         if (size == 2)
         {
+        // cmml2 (08e)  m_at = m_au; m_da[ry] = m_au; m_au = m_au + 2; read at m_aob                   4
             SetA(ry, sourceAddress + 2);                   // cmml2 — the step lands before the read
             ushort sourceHigh = await ReadWordAsync(sourceAddress);
             if (_busFaulted)
@@ -658,6 +672,7 @@ public sealed partial class M68000
                 return;
             }
 
+        // cmml3 (154)  m_aob = m_at; m_alub = m_dbin; m_da[ry] = m_au; read at m_aob                  4
             SetA(ry, sourceAddress + 4);                   // cmml3 — the second word's commit
             ushort sourceLow = await ReadWordAsync(sourceAddress + 2);
             if (_busFaulted)
@@ -668,6 +683,8 @@ public sealed partial class M68000
 
             source = Merge16_32(sourceHigh, sourceLow);
 
+        // cmml4 (12e)  m_aob = m_da[rx]; m_ir = m_irc; m_au = m_da[rx] + 2; alu_and(m_dbin, 0xffff);
+        //              read at m_aob                                                                  4
             uint destAddress = GetA(rx);                                          // cmml4 — m_da[rx]
             ushort destinationHigh = await ReadWordAsync(destAddress);            // cmml4
             if (_busFaulted)
@@ -676,6 +693,7 @@ public sealed partial class M68000
                 return;
             }
 
+        // cmml5 (155)  m_aob = m_au; m_alue = m_dbin; m_au = m_au + 2; read at m_aob                  4
             ushort destinationLow = await ReadWordAsync(destAddress + 2);         // cmml5
             if (_busFaulted)
             {
@@ -684,15 +702,19 @@ public sealed partial class M68000
             }
 
             destination = Merge16_32(destinationHigh, destinationLow);
+        // cmml6 (156)  m_aob = m_pc; m_da[rx] = m_au; m_au = m_pc + 2; alu_sub(m_aluo, m_dbin);
+        //              sr_nzvc                                                                        0
             SetA(rx, destAddress + destinationStep);             // cmml6 — after both words
 
             AluLongOp(source, destination, AluLong.Sub);         // cmml6 — alu_sub, sr_nzvc
             SetLongFlags(AluLong.Sub, source, destination, _aluo, extend: false);
 
+        // cmml7 (157)  m_ird = m_ir; alu_subc(m_alub, m_alue); sr_nzvc_u; read at m_aob               4
             await TrailingFetchAsync();                          // cmml7 — the closing prefetch
             return;
         }
 
+        // cmmw2 (086)  m_at = m_au; m_da[ry] = m_au; m_au = m_au + 2; read at m_aob                   4
         SetA(ry, sourceAddress + sourceStep);              // cmmw2 — the step lands before the read
         source = await ReadAtAsync(sourceAddress, size);
         if (_busFaulted)
@@ -701,6 +723,8 @@ public sealed partial class M68000
             return;
         }
 
+        // cmmw3 (122)  m_aob = m_da[rx]; m_ir = m_irc; m_au = m_da[rx] + (rx < 15 ? 1 : 2);
+        //              alu_and8(m_dbin, 0xffff); read at m_aob                                        4
         uint destinationAddress = GetA(rx);                         // cmmw3 — after the source's step
         destination = await ReadAtAsync(destinationAddress, size);   // cmmw3
         if (_busFaulted)
@@ -709,6 +733,8 @@ public sealed partial class M68000
             return;
         }
 
+        // cmmw4 (170)  m_aob = m_pc; m_ird = m_ir; m_da[rx] = m_au; m_au = m_pc + 2;
+        //              alu_sub8(m_aluo, m_dbin); sr_nzvc; read at m_aob                               4
         SetA(rx, destinationAddress + destinationStep);    // cmmw4 — after the read, before the fetch
         SetCompareFlags(source, destination, (destination - source) & SizeMask(size), size);
 
