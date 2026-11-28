@@ -1,5 +1,14 @@
 # Blitter
 
+> **Caution — 2026-11-28.** The body of this page is **not a source**, and its first three claims are wrong for
+> the 1040STE this repository models. The blitter here is a **discrete 68-pin PLCC, `U101 C101643`**, addressed
+> at `$FF8A00`–`$FF8A3D` — not a block inside a "GST Shifter (C029145)" at `$FFE400`. `C029145` is the TT's
+> Shifter, the Mega ST of 1987 had a `C101643` a year before the Mega STE, and on the later `CA4003290` STE
+> boards the function moved *into* the GSTMCU (`U400`), which is the only sense in which "combined" is true.
+> The register table below is a different part's. For this machine read `design/subsystems-spec.md` §1/§3 and
+> `research/blitter-implementation.md`, which is sourced from Atari's own *BLiTTER* manual (25 January 1990)
+> and the recovered designs. The page is left as it stands so the correction stays visible; do not cite it.
+
 > The BLiTTER (Bit Block Transfer Processor) is a custom chip in the STe and Mega STE that accelerates bitmap operations. The original ST does not have a dedicated blitter chip.
 
 ## Overview

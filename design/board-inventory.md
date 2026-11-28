@@ -289,6 +289,19 @@ same function is inside U400 and U101 is not fitted (see §6).
 `A1…A23` on the blitter are the *CPU* address bus, not the MAD bus: the blitter is a bus
 master that drives addresses onto the system bus through the GSTMCU.
 
+> **Correction — 2026-11-28** (U101 study, `research/blitter-implementation.md` §3.4). The recovered design's
+> pad ring (sheet 11 of `TA-4021` / `ST-4051`) carries **no `HALT`, `VMA`, `VPA` or `IPL*` pad at all**, so the
+> rows above for pins 19, 21, 23, 25, 26 and 27 name signals this part does not have: it does not halt the CPU
+> (it takes the bus from it) and it has no interrupt-priority encoder. What the design does have, and the table
+> above is missing, is the **grant relay** — `BGI`/`XBGI` in, `BGO`/`XBGO` out, `BGACKI` in and `BGACK` out —
+> plus one `INT` pad, `XCS`, `XDTACK`, `XBERR`, `XAS`, `XUDS`, `XLDS`, `XIDS` and `FC0–FC2`. `BERR` is an
+> **input** to this chip (its state sheet consumes it) and `FC0–FC2` are **outputs** (it is a bus master), so
+> the directions on rows 24 and 28–30 are also wrong. The six pins this table could not read — **6, 7, 8, 9, 18
+> and 31** — are the only remaining candidates for `AS`, `UDS`, `LDS`, `R/W` (the §4.1 rows list those nets for
+> U101 with no pin numbers), the relay's other two pins and `INT`; that assignment is `inferred`, and a re-read
+> of the 600 dpi sheet settles it. The pins named `BLIT-INT-related / bus control` on row 12/20/22 are almost
+> certainly three of those.
+
 ### 3.3 U102 / U103 — TOS ROM 27C010, 32-pin DIP
 
 Sheets 1. Both devices wired identically; U102 = high half, U103 = low half.

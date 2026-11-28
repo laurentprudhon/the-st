@@ -565,6 +565,8 @@ The RTL is wrong as a description of the chip, and right as a description of wha
 These disagree by one cycle, and the difference is probably where `BUSY` is sampled relative to the first `AS` — exactly the kind of off-by-one that only a test settles.
 It is the Blitter's study, not this one, but the conflict belongs in the record now that both sources are cited.
 
+`documented` **Closed as far as a record can close it — 2026-11-28** (`research/blitter-implementation.md` §5.1). Atari's own manual states the rule in the vendor's words: with the HOG bit cleared "each will get 64 bus cycles while the other is halted", so **64 is the documented number** and Hatari's 63 is an anomaly with a named mechanism (a CPU access inside the 4-clock latency being counted as a blitter access). The design cannot arbitrate it: the standalone revisions (`TA-4021`, `ST-4051`) have **no timeout net at all**, `TMOUT` appears only in `ST-4082` — the revision drawn for this combo chip — so the count is not readable from the drawings on either side. The scope test is the study's §7.1.
+
 **7. `$FF8260` exists twice.** `documented` The design has both write and read nets for the video-base registers and the mode register lives in the sync/video block *and* is decoded in the Shifter; Hatari encodes the pair as `Video_ResGlueShifter` (`$FF8260`) and `Video_ResShifter` (`$FF8261`)[2].
 Our own `design/subsystems-spec.md` carries this as correction 4, and the design agrees: two storage sites, not one register mirrored.[2]
 Confirmed the same day from the Shifter's side (`research/gst-shifter-implementation.md` §5.6): the board article states two registers at `$FF8260`, one in each chip, both fed from bus bits 8 and 9.[6]
@@ -632,7 +634,12 @@ None of the six needs a die, and all six are cheaper than one decap attempt by o
 - **`LATCH`'s payload**, and the ring's step count — the two items §5 closes with: `LATCH`'s consumers lie
   outside both netlist exports, and the ring's spacing is settled while its wrap is not.
 - **`BINT`'s function inside the GSTMCU**, and whether the C302183 variant's blitter logic reuses it — the one
-  pin on this chip that two independent readings have both failed to explain[6].
+  pin on this chip that two independent readings have both failed to explain[6]. **Answered 2026-11-28**
+  (`research/blitter-implementation.md` §4.5): there is no function inside the GSTMCU — `BINT` is a
+  pass-through. The Blitter's `INT` comes in, `BINT` goes out at pin 60, and Hatari's MFP identifies the
+  destination as **`GPIP3`, "STF/STE: blitter, active low (busy/idle state)"**, which agrees with Atari's
+  manual calling its interrupt line "a duplicate of" the BUSY bit. So the pin is explained, and it stays out of
+  the model on the same ruling for a better reason: it carries a level that software polls.
 
 **Not modelled — owner's ruling, 2026-11-21.** Three of this study's questions are closed by decision rather
 than by evidence, and the decision is that our core does not implement them:

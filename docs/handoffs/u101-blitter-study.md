@@ -1,5 +1,29 @@
 # Handoff — U101, the Blitter (C101643)
 
+> **Status — executed 2026-11-28.** Study: [`research/blitter-implementation.md`](../../research/blitter-implementation.md).
+> Sheets: [`research/blitter-silicon/schematics/`](../../research/blitter-silicon/schematics/) (four, plus a
+> README, an index and one generator, `0 layout warnings` and `0 overlaps` on the last build).
+>
+> - [x] §1 the part's record re-read — and corrected: `TA-4021`/`ST-4051`/`ST-4082` are **three revisions of one
+>   design**, `ST-4051` is the blitter by its own sheet titles, and `4021.pdf` **has a text layer** (53,291
+>   characters) where the brief recorded none; the `.DWG` sources carry every sheet's labels.
+> - [x] §2 all seven acceptance criteria: one word end to end (§4.1), a timetable (§4.2), the control register
+>   bit by bit (§3.3, sheet `02`), a mask worked by hand (§4.7), "line mode" **disproved** (§4.6), the
+>   interrupt path (§4.5), the operation set (§3.3, §3.6).
+> - [x] §5's seeds checked: the `4N + 8` cost is a **fill's**, not a copy's (a copy is `8N + 8`, a masked copy
+>   `12N + 8`); `$FF8A00–$FF8A3D` is **62 bytes / 31 words**, not 31 bytes; the 64-access window is 256 clocks
+>   = 32 µs and alternates, so a full-screen copy is ~32 ms and does not fit in a frame.
+> - [x] §6's `unknown`s kept as `unknown`, with the reason improved: the 63/64 count is not readable from the
+>   standalone drawings because they have **no timeout net at all** (`TMOUT` exists only in the combo revision,
+>   `ST-4082`), and the grant chain's order is not in the net list.
+> - [x] §8's definition of done: study verified (`--min-coverage 0.30`, 31 %), sheets self-auditing, the U400
+>   study's §6.6 and `BINT` note closed in place, `design/subsystems-spec.md` §1/§3, `design/board-inventory.md`
+>   §3.2 and the in-repo blitter page corrected with dated notes, per-chip §4 U101 marked **done**.
+> - [ ] **Still the owner's**: the eight scope tests of the study's §7 (each needs the real 1040STE, a probe and
+>   half an hour), and the 500–700 dpi crops for the two sheet reads this session could not do by text alone —
+>   the pad ring's pin *positions* (which of pins 6–9, 18, 31 is `AS`/`UDS`/`LDS`/`R/W`) and the state sheet's
+>   bus-access counter, if it has one.
+
 **Goal of the next session.** Write `research/blitter-implementation.md`: the STE's blitter studied to the
 standard the GSTMCU, Shifter and DMA studies reached — what it *is*, how it operates (one word, one line of
 a blit, one bus window, one register write, one interrupt), what the record disputes, and what only the board
