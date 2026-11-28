@@ -262,7 +262,8 @@ What the session established, in the form the remaining chips can reuse:
   (study §4.6); the register question is answered by Atari's own manual, which survives complete at the 2020
   Wayback timestamp, and the "behavioural model plus a handful of cases" is what now exists on both sides.
 
-### U203 MFP 68901, U301 WD1772, U200/U201 6850, U202 YM2149
+### U203 MFP 68901, U301 WD1772, U200/U201 6850, U202 YM2149 — **next**, brief:
+[`u203-standard-parts-study.md`](u203-standard-parts-study.md)
 * Datasheet-led, short studies. Only research what the datasheet does not settle: MFP timer prescaler
   edges and the I/O port's read-modify-write behaviour; WD1772 command timing and the "force interrupt"
   corner; the ACIA's ÷64 clocking to 7812.5 baud and the 74LS164 serialiser's role; the PSG's envelope
@@ -321,7 +322,14 @@ nomenclature section (only if the part has internal names worth fixing), drawing
    the blit's burst is a real ownership transfer through a daisy-chain station; and the non-HOG window is 64
    by Atari's own wording, with the 63 a measured anomaly that the drawings cannot arbitrate because the
    standalone revisions carry no timeout net at all.
-5. **MFP / WD1772 / ACIA / PSG** — one combined session.
+5. **MFP / WD1772 / ACIA / PSG** — **next**; one combined session, brief written:
+   [`u203-standard-parts-study.md`](u203-standard-parts-study.md). The method inverts here: the datasheets are
+   the primary source and the board is the only thing that outranks them, so the session is three questions
+   rather than one — what the **wiring** adds (three of the four parts still have unresolved pin rows, and the
+   PSG's own clock contradicts our inventory), what the **datasheet leaves open** (prescaler edges, `GPIP`'s
+   read-modify-write, the 1772's force-interrupt corner), and what the **model already assumes** that neither
+   says. It inherits one new fact: `BINT` is the blitter's busy/idle line on `GPIP3`, a level that needs `AER`
+   to become an interrupt. No sheets unless earned.
 6. **IKBD** — half a session, behavioural only.
 
 **Stopping rule:** stop when every open question in our core has either a labelled claim or an explicit
