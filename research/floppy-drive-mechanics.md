@@ -9,6 +9,8 @@ Studied 2026-11-28, the fourth session of this stretch. Companion to `research/f
 Labels: `documented` (a source states it), `derived` (arithmetic on stated numbers), `inferred` (the ST's drive from a class representative), `unknown` (nothing states it). Tiers: T1 hardware-captured, T2 hardware-corrected, T3 emulator-derived.
 Sources are cited by number; the ledger's ids are stable across the campaign's studies.*
 
+> **Rulings — owner, 2026-11-28.** (1) **No disk**: no rotation, no index, **no synthetic index**; TOS's timeout ends the poll. (2) **Read and write are two separate capabilities**; the copy-protection asymmetry is §6.6. (3) **Write-back to the source**, as the disk; §6.7. (4) **Index jitter: nominal 0 for v1**; A11 open; the implications are §7.1 and §12.
+
 ---
 
 ## 1. Executive summary
@@ -21,7 +23,9 @@ Sources are cited by number; the ledger's ids are stable across the campaign's s
 | How is a byte written? | The FDC serializes MFM into `WD` pulses; each pulse toggles the head current between the two R/W coils (saturated recording). The **tunnel erase head behind the R/W gap** (the mechanism is Motorola's[108]; the 3.5" head is the inferred class, §6.2) trims both track edges: on about **500 µs** after writing starts, off about **1 ms** after it ends. The write gate must be true **18 ms after the last step** and **100 µs after a side change**; a write-protected disk ignores `WD`.[104][108][109] | 6 |
 | Where is the write splice? | At the **start of gap 2** (the 6/12 zero bytes) and **after the first byte of gap 3**; the FDC writes the gap, the data field and its CRC, **not the ID**. The first flux change after a rewrite sits at a different phase because the spindle speed varies, and the 12-byte zero preamble lets the DPLL resync. `Read Track` can read the splice bytes incorrectly; after a format the **index gap's first bytes may be ill-defined**.[23][106][110] | 6 |
 | What must the model expose? | A **`DriveSnapshot` at each frame boundary** — present, write-protected, motor, ready, track, side, head loaded, spindle angle, byte position, sector under the head, write gate, erase gate, activity, media version — and a **`TrackMap`** for the current track: blocks, sectors, splices, fuzzy/CRC flags, provenance. `design/disk-drive-model.md` §3. | 8–9 |
-| What must the write path do? | Write the **exact bytes** into the track map at the FDC's byte cadence; keep the ID; rewrite gap 2, the data field, the CRC and the first gap-3 byte; **mark the splice and the undefined bytes**; respect the write-protect tab; bump the media version; keep the geometry. The mechanics are approximate; the bytes are exact. | 6, 8 |
+| What must the write path do? | Check the **write capability** (standard vs raw), write the **exact bytes** into the track map at the FDC's byte cadence; keep the ID; rewrite gap 2, the data field, the CRC and the first gap-3 byte; **mark the splice and the undefined bytes**; respect the write-protect tab; bump the media version; **write the result back to the source image**. The mechanics are approximate; the bytes are exact. | 6, 8 |
+| What can the ST **read** that it cannot **write**? | The asymmetry the protections use: the machine can read a **long track**, **fuzzy bits**, a **no-flux area**, a **half-track**, **duplicate IDs**, a **bad CRC**, a **long sector** and an **overlap**; the **standard** write path cannot make duplicate IDs/bad CRC/long sector, and **neither** path can make fuzzy bits, a no-flux gap, a half-track, a long track or a density change. The **raw `Write Track`** can make duplicate IDs/bad CRC/long sector/overlap. §6.6. | 6.6 |
+| Where does a write go? | To the **source image**, as to the disk: the loader opens it read-write, the write updates the track map and the file, `Flush` on eject/exit. A sector-only `.st`/`.msa`/`.dim` source cannot hold a raw track write; the store refuses/converts, and the host must not silently drop it. §6.7; `design/disk-drive-model.md` §5.3. | 6.7 |
 | What is **not** modelled? | The spin-up curve, actuator resonance/micro-stepping, the analogue read/write chain, coercivity and residual magnetisation, head wear, the ST drive's exact erase timing and current, and the index phase tolerance. These are A1–A11 in `design/emulator-limitations.md` §6.1. | 12 |
 
 ---
@@ -166,7 +170,7 @@ The angle is computed on demand, not by a per-byte wake; the visual can interpol
 - **`NoDisk`** — no cartridge. The real drive does not spin and produces **no index**. The FDC's 4-revolution search needs index pulses; with none, its "4 revolutions" deadline cannot be counted[23][44], and the command may never complete. A real ST with an empty drive relies on TOS's own timeout (or the drive's `READY` being false) rather than on an FDC record-not-found. The visual must show **a still disk and no index**.
 - **`DiskWithoutImage`** — a cartridge is present but the host has no image for it (a blank or unformatted disk). The drive spins, the index runs, and the FDC's search finds no ID and times out with record-not-found[23][44]. This is the state §5's rule describes, and it is the one the boot poll needs.
 
-`derived` The recommended model is therefore **two states**, not one: `NoDisk` (motor off, no index, `READY` false) and `DiskWithoutImage` (motor on, index, blank media, FDC timeout). If §5's rule is meant to cover `NoDisk`, it contradicts TEAC and the visual would show a spinning empty drive; if it is meant to cover `DiskWithoutImage`, the wording should say "no image" rather than "no disk". This is the owner's call (it changes the FDC timeout rule), recorded as a decision in `design/disk-drive-model.md` §8.1. The study does not silently change the ruling.
+`derived` The model is therefore **two states**, not one: `NoDisk` (motor off, no index, `READY` false) and `DiskWithoutImage` (motor on, index, blank media, FDC timeout). If §5's rule is meant to cover `NoDisk`, it contradicts TEAC and the visual would show a spinning empty drive; if it is meant to cover `DiskWithoutImage`, the wording should say "no image" rather than "no disk". **Ruled 2026-11-28:** the two states stand; `NoDisk` gives no index, and **TOS's timeout ends the poll** — there is no synthetic index. `DiskWithoutImage` is the blank-disk record-not-found. `design/disk-drive-model.md` §8.1 carries the decision.
 
 ---
 
@@ -271,11 +275,42 @@ The FDC's Write Sector command writes **from gap 2 through the first byte of gap
 
 `documented` `DISK CHANGE` is true on power-on or disk removal and returns false when a disk is installed **and** a STEP is received with the drive selected.[104] §8.3.12. `derived` The ST's 14-pin connector may not carry the signal (the pin page does not list it; the internal 34-pin header does); the model can use a **media version** and a host-side insertion event rather than a pin.
 
-`derived` Every write bumps `MediaVersion`. The visual caches the `TrackMap` by `(track, side, version)`; a write invalidates only the written track. The media image (if persisted) must record the write **and** the splice/undefined flags, not just the 512 bytes; an `.st`/`.msa`/`.dim` sector image cannot carry the flags, an `.stx` track image can[46][48].
+`derived` Every write bumps `MediaVersion`. The visual caches the `TrackMap` by `(track, side, version)`; a write invalidates only the written track. **The write goes back to the source image** — the source is the disk (§6.7) — and must record the splice/undefined flags, not just the 512 bytes; a `.st`/`.msa`/`.dim` sector image cannot carry the flags, an `.stx` track image can[46][48].
 
 ### 6.5 Overwrite and residual
 
 `documented` ECMA's overwrite test: record 1f for one revolution, overwrite with 2f for one revolution, and require the residual 1f average signal amplitude to be **less than 125 %** of the reference's residual.[106] §8.3.1.6. `derived` This is an analogue property of the medium, the head and the write current; the model's byte-level write is **clean** (the old bytes are replaced) and does not model the residual. The visual can show the track as rewritten; it must not pretend to show a residual signal. This is part of **A2/A6**.
+
+### 6.6 The read/write asymmetry
+
+`documented` The copy protection is not a list of "features the ST cannot read"; it is a list of features the machine **can read** but its **write path cannot reproduce**. The read set is the machine's (drive + FDC); the write set has two scopes: the **standard** path (Format / Write Sector) and the **raw** path (Write Track, arbitrary bytes).
+
+| feature | ST read | ST **format** (create the track) | ST **sector write** (on an existing track) | ST raw Write Track | where the model carries it |
+|---|---|---|---|---|---|
+| 9/10 sectors | yes | yes | yes | yes | byte map |
+| 11 sectors | yes | no | yes (the track exists) | yes (sub-min gaps) | byte map |
+| 12 sectors / long track | yes (DPLL) | no | yes (existing; mixed rate) | no (6 250 B/rev) | byte map; A5 |
+| long sector (>512 B) | yes | no | no (the ID's length) | yes | byte map |
+| fuzzy / weak bits | yes | no | no (the write clears it) | no | fuzzy mask |
+| no-flux area | yes (undefined) | no | no | no | gap flag |
+| half-track | yes (head width) | no | no | no | flux only (deferred) |
+| duplicate IDs | yes | no | no | yes | byte map |
+| bad CRC | yes | no | no | yes | byte map |
+| deleted DAM | yes | yes | yes | yes | byte map |
+| sector crossing the index | yes | no | yes | yes | byte map (wrap) |
+| density change | yes? | no | no (only a local mixed rate) | no | flux only (deferred) |
+
+`derived` The **format** and **sector** columns are the copy protection's target: a copier that uses Read Sector/Write Sector/Format cannot create the long sector, duplicate IDs or bad CRC, and cannot format an 11/12-sector or long track; it can still write a sector on a track that already exists. The **raw** column is what a custom program with Write Track can do — still not the physical features. The media study's classes map onto this: Copylock's long sector → raw-only; Dungeon Master's fuzzy → read-only; Turrican's overlap → sector/raw; 12 sectors → read-only (the track must exist); NFA → read-only; half-track → read-only and flux-only.
+
+`derived` The byte map carries all but `half-track` and `density change`; those need the flux layer, so the model can **flag** them but not draw them. The read flags are permissive (the machine's documented abilities); the actual decode is the FDC's (CRC, DAM, DPLL). A **sector write on a long track** is a local mixed rate, not a deliberate density change: the written block carries 1 024 ticks against the track's 1 018.5, and the source's `.stx` timing can carry it; a `.st` cannot.
+
+### 6.7 Write-back to the source
+
+`derived` The source image is the disk. The loader opens it read-write; a write updates the track map **and** the file; `Flush` on eject/exit. The real disk has no undo; the host may keep a backup, but the model writes in place.
+
+`derived` The source format's own limit is separate from the drive's: `.stx`/`.stt` carry the track bytes, IDs/CRC/status and (STX) the fuzzy mask, so a sector or raw write can be written back; `.st`/`.msa`/`.dim` carry 512-byte sectors only, so a raw Write Track is **not representable** — the store refuses or the host converts a `.stx`/`.stt`; it must not silently drop the raw bytes. A write clears the fuzzy mask in the written range; the sector descriptor's CRC/status is recomputed; the track length and offsets stay.
+
+`derived` A `.stx` source's track length (6 283) is unchanged by a **sector** write; the FDC's 32 µs write clock covers 534 of the track's 6 283 bytes for a 531-byte window, a local mixed rate. A whole-track `WriteTrack` **normalizes** the track to 6 250 bytes — the ST's 32 µs clock writes 6 250 a revolution, so the long-track feature is lost and the source's track length becomes 6 250; the `.stx` writer rebuilds the track image and the sector descriptors. This is the asymmetry in the write-back.
 
 ---
 
@@ -316,6 +351,8 @@ The FDC's Write Sector command writes **from gap 2 through the first byte of gap
 
 `derived` A preserved `.stx` track may be **6 283 bytes** (The Pawn 2.1)[46]; at a 200 ms revolution its byte period is **31.83 µs**, not 32 µs[60], and the FDC's nominal 32 µs clock would overrun the track by 33 bytes. The model therefore uses the **track length** to compute the byte position and the sector's phase, not a hard-coded 6 250; the media study's "nominal 32 µs, overridable by the image" rule applies to the drive's angle as well. `derived` The visual's sector arcs use `byte / trackLength × 360°`, so a long track's sectors are slightly compressed in angle; that is the image's cadence, not a drive error.
 
+`derived` **Index jitter.** The nominal index is exactly 6 400 000 ticks; the TEAC's **period** is 197–203 ms, a **±3 ms / ±1.5 %** window (**±96 000 ticks**, **±93.75 bytes** at 32 µs), and its **burst detection** error is **±400 µs** (**±12 800 ticks**, **±12.5 bytes**)[104]. The **read** data is self-clocked: the index only times the FDC's four-revolution search, so a 1.5 % period error moves the timeout, not the bytes. A **Write Track** ends at the index, so a jittered index changes the bytes written between indexes by up to **±94** (period) or **±12** (burst); a protection that measures index-to-index time or byte count could see it. The model's `IndexJitterMicroseconds = 0` for v1 (A11); a measured profile can replace it.
+
 ### 7.2 A seek
 
 `derived` A 40-track seek at 3 ms/step is **120 ms** (3 840 000 ticks), plus the 15 ms settle (**480 000**) = 135 ms; the drive's "access within 18 ms" is per **single** track[104], not per multi-track move, so the step interval dominates[44]. The average seek of 94 ms is consistent with ~26 tracks at 3 ms + 15 ms settle (26 × 3 + 15 = 93 ms); the exact average distance is not stated.
@@ -334,7 +371,7 @@ The FDC's Write Sector command writes **from gap 2 through the first byte of gap
 
 ## 8. The model
 
-`derived` The drive is a **state machine plus a media store**. The FDC owns the command and the byte stream; the drive owns the spindle, the carriage, the heads, the write gate, the erase gate and the media. The model must not move the FDC's byte clock into the drive, and must not put the drive's mechanics into the FDC.
+`derived` The drive is a **state machine plus a media store**. The FDC owns the command and the byte stream; the drive owns the spindle, the carriage, the heads, the write gate, the erase gate and the media. The model must not move the FDC's byte clock into the drive, and must not put the drive's mechanics into the FDC. The **two capabilities** are records on the profile, not on the state; the FDC consults them (design §2.3), and the write goes back to the source store (design §5.3).
 
 ### 8.1 State
 
@@ -361,6 +398,8 @@ sealed class DriveState
 
 `derived` `Ready` is a **derived** predicate[104], not a stored bit: `Present && MotorOn && now ≥ motorReadyAt && now ≥ SettlingUntil && indexSeen`. The model should not let software set it directly.
 
+`derived` The profile's `Read` and `Write` capability records are not in the drive's state; they are the two feature sets the FDC's command path consults. A write checks the path's set before it touches the media; a read's features are what the loader may present, and the FDC's CRC/DAM/DPLL decide the actual result.
+
 ### 8.2 Media
 
 ```csharp
@@ -378,13 +417,13 @@ sealed class MediaState
 sealed record TrackMap(int Track, int Side, int Length, ImmutableArray<Block> Blocks, ulong Version);
 
 readonly record struct Block(
-    BlockKind Kind, int Start, int Length, int Sector, BlockFlags Flags);
+    BlockKind Kind, int Start, int Length, int Sector, int ByteTicks, BlockFlags Flags);
 
 enum BlockKind { Gap, Sync, Idam, IdField, Data, Crc, Splice, Unknown }
 [Flags] enum BlockFlags { Fuzzy, CrcError, Rnf, Deleted, WriteSplice, Synthetic }
 ```
 
-`derived` The block stream is the same model as `design/disk-path.md` §2; the drive adds the **splice** and **unknown** kinds and the **version**[46][60]. The `TrackMap` is the truth; the sector index is a cache. The FDC's Read Track reads the blocks including gaps; the write path replaces a range and leaves the rest.
+`derived` The block stream is the same model as `design/disk-path.md` §2; the drive adds the **splice** and **unknown** kinds and the **version**[46][60]. The `TrackMap` is the truth; the sector index is a cache. The FDC's Read Track reads the blocks including gaps; the write path replaces a range and leaves the rest. `ByteTicks` is 1 024 on a nominal track; a sector write on a long track writes 531 bytes at 32 µs against the track's 31.83 µs, so the written block carries 1 024 and its neighbours 1 018.5 — a local mixed rate the `.stx` timing can carry and a sector-only source cannot.
 
 ### 8.3 The snapshot
 
@@ -506,10 +545,12 @@ The **byte position is arithmetic**[44]: `(now − IndexTick) × TrackLength / R
 | claim | where it lands | action |
 |---|---|---|
 | the drive's state, snapshot and track map | `design/disk-drive-model.md` §2–3 | the new contract |
-| the write path | `design/disk-drive-model.md` §5 | byte window, ID, splice, erase, WP, version |
+| the write path | `design/disk-drive-model.md` §5 | byte window, ID, splice, erase, WP, version, **write-back** |
+| the read/write capabilities | `design/disk-drive-model.md` §2.3 | the feature sets; standard/raw scopes; the visual badges |
+| the write-back | `design/disk-drive-model.md` §5.3 | source read-write; per-format store; `.st` raw refusal |
 | the visual contract | `design/disk-drive-model.md` §6 | the three views, units, edge cases |
 | the byte position and index arithmetic | `design/disk-path.md` §3 | reuse; the drive's angle is the same arithmetic |
-| the no-disk vs no-image state | `design/disk-path.md` §5 | **owner decision**; §4.3 above |
+| the no-disk vs no-image state | `design/disk-path.md` §5 | **ruled: no index, TOS timeout**; §4.3 above |
 | the analogue rows | `design/emulator-limitations.md` §6.1 | A7–A11 added; A6 re-worded |
 | the pin page's driver column | `atari-st-hardware/pins/04-din14-floppy-port.md` | dated correction: PSG port A for side/drive selects; the FDC for MO/STEP/DIRC/WD/WG/DDEN |
 | the code | `src/TheST.Machine/Chips/DiskDrive.cs` (future) | not this study; the stub stays until the build |
@@ -522,7 +563,7 @@ The **byte position is arithmetic**[44]: `(now − IndexTick) × TrackLength / R
 
 ### 11.1 No-disk motor — TEAC vs `design/disk-path.md` §5
 
-`documented` TEAC: no rotation with no disk.[104] `documented` The design: motor spins with no image.[internal] `derived` These are different states (NoDisk vs DiskWithoutImage); the design's wording conflates them. **Resolution:** the model has both; `NoDisk` is motor-off/no-index[104]; `DiskWithoutImage` is the blank-disk timeout[23]. The FDC's timeout rule for `NoDisk` is the owner's decision (does TOS's timeout suffice, or does the FDC need a synthetic index?). §4.3.
+`documented` TEAC: no rotation with no disk.[104] `documented` The design: motor spins with no image.[internal] `derived` These are different states (NoDisk vs DiskWithoutImage); the design's wording conflates them. **Resolution (ruled 2026-11-28):** the model has both; `NoDisk` is motor-off/no-index[104] and **TOS's timeout ends the poll** (no synthetic index); `DiskWithoutImage` is the blank-disk timeout[23]. §4.3.
 
 ### 11.2 The DIN14 pin page's drivers
 
@@ -530,7 +571,7 @@ The **byte position is arithmetic**[44]: `(now − IndexTick) × TrackLength / R
 
 ### 11.3 The F-354C is a class representative, not the ST's exact drive
 
-`documented` The 1040STE's built-in drive is a 1 MB unformatted (720 KB formatted) DS DD unit.[41] `documented` The F-354C is a 135 TPI DS mechanism with the same media geometry.[105] `unknown` Which mechanism a given 1040STE has. **Resolution:** the model uses the class's numbers; the exact model is a drive-profile field (`MaxTrack`, `EraseOn/Off`, `WriteCurrent`) that a measurement can fill.
+`documented` The 1040STE's built-in drive is a 1 MB unformatted (720 KB formatted) DS DD unit.[41] `documented` The F-354C is a 135 TPI DS mechanism with the same media geometry.[105] `unknown` Which mechanism a given 1040STE has. **Resolution:** the model uses the class's numbers; the exact model is a drive-profile field (`MaxTrack`, `EraseOn/Off`, `WriteCurrent`, and the `Read`/`Write` capability sets) that a measurement can fill.
 
 ### 11.4 Track 81 vs the 82/83-track tricks
 
@@ -574,7 +615,7 @@ The **byte position is arithmetic**[44]: `(now − IndexTick) × TrackLength / R
 | **A8** | **actuator dynamics, resonance, micro-stepping, seek errors at 2 ms** | **`open`** | a scope on `STEP`/`TR00` and a step-settle sweep; the model uses 3/4 ms + 15 ms settle and one track per STEP |
 | **A9** | **the write splice's exact extent and bit phase** | **`open`** | a write/rewrite test and a flux capture of the gap; the model marks the gap 2/gap 3 window and hatches the edges |
 | **A10** | **the ST drive's erase-head timing and current** | **`open`** | a head-current probe or the drive's schematic; the model uses 500 µs/1 ms and 40 mA as defaults |
-| **A11** | **the ST drive's index phase and burst tolerance** | **`open`** | an index-vs-byte-0 capture; the model sets index at byte 0 and uses ±400 µs only as a bound |
+| **A11** | **the ST drive's index phase and burst tolerance** | **`open`; the model is nominal 0** | an index-vs-byte-0 + jitter capture; the read path is unaffected (self-clocked; the 197–203 ms period is ±1.5 % on the four-revolution timeout), a Write Track's tail varies up to ±94 bytes (period) or ±12 (burst), and a protection that measures index-to-index could see it. The model sets index at byte 0 and jitter 0 for v1 |
 
 `derived` None of A7–A11 changes a **read** result: the FDC's byte stream is the image's, and the drive's nominal index/step timing is enough for the sector deadlines. They change the **visual's** honesty and the **write's** analogue residue; the model labels them.
 
@@ -584,14 +625,15 @@ The **byte position is arithmetic**[44]: `(now − IndexTick) × TrackLength / R
 
 `derived` These are the measurements that would move a row from `unknown` to T1; they are not required for the model, but they are the only way to make the visual claim a real drive.
 
-- **E1 — spin-up and index.** Logic analyser on `MOTOR ON`, `INDEX`, `READY` at power-on and on insertion[104]; 10 trials; fit the 0→300 rpm curve and the index period. Settles A7 and the index phase (A11).
+- **E1 — spin-up and index.** Logic analyser on `MOTOR ON`, `INDEX`, `READY` at power-on and on insertion[104]; 10 trials; fit the 0→300 rpm curve, the index period and the index jitter. Settles A7, the index phase and the jitter (A11).
 - **E2 — step and settle.** Scope `STEP`, `TR00`, and the head's position (a test disk with a known track)[104]; step 1, 40 and 80 tracks; same-direction 3 ms and reversal 4 ms; measure the settle and the 2 ms risk. Settles A8.
 - **E3 — write splice.** Write a known sector over a known track; `Read Track` the gap 2/gap 3 region before and after[23]; repeat 10×; measure the undefined byte window and the first-flux phase. Settles A9 and refines A6.
 - **E4 — erase.** Write a track, read the adjacent track and the guard band; vary the erase delay on a drive with an accessible control (or use the MC3471's RC)[108]; measure the trim. Settles A10 (partly).
 - **E5 — visual prototype.** A host-side renderer fed by a synthetic `DriveSnapshot` and `TrackMap`: 80 tracks, head radius, angle, sector under head, seek animation, write window, splice, erase band[106]. This is the **view's acceptance test**, not an emulator build.
 - **E6 — model read-back.** Write a sector, read it back, compare the 512 bytes and the CRC[46]; write-protect; long track; 11 sectors; track 81. This is the **write path's acceptance test** when the code exists.
+- **E7 — write-back.** Insert a `.stx`, write a sector and a raw track, eject, reload; the bytes/IDs/CRC/fuzzy mask match; a `.st` source refuses the raw write (or the host converts); a `.stx` fuzzy sector's mask is zeroed. This is the **source-is-the-disk test**.
 
-`derived` The model's acceptance is not "the visual looks right"; it is: (1) the FDC reads back what the write path wrote; (2) the snapshot's byte position matches the FDC's byte position at the same tick; (3) the track map's blocks and the image's bytes agree; (4) the visual's radius/angle match the formulas; (5) the no-disk and blank-disk states are distinguishable. The first three are machine tests; the last two are host tests.
+`derived` The model's acceptance is not "the visual looks right"; it is: (1) the FDC reads back what the write path wrote; (2) the snapshot's byte position matches the FDC's byte position at the same tick; (3) the track map's blocks and the image's bytes agree; (4) the visual's radius/angle match the formulas; (5) the no-disk and blank-disk states are distinguishable; (6) the write-back round-trips; (7) the read/write capability badges name the asymmetry. The first three are machine tests; the rest are host/view tests.
 
 ---
 

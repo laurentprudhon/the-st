@@ -165,7 +165,7 @@ and the only way to know the real design does that is to let the FDC's own timeo
 than special-casing the empty drive. A title polling `IP`/`TR00` while waiting for a disk then sees what a real
 ST with an empty drive shows.
 
-> ### Correction and proposal — 2026-11-28 (`research/floppy-drive-mechanics.md` §4.3; `design/disk-drive-model.md` §2.1, §8.1)
+> ### Correction and ruling — 2026-11-28 (`research/floppy-drive-mechanics.md` §4.3; `design/disk-drive-model.md` §2.1, §2.3, §5.3, §8.1)
 >
 > The second bullet's "no image" is **not** the same state as a drive with **no disk**. The TEAC FD-235HF
 > specification (§12.2(1)) says the spindle **does not rotate at any condition while no disk is installed**;
@@ -174,10 +174,10 @@ ST with an empty drive shows.
 > times out — and wrong for **`NoDisk`**, where the visual would show a spinning empty drive.
 >
 > The drive model therefore has **two states**: `NoDisk` (motor off, no index, `READY` false) and
-> `DiskWithoutImage` (motor on, index, blank media, FDC record-not-found). The FDC-timeout rule for `NoDisk`
-> is the owner's decision: with no index the FDC's four-revolution search cannot count, so either the model
-> gives the FDC a synthetic index, or the host/TOS timeout is the one that ends the poll. The write path and
-> the visual contract are in `design/disk-drive-model.md` §5–§6.
+> `DiskWithoutImage` (motor on, index, blank media, FDC record-not-found). **Ruled 2026-11-28:** `NoDisk`
+> gives **no index**; the FDC's four-revolution search cannot count, and **TOS's timeout ends the poll** — the
+> model does **not** synthesize an index. The write path (two capabilities, write-back) and the visual
+> contract are in `design/disk-drive-model.md` §2.3, §5.3, §6.
 
 ### 5.1 The stub contract (#10 takes this before the real design exists)
 
@@ -189,7 +189,8 @@ immediate answer for the modelled timeout.
 
 **Ruled** (owner: "*1*"): the loader **normalises every format to the block stream**; the FDC has one input
 type. `.stx` is read directly; `.st`/`.msa` are expanded into a synthetic block stream using the standard layout
-(9/10/11 sectors per track, standard gaps and IDAMs).
+(9/10/11 sectors per track, standard gaps and IDAMs). **Ruled 2026-11-28:** the loader also keeps each format's
+**writer** (`IMediaStore`) so a write goes back to the source; `design/disk-drive-model.md` §5.3.
 
 For `.st`/`.msa` the gaps are a **fiction, but an honest one** — those formats carry no gap information, so any
 gap is a default rather than a loss. The expansion must therefore mark the image **`gaps: synthetic`** versus
@@ -214,6 +215,13 @@ a property of the file, not a bug:
 
 The loader must **never repair a preserved track**: no recomputed CRC over a bad one, no renumbering a 247, no
 gap synthesis when a track image exists.
+
+**The source is the disk (ruled 2026-11-28).** The loader opens the image **read-write**; a write updates the
+track map and the source file; `Flush` on eject/exit. A sector-only `.st`/`.msa`/`.dim` cannot carry a raw track
+write, so the store refuses or the host converts to `.stx`/`.stt`; it must not silently drop the raw bytes. A
+written track's provenance updates: its gaps/IDs are `as-dumped`, its FDC status `recomputed`, and its fuzzy
+mask `none` in the written range. The read/write asymmetry — what the machine can read but not write — is
+`design/disk-drive-model.md` §2.3 and the study §6.6.
 
 ## 7. What this document does not decide
 
