@@ -1746,12 +1746,16 @@ public sealed partial class M68000
         uint result = WordAlu(kind, source, destination);
         SetWordFlags(kind, source, destination, result, extend: kind is AluLong.Add or AluLong.Sub);
 
+        // morw1 (299)  m_aob = m_au; m_ir = m_irc; m_pc = m_au; m_au = m_at; alu_or8(m_dt, m_dbin);
+        //              sr_nzvc(); read at m_aob                                                       4
         await TrailingFetchAsync();                                // morw1 — m_pc = m_au, the one read
         if (_busFaulted)
         {
             return;
         }
 
+        // morw2 (38d)  m_aob = m_au; m_ird = m_ir; set_8xl(m_dbout, m_aluo); m_au = m_pc + 2;
+        //              write m_dbout at m_aob                                                         4
         await WriteWordAsync(address, (ushort)result);              // morw2
     }
 
