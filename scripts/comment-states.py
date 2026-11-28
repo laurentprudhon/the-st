@@ -19,7 +19,9 @@ What it checks, and nothing else:
     finding, not a typo to fix by eye);
   · the charge is the state's **own** — 2 for a state, 4 for a state that touches the bus, 0 for
     one the listing leaves uncharged — and a fused pair's is the sum of its parts, in the pair's
-    order (`b (363) + mmrw3 (34c)` is `0+4`: `b` is uncharged and the read is `mmrw3`'s);
+    order (`b (363) + mmrw3 (34c)` is `0+4`: `b` is uncharged and the read is `mmrw3`'s); a state's
+    name may carry `#` (`e#w1`), and a name the pattern cannot match is a name the index lacks — so
+    the state *before* it would absorb its block's charge;
   · the line ends at column 104 (the charge right-aligned there), and continuation lines of the
     same state carry no name of their own;
   · a state is not commented twice inside one method;
@@ -52,13 +54,17 @@ WALK = os.path.join(ROOT, "scripts", "microcode-walk.py")
 WIDTH = 104
 
 # `// <name> (<addr>)  <statements>  <charge>` — the charge is the last token of the line.
-STATE = re.compile(r"^\s*//\s+([a-z][a-z0-9_]*)\s+\(([0-9a-f]{3})\)\s*(.*)$")
+# A name may carry `#` (the immediate forms: `e#w1`, `e#l1`, `o#w1`, `o#l1`); a name the pattern
+# cannot match is not a name the index has, and then the state *before* it absorbs its block's
+# charge — which read `chkr4`, `dvs1c`, `roml3` and five more as 4 for a while.
+NAME = r"[a-z][a-z0-9_#]*"
+STATE = re.compile(rf"^\s*//\s+({NAME})\s+\(([0-9a-f]{{3}})\)\s*(.*)$")
 # A state fused into a helper names both: `// b (363) + mmrw3 (34c)  …  0+4`.
-FUSED = re.compile(r"^\+\s*([a-z][a-z0-9_]*)\s+\(([0-9a-f]{3})\)\s*")
+FUSED = re.compile(rf"^\+\s*({NAME})\s+\(([0-9a-f]{{3}})\)\s*")
 CHARGE = re.compile(r"(\d+(?:\+\d+)?)\s*$")
 CONTINUATION = re.compile(r"^\s*//\s{2,}\S")
 OURS = re.compile(r"^\s*//\s+ours:")
-LABEL = re.compile(r"^\s*//\s+([0-9a-f]{3})\s+([a-z][a-z0-9_]*)\s*$")
+LABEL = re.compile(rf"^\s*//\s+([0-9a-f]{{3}})\s+({NAME})\s*$")
 METHOD = re.compile(r"^\s{4}(?:public|private|internal|protected|static|async|sealed|override|void|ValueTask|Task|bool|uint|int|ushort|byte)\b")
 
 
@@ -87,8 +93,8 @@ def state_index():
 
     for pair, seen in charges.items():
         # A state's own cost is its `m_icount` decrement: 4 for a bus access, 2 for an idle state,
-        # and **0** for a state that has neither (`rorw1`, `adrw1`, `cpmm1` — the listing's own
-        # silence is the charge, which is why `OR.w Dn,Dn` is 4 clocks). A state carrying both is a
+        # and **0** for a state that has neither (`rorw1`, `adrw1`, `cpmm1`, `chkr4` — the listing's
+        # own silence is the charge, which is why `OR.w Dn,Dn` is 4 clocks). A state carrying both is a
         # bus state whose 2 is a fused idle inside it.
         index[pair] = 4 if 4 in seen else (2 if 2 in seen else 0)
     return index
