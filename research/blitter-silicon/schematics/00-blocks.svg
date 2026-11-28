@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 980" width="1440" height="980"
+     font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" role="img" aria-label="00 · The chip as blocks">
+<defs>
+  <marker id="a-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#1f5fa8"/>
+</marker>
+  <marker id="a-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#2f7f5b"/>
+</marker>
+  <marker id="a-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#b4761a"/>
+</marker>
+  <marker id="a-k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#8a4fb0"/>
+</marker>
+  <marker id="a-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#6f5aad"/>
+</marker>
+  <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+<path d="M24 0 L0 0 0 24" fill="none" stroke="#e8e5db" stroke-width="1"/>
+</pattern>
+  <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+<path d="M0 0 L0 8" stroke="#b4761a" stroke-width="1.4" opacity=".55"/>
+</pattern>
+</defs>
+<rect width="100%" height="100%" fill="#fbfaf6"/>
+<rect width="100%" height="100%" fill="url(#grid)" opacity=".6"/>
+<text x="44" y="44" font-size="25" font-weight="700" fill="#22232a" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">00 · The chip as blocks</text>
+<text x="44" y="71" font-size="14" fill="#63666f" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">Blitter C101643 — one bus master, one datapath, one truth table, one 16×16 pattern. Functional, not to scale.</text>
+<text x="44" y="112" font-size="12" fill="#63666f" text-anchor="start" font-style="italic" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the bus side — driven, so it owns the cycle</text>
+<rect x="44" y="128" width="250" height="78" rx="8" fill="#e8eefa" stroke="#1f5fa8" stroke-width="1.6"/>
+<text x="169.0" y="163.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">A1–A23 · AS · UDS · LDS</text>
+<text x="169.0" y="182.0" text-anchor="middle" font-size="11" fill="#63666f">addresses and strobes, driven</text>
+<rect x="44" y="222" width="250" height="78" rx="8" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.6"/>
+<text x="169.0" y="257.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">D0–D15</text>
+<text x="169.0" y="276.0" text-anchor="middle" font-size="11" fill="#63666f">one word per access, both ways</text>
+<rect x="44" y="316" width="250" height="78" rx="8" fill="#fdf1de" stroke="#b4761a" stroke-width="1.6"/>
+<text x="169.0" y="351.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">R/W · FC0–FC2 · BERR</text>
+<text x="169.0" y="370.0" text-anchor="middle" font-size="11" fill="#63666f">control; BERR is an input</text>
+<rect x="44" y="410" width="250" height="78" rx="8" fill="#fdf1de" stroke="#b4761a" stroke-width="1.6"/>
+<text x="169.0" y="445.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">BR · BG · BGACK</text>
+<text x="169.0" y="464.0" text-anchor="middle" font-size="11" fill="#63666f">grant in, grant out, ack both ways</text>
+<text x="360" y="112" font-size="12" fill="#63666f" text-anchor="start" font-style="italic" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the address path — the chip's only adder</text>
+<rect x="360" y="128" width="300" height="78" rx="8" fill="#e8eefa" stroke="#1f5fa8" stroke-width="1.6"/>
+<text x="510.0" y="163.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">address latches</text>
+<text x="510.0" y="182.0" text-anchor="middle" font-size="11" fill="#63666f">AI1–AI23, AO1–AO23, BLTAD1</text>
+<rect x="360" y="222" width="300" height="78" rx="8" fill="#e8eefa" stroke="#1f5fa8" stroke-width="1.6"/>
+<text x="510.0" y="257.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">BLTADD — the adder</text>
+<text x="510.0" y="276.0" text-anchor="middle" font-size="11" fill="#63666f">23 bits + signed 15-bit increment</text>
+<rect x="360" y="316" width="300" height="78" rx="8" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.6"/>
+<text x="510.0" y="351.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">increment registers</text>
+<text x="510.0" y="370.0" text-anchor="middle" font-size="11" fill="#63666f">SX · SY · DX · DY, each signed 15</text>
+<rect x="360" y="410" width="300" height="78" rx="8" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.6"/>
+<text x="510.0" y="445.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">counters</text>
+<text x="510.0" y="464.0" text-anchor="middle" font-size="11" fill="#63666f">X COUNT, Y COUNT (16 bits each)</text>
+<text x="736" y="112" font-size="12" fill="#63666f" text-anchor="start" font-style="italic" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the datapath — shift, merge, mask</text>
+<rect x="736" y="128" width="300" height="78" rx="8" fill="#e7f2ec" stroke="#2f7f5b" stroke-width="1.6"/>
+<text x="886.0" y="163.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">skew shifter</text>
+<text x="886.0" y="182.0" text-anchor="middle" font-size="11" fill="#63666f">SI0–SI30, 31 stages, SKEW 0–15</text>
+<rect x="736" y="222" width="300" height="78" rx="8" fill="#fdf1de" stroke="#b4761a" stroke-width="1.6"/>
+<text x="886.0" y="257.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">HOP merge</text>
+<text x="886.0" y="276.0" text-anchor="middle" font-size="11" fill="#63666f">all ones · halftone · source · S AND H</text>
+<rect x="736" y="316" width="300" height="78" rx="8" fill="#fdf1de" stroke="#b4761a" stroke-width="1.6"/>
+<text x="886.0" y="351.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">BITBLT — the 16 LOPs</text>
+<text x="886.0" y="370.0" text-anchor="middle" font-size="11" fill="#63666f">one truth table, 50 XOR cells</text>
+<rect x="736" y="410" width="300" height="78" rx="8" fill="#fdf1de" stroke="#b4761a" stroke-width="1.6"/>
+<text x="886.0" y="445.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">end-mask merge</text>
+<text x="886.0" y="464.0" text-anchor="middle" font-size="11" fill="#63666f">ones written, zeros keep the old word</text>
+<text x="1112" y="112" font-size="12" fill="#63666f" text-anchor="start" font-style="italic" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">storage and control</text>
+<rect x="1112" y="128" width="284" height="78" rx="8" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.6"/>
+<text x="1254.0" y="163.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">halftone RAM</text>
+<text x="1254.0" y="182.0" text-anchor="middle" font-size="11" fill="#63666f">16 words × 16 bits = 256 BIT cells</text>
+<rect x="1112" y="222" width="284" height="78" rx="8" fill="#e8eefa" stroke="#1f5fa8" stroke-width="1.6"/>
+<text x="1254.0" y="257.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">register decode</text>
+<text x="1254.0" y="276.0" text-anchor="middle" font-size="11" fill="#63666f">XSEL00…XSEL1E + field strobes</text>
+<rect x="1112" y="316" width="284" height="78" rx="8" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.6"/>
+<text x="1254.0" y="351.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">state machine</text>
+<text x="1254.0" y="370.0" text-anchor="middle" font-size="11" fill="#63666f">BUSY · HOG · DMARQ · DIP · TMOUT*</text>
+<rect x="1112" y="410" width="284" height="78" rx="8" fill="#fdf1de" stroke="#b4761a" stroke-width="1.6"/>
+<text x="1254.0" y="445.0" text-anchor="middle" font-size="13" font-weight="700" fill="#22232a">grant relay</text>
+<text x="1254.0" y="464.0" text-anchor="middle" font-size="11" fill="#63666f">BGI → BGO, BGACKI → BGACK</text>
+<line x1="298" y1="167" x2="356" y2="167" stroke="#1f5fa8" stroke-width="3" marker-end="url(#a-a)"/>
+<line x1="664" y1="167" x2="732" y2="167" stroke="#1f5fa8" stroke-width="3" marker-end="url(#a-a)"/>
+<line x1="1040" y1="167" x2="1108" y2="167" stroke="#1f5fa8" stroke-width="3" marker-end="url(#a-a)"/>
+<line x1="298" y1="261" x2="356" y2="261" stroke="#2f7f5b" stroke-width="3" marker-end="url(#a-d)"/>
+<line x1="664" y1="261" x2="732" y2="261" stroke="#2f7f5b" stroke-width="3" marker-end="url(#a-d)"/>
+<line x1="1040" y1="261" x2="1108" y2="261" stroke="#2f7f5b" stroke-width="3" marker-end="url(#a-d)"/>
+<line x1="298" y1="355" x2="356" y2="355" stroke="#b4761a" stroke-width="3" marker-end="url(#a-c)"/>
+<line x1="664" y1="355" x2="732" y2="355" stroke="#b4761a" stroke-width="3" marker-end="url(#a-c)"/>
+<line x1="1040" y1="355" x2="1108" y2="355" stroke="#b4761a" stroke-width="3" marker-end="url(#a-c)"/>
+<line x1="298" y1="449" x2="356" y2="449" stroke="#b4761a" stroke-width="3" marker-end="url(#a-c)"/>
+<line x1="664" y1="449" x2="732" y2="449" stroke="#b4761a" stroke-width="3" marker-end="url(#a-c)"/>
+<line x1="1040" y1="449" x2="1108" y2="449" stroke="#b4761a" stroke-width="3" marker-end="url(#a-c)"/>
+<path d="M360,355 L330,355 L330,261 L356,261" fill="none" stroke="#6f5aad" stroke-width="2" marker-end="url(#a-s)"/>
+<path d="M360,449 L330,449 L330,395 L356,395" fill="none" stroke="#6f5aad" stroke-width="2" marker-end="url(#a-s)"/>
+<path d="M1112,449 L1076,449 L1076,498 L520,498 L520,432" fill="none" stroke="#8a4fb0" stroke-width="1.6" marker-end="url(#a-k)" stroke-dasharray="5 4"/>
+<path d="M1112,167 L1060,167 L1060,60 L886,60 L886,124" fill="none" stroke="#6f5aad" stroke-width="2" marker-end="url(#a-s)"/>
+<text x="900" y="54" font-size="10" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">haltone word, selected by LINE NUMBER or by the source's low nibble (SMUDGE)</text>
+<path d="M294,261 L320,261 L320,510 L1040,510 L1040,449 L1040,452" fill="none" stroke="#2f7f5b" stroke-width="1.6" marker-end="url(#a-d)" stroke-dasharray="5 4"/>
+<text x="330" y="526" font-size="10" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the old destination word, read only when the LOP or the mask needs it</text>
+<rect x="44" y="560" width="1352" height="112" rx="8" fill="#eef0f5" stroke="#8a90a8" stroke-width="1.4" stroke-dasharray="5 4"/>
+<text x="64" y="584" font-size="13" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">What is deliberately not in this box</text>
+<text x="64" y="606" font-size="11.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">no line mode — no octant bits, no accumulator; line drawing is SMUDGE with X COUNT = 1</text>
+<text x="64" y="626" font-size="11.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">no memory timing — no RAS/CAS, no refresh: the cycles are U400's, this chip only asks and drives</text>
+<text x="64" y="646" font-size="11.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">no FIFO and no prefetch — the source buffer is a shift register, not a queue</text>
+<text x="760" y="606" font-size="11.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">no interrupt controller — one INT pin, and it duplicates BUSY</text>
+<text x="760" y="626" font-size="11.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">no microcode, no PLA, no RAM cell: 2,133 cells of random logic</text>
+<text x="760" y="646" font-size="11.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">no die photograph exists, so no floorplan is drawn here or anywhere</text>
+<text x="64" y="666" font-size="10.5" fill="#8a90a8" text-anchor="start" font-style="italic" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">* TMOUT appears only in ST-4082, the revision drawn for the combo chip</text>
+<rect x="44" y="700" width="652" height="96" rx="8" fill="#eef0f5" stroke="#8a90a8" stroke-width="1.6"/>
+<text x="370.0" y="744.0" text-anchor="middle" font-size="14" font-weight="700" fill="#22232a">2,133 cell instances · 58 cell types</text>
+<text x="370.0" y="763.0" text-anchor="middle" font-size="11" fill="#63666f">fixed cells 15,706 transistors — the GSTMCU's size class</text>
+<rect x="744" y="700" width="652" height="96" rx="8" fill="#eef0f5" stroke="#8a90a8" stroke-width="1.6"/>
+<text x="1070.0" y="744.0" text-anchor="middle" font-size="14" font-weight="700" fill="#22232a">15 sheets, four revisions</text>
+<text x="1070.0" y="763.0" text-anchor="middle" font-size="11" fill="#63666f">TA-4021 Oct 86 · ST-4051 Mar 88 · BLT Jul 88 · ST-4082 Sep 88</text>
+<rect x="0" y="934" width="1440" height="46" fill="#f4f1e8"/>
+<text x="44" y="952" font-size="11" fill="#63666f" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">Provenance: the sheet titles and net names of the recovered designs (TA-4021 text layer; ST-4051 and ST-4082 drawing strings)</text>
+<text x="44" y="967" font-size="11" fill="#63666f" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">and 4082.LST's cell census; the register semantics from Atari's BLiTTER manual. See README.md and the study's §9.</text>
+</svg>

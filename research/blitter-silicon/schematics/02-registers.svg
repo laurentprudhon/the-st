@@ -1,0 +1,155 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 1000" width="1440" height="1000"
+     font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" role="img" aria-label="02 · The register seam">
+<defs>
+  <marker id="a-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#1f5fa8"/>
+</marker>
+  <marker id="a-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#2f7f5b"/>
+</marker>
+  <marker id="a-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#b4761a"/>
+</marker>
+  <marker id="a-k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#8a4fb0"/>
+</marker>
+  <marker id="a-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#6f5aad"/>
+</marker>
+  <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+<path d="M24 0 L0 0 0 24" fill="none" stroke="#e8e5db" stroke-width="1"/>
+</pattern>
+  <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+<path d="M0 0 L0 8" stroke="#b4761a" stroke-width="1.4" opacity=".55"/>
+</pattern>
+</defs>
+<rect width="100%" height="100%" fill="#fbfaf6"/>
+<rect width="100%" height="100%" fill="url(#grid)" opacity=".6"/>
+<text x="44" y="44" font-size="25" font-weight="700" fill="#22232a" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">02 · The register seam</text>
+<text x="44" y="71" font-size="14" fill="#63666f" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">62 bytes at $FF8A00: sixteen halftone words, eleven pointer registers, three end masks, and one byte of control.</text>
+<text x="44" y="112" font-size="12" fill="#63666f" text-anchor="start" font-style="italic" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the map, with the decode's own strobes beside it</text>
+<rect x="44" y="126" width="800" height="50" rx="6" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.3"/>
+<text x="58" y="147" font-size="11" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8A00–$FF8A1E</text>
+<text x="58" y="166" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">HALFTONE RAM · 16 words</text>
+<text x="380" y="157" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">XSEL00 … XSEL1E — sixteen selects, 2-byte steps</text>
+<rect x="44" y="182" width="800" height="50" rx="6" fill="#e8eefa" stroke="#1f5fa8" stroke-width="1.3"/>
+<text x="58" y="203" font-size="11" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8A20 / 22</text>
+<text x="58" y="222" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">SOURCE X · Y INCREMENT</text>
+<text x="380" y="213" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">signed 15, LSB ignored</text>
+<rect x="44" y="238" width="800" height="50" rx="6" fill="#e8eefa" stroke="#1f5fa8" stroke-width="1.3"/>
+<text x="58" y="259" font-size="11" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8A24 / 26</text>
+<text x="58" y="278" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">SOURCE ADDRESS (32-bit pair)</text>
+<text x="380" y="269" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">23 bits used</text>
+<rect x="44" y="294" width="800" height="50" rx="6" fill="#fdf1de" stroke="#b4761a" stroke-width="1.3"/>
+<text x="58" y="315" font-size="11" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8A28 / 2A / 2C</text>
+<text x="58" y="334" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">ENDMASK 1 · 2 · 3</text>
+<text x="380" y="325" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">first word · middle · last word</text>
+<rect x="44" y="350" width="800" height="50" rx="6" fill="#e8eefa" stroke="#1f5fa8" stroke-width="1.3"/>
+<text x="58" y="371" font-size="11" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8A2E / 30</text>
+<text x="58" y="390" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">DEST X · Y INCREMENT</text>
+<text x="380" y="381" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">signed 15, LSB ignored</text>
+<rect x="44" y="406" width="800" height="50" rx="6" fill="#e8eefa" stroke="#1f5fa8" stroke-width="1.3"/>
+<text x="58" y="427" font-size="11" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8A32 / 34</text>
+<text x="58" y="446" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">DESTINATION ADDRESS (32-bit pair)</text>
+<text x="380" y="437" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">23 bits used</text>
+<rect x="44" y="462" width="800" height="50" rx="6" fill="#ece7f7" stroke="#6f5aad" stroke-width="1.3"/>
+<text x="58" y="483" font-size="11" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8A36 / 38</text>
+<text x="58" y="502" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">X COUNT · Y COUNT</text>
+<text x="380" y="493" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">1 … 65536, and 65536 is written as 0</text>
+<rect x="44" y="518" width="800" height="50" rx="6" fill="#fdf1de" stroke="#b4761a" stroke-width="1.3"/>
+<text x="58" y="539" font-size="11" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8A3A</text>
+<text x="58" y="558" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">HOP — 2 bits</text>
+<text x="380" y="549" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">all ones · halftone · source · S AND H</text>
+<rect x="44" y="574" width="800" height="50" rx="6" fill="#fdf1de" stroke="#b4761a" stroke-width="1.3"/>
+<text x="58" y="595" font-size="11" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8A3B</text>
+<text x="58" y="614" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">OP (LOP) — 4 bits</text>
+<text x="380" y="605" font-size="10.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the sixteen boolean combinations</text>
+<text x="44" y="690" font-size="13" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">the last four bytes — one word's worth of control, and the only place a model can go wrong</text>
+<text x="44" y="714" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8A3A</text>
+<rect x="44" y="722" width="39" height="34" rx="3" fill="#fdf1de" stroke="#b4761a" stroke-width="1.1"/>
+<text x="63.5" y="744" font-size="9" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">HOP1</text>
+<rect x="85" y="722" width="39" height="34" rx="3" fill="#fdf1de" stroke="#b4761a" stroke-width="1.1"/>
+<text x="104.5" y="744" font-size="9" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">HOP0</text>
+<rect x="126" y="722" width="39" height="34" rx="3" fill="#ffffff" stroke="#b4761a" stroke-width="1.1" stroke-dasharray="3 3"/>
+<text x="145.5" y="744" font-size="9" fill="#98a0ac" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">·</text>
+<rect x="167" y="722" width="39" height="34" rx="3" fill="#ffffff" stroke="#b4761a" stroke-width="1.1" stroke-dasharray="3 3"/>
+<text x="186.5" y="744" font-size="9" fill="#98a0ac" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">·</text>
+<rect x="208" y="722" width="39" height="34" rx="3" fill="#ffffff" stroke="#b4761a" stroke-width="1.1" stroke-dasharray="3 3"/>
+<text x="227.5" y="744" font-size="9" fill="#98a0ac" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">·</text>
+<rect x="249" y="722" width="39" height="34" rx="3" fill="#ffffff" stroke="#b4761a" stroke-width="1.1" stroke-dasharray="3 3"/>
+<text x="268.5" y="744" font-size="9" fill="#98a0ac" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">·</text>
+<rect x="290" y="722" width="39" height="34" rx="3" fill="#ffffff" stroke="#b4761a" stroke-width="1.1" stroke-dasharray="3 3"/>
+<text x="309.5" y="744" font-size="9" fill="#98a0ac" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">·</text>
+<rect x="331" y="722" width="39" height="34" rx="3" fill="#ffffff" stroke="#b4761a" stroke-width="1.1" stroke-dasharray="3 3"/>
+<text x="350.5" y="744" font-size="9" fill="#98a0ac" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">·</text>
+<text x="44" y="774" font-size="9.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">bit 7</text>
+<text x="364" y="774" font-size="9.5" fill="#63666f" text-anchor="end" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">bit 0</text>
+<text x="380" y="714" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8A3B</text>
+<rect x="380" y="722" width="39" height="34" rx="3" fill="#ffffff" stroke="#b4761a" stroke-width="1.1" stroke-dasharray="3 3"/>
+<text x="399.5" y="744" font-size="9" fill="#98a0ac" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">·</text>
+<rect x="421" y="722" width="39" height="34" rx="3" fill="#ffffff" stroke="#b4761a" stroke-width="1.1" stroke-dasharray="3 3"/>
+<text x="440.5" y="744" font-size="9" fill="#98a0ac" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">·</text>
+<rect x="462" y="722" width="39" height="34" rx="3" fill="#ffffff" stroke="#b4761a" stroke-width="1.1" stroke-dasharray="3 3"/>
+<text x="481.5" y="744" font-size="9" fill="#98a0ac" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">·</text>
+<rect x="503" y="722" width="39" height="34" rx="3" fill="#ffffff" stroke="#b4761a" stroke-width="1.1" stroke-dasharray="3 3"/>
+<text x="522.5" y="744" font-size="9" fill="#98a0ac" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">·</text>
+<rect x="544" y="722" width="39" height="34" rx="3" fill="#fdf1de" stroke="#b4761a" stroke-width="1.1"/>
+<text x="563.5" y="744" font-size="9" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">OP3</text>
+<rect x="585" y="722" width="39" height="34" rx="3" fill="#fdf1de" stroke="#b4761a" stroke-width="1.1"/>
+<text x="604.5" y="744" font-size="9" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">OP2</text>
+<rect x="626" y="722" width="39" height="34" rx="3" fill="#fdf1de" stroke="#b4761a" stroke-width="1.1"/>
+<text x="645.5" y="744" font-size="9" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">OP1</text>
+<rect x="667" y="722" width="39" height="34" rx="3" fill="#fdf1de" stroke="#b4761a" stroke-width="1.1"/>
+<text x="686.5" y="744" font-size="9" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">OP0</text>
+<text x="380" y="774" font-size="9.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">bit 7</text>
+<text x="700" y="774" font-size="9.5" fill="#63666f" text-anchor="end" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">bit 0</text>
+<text x="716" y="714" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8A3C</text>
+<rect x="716" y="722" width="39" height="34" rx="3" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.1"/>
+<text x="735.5" y="744" font-size="9" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">BUSY</text>
+<rect x="757" y="722" width="39" height="34" rx="3" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.1"/>
+<text x="776.5" y="744" font-size="9" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">HOG</text>
+<rect x="798" y="722" width="39" height="34" rx="3" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.1"/>
+<text x="817.5" y="744" font-size="9" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">SMUDGE</text>
+<rect x="839" y="722" width="39" height="34" rx="3" fill="#ffffff" stroke="#8a4fb0" stroke-width="1.1" stroke-dasharray="3 3"/>
+<text x="858.5" y="744" font-size="9" fill="#98a0ac" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">·</text>
+<rect x="880" y="722" width="39" height="34" rx="3" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.1"/>
+<text x="899.5" y="744" font-size="9" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">LN3</text>
+<rect x="921" y="722" width="39" height="34" rx="3" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.1"/>
+<text x="940.5" y="744" font-size="9" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">LN2</text>
+<rect x="962" y="722" width="39" height="34" rx="3" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.1"/>
+<text x="981.5" y="744" font-size="9" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">LN1</text>
+<rect x="1003" y="722" width="39" height="34" rx="3" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.1"/>
+<text x="1022.5" y="744" font-size="9" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">LN0</text>
+<text x="716" y="774" font-size="9.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">bit 7</text>
+<text x="1036" y="774" font-size="9.5" fill="#63666f" text-anchor="end" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">bit 0</text>
+<text x="1052" y="714" font-size="11.5" fill="#22232a" text-anchor="start" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">$FF8A3D</text>
+<rect x="1052" y="722" width="39" height="34" rx="3" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.1"/>
+<text x="1071.5" y="744" font-size="9" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">FXSR</text>
+<rect x="1093" y="722" width="39" height="34" rx="3" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.1"/>
+<text x="1112.5" y="744" font-size="9" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">NFSR</text>
+<rect x="1134" y="722" width="39" height="34" rx="3" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.1"/>
+<text x="1153.5" y="744" font-size="9" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">SKEW3</text>
+<rect x="1175" y="722" width="39" height="34" rx="3" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.1"/>
+<text x="1194.5" y="744" font-size="9" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">SKEW2</text>
+<rect x="1216" y="722" width="39" height="34" rx="3" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.1"/>
+<text x="1235.5" y="744" font-size="9" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">SKEW1</text>
+<rect x="1257" y="722" width="39" height="34" rx="3" fill="#f2eaf8" stroke="#8a4fb0" stroke-width="1.1"/>
+<text x="1276.5" y="744" font-size="9" fill="#22232a" text-anchor="middle" font-weight="700" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">SKEW0</text>
+<rect x="1298" y="722" width="39" height="34" rx="3" fill="#ffffff" stroke="#8a4fb0" stroke-width="1.1" stroke-dasharray="3 3"/>
+<text x="1317.5" y="744" font-size="9" fill="#98a0ac" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">·</text>
+<rect x="1339" y="722" width="39" height="34" rx="3" fill="#ffffff" stroke="#8a4fb0" stroke-width="1.1" stroke-dasharray="3 3"/>
+<text x="1358.5" y="744" font-size="9" fill="#98a0ac" text-anchor="middle" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">·</text>
+<text x="1052" y="774" font-size="9.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">bit 7</text>
+<text x="1372" y="774" font-size="9.5" fill="#63666f" text-anchor="end" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">bit 0</text>
+<text x="44" y="806" font-size="11.5" fill="#22232a" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">BUSY is a read bit and a start bit at once: write 1 and it starts, write 0 and it pauses, and it reads 1 through the pause.</text>
+<text x="44" y="826" font-size="11.5" fill="#63666f" text-anchor="start" font-family="'Iosevka', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace">The interrupt line is a duplicate of BUSY, so completion is a falling edge — never a pulse. FXSR and NFSR change how many source reads a line spends.</text>
+<rect x="44" y="850" width="660" height="104" rx="8" fill="#e8eefa" stroke="#1f5fa8" stroke-width="1.6"/>
+<text x="374.0" y="898.0" text-anchor="middle" font-size="13.5" font-weight="700" fill="#22232a">why the halftone block is first</text>
+<text x="374.0" y="917.0" text-anchor="middle" font-size="11" fill="#63666f">sixteen word selects at 2-byte steps, $00–$1E, is 32 bytes — the pattern, exactly</text>
+<rect x="724" y="850" width="672" height="104" rx="8" fill="#fdf1de" stroke="#b4761a" stroke-width="1.6"/>
+<text x="1060.0" y="898.0" text-anchor="middle" font-size="13.5" font-weight="700" fill="#22232a">why the rest is not word-aligned</text>
+<text x="1060.0" y="917.0" text-anchor="middle" font-size="11" fill="#63666f">HOP, OP, LINE·SMUDGE·HOG·BUSY and SKEW·FXSR·NFSR are bytes inside one word</text>
+<rect x="0" y="954" width="1440" height="46" fill="#f4f1e8"/>
+<text x="44" y="972" font-size="11" fill="#63666f" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">Provenance: the register map and every quoted field from Atari's BLiTTER manual; the strobe names (XSEL00…XSEL1E, XOPW, XHOPW, XSKEWW,</text>
+<text x="44" y="987" font-size="11" fill="#63666f" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif">XLINEW, XSMUDGE, XFXSR, XRAMR/XRAMW) from sheet 9 of ST-4051, "Address decode and regs".</text>
+</svg>

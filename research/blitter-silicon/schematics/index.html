@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Blitter — four sheets, one chip</title>
+<style>
+  :root { --ink:#22232a; --mut:#63666f; --paper:#fbfaf6; --rule:#e8e5db; }
+  html { background:#efece3; }
+  body { margin:0 auto; max-width:1500px; padding:32px 24px 80px;
+         font-family:'Inter','Helvetica Neue',Arial,sans-serif; color:var(--ink); background:var(--paper); }
+  header { border-bottom:2px solid var(--ink); padding-bottom:14px; margin-bottom:8px; }
+  h1 { font-size:30px; margin:0 0 6px; letter-spacing:-.01em; }
+  .sub { color:var(--mut); font-size:15px; }
+  .note { background:#fdf1de; border-left:4px solid #b4761a; padding:12px 16px; margin:18px 0 26px; font-size:14px; }
+  section { margin:34px 0 46px; page-break-inside:avoid; }
+  h2 { font-size:19px; margin:0 0 2px; }
+  .lede { color:var(--mut); font-size:13.5px; margin:0 0 12px; }
+  object, img { width:100%; height:auto; border:1px solid var(--rule); background:#fff; }
+  footer { border-top:1px solid var(--rule); padding-top:12px; color:var(--mut); font-size:12.5px; }
+  @media print {
+    @page { size:A3 landscape; margin:10mm; }
+    html, body { background:#fff; }
+    body { padding:0; max-width:none; }
+    .note, footer { display:none; }
+    section { margin:0; page-break-after:always; }
+    section:last-of-type { page-break-after:auto; }
+    h2, .lede { margin-bottom:4mm; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Blitter — four sheets, one chip</h1>
+  <div class="sub">C101643, U101 on the 1040STE: the blocks, one word, the register seam, and the bus window.</div>
+</header>
+
+<div class="note">
+  Educational schematics, drawn from the recovered Atari designs (<code>TA-4021</code>, <code>ST-4051</code>,
+  <code>ST-4082</code>), Atari's <em>BLiTTER</em> manual of 25 January 1990, the board's net list and the Hatari
+  model. Functional, not to scale, and <strong>not a floorplan</strong> — no die photograph of this part exists,
+  so no layout is claimed anywhere.
+</div>
+
+<section>
+  <h2>00 · The chip as blocks</h2>
+  <p class="lede">Bus side, address path, datapath, storage and control — and the five things deliberately absent.</p>
+  <object type="image/svg+xml" data="00-blocks.svg" aria-label="The Blitter as blocks"></object>
+</section>
+
+<section>
+  <h2>01 · One word, end to end</h2>
+  <p class="lede">Read, shift, merge, mask, write: the eight steps, the read-count table (4, 8 or 12 clocks a word), the 32-bit source buffer, and a masked line worked by hand.</p>
+  <object type="image/svg+xml" data="01-word.svg" aria-label="One word end to end"></object>
+</section>
+
+<section>
+  <h2>02 · The register seam</h2>
+  <p class="lede">Sixty-two bytes at <code>$FF8A00</code>: sixteen halftone words, the pointer registers, three end masks, and one word of control exploded bit by bit.</p>
+  <object type="image/svg+xml" data="02-registers.svg" aria-label="The register seam"></object>
+</section>
+
+<section>
+  <h2>03 · The bus window</h2>
+  <p class="lede">Four clocks of CPU, four of arbitration, 64 accesses of four clocks — the 63/64 conflict, the frame budget, and the one wire that leaves the chip.</p>
+  <object type="image/svg+xml" data="03-window.svg" aria-label="The bus window"></object>
+</section>
+
+<footer>
+  Four SVGs, one generator: <code>python3 build_schematics.py &amp;&amp; python3 check_overlaps.py</code>.
+  Labels are self-audited on every build (0.60 em per character against the box), and both passes print zero on a
+  clean build. Provenance per sheet; the study is <code>../blitter-implementation.md</code>.
+</footer>
+</body>
+</html>
