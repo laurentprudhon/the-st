@@ -1331,17 +1331,30 @@ public sealed partial class M68000
         switch (mode)
         {
             case 2:                                        // ais — adrw1, the address and nothing else
+                //   ours: one method for the byte and word shapes, so these are the byte listing's text
+                //   (`--op 8010`); a word shape renders the same blocks with a plain read (`m_aob & 1`
+                //   is the byte's lane). The closing read is `adrw2`'s for `(An)`, `(d16,An)` and the
+                //   indexed forms; `pinw2`/`pdcw2` carry theirs in the state that commits the register.
+                //
+                // adrw1 (006)  m_aob = m_da[ry]; m_at = m_da[ry]; alu_and8(m_dbin, 0xffff)            0
                 address = GetA(reg);
                 break;
 
             case 3:                                        // aips — pinw1
+                // pinw1 (21c)  m_aob = m_da[ry]; m_alub = m_dbin; m_dcr = m_da[rx]; m_at = m_da[ry];
+                //              m_au = m_da[ry] + (ry < 15 ? 1 : 2); alu_or8(m_da[rx], m_dbin)         0
                 address = GetA(reg);
                 break;
 
             case 4:                                        // pais — pdcw1 (2 clocks), pdcw2 (the commit)
+                // pdcw1 (103)  m_alub = m_dbin; m_pc = m_au; m_dcr = m_da[rx];
+                //              m_au = m_da[ry] - (ry < 15 ? 1 : 2); alu_or8(m_da[rx], m_dbin)         2
                 BeginFetchState();                         // pdcw1 — m_pc = m_au
                 address = GetA(reg) - (uint)step;
                 await IdleAsync();
+                // pdcw2 (17b)  m_aob = m_au; m_at = m_au; m_da[ry] = m_au; m_au = m_pc;
+                //              alu_and8(m_alub, 0xffff); read at m_aob, m_aob & 1 ? 0x00ff : 0xff00;
+                //              m_edb >>= 8                                                            4
                 SetA(reg, address);
                 break;
 
@@ -1386,9 +1399,12 @@ public sealed partial class M68000
 
         if (mode == 3)
         {
+            // pinw2 (21d)  m_da[ry] = m_au; m_au = m_pc + 2; alu_and8(m_alub, 0xffff);
+            //              read at m_aob, m_aob & 1 ? 0x00ff : 0xff00; m_edb >>= 8                    4
             SetA(reg, address + (uint)step);               // pinw2 — the increment, before the read
         }
 
+        // adrw2 (024)  m_dcr = m_da[rx]; read at m_aob, m_aob & 1 ? 0x00ff : 0xff00; m_edb >>= 8      4
         _dbin = size == 0
             ? await ReadByteAsync(address)                 // adrw2 / abll3, in the byte's own lane
             : await ReadWordAsync(address);
@@ -1655,6 +1671,17 @@ public sealed partial class M68000
     async ValueTask AluWordIntoDataRegisterAsync(int rx, AluLong kind, uint source)
     {
         uint destination = _d[rx] & 0xFFFF;
+        //   ours: the two sources' ALU states are one call — `WordAlu` then `SetWordFlags` — where the
+        //   listing has `romw1` for a memory operand and `rorw1` for a register or an immediate one,
+        //   and both listings end on the same tail `rrgw2`: the destination's write and the
+        //   instruction's one read. The byte shapes render those three states as `alu_or8`/`set_8`
+        //   (`--op 8010`); the states are the same ones.
+        //
+        // romw1 (1c3)  m_aob = m_au; m_ir = m_irc; m_pc = m_au; m_at = ext32(m_dbin);
+        //              alu_or(m_dbin, m_da[rx]); sr_nzvc()                                            0
+        // rorw1 (1c1)  m_aob = m_au; m_ir = m_irc; m_pc = m_au; m_at = ext32(m_da[ry]);
+        //              alu_or(m_da[ry], m_da[rx]); sr_nzvc()                                          0
+        // rrgw2 (27a)  m_ird = m_ir; set_16l(m_da[rx], m_aluo); m_au = m_pc + 2; read at m_aob        4
         uint result = WordAlu(kind, source, destination);
         SetWordFlags(kind, source, destination, result, extend: kind is AluLong.Add or AluLong.Sub);
 
