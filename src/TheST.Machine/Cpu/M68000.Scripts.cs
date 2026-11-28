@@ -3587,30 +3587,58 @@ public sealed partial class M68000
 
         uint value = _d[rx] & 0xFFFF;
 
-        // chkr1 — the chip latches the value into m_alub and compares bound − value: this subtraction's
-        // N and V are the range test, and nothing else is written.
+        // The script, in the listing's order (`microcode-walk.py --op 4180` — the `Dn` source form; every
+        // other form's bound is the addressing class's read above, `ReadWordSourceAsync`).
+        //
+        //   ours: no adder arithmetic, which is `chkr1`'s `m_au = m_au - 2` and `chkr2`'s `m_pc = m_au;
+        //   m_au = m_au + 2` — a net-zero transfer pair, and the trap's frame counter is `_pc`'s. The
+        //   corpus's CHK file measures the pair directly: 2 500/2 500 state and exact-clock, both paths
+        //   present (1 447 records vector 6, 1 053 vector 3).
+        //
+        // chkr1 (152)  m_alub = m_da[rx]; m_au = m_au - 2; alu_sub(m_da[rx], m_da[ry]); sr_nzvc()     2
         _alub = value;
         AluSub16(value, operand.Value & 0xFFFF);
         SrNzvc();
         await IdleAsync();
 
-        // chkr2 — the value's own flags go into SR (an and with 0xFFFF is a move that sets them, and this
-        // is the comparison whose flags the instruction *leaves*), and the branch the range test decided
-        // is taken on the *old* flags: out of range goes straight to the trap, which is why the trap path
-        // is two states and not three.
+        // chkr2 (153)  m_t = !(m_isr & (SR_V|SR_N)); m_pc = m_au; m_au = m_au + 2;
+        //              alu_and(m_alub, 0xffff); sr_nzvc()                                             2
         bool outOfRange = (_isr & (FlagV | FlagN)) != 0;
         AluAnd16(_alub, 0xFFFF);
         SrNzvc();
         await IdleAsync();
 
+        //   ours: the trap path is the exception entry's code, not this method's — `EnterExceptionAsync(6, 0)`,
+        //   which `chkr2`'s branch below and `chkr3`'s sign test both call — so its states are pasted once
+        //   here, in the listing's order, rather than expanded by CHK. The entry closes on the handler's
+        //   fetch, the pair `b`/`mmrw3` (`RefillAsync`'s, named once at `CloseInstructionAsync`), and
+        //   `chkr4` below is the in-range path's own `b` — the same four statements, uncharged — whose
+        //   read is that same pair.
+        //
+        // trap1 (1d0)  m_ftu = m_sr; m_au = m_pc - 2                                                  2
+        // trap2 (347)  m_sr = (m_sr & ~SR_T) | SR_S; update_user_super(); update_interrupt();
+        //              m_au = m_da[16] - 2; alu_and(m_pc, 0xffff)                                     2
+        // trap3 (3c2)  m_aob = m_au; m_dbout = m_aluo; m_au = m_au - 4; alu_and(m_ftu, 0xffff);
+        //              write m_dbout at m_aob                                                         4
+        // trap4 (360)  m_aob = m_au; m_dbout = m_aluo; debugger_exception_hook(0x06);
+        //              m_da[16] = m_au; m_ftu = 0x0018; m_au = m_au + 2;
+        //              alu_and(high16(m_pc), 0xffff); write m_dbout at m_aob                          4
+        // trap5 (0ef)  m_aob = m_au; m_dbout = m_aluo; m_at = ext32(m_ftu); m_au = m_au - 4;
+        //              alu_and(m_alub, 0xffff); write m_dbout at m_aob                                4
+        // trap6 (367)  m_aob = m_at; m_pc = m_at; m_au = m_at + 2; read at m_aob                      4
+        // trap7 (11a)  m_aob = m_au; set_16h(m_at, m_dbin); m_au = m_au + 2; read at m_aob            4
+        // trap8 (2b7)  m_aob = merge_16_32(high16(m_at), m_dbin);
+        //              m_au = merge_16_32(high16(m_at), m_dbin) + 2; read at m_aob                    4
+        // trap9 (11c)  (no statement of its own: the `n 2` the vector's read is followed by)          2
+        // b (363) + mmrw3 (34c)  m_aob = m_au; m_ir = m_irc; m_pc = m_au; m_au = m_au + 2;
+        //              m_ird = m_ir; read at m_aob                                                  0+4
         if (outOfRange)
         {
             await EnterExceptionAsync(6, 0);                  // chkr2 branches straight to the trap
             return;
         }
 
-        // chkr3 — the second test: the value's own sign, which is what the flags in SR now say. Only the
-        // clean path runs this state, which is the two clocks that separate the paths.
+        // chkr3 (110)  m_t = m_isr & SR_N                                                             2
         bool negative = (_isr & FlagN) != 0;
         await IdleAsync();
         if (negative)
@@ -3619,6 +3647,7 @@ public sealed partial class M68000
             return;
         }
 
+        // chkr4 (150)  m_aob = m_au; m_ir = m_irc; m_pc = m_au; m_au = m_au + 2                       0
         await TrailingFetchAsync();                           // chkr4 — the closing read
     }
 }
