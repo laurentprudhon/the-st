@@ -25,6 +25,12 @@ This file is that document, and it supersedes ticket
 `open` and `unmeasurable` are the only rows that can never be closed by work in this repository. Everything
 else is a task with a known route, and the row says which.
 
+**Readings and measurements are two registers, and the split was only written down at the closing audit
+(2026-11-28).** A `read` row is a drawing question — a pin name, a net, a pad's direction — and its route is a 600
+dpi crop and the owner's eyes, so the reading residue lives in `design/board-inventory.md` §6 and the component
+pages, with the crop named. This file carries the *measurements*: a scope, a meter, a modified board, a firmware
+dump. A row that mixes the two says which half is which.
+
 ## 1. The Blitter (U101)
 
 The study is [`research/blitter-implementation.md`](../research/blitter-implementation.md). **No blitter is
@@ -64,6 +70,9 @@ Study: [`research/gstmcu-silicon-implementation.md`](../research/gstmcu-silicon-
 | G4 | The frame boundary when `top` is rewritten mid-frame | **`open`** | Nobody has published it, the memo does not cover it and no emulator models it (Hatari writes `top` and lets the counter run). A 20-line test program would settle it on hardware; recorded here until then. |
 | G5 | The paddle/pen ADC's law | **`open`** | Hatari returns a host-joystick-derived constant; the STE FAQ documents the *range* (`$FF9211`, 8 bits) and not the law; Info-Coach documents the pins. A resistive sweep on a known divider would settle it. Nothing in the model depends on it (the ADC is stubbed). |
 | G6 | Does refresh ever lose to `XSRQ` held low indefinitely? | **`open`**, and it needs a **modified board** | The memo says a held `XSRQ` stops refresh; nobody has published what the machine does when it is held for a frame. Out of reach without cutting a trace; recorded and not chased. |
+| G7 | Does the sound counter increment on the grant or on the `SLOAD` load? | **`open`** | The design's RTL increments on grant; the memo latches on `SLOADB`'s rising edge. The two orderings differ by one fetch at a refill boundary and the study records the disagreement rather than picking a branch (`research/gstmcu-silicon-implementation.md` §7 row 2, §8 test 3). The probe: poll `$FF8909/0B/0D` between two refills and correlate with `SLOAD`. |
+| G8 | How many of a line's blanking slots a refresh actually takes | **`open`** | The address clock free-runs at 2 µs and the cycles wait for blanking, so the walk is 2.05 ms and the model keeps refresh off the deadline list either way; the count is a bound, not a task (`design/system-control-unit.md` §12). A scope on `RAS0` while `DE` is high counts it. |
+| G9 | What `LATCH`'s payload is, and where the ring wraps | **`open`**, and it is the one question the two netlist exports cannot answer | `LATCH`'s consumers lie outside both exports, and the ring's spacing is settled while its wrap is not (`research/gstmcu-silicon-implementation.md` §5, §9). A scope on `LATCH` (pin 131) across a line, plus one read of the wrap in the recovered `.DWG` text, would both land. |
 
 ## 3. The GST Shifter (U401)
 
@@ -79,6 +88,8 @@ Study: [`research/gst-shifter-implementation.md`](../research/gst-shifter-implem
 | S6 | The Microwire frame's length and rate | **`documented`** | The board article and Atari's example: 1 Mbit/s, a mask that decides which bits clock out, 11 clocks for `$07FF`. A model task. |
 | S7 | The sound DMA FIFO's depth (carried as four words from Steem) | **`open`** — the row that ticket [#26](https://github.com/laurentprudhon/the-st/issues/26) has been carrying | `SREQ` is the chip's own output, so software cannot starve the buffer to count its depth: it needs a logic analyser on U401 pin 36 under a frame written to overrun, or a franker reading of the reconstruction's own comment (which argues only that two words is too few). Nothing else in the machine depends on the figure — it changes when a sound word is dropped, not whether the path works. |
 | S8 | What the ACIA does when the IKBD holds the line busy (ticket [#21](https://github.com/laurentprudhon/the-st/issues/21)) | **`documented`**, closed 2026-11-28 | The 6850's data sheet states all three cases: a one-byte receive register with an overrun flag ("neither the receive buffer nor the `RSR` is overwritten"), `CTS` high inhibiting `TDRE` ("the Transmit Data Register Empty bit is inhibited"), and `DCD` high inhibiting the receiver — so "busy" costs *bytes*, not time, and costs the transmitter only its status bit. The ÷64 clocking to 7812.5 baud is arithmetic on the 500 kHz reference (`design/timers-and-events.md`; `research/standard-parts-implementation.md` §5.2–§5.3). |
+| S9 | Which pins 35, 52, 55, 72 and 76 carry — and therefore where the reset condition's second input comes from | **`read`** | A pin-name reading on the drawing, not a measurement: the 84-pin symbol's remaining unnamed pins are a 600 dpi crop each (`research/gst-shifter-implementation.md` §8). It decides nothing the model does today; it decides whether the internal reset has one input or two. |
+| S10 | Is the `$FF8265` non-zero-to-zero bug this chip's or U400's? | **`open`** | Both are plausible and the group boundary is shared: the extra group is fetched by the System Control Unit and shifted here, so the off-by-one can live on either side of the wire (`research/gst-shifter-implementation.md` §4.7). The probe is experiment 4 of that study's §7 with `$FF8265` written 8 → 0 mid-line. |
 
 ## 4. The DMA controller (U300)
 
@@ -95,6 +106,11 @@ document that the study did not use.
 | D5 | The counter's readback cadence | **`open`** | Nobody has published whether a read of `$FF8609/0B/0D` can disturb a transfer in flight; the study calls it a documented behaviour with no model. Recorded. |
 | D6 | The reset state of a chip with no reset pin | **`open`** | Power-on state after a warm boot. A test program and a cold/warm boot; no other route. |
 | D7 | The double strobe | **`documented`** — a model task, tracked in [#95](https://github.com/laurentprudhon/the-st/issues/95) | Atari's own DMA documentation and the WD1772's command timing; no emulator models it. |
+| D8 | How the direction reaches U400 — a latched copy of `$FF8606`, or a net the symbol does not name | **`read`** | The symbol names `CR/W` on the device port and nothing that carries direction to the GSTMCU (`research/dma-controller-implementation.md` §4.4). A crop of the two symbols and the §4.1 net column settles it; nothing depends on it while the model drives data only. |
+| D9 | The priority between `FDRQ` and `HDRQ` if both assert | **`open`** | Nothing in the record ranks them, and ADR 0007 forbids inventing a ranking; mode bit 7 gates one of the two, so the interesting case is a mode write landing between two requests. The probe is a scope on both request lines with the mode word rewritten mid-sector (study §7 test 4). |
+| D10 | The silicon FIFO depth, and whether the write direction's 32-byte prefill is one operation or two | **`open`** | The 16-byte depth is Atari's own "what logically looks like a sixteen byte FIFO", not a measured count, and the prefill's shape is the model's (`research/dma-controller-implementation.md` §4.6). A scope on `DRQ` against `CA1` with a one-word transfer measures both. |
+| D11 | What the reserved mode bits (0 and 5) do, and whether bit 6 is ignored at the pin or only in the models | **`open`** | Three emulators ignore the three bits and no document assigns them (`research/dma-controller-implementation.md` §5.5). A write-and-read on a real chip answers it in one line; nothing in our model depends on it. |
+| D12 | Why `DRQ` is measurably shorter on the last two bytes of a sector | **`open`** | The field literature records the irregularity and no document explains it; it is where the FIFO's flush meets the device's last request (`research/dma-controller-implementation.md` §8). A scope on `DRQ` across a sector boundary with a known image measures the two-byte tail. |
 
 ## 5. Machine-level questions
 
@@ -104,6 +120,9 @@ document that the study did not use.
 | M2 | The real pin-event rate ([#18](https://github.com/laurentprudhon/the-st/issues/18)) | **`ours`** | An *emulator* measurement: instrument a reference emulator. Nothing to do with a board. |
 | M3 | The peripherals' `/RESET` receivers ([#101](https://github.com/laurentprudhon/the-st/issues/101)) | **`documented`** in part | The CPU's own hold is captured in the corpus (124 clocks); which chips subscribe is a schematic question (`read`) plus the design's pad rings — the blitter has `XRESET` and one `INT`, and the GSTMCU takes `/RESET` to re-initialise its counters (Info-Coach). |
 | M4 | The DMA-chip relay versus the blitter's direct request | **`documented`** | Both studies plus Info-Coach: the DMA asserts `RDY` and the GSTMCU performs the cycles; the blitter drives addresses and takes the grant. This row exists because it is the one contrast every summary of the machine gets wrong. |
+| M5 | Which slot each client actually occupies — the blitter's and disk's share of the bus, and the STE's internal share | **`open`** | `design/partition-audit.md` carries the estimate and flags it as an estimate; the studies give the per-access cost and not the scheduling (`research/blitter-implementation.md` §4.2, `research/dma-controller-implementation.md` §4.2). A cycle-counting program with a scope on `BGACK` and `AS` would measure the share; nothing in the model depends on the average, only on the order. |
+| M6 | The shipped mask of the three customs that have no decap (U400, U401, U300) | **`unmeasurable`** | No STE custom has been decapped, so the mask cannot be read off a die; the GSTMCU's archive holds three revisions differing in cell count, and the Shifter and DMA have no drawing at all (`research/gstmcu-silicon-implementation.md` §9, `research/gst-shifter-implementation.md` §8). It matters only for which stack a settled behaviour lives in — never for what the machine does. |
+| M7 | The readings still owed on the board | **`read`** | `design/board-inventory.md` §6's remaining items: U400's `MAL0`–`MAL9`, `CLK` and ground pins; the two "all pins unverified" symbols (`U502`/`U503`, `U508`); and the redraw-versus-photographic-scan check for the GSTMCU. Every one is a crop and the owner's eyes, and none blocks a model change. |
 
 ## 6. The four standard parts (U203, U301, U200/U201, U202)
 
@@ -148,7 +167,26 @@ correction rather than as a question.
 | K3 | What an unplugged keyboard's floating `RXD` reads as | **`open`** | `$FF` (a break condition) and noise are both plausible, and nothing published says which; whether the ST's ACIA reports `OVRN`, `FE` or silence is the same question one level up. Pull the cable mid-session on a real machine. |
 | K4 | The reset window: its length, and whether the four known command pairs are the whole rule | **`measured-elsewhere`** for the pairs, **`open`** for the rule | Hatari records `$08 $14`, `$08 $0B $14`, `$12 $14` and `$12 $1A` arriving during the self-test as the trigger for reporting mouse and joystick together, with *Barbarian* and *Hammerfist* named; nothing else in the record generalises it. A real machine with a timer between `$80 $01` and the second command would map the window. |
 
-## 8. What the 2026-11-28 search changed
+## 8. The 68000 (U100)
+
+Study: [`research/m68000-silicon-implementation.md`](../research/m68000-silicon-implementation.md); the model
+comparison is [`design/cpu-silicon-todo.md`](cpu-silicon-todo.md), which is where this part's *code* residue lives
+— twelve rows, each with a blocker or a ruling. What follows is the part's *evidence* residue: the six things the
+die work did not settle, which the campaign's register was missing until the closing audit (2026-11-28).
+
+| # | question | state | what settles it, and what is already known |
+|---|---|---|---|
+| C1 | A complete nanocode bit map (the ~40 named fields, not the 68-bit assignment) | **`ours`** | Two working cores decode it — FX68K identifies all control lines, rm68000 decodes 199 — but neither publishes a bit-level table. FX68K's RTL is public, so the map is a reading of that source, not a measurement: a session, not a board. |
+| C2 | The `IRD` PLA bank's truth tables | **`read`** | Nobody has published them, and the block statement ("a ton of PLAs") is where the record stops. The die is photographed and delayered; a PLA plane at the archive's resolution would be read, not measured. Until then `Decode`'s families are the manual's list, which the study says plainly. |
+| C3 | The internal clock generator beyond the `E` divider | **`unmeasurable`** | `eclock.v` extracts the divider from the netlist; what clocks it is inside the die's clock block and no photograph at the archive's resolution resolves it. Nothing in the model depends on it — `Pins.E` is undriven by ruling. |
+| C4 | Die-revision differences (R9M and later, the `68HC000` CMOS conversion, the 68010's microcode changes) | **`unmeasurable`** | The die work covers one NMOS part; each revision is another die. It matters only if a corpus record ever disagrees with the manual in a way the 1983 photo cannot explain. |
+| C5 | Why the micro/nanocode rows are laid out as they are (the address scramble's rationale) | **`unmeasurable`**, and academic | `rommap.txt` is readable and its rationale (layout pitch, decoder fan-out, column sharing) was never written up. The model does not use the row order. |
+| C6 | The test mode, exercised on hardware | **`open`** | Described in 1985 and never publicly exercised; the die shows the mode's decode and no program can reach it without a tester. A board with the mode's stimulus would settle what it observes versus what it injects. |
+
+`derived` The first two rows are the ones a later session can close without a board: one is a public RTL's
+decode, the other a die image the archive already holds.
+
+## 9. What the 2026-11-28 search changed
 
 1. **The 63/64 conflict is closed** — three people (a demo coder with a real STE, Hatari's author, and the
    blitter's own reverse-engineer) published the answer, and the RTL shows the counter. Our study's §5.1 and
@@ -170,33 +208,45 @@ correction rather than as a question.
 6. **Nothing has been published about the endmask's last pixel** — which, given that every working blitter
    routine uses Atari's own tables, is evidence that the tables are right and the derived rule was wrong.
 
-## 9. What is genuinely open, and nothing else
+## 10. What is genuinely open, and nothing else
 
-Fourteen rows. Two are on the blitter itself (B7's *coverage* is the third, counted in §1), two on the
-disk path's digital side, three on the medium (A4–A6), three on the GSTMCU (two of them on its stub), one
-is analogue, one is the Shifter's sound FIFO, and two are on the IKBD — its scan cadence and a floating
-`RXD`. Nothing in the list can be closed by work in this repository, and every one of them has the
-experiment written down.
+Twenty-four rows, and the closing audit (2026-11-28) is what made the list complete: before it, the register had
+sixteen and four of the chips' residuals lived only in their studies. Two are on the blitter, six on the GSTMCU, three
+on the Shifter, seven on the DMA controller, three on the medium, three machine-level, two on the IKBD and one on the
+68000. None can be closed by work in this repository, every one has its experiment written down, and the ones whose
+route is a *reading* rather than a scope are named as such.
 
 | row | question | the one thing that would close it |
 |---|---|---|
 | B8 | what a bus error does mid-blit | a cartridge-driven fault on hardware, or a vendor sentence nobody has found |
-| B9 | the `XIDS` pad | a 600 dpi read of the pad sheet (a `read`, not a scope) |
+| B9 | the `XCS`/`XIDS` pads against a symbol that has neither | a 600 dpi read of the pad sheet (a `read`, not a scope) |
+| G4 | the frame boundary when `top` is rewritten mid-frame | a 20-line test program on a board |
+| G5 | the paddle/pen ADC's law | a resistive sweep |
+| G6 | `XSRQ` held low indefinitely | a modified board |
+| G7 | the sound counter's increment instant (grant or load) | poll `$FF8909/0B/0D` between refills, correlate with `SLOAD` |
+| G8 | how many of a line's blanking slots refresh takes | a scope on `RAS0` while `DE` is high |
+| G9 | `LATCH`'s payload and the ring's wrap | a scope on `LATCH` (pin 131), plus one `.DWG` read |
+| S5 | the ladder's per-bit resistor values | a meter (analogue; nothing depends on it) |
+| S7 | the sound FIFO's depth | a logic analyser on `SREQ` under an overrunning frame |
+| S10 | whether the `$FF8265` non-zero-to-zero bug is the Shifter's or U400's | experiment 4 with `$FF8265` written 8 → 0 mid-line |
 | D5 | the counter's readback cadence | a poll-loop test against `RDY` on a scope |
 | D6 | the disk chip's power-on state (it has no reset pin) | a cold/warm boot pair and a register dump |
-| G4 | a mid-frame `top` write | a 20-line test program on a board |
-| G5 | the ADC's law | a resistive sweep |
-| G6 | `XSRQ` held low | a modified board |
-| S5 | the ladder's resistor values | a meter (analogue; nothing depends on it) |
-| S7 | the sound FIFO's depth | a logic analyser on `SREQ` under an overrunning frame |
-| A4 | the reference drive's speed error and wow | a tachometer on a real drive |
-| A5 | the DPLL's analogue capture range | a bit-error-rate sweep against cell width |
+| D9 | `FDRQ` against `HDRQ` priority when both assert | both request lines on a scope, mode rewritten mid-sector |
+| D10 | the silicon FIFO's depth and the write prefill's shape | `DRQ` against `CA1` with a one-word transfer |
+| D11 | what the reserved mode bits (0, 5, 6) do | a write-and-read on a real chip |
+| D12 | why `DRQ` shortens on a sector's last two bytes | `DRQ` across a sector boundary with a known image |
+| A4 | the reference drive's speed error, wow and flutter | a tachometer on a real drive |
+| A5 | the preamp/AGC curve and the DPLL's capture range | a bit-error-rate sweep against cell width |
 | A6 | the write splice of a rewritten sector | a write/rewrite test on hardware, then a flux capture |
+| M5 | which slot each client actually occupies, and the STE's internal share | a cycle-counting program with `BGACK` and `AS` on a scope |
 | K1 | the IKBD's matrix scan period | a scope on `DR1`, or a cycle count of the firmware's loop |
 | K3 | a floating `RXD` on an unplugged keyboard | pull the cable mid-session |
+| C6 | the 68000's test mode, exercised | a tester that drives the mode's stimulus and reads back what it observes |
 
 Everything else in this document is a task with a route: implement it (`documented`), model it and cite the
 person who measured it (`measured-elsewhere`), read a crop (`read`), or test it in our own tree (`ours`).
+The rows that are `read` or `unmeasurable` but not in this list are in their sections above, and the board's reading
+residue is `design/board-inventory.md` §6.
 
 ## Sources
 

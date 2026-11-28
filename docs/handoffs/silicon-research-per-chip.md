@@ -380,3 +380,28 @@ ticket. A ticket is a promise of work; "nobody can do this yet" is not work.
   GST chips first, then the DMA.
 * **Do the studies publish?** The 68000 one vendors a 1983 *Byte* figure under research use; if any of
   this goes public, that figure must be replaced (the licence note in `die/SOURCES.md` says how).
+
+---
+
+## 8. The closing audit — **done, 2026-11-28**, `docs/handoffs/silicon-closing-audit.md`
+
+The stopping rule was walked over all eight entries of §4, in three directions: every study's "what the model needs"
+back to a design file, every open marker in `design/` forward to a study, and the seven questions of §2 across every
+chip. **The rule is met**: every question in our core has a labelled claim with a tier, or a register row with its
+state and its experiment — and no chip is missing any of the seven.
+
+What the audit changed, and it is the reason it was worth a session rather than a reading:
+
+- **The register was incomplete by eighteen rows** — sixteen residuals that lived only in the GSTMCU, Shifter, DMA and
+  68000 studies' prose, and three machine-level ones. All nineteen landed in `design/emulator-limitations.md`, which
+  now holds 68 rows (26 open outright, 5 `read`, 8 `unmeasurable`).
+- **The campaign's first chip had no register section at all.** `§8. The 68000 (U100)` is that section now, with the
+  study's six evidence residuals; the twelve code-level rows stay in `design/cpu-silicon-todo.md`.
+- **The reference case's citations were study-local.** Its Sources block numbered 1–31 while the shared ledger used
+  those ids for other URLs; its 31 sources are now ledger ids 73–103 and `verify` is green on it like on the others.
+- **Two rules were written down**: a `read` (a crop) is not a measurement, and the register now says which half of a
+  mixed row is which; and the citation gate's two blind spots are in the repository's own `scripts/verify-research.sh`.
+
+**The thread after the audit is no longer silicon**: the media and image study is done
+(`research/floppy-media-and-images.md`, 2026-11-28) and re-priced the flux defer rather than reopening it, so the
+audit's §8 records what that thread inherits. The register's §10 shopping list is what a board would still buy.
