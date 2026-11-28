@@ -28,7 +28,7 @@ scripts/verify-research.sh --all                   # every study in the tree
 ```
 
 - **The ledger is shared and its ids are stable for the whole campaign** (`$HERMES_HOME/cache/citations/ledger.json`,
-  currently 72 sources). Never guess the next number: `sources.py add` returns the id, and a re-added URL returns the
+  103 sources, one id per URL across every study). Never guess the next number: `sources.py add` returns the id, and a re-added URL returns the
   **existing** id. A study that renumbers to look tidy breaks every other study's citations.
 - **The verifier has two blind spots that cost a session**: it splits sentences on `[.!?]` + whitespace and skips
   lines beginning with `|`. A citation written *after* a sentence's last period falls into a dropped fragment, and

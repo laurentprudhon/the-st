@@ -22,8 +22,10 @@ Plus the owner's ruling of 2026-11-28: a question only a board could settle goes
 1. **Study → home.** Each row of each study's "what the model needs" carries a claim, a tier and a design file; each
    item of each study's "what is still unknown" is a register row, or a `read` in the board inventory.
 2. **Design → study.** Every open marker in `design/*.md` is either a claim the studies settled or a register row.
-   `grep -niE "unknown|unverified|TODO|TBD|open question" design/*.md` returns eighteen lines, and the audit read
-   each one.
+   `grep -niE "unknown|unverified|TODO|TBD|open question" design/*.md` returns a list short enough to read in one
+   pass — `board-inventory.md` §6 and its two "all pins unverified" symbols, the two register cross-references, and one
+   line each in `video.md`, `system-control-unit.md`, `partition-audit.md`, `crossings.md` and `subsystems-spec.md` —
+   and the audit read every line.
 3. **The seven questions, per chip** (`silicon-research-per-chip.md` §2): images, clocking/counting, control
    structure, registers/latches, datapath, documented-vs-real behaviour, what the model needs.
 
