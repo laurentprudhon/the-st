@@ -491,6 +491,8 @@ The datasheet gives four timers and exactly two auxiliary inputs, `TAI` and `TBI
 
 `inferred` Neither Hatari nor NeoST models the delay — Hatari's comment says so explicitly ("at the emulation level, we don't take into account this delay of 32 CPU cycles, as it would add complexity and no program are known so far to require this delay"), and NeoST's own mapping table agrees.[43]
 
+`documented` What the model does, in one line: `design/timers-and-events.md` §10.1 and `MfpClock` carry the delay as **128 master ticks** (8 × 500 ns), added to Timer A's pending instant — the part has no register and no pin of its own to model, so the whole 74LS164 is one constant in one file.
+
 ---
 
 ## 8. What the model needs

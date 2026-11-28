@@ -684,23 +684,28 @@ Sheet 2. Complete.
 | Pin | Signal | Dir | Active | Tag |
 |---|---|---|---|---|
 | 1 | VSS | pwr | — | V |
-| 2, 5 | N/C | — | — | V |
+| 2, 5 | N/C | — | — | — (not drawn) |
 | 3 | ANALOG CHANNEL B | out | — | V |
 | 4 | ANALOG CHANNEL A | out | — | V |
 | 6–13 | IOB7 … IOB0 | I/O | H | V |
 | 14–21 | IOA7 … IOA0 | I/O | H | V |
 | 22 | CLOCK | in | 2 MHz (`CLK2`) | V |
 | 23 | RESET | in | L | V |
-| 24 | A9 | in | tied low | V (name as printed; the datasheet numbers it `A9`) |
-| 25 | A8 | in | tied high | V (name as printed; the datasheet numbers it `A8`) |
-| 26 | SEL | in | H (pull-up; clock not divided) | V |
+| 24 | A8 (as printed; the datasheet numbers this pin `A9`) | in | tied low | V |
+| 25 | A9 (as printed; the datasheet numbers this pin `A8`) | in | tied high | V |
+| 26 | SEL | in | H (pull-up; clock not divided) | U — not drawn on the symbol |
 | 27 | BDIR | in | H | V |
 | 28 | BC2 | in | H (tied to VCC) | U (not paired; wired per Hatari's table) |
 | 29 | BC1 | in | H | V |
 | 30–37 | DA7 … DA0 | I/O | H | V |
 | 38 | ANALOG CHANNEL C | out | — | V |
-| 39 | TEST1 | — | — | V (open) |
+| 39 | TEST1 | — | — | U — not drawn on the symbol |
 | 40 | VCC | pwr | — | V |
+
+`SEL` and `TEST1` are not drawn at all, and both are safe to leave open by the datasheet's own
+wording: `SEL` "has pullup resistance, allowing for full pin compatibility with the AY-3-8910 ... when
+this pin is not connected", so an undrawn pin means the clock is not divided, and `TEST1` is the
+part's test output ("do not connect to anything").
 
 Port A is the **control port** on the STE — `IOA0` the floppy side select, `IOA1`/`IOA2`
 drives 0 and 1, `IOA3`/`IOA4` the RS-232 `RTS`/`DTR` outputs, `IOA5` the parallel
