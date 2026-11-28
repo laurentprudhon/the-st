@@ -275,7 +275,8 @@ What the session established, in the form the remaining chips can reuse:
 ### IKBD (HD6301V1, on the keyboard PCB)
 * Not a die study: a 6801-family MCU running Atari firmware. Questions: the command set and its timing,
   the scan matrix, mouse/joystick packet formats, and what the ACIA link does when the IKBD is busy.
-  MAME has a driver; our `design/board-inventory.md` has the wiring.
+  MAME has a driver; our `design/board-inventory.md` has the wiring. **Brief written 2026-11-28:**
+  `docs/handoffs/ikbd-hd6301-study.md` — and it is the last chip, so the session after it is the closing audit.
 
 ---
 
@@ -332,7 +333,9 @@ nomenclature section (only if the part has internal names worth fixing), drawing
    read-modify-write, the 1772's force-interrupt corner), and what the **model already assumes** that neither
    says. It inherits one new fact: `BINT` is the blitter's busy/idle line on `GPIP3`, a level that needs `AER`
    to become an interrupt. No sheets unless earned.
-6. **IKBD** — half a session, behavioural only.
+6. **IKBD** — half a session, behavioural only. Its brief is written: `docs/handoffs/ikbd-hd6301-study.md`
+   (2026-11-28), which also names the thread that follows the closing audit:
+   `docs/handoffs/disk-media-and-image-formats-study.md`.
 
 **Stopping rule:** stop when every open question in our core has either a labelled claim or an explicit
 `unknown` with the experiment that would settle it. Do not chase transistor-level detail for a part whose

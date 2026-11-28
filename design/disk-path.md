@@ -174,7 +174,7 @@ so the two layers agree instead of inventing separate vocabularies.
 
 | falsifier | reopens |
 |---|---|
-| a title in the validation ladder needs `.ipf` or `.scp` | §1 — the flux path becomes v1 work |
+| a title in the validation ladder needs `.ipf` or `.scp` | §1 — the flux path becomes v1 work. **The pricing session for that decision is briefed**: `docs/handoffs/disk-media-and-image-formats-study.md` (2026-11-28) builds the protection-class table this row needs to be argued from |
 | a real sector read shows more than 6 wakes per transfer | §3 — the burst's wake accounting |
 | a protection fails on a synthesised-gap `.st` that passes on the same game's `.stx` | §6 — the loader's default layout |
 | the perf chain shows the disk's arithmetic dominating a frame | §3 — the deadline choice |
