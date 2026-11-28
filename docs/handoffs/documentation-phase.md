@@ -1,15 +1,17 @@
 # Handoff — the documentation phase: one authoritative reference, the machine and the emulator
 
 **Goal of the phase.** Replace a decade-shaped pile of documents with **one reader's book and one archive**. A new
-`reference/` directory becomes the single entry point and the only authoritative statement of what this machine is
+`book/` directory becomes the single entry point and the only authoritative statement of what this machine is
 and what this emulator does; `research/` becomes the archive of evidence everything in it is derived from, including
 the older documents that were written before there was a book to fold them into.
 
-The book has two halves and they are deliberately different in kind. **The first half is the real machine** — a
-1040STE as a product a person uses, then as a board, then as a set of parts, then as a set of timelines. **The second
-half is our emulator of it** — how time is simulated, how each part is modelled, what is *not* modelled, what nobody
-knows about the hardware, and where the code is. A third thread runs through both: **the 68000**, presented as a
-programming manual we can write better than Motorola's, because we have the microcode listing and the corpus.
+The book is six parts and they are deliberately different in kind. **Parts 1 to 3 are the real machine** — a 1040STE
+as a product a person uses, then as a board, then as a set of parts, then as a set of timelines. **Part 4 is our
+emulator of it** — how time is simulated, how each part is modelled, what is *not* modelled, what nobody knows about
+the hardware, and where the code is. **Part 5 is the 68000**, presented as a programming manual we can write better
+than Motorola's, because we have the microcode listing and the corpus. **Part 6 is TOS as code** — every service a
+program can call, its implementation in EmuTOS and in real TOS, and the table that ties each service back to the
+hardware of Parts 2–3 and forward to the model of Part 4.
 
 **Why now.** The per-chip campaign and the closing audit (`docs/handoffs/silicon-closing-audit.md`) have just
 finished: every chip has a study, every open question has a labelled claim or a register row, and the register is
@@ -23,14 +25,29 @@ it is called done. §5 is the mechanism; it is the most important section of thi
 
 ---
 
+## 0. The standing rule — **the owner validates a detailed plan before anything is written**
+
+**No chapter, no section and no document of this phase is written before the owner has validated its plan.** The
+plan is *detailed*: the chapter's sections in order, what each section will claim, the sources it will name, the
+figures it will draw. It is posted as a comment on the ticket that owns the chapter, and the owner answers there —
+approval, corrections, or a different shape. A chapter written on an unvalidated plan is a chapter that gets
+rewritten, and the phase has thirty-odd chapters: this is the cheapest rule in it.
+
+The same rule governs everything else in the repository that is expensive to undo: a study's outline, a move of
+files, a register of rows, a design document. **Ask first, in writing, with the plan attached.** Silence is not
+approval, and a plan that is "obviously right" is still posted — the owner's corrections are the point, and they
+have been right about the chapter order, the vocabulary and the sources more than once.
+
+---
+
 ## 1. The shape of the repository after the phase
 
 | directory | role | what changes |
 |---|---|---|
-| **`reference/`** | **NEW.** The book: the only authoritative statement, and the single entry point for a reader. Written for a human, progressive disclosure inside every chapter. | created here |
+| **`book/`** | **The book**, at the repository root: `book/README.md` is the single entry point, `book/part-1/` … `book/part-6/` the chapters, `book/appendix/` the appendices. The only authoritative statement of the machine and the model. | created here |
+| `docs/` | the project's **records**, which it already held: `docs/adr/` (decisions), `docs/handoffs/` (session briefs), `docs/agents/` (tracker conventions). Unchanged in place. | unchanged |
 | `research/` | The **archive of evidence**: the studies, the vendored sources, the recovered designs, the magazines, and — new — `research/archive/` holding the older documents that were never studies. | gains `archive/`, and a `README.md` that indexes what is where |
 | `design/` | The **implementation record**: ADRs, the virtual-chip partition, the scheduler, the subsystem specs. Not rewritten; cited by the book's second half as a source. | unchanged in place; some files gain a pointer line |
-| `docs/` | ADRs and handoffs: how the project decided and how sessions hand over. | unchanged |
 | `atari-st-hardware/`, `atari-st-software/`, `atari-st-emulation/` | **moved** into `research/archive/` — see §7. | moved, with redirects |
 
 **Why `design/` does not move.** It is not a document *about the machine*; it is the record of how we decided to build
@@ -50,7 +67,7 @@ claim by claim, re-sourced). Keeping them at the root makes them look authoritat
 
 ## 2. The reader, and how the book discloses itself
 
-The book is written for four readers who arrive at the same page with different questions. `reference/README.md` is
+The book is written for four readers who arrive at the same page with different questions. `book/README.md` is
 the single entry point and it says, in one screen, what the book is and which path to take:
 
 | reader | arrives asking | reading path |
@@ -59,6 +76,7 @@ the single entry point and it says, in one screen, what the book is and which pa
 | **the hardware reader** | "how is it built, what talks to what, how fast?" | Part 1.1 → Part 2 completely → Part 3 completely |
 | **the emulator implementer** | "how is it modelled, what is missing, where is the code?" | Part 2.3 (buses) → Part 3 → Part 4 completely |
 | **the 68000 programmer** | "what does this instruction do, how long does it take, what does the bus do?" | Part 5, then Part 3.3 for the bus it sits on |
+| **the TOS programmer** | "how do I call the system, and what does it do to the hardware?" | Part 6, then the Part 2/3 chapter each service's bridge row points at |
 
 **Progressive disclosure is a mechanism, not a tone.** Every chapter file has the same four levels:
 
@@ -77,7 +95,9 @@ it. A chapter that needs a term the glossary lacks adds it to the glossary in th
 
 ## 3. The book: chapter map
 
-`reference/` holds **33 chapters in five parts** (4 + 9 + 5 + 8 + 7) and four appendices. Each row below is a file, its job, and its
+`book/` holds **43 chapters in six parts** (4 + 9 + 5 + 8 + 7 + 10) and four appendices. The layout is
+`book/part-1/…` … `book/part-6/…` and `book/appendix/…`, with `book/README.md` as the entry point; `docs/` keeps the
+records (`adr/`, `handoffs/`, `agents/`) and is not part of the book. Each row below is a file, its job, and its
 principal sources today — the evidence exists for every one of them or the row says what is missing.
 
 ### Part 1 — the machine as a product (4 chapters)
@@ -138,6 +158,37 @@ principal sources today — the evidence exists for every one of them or the row
 | `5.6-timing-diagrams.md` | the same four cycles as **diagrams**, and the instruction-timing chart by family | drawn from §5.5 (see §6.3 on drawings) |
 | `5.7-cycle-counting.md` | how to count a routine's clocks: the tables, the prefetch's effect, the corpus's own conventions | §5.2, `design/cpu-silicon-todo.md`, `tests/680x0/CONFORMANCE.md`, `FINDINGS.md` |
 
+### Part 6 — the operating system: TOS as code (10 chapters)
+
+The part the other five cannot replace: **what a programmer can call, and how it is implemented.** It is written for
+somebody who wants to *use* the machine's software rather than its hardware — and its last chapter is the bridge back
+to the hardware, because every TOS service ends on a register or a pin that Parts 2 and 3 describe.
+
+**The evidence, stated once here because every chapter inherits it.** EmuTOS is in the tree as source (GPLv2,
+`roms/emutos-1.4/emutos-src-1.4.tar.gz`) and it is the *readable* implementation of this API. Real TOS 1.62 is not
+public as source: its implementation is read from the **disassembly of a user-supplied image** — the project ships
+EmuTOS and never distributes a real TOS (ADR 0010) — plus the published Srecords/documentation of the era. So each
+function gets up to three columns: *what the interface promises* (documented), *what EmuTOS does* (`path:line`, a
+reading), *what TOS 1.62 does* (a disassembly address, or `inferred` from observed behaviour, or `unknown` with the
+reason). No chapter of this part may present an EmuTOS implementation as if it were Atari's.
+
+| file | answers | principal sources |
+|---|---|---|
+| `6.1-tos-as-a-product.md` | what TOS is: the ROMs, the five layers (BIOS, XBIOS, GEMDOS, VDI, AES), the traps, the cookie jar, the system variables, and which version this book describes | `research/tos-rom-sourcing.md`, ADR 0010, `atari-st-software/rom-system/01`, EmuTOS's `doc/` |
+| `6.2-the-trap-interface.md` | how a program calls the system: trap 13/14/1/2, the parameter conventions per layer, the error returns, and the dispatcher | `atari-st-software/rom-system/02`, the M68000 user's manual (trap/exception model), EmuTOS's trap tables |
+| `6.3-the-boot-in-code.md` | the ROM's start to the desktop, in code: hardware init, memory detection, GEMDOS init, the AES/desktop start, the AUTO folder | `research/tos-rom-sourcing.md`, EmuTOS `bios/`, `atari-st-software/boot-os/01`, `design/disk-path.md` (the boot sector) |
+| `6.4-bios.md` | every BIOS function, one row each: what it promises, what EmuTOS does, what TOS 1.62 does, the hardware it touches | `atari-st-software/rom-system/02`, EmuTOS `bios/`, the trap table |
+| `6.5-xbios.md` | the same for XBIOS — screen base and palette, `Initmous`, `Vsetmode`, `Kbdvbase`, `Mfpint`, `Giaccess`, `Dosound`, the floppy calls | `atari-st-software/rom-system/02`, EmuTOS `bios/`, Parts 2.5–2.8 of this book |
+| `6.6-gemdos.md` | the file, memory and process services, the descriptor table, the BIOS device layer, and the disk path to the FDC | `atari-st-software/boot-os/*`, EmuTOS `gemdos/`, `design/disk-path.md`, Part 2.7 |
+| `6.7-vdi.md` | the workstation, the screen as a bitmap, and the drawing primitives — which are TOS's own code and which reach the Shifter or the blitter | `atari-st-software/games-demos/04` (the VDI reference), EmuTOS `vdi/`, Parts 2.5 and 3.2 |
+| `6.8-aes-and-the-desktop.md` | the AES calls, the resource files, and the event loop (mouse, keyboard, timed events) that the desktop runs | `atari-st-software/rom-system/02`, EmuTOS `aes/`, `research/ikbd-implementation.md` §5 |
+| `6.9-interrupts-and-timers.md` | `VBLQueue`, the 200 Hz clock, the MFP's role, and the path a keypress takes from the IKBD to the desktop | `atari-st-software/boot-os/03`, `design/timers-and-events.md`, `research/ikbd-implementation.md` |
+| `6.10-where-tos-meets-the-hardware.md` | **the bridge**: one table, service → register or pin → the Part 2/3 chapter that explains it → the Part 4 section that models it | all of the above, plus Parts 2, 3 and 4 |
+
+**The 6.10 table is this part's reason for existing** and its acceptance criterion: a reader who has read Parts 2–5
+can be told, for any TOS service, exactly which piece of hardware it drives and which chapter describes that
+hardware — and an implementer can be told which part of the model it exercises.
+
 ### Appendices (4 files)
 
 | file | holds |
@@ -151,18 +202,22 @@ principal sources today — the evidence exists for every one of them or the row
 
 ## 4. The order of work, and why it is that order
 
-1. **Scaffolding first (T1).** The directory, the chapter template, the checker, the manifest. A chapter written
+1. **Scaffolding first (#105).** The directory, the chapter template, the checker, the manifest. A chapter written
    before the checker exists gets rewritten.
-2. **Parts 1 and 2 next (T2, T3, T4, T5).** The machine, from the outside in: product, board, chips, buses, then each
+2. **Parts 1 and 2 next (#106, #107, #108, #109).** The machine, from the outside in: product, board, chips, buses, then each
    subsystem, then each part's internals. Everything later cites these chapters instead of re-deriving a pin.
-3. **Part 3 (T6).** Time, once the parts are described: clocks, video timing, slots, refresh, one frame.
-4. **Part 4 (T7, T8, T9).** The emulator, in three passes: architecture/time, then the per-part modelling, then the
+3. **Part 3 (#110).** Time, once the parts are described: clocks, video timing, slots, refresh, one frame.
+4. **Part 4 (#111, #112, #113).** The emulator, in three passes: architecture/time, then the per-part modelling, then the
    unknowns and the code. It can be written only after Parts 2 and 3 exist, because every section is "the model of
    *that* chapter".
-5. **Part 5 (T10, T11).** The 68000 can start in parallel with Part 1 — it shares no source with the board — but T11's
-   diagrams reuse §5.5, so it comes after T10.
-6. **Appendices and the archive move (T12) last**, except the glossary, which grows with every ticket.
-7. **The verification sweep (T13) closes the phase**: the second pass over every chapter, the redirect sweep over the
+5. **Part 5 (#114, #115).** The 68000 can start in parallel with Part 1 — it shares no source with the board — but #115's
+   diagrams reuse §5.5, so it comes after #114.
+5a. **Part 6 (#118, #119).** TOS needs the hardware described (Part 3) and the 68000's trap model (Part 5.4), and its
+   last chapter is the bridge back into Parts 2–4: it is the second-to-last thing written, and the one that proves the
+   book hangs together.
+6. **Appendices and the archive move (#116) last**, except the glossary, which grows with every ticket. The
+   `atari-st-software/` documents move into the archive *after* Part 6 has absorbed them, not before.
+7. **The verification sweep (#117) closes the phase**: the second pass over every chapter, the redirect sweep over the
    old documents, and the phase's own audit.
 
 ---
@@ -184,7 +239,9 @@ Rules for it:
 - **A repo document is named with its path and section** — not "the GSTMCU study".
 - **An external source carries its ledger id** — the same one every study uses.
 - **A drawing is named with its sheet and, where a crop was read, the crop's path.**
-- **A code fact is named with `path:line`.**
+- **A code fact is named with `path:line`** — and in Part 6 a TOS claim names *which* code: EmuTOS by
+  `src/…:line`, real TOS by the function and the disassembly address, or `inferred from behaviour` when neither
+  is readable. A paragraph that presents one as the other is the part's one fatal error.
 - **The claim's label travels**: a paragraph whose source is `inferred` in the study says so ("`inferred` from the
   RTL's comment"), and an `unknown` says that too, with the register row (`B9`).
 - **A paragraph with no source is not allowed.** If the only source is the book's own arithmetic, the line says
@@ -193,7 +250,7 @@ Rules for it:
 
 ### 5.2 The checker
 
-`scripts/check-reference-sources.py` runs over `reference/` and fails on:
+`scripts/check-book-sources.py` runs over `book/` and fails on:
 
 1. **an unsourced paragraph** — any block of prose between blank lines that does not end with a `*Sources:` line;
 2. **a broken reference** — a `` `research/...` `` or `` `design/...` `` path that does not exist, or a `` § `` that the
@@ -201,18 +258,20 @@ Rules for it:
 3. **an unknown id** — a `[n]` that is not in the ledger, or an id cited in a chapter but absent from that chapter's
    "Where this comes from" list (and the reverse: a listed id never cited);
 4. **a label-less extrapolation** — a paragraph that uses a word from the reserved set (`measured`, `exactly`,
-   `always`, `never`, `the hardware does`) while its sources are all `inferred`/`T3`. This one is a warning, not a
+   `always`, `never`, `the hardware does`) while its sources are all `inferred`/`#107`. This one is a warning, not a
    failure: it flags the paragraphs a second reader should look at first;
-5. **a manifest mismatch** — a chapter file with no entry in `reference/manifest.json` (title, part, order, sources
+5. **a manifest mismatch** — a chapter file with no entry in `book/manifest.json` (title, part, order, sources
    count, audit state), or an entry with no file.
 
-It runs from `scripts/verify-reference.sh` (the wrapper, next to `verify-research.sh`) and its exit code is the
+It runs from `scripts/verify-book.sh` (the wrapper, next to `verify-research.sh`) and its exit code is the
 chapter's gate: a chapter is not done while the checker fails on it.
 
 ### 5.3 The first pass — how a chapter is written
 
 A chapter session works in this order, and the order is the discipline:
 
+0. **Post the detailed plan and wait for the owner's go** (§0): the chapter's sections, the claims each will make,
+   the sources each will name, the figures it will draw. The plan is the ticket's comment, not a chat message.
 1. **Collect the claims** into a scratch list with the source each one will carry, *before* writing prose. The list is
    the audit table of §5.4, started empty-of-verdicts.
 2. **Write the chapter** from the list, one paragraph at a time, each ending with its provenance line. A claim whose
@@ -242,7 +301,7 @@ Rules:
 - **The second pass is done by a different session or a delegated reader, not by the writer in the same sitting.**
   The writer's own re-read finds typos, not overstatements; the point of the second pass is that the reader has not
   already committed to the sentence.
-- **The phase's last ticket (T13) samples nothing: it re-runs the protocol's own evidence** — one row per chapter at
+- **The phase's last ticket (#119) samples nothing: it re-runs the protocol's own evidence** — one row per chapter at
   minimum, every chapter's `not found` count at zero, and the checker green across the whole directory.
 
 ### 5.5 Facts, decisions and opinions in one book
@@ -275,7 +334,7 @@ the +2 on a taken branch, the read-modify-write's five states) with a worked rou
 ### 6.3 Drawings — timing diagrams, and only where they earn their place
 
 - **Timing diagrams live in `5.6` and in `3.2`/`3.3`** (the video fetch cadence and the arbitration handshake).
-- They are **generated by a script** (`reference/tools/draw-timing.py`), from a table of signals and edges in the
+- They are **generated by a script** (`book/tools/draw-timing.py`), from a table of signals and edges in the
   chapter itself, so a diagram cannot drift from the text that describes it, and the script prints the table it drew.
 - **Every diagram declares its evidence**: measured (with the ledger id), derived (with the arithmetic), or drawn from
   a datasheet's figure (with the page).
@@ -286,25 +345,25 @@ the +2 on a taken branch, the read-modify-write's five states) with a worked rou
 
 `GLOSSARY.md` is the machine's vocabulary, and the book must not invent synonyms. Where a chapter needs a word the
 glossary lacks (e.g. "provenance line", "audit table", "reading path"), the word is added to the glossary in the same
-commit, under a "the book's own terms" heading. `reference/appendix/C-glossary.md` is the rendered glossary.
+commit, under a "the book's own terms" heading. `book/appendix/C-glossary.md` is the rendered glossary.
 
 ---
 
 ## 7. The archive: what moves, and what a moved file says
 
-**Moves (T12, one commit, with redirects):**
+**Moves (#118, one commit, with redirects):**
 
 | from | to | header added |
 |---|---|---|
-| `atari-st-emulation/01-emulation-technical-solutions.md` | `research/archive/emulation-technical-solutions.md` | "An epoch-1 survey (2026-11 era); superseded by `reference/part-4` — kept as evidence of what was believed." |
+| `atari-st-emulation/01-emulation-technical-solutions.md` | `research/archive/emulation-technical-solutions.md` | "An epoch-1 survey (2026-11 era); superseded by `docs/part-4` — kept as evidence of what was believed." |
 | `atari-st-emulation/02-atari-ste-hardware-overview-for-emulation.md` | `research/archive/ste-hardware-overview.md` | same, pointing at Parts 2 and 3 |
 | `atari-st-emulation/sources/` | `research/archive/ste-study-transcript.md` | same |
-| `atari-st-hardware/components/*.md` | `research/archive/hardware/*.md` | "Superseded by `reference/part-2`; the pin tables that survive are in `design/board-inventory.md`." |
-| `atari-st-software/**/*.md` | `research/archive/software/*.md` | "Superseded by `reference/1.3` and `1.4`; kept for its API reference, which the book does not repeat." |
+| `atari-st-hardware/components/*.md` | `research/archive/hardware/*.md` | "Superseded by `book/part-2`; the pin tables that survive are in `design/board-inventory.md`." |
+| `atari-st-software/**/*.md` | `research/archive/software/*.md` | "Superseded by `book/part-6` (the TOS API by function) and `book/part-1/1.3`–`1.4`; kept as the epoch-1 reading the TOS chapters re-sourced claim by claim." |
 | `atari-st-hardware/docs/downloads/` (93 MB of PDFs) | **stays where it is**, with `research/archive/hardware/README.md` pointing at it | archive of primary documents, not prose |
 
 **Every moved file carries the header, and every reference to its old path is updated** — `grep` for the old path
-across `research/`, `design/`, `docs/`, `reference/` and the code comments, and fix each hit. The redirects are part
+across `research/`, `design/`, `docs/`, `book/` and the code comments, and fix each hit. The redirects are part
 of the same ticket, not a follow-up: a book that supersedes documents nobody can find is worse than no book.
 
 **`research/README.md`** (new) is the archive's index: what each subdirectory holds, which study answers which
@@ -314,7 +373,7 @@ question, and which chapters of the book each study now feeds.
 
 ## 8. Acceptance criteria for the phase
 
-A reader of the finished book can do all of these without opening a document outside `reference/`:
+A reader of the finished book can do all of these without opening a document outside `book/`:
 
 1. **Use the machine** — say what a 1040STE is, plug it up, boot it, load a disk, and explain each port (Part 1).
 2. **Draw the board** — name every chip, its role, its package, its clock, and the buses it sits on (Part 2).
@@ -325,6 +384,8 @@ A reader of the finished book can do all of these without opening a document out
 5. **Answer "is this modelled?"** for any behaviour, with the chapter, the code file and the register row.
 6. **Program the 68000** — the instruction set's variants with clocks and micro-states, the exception model, and the
    bus cycle's signals, from the book alone (Part 5).
+6a. **Call TOS** — look up any BIOS, XBIOS, GEMDOS, VDI or AES function, see what it promises, how EmuTOS and TOS
+   1.62 each implement it, and which register or pin it ends on (Part 6).
 7. **Trust it** — every paragraph names its sources, every chapter has an audit table with no `not found` rows, and
    the checker is green.
 
@@ -337,6 +398,9 @@ A reader of the finished book can do all of these without opening a document out
   owner's ruling — never a ticket.
 - **No emulator changes.** The book describes the model as it is; where the model differs from the study, Part 4.5/4.6
   says so and names the ticket that owns the fix (if any) — it does not fix it.
+- **No reverse-engineering of TOS beyond what the book needs.** Part 6 documents the *documented* API and reads the
+  implementation where a disassembly or EmuTOS's source is legible; it does not disassemble all of TOS, rename its
+  internal routines, or reconstruct its data structures beyond the system variables a programmer may touch.
 - **No translation, no website, no PDF build.** One markdown book in the repo, rendered by whatever the reader uses.
 - **No rewriting of `design/`.** It is cited, not edited, except for a pointer line at the top of a file the book
   supersedes as the reader's entry.
@@ -345,15 +409,15 @@ A reader of the finished book can do all of these without opening a document out
 
 ## 10. Definition of done for the phase
 
-1. `reference/` holds the 33 chapters and 4 appendices of §3, each with its `In one page` box, its provenance lines,
+1. `book/` holds the 43 chapters and 4 appendices of §3, each with its `In one page` box, its provenance lines,
    its `Where this comes from`, and its `.audit.md` with zero `not found` rows.
-2. `scripts/check-reference-sources.py` and `scripts/verify-reference.sh` are green over the whole directory, and the
+2. `scripts/check-book-sources.py` and `scripts/verify-book.sh` are green over the whole directory, and the
    manifest lists every chapter with its audit state.
-3. `reference/README.md` is a real entry point: the four reading paths, the map of the machine in one page, and the
+3. `book/README.md` is a real entry point: the four reading paths, the map of the machine in one page, and the
    chapter index with one line each.
 4. The archive move is done, every moved file carries its header, and `research/README.md` indexes the archive.
 5. `GLOSSARY.md` and Appendix C agree; `GLOSSARY.md` is the stub that points at the appendix.
-6. The phase's audit (T13) is written into `docs/handoffs/documentation-audit.md`: one row per chapter, the checker's
+6. The phase's audit (#119) is written into `docs/handoffs/documentation-audit.md`: one row per chapter, the checker's
    output, the `not found` counts, and the residue.
 
 ---
@@ -362,7 +426,8 @@ A reader of the finished book can do all of these without opening a document out
 
 The tickets are children of the map issue [#104](https://github.com/laurentprudhon/the-st/issues/104)
 (*Documentation: one authoritative reference — the machine and the emulator*), created with this brief; its body is
-§1–§3 of this file. The thirteen tickets, by the numbers the tracker returned (never the ones a plan predicts):
+§1–§3 of this file. The fifteen tickets, by the numbers the tracker returned (never the ones a plan predicts). The TOS part added two
+after the first charting, which is why their numbers (#118, #119) sit out of order:
 
 | # | ticket | chapters | blocked by |
 |---|---|---|---|
@@ -377,21 +442,24 @@ The tickets are children of the map issue [#104](https://github.com/laurentprudh
 | [#113](https://github.com/laurentprudhon/the-st/issues/113) | Part 4C — what we do not know, and the code | 4.7–4.8 | #105, #112 |
 | [#114](https://github.com/laurentprudhon/the-st/issues/114) | Part 5A — the 68000 as a programming manual | 5.1–5.4 | #105 |
 | [#115](https://github.com/laurentprudhon/the-st/issues/115) | Part 5B — bus cycles, timing diagrams, cycle counting | 5.5–5.7 | #105, #114 |
-| [#116](https://github.com/laurentprudhon/the-st/issues/116) | appendices, the archive move and the redirect sweep | A–D | #105, #106, #113, #115 |
+| [#118](https://github.com/laurentprudhon/the-st/issues/118) | Part 6A — TOS: the system, the trap interface, the boot in code | 6.1–6.3 | #105, #110, #114 |
+| [#119](https://github.com/laurentprudhon/the-st/issues/119) | Part 6B — TOS: the API by function, the desktop, the hardware bridge | 6.4–6.10 | #105, #118 |
+| [#116](https://github.com/laurentprudhon/the-st/issues/116) | appendices, the archive move and the redirect sweep | A–D | #105, #106, #113, #115, #119 |
 | [#117](https://github.com/laurentprudhon/the-st/issues/117) | the phase's verification sweep and audit | — | #105, #116 |
 
 The blocking order is:
 
 ```
-T1 scaffolding
- ├─ T2 Part 1 ─┐
- ├─ T3 Part 2A ┴─ T4 Part 2B ─ T5 Part 2C ─ T6 Part 3 ─┐
- ├─ T10 Part 5A ─ T11 Part 5B                          ├─ T7 Part 4A ─ T8 Part 4B ─ T9 Part 4C ─ T12 appendices+archive ─ T13 sweep
- └──────────────────────────────────────────────────────┘
+#105  scaffolding
+  →  #106 Part 1                                     (parallel with 2A and 5A)
+  →  #107 Part 2A → #108 Part 2B → #109 Part 2C → #110 Part 3
+  →  #111 Part 4A → #112 Part 4B → #113 Part 4C       (needs #110)
+  →  #114 Part 5A → #115 Part 5B
+  →  #118 Part 6A → #119 Part 6B                      (needs #110 and #114)
+  →  #116 appendices + archive → #117 verification    (needs #113, #115, #119)
 ```
 
-T2–T5 and T10 may run in any order once T1 is done; T6 needs the parts described; T7 needs Part 3; T12 needs every
-chapter that it indexes; T13 is last and is the phase's own audit.
+#106–#109 and #114 may run in any order once #105 is done; #110 needs the parts described; #111 needs Part 3; #118 needs Part 3 and the 68000's trap model (#114); #116 needs every chapter it indexes; #117 is last and is the phase's own audit.
 
 Each ticket's body carries its chapters, their sources, and their acceptance criteria; this brief carries the rules
 every ticket obeys — §5 above all.
