@@ -771,6 +771,20 @@ public sealed partial class M68000 : Chip
             return;
         }
 
+        // The closing pair, which is no script's: every instruction that falls through ends on it, and
+        // NOP's whole listing is it (`scripts/microcode-walk.py --op 4e71`). `b` shifts the queue and
+        // gives the frame its counter, `mmrw3` makes the instruction's one read. The absolute-long
+        // `MOVE` destination above is the other branch, and its two reads are that class's own.
+        //
+        //   ours: the own work charged first (`ClocksAsync(_own)`) is not a state — it is #94's clock
+        //   table's residue, spent before the read. `b`'s `m_au = m_au + 2` is the loop's decode step
+        //   (`Run`'s `AuPlusTwo`), so it is not here. And the two queue copies are taken after the
+        //   read because the read is what fills `_irc`: a script whose own state *is* the read calls
+        //   this helper itself (`nnml1`/`morl1`, and the `MOVE` store that issues it before its
+        //   write), and then the pair's read is already spent and only the copies run.
+        //
+        // b (363) + mmrw3 (34c)  m_aob = m_au; m_ir = m_irc; m_pc = m_au;
+        //              m_ird = m_ir; read at m_aob                                                  0+4
         if (!_busFaulted)
         {
             await ClocksAsync(_own, prefetch: true);   // the instruction's own work, before its closing fetch

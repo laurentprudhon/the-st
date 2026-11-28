@@ -690,6 +690,15 @@ are spent, and the block says so. `UNLK`'s (`UnlinkAsync`, `#94`'s first method)
 harder shapes: a read pair the code issues in one helper — named as the two states it is — and a closing
 fetch the *loop* issues, which the block says instead of pretending the script does it.
 
+The pair itself is the third model, and it is commented where the loop issues it — `CloseInstructionAsync`
+and `TrailingFetchAsync` in `M68000.cs`, not in any script. Every instruction that falls through ends on it,
+and NOP's whole listing **is** it, so `--complete --op 4e71 M68000.cs` is the check; a listing that ends on
+it reads across both files, in the order given — JSR's (`--op 4e90`) is `jsra1`/`jsaw2`/`jsaw3` in the
+script and the pair in `M68000.cs`, so `--complete --op 4e90 M68000.Scripts.cs M68000.cs` names the three
+script states as missing until that method is converted and the pair as already satisfied. Its block names
+what the code does not contain: the `_own` charge before it (the clock table's residue, not a state) and
+`b`'s `m_au = m_au + 2` (the loop's `AuPlusTwo`, its decode step).
+
 The checker is `scripts/comment-states.py` (stdlib only, needs the pinned microcode):
 
 ```sh
