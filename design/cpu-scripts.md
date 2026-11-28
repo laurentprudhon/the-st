@@ -699,6 +699,18 @@ script states as missing until that method is converted and the pair as already 
 what the code does not contain: the `_own` charge before it (the clock table's residue, not a state) and
 `b`'s `m_au = m_au + 2` (the loop's `AuPlusTwo`, its decode step).
 
+**A shared part of two scripts is one method, and the method carries the states it expands — both
+listings'.** The die reuses tails the way a program reuses functions, so the C# must too, or a fix to one
+copy silently leaves the other wrong: `RefillAsync` is `malw3` + `b`/`mmrw3`, `RefillFromAsync` is that pair
+when the script's own last state *is* the target's read (`bbci3`, `jsrd3`), `PushReturnAddressAsync` is the
+return address's two writes for both call families (`bsrw2`/`bsrw3` and `jsaw2`/`jsaw3`, one helper, two
+listings), `AluIntoDataRegisterAsync` is `roml1`–`roml3` and `rorl1`–`rorl3`, and the closing pair is
+`CloseInstructionAsync`/`TrailingFetchAsync`. A script that ends on a shared part *calls* it and names the
+part in prose; no script re-expands a tail inline, because the second copy is where the two scripts drift
+apart. The checker's `--complete` reads across every file, so a state named in the helper still satisfies
+the script's listing, and an order test that only reads the states named once is what keeps a shared
+state from looking like a misordering.
+
 The checker is `scripts/comment-states.py` (stdlib only, needs the pinned microcode):
 
 ```sh

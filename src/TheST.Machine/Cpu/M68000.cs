@@ -911,14 +911,44 @@ public sealed partial class M68000 : Chip
             FrameSavesOnFetch(_pc);
         }
 
-        _ird = await ReadProgramAsync(target);
+        //   ours: the first read is `malw3`'s and the second `b`+`mmrw3`'s — one helper over three
+        //   states (#87 measured this shape and refused to split it) — and a script whose own last
+        //   state *is* the target's read (`bbci3` for JMP, `jsrd3` for JSR) hands the word it already
+        //   has to `RefillFromAsync`, so the same pair is expanded from both ends.
+        //
+        // malw3 (1e1)  m_aob = m_au; m_movemr = m_dbin; m_pc = m_au; m_ftu = m_dbin; m_au = m_au + 2;
+        //              read at m_aob                                                                  4
+        ushort first = await ReadProgramAsync(target);
         if (_busFaulted)
         {
             return;
         }
 
-        _ir = await ReadProgramAsync(target + 2);
+        // b (363) + mmrw3 (34c)  m_aob = m_au; m_ir = m_irc; m_pc = m_au; m_au = m_au + 2;
+        //              m_ird = m_ir; read at m_aob                                                  0+4
+        await RefillFromAsync(target, first);
+    }
+
+    /// <summary>
+    /// A control transfer's refill with the target's word already in hand: the listing's <c>b</c> and
+    /// <c>mmrw3</c> — <c>m_pc = m_au</c>, then the fetch that lands the queue a word ahead — where the
+    /// script's own last state was the target's read (<c>bbci3</c> for <c>JMP</c>, <c>jsrd3</c> for
+    /// <c>JSR</c>) and that read's result is <paramref name="first"/>.
+    /// </summary>
+    async ValueTask RefillFromAsync(uint target, ushort first)
+    {
+        _flowTransferred = true;
+        _ird = first;
+
+        // `b`'s `m_pc = m_au` lands before `mmrw3`'s read, and the counter it names is the target's
+        // successor (a fault inside the read leaves it there, as the listing's order does)
         _pc = target + 2;
+        _ir = await ReadProgramAsync(target + 2);
+        if (_busFaulted)
+        {
+            return;
+        }
+
         _ircValid = false;
 
         // the boundary convention: `_au` is the address of the opcode the queue has fetched, and the

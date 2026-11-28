@@ -2177,33 +2177,20 @@ public sealed partial class M68000
         //   takes `ext32(m_dbin)`, the word the previous instruction's closing fetch already landed, and a
         //   branch never refills the slot behind it. `alu_and(m_au, 0xffff)` is the constants ROM's route to
         //   `m_aluo` (bsrw3's `m_dbout`), so the low word here is `Low16` of the latched address. And the
-        //   two reads after `malw3`, with the `b`/`mmrw3` behind them, are `RefillAsync`'s — named once at
-        //   `CloseInstructionAsync` — where `b`'s `m_pc = m_au` is the frame's counter, declared before
-        //   either read lands.
+        //   two writes are `PushReturnAddressAsync`'s (below, where both call families' pairs are named)
+        //   and the refill `RefillAsync`'s (`malw3` with the `b`/`mmrw3` behind it, named there) — one
+        //   helper each, the listing's states named where the code expands them.
         //
         // bsrw1 (0a9)  m_at = m_au; alu_and(m_au, 0xffff); m_au = m_da[m_sp] - 4                      2
         await IdleAsync();                                 // bsrw1 — `alu r=0 c=1`, the transfer's own 2
 
-        uint returnAddress = _au;                          // the latch: bsrw1's `m_at = m_au`
-        uint stack = A7 - 4;
-        A7 = stack;
-
-        // `A7 = stack` above is bsrw2's `m_da[m_sp] = m_au`: the stack pointer is a register here, so the
-        // commit is a plain write and it lands before the first store, as the listing has it.
-        //
-        // bsrw2 (10e)  m_aob = m_au; m_dbout = high16(m_at); m_da[m_sp] = m_au; m_au = m_au + 2;
-        //              write m_dbout at m_aob                                                         4
-        await WriteWordAsync(stack, (ushort)High16(returnAddress));      // bsrw2 — high word first
-        if (_busFaulted) return;
-        // bsrw3 (0aa)  m_aob = m_au; m_dbout = m_aluo; m_au = ext32(m_dbin) + m_pc;
-        //              write m_dbout at m_aob                                                         4
-        await WriteWordAsync(stack + 2, (ushort)Low16(returnAddress));   // bsrw3
+        // `A7 = stack` inside `PushReturnAddressAsync` is bsrw2's `m_da[m_sp] = m_au`: the stack pointer
+        // is a register here, so the commit is a plain write and it lands before the first store.
+        await PushReturnAddressAsync(_au);                 // bsrw2 + bsrw3 — the latch is bsrw1's m_at
         if (_busFaulted) return;
 
         long target = (long)_opcodeAddress + 2 + displacement;
         FrameSavesOnFetch((uint)target);                   // `b`: `m_pc = m_au` = the target
-        // malw3 (1e1)  m_aob = m_au; m_movemr = m_dbin; m_pc = m_au; m_ftu = m_dbin; m_au = m_au + 2;
-        //              read at m_aob                                                                  4
         await RefillAsync((uint)target);                   // malw3 then `b`/`mmrw3`: the target's pair
 
         // an odd target aborts on that fetch, and this family is scripted: the aborting state's own 4 is the
@@ -2237,8 +2224,8 @@ public sealed partial class M68000
         //   ours: the target's read is one call (`ReadTargetAsync`, below) where the listing gives it to `bbci3`
         //   on every shape but the two absolutes — `(xxx).w` ends on `jmaw1`'s latch and `(xxx).l` on `jmal2`,
         //   the state that builds the address and reads it, so that read is the tail's as well. The adder's
-        //   moves are the derivation's, and the pair is written inline here, not through `RefillAsync` — the
-        //   second site that expands it, named once at `CloseInstructionAsync`.
+        //   moves are the derivation's, and the pair at the target is `RefillFromAsync`'s — `RefillAsync`
+        //   without its first read, since this script's own last state is that read.
         //
         switch (mode)
         {
@@ -2322,14 +2309,9 @@ public sealed partial class M68000
             return;
         }
 
-        // b + mmrw3 — `m_pc = m_au`, then the one fetch that lands the queue at the target
-        _flowTransferred = true;
-        _ird = first;
-        _pc = address + 2;
-        _ir = await ReadProgramAsync(address + 2);
-        if (_busFaulted) return;
-        _ircValid = false;
-        _au = address;
+        // b + mmrw3 — `m_pc = m_au`, then the one fetch that lands the queue at the target: the pair
+        // `RefillAsync` expands from its own first read, here from this script's (`RefillFromAsync`)
+        await RefillFromAsync(address, first);
     }
 
     /// <summary>
@@ -2361,8 +2343,8 @@ public sealed partial class M68000
         //   the mode's last address state — `jsra1`, `jsrd3`, `jsaw1`, `jsal2` — so each block below is that
         //   state's address half and the tail is its read. The adder's moves are the derivation's
         //   (`FetchPosition`) except the one the code pays for explicitly: `jsal2`'s queue read moves the
-        //   counter by 2. And the pair at the target is written inline here, not through `RefillAsync` — the
-        //   second site that expands it, named once at `CloseInstructionAsync`.
+        //   counter by 2. And the pair at the target is `RefillFromAsync`'s (with the push
+        //   `PushReturnAddressAsync`'s), one helper each where the listing's states are expanded.
         //
         switch (mode)
         {
@@ -2457,29 +2439,48 @@ public sealed partial class M68000
         }
 
         // jsaw2, jsaw3 — the return address's two words, high first, the stack pointer committed with
-        // the first one (as `m_da[m_sp] = m_au` does)
-        // jsaw2 (271)  m_aob = m_au; m_dbout = high16(m_pc); m_da[m_sp] = m_au; m_au = m_au + 2;
-        //              write m_dbout at m_aob                                                         4
-        uint returnAddress = _au;
-        uint stack = A7 - 4;
-        A7 = stack;
-        await WriteWordAsync(stack, (ushort)High16(returnAddress));
-        if (_busFaulted) return;
-        // jsaw3 (272)  m_aob = m_au; m_ir = m_irc; m_dbout = m_pc; m_au = m_at + 2;
-        //              write m_dbout at m_aob                                                         4
-        await WriteWordAsync(stack + 2, (ushort)Low16(returnAddress));
+        // the first one (`m_da[m_sp] = m_au`): `PushReturnAddressAsync` below, where both the call
+        // families' pairs are named once
+        await PushReturnAddressAsync(_au);
         if (_busFaulted) return;
 
-        // b + mmrw3 — `m_pc = m_au` at the target's successor, `m_ird = m_ir` (the target's own word)
-        _flowTransferred = true;
-        _ird = first;
-        _pc = address + 2;
-        _ir = await ReadProgramAsync(address + 2);
-        if (_busFaulted) return;
-        _ircValid = false;
-        _au = address;
+        // b + mmrw3 — `m_pc = m_au` at the target's successor, `m_ird = m_ir` (the target's own word),
+        // the pair `RefillAsync` expands from its own first read
+        await RefillFromAsync(address, first);
     }
 
+    /// <summary>
+    /// The return address a subroutine call pushes: one long, high word first, at <c>A7 - 4</c>, with
+    /// the stack pointer committed before the first store (<c>m_da[m_sp] = m_au</c> in both listings).
+    /// The listing's two pairs are the same two writes — <c>BSR</c>'s and <c>JSR</c>'s — so one helper
+    /// names both, each pair where its write is.
+    /// </summary>
+    async ValueTask PushReturnAddressAsync(uint value)
+    {
+        uint stack = A7 - 4;
+        A7 = stack;
+
+        //   ours: the latch is the caller's — `bsrw2`'s `high16(m_at)` is `bsrw1`'s `m_at = m_au` and
+        //   `jsaw2`'s is `m_pc`'s, while the value here is passed in; `bsrw3`'s `m_au = ext32(m_dbin) +
+        //   m_pc` and `jsaw3`'s `m_au = m_at + 2` are the adder's derivation, which this core computes
+        //   from `FetchPosition` rather than stepping.
+        //
+        // bsrw2 (10e)  m_aob = m_au; m_dbout = high16(m_at); m_da[m_sp] = m_au; m_au = m_au + 2;
+        //              write m_dbout at m_aob                                                         4
+        // jsaw2 (271)  m_aob = m_au; m_dbout = high16(m_pc); m_da[m_sp] = m_au; m_au = m_au + 2;
+        //              write m_dbout at m_aob                                                         4
+        await WriteWordAsync(stack, (ushort)High16(value));
+        if (_busFaulted)
+        {
+            return;
+        }
+
+        // bsrw3 (0aa)  m_aob = m_au; m_dbout = m_aluo; m_au = ext32(m_dbin) + m_pc;
+        //              write m_dbout at m_aob                                                         4
+        // jsaw3 (272)  m_aob = m_au; m_ir = m_irc; m_dbout = m_pc; m_au = m_at + 2;
+        //              write m_dbout at m_aob                                                         4
+        await WriteWordAsync(stack + 2, (ushort)Low16(value));
+    }
     /// <summary>
     /// `UNLK An` — "tears the frame down: `SP` = `An`, then pops `An`" (§5.1). The die's script is
     /// `unlk1`..`unlk4`: the two words are read at the frame pointer the register names, the new stack
@@ -3611,9 +3612,9 @@ public sealed partial class M68000
         //   ours: the trap path is the exception entry's code, not this method's — `EnterExceptionAsync(6, 0)`,
         //   which `chkr2`'s branch below and `chkr3`'s sign test both call — so its states are pasted once
         //   here, in the listing's order, rather than expanded by CHK. The entry closes on the handler's
-        //   fetch, the pair `b`/`mmrw3` (`RefillAsync`'s, named once at `CloseInstructionAsync`), and
-        //   `chkr4` below is the in-range path's own `b` — the same four statements, uncharged — whose
-        //   read is that same pair.
+        //   fetch, the pair `b`/`mmrw3` (`RefillAsync`'s second half, named there), and `chkr4` below is
+        //   the in-range path's own `b` — the same four statements, uncharged — whose read is that same
+        //   pair.
         //
         // trap1 (1d0)  m_ftu = m_sr; m_au = m_pc - 2                                                  2
         // trap2 (347)  m_sr = (m_sr & ~SR_T) | SR_S; update_user_super(); update_interrupt();
@@ -3630,8 +3631,6 @@ public sealed partial class M68000
         // trap8 (2b7)  m_aob = merge_16_32(high16(m_at), m_dbin);
         //              m_au = merge_16_32(high16(m_at), m_dbin) + 2; read at m_aob                    4
         // trap9 (11c)  (no statement of its own: the `n 2` the vector's read is followed by)          2
-        // b (363) + mmrw3 (34c)  m_aob = m_au; m_ir = m_irc; m_pc = m_au; m_au = m_au + 2;
-        //              m_ird = m_ir; read at m_aob                                                  0+4
         if (outOfRange)
         {
             await EnterExceptionAsync(6, 0);                  // chkr2 branches straight to the trap
