@@ -18,9 +18,9 @@
 //   · **No time here.** A duration is not storage: its name carries its unit and it may live only in
 //     `M68000.Emulator.cs` (ADR 0015 §5.1). A script's charge is a local in the script's frame.
 //
-// What is deliberately *not* here: the prefetch queue's bookkeeping (`_fetchPointer`,
-// `_streamStart`, `_opcodeAddress`, `_trailingFetched`, `_queueShort`) — those are the queue's software
-// position, not latches the patents name; and `_own`/`_eaCharged`, which are durations and "has happened"
+// What is deliberately *not* here: the prefetch queue's bookkeeping (`_streamStart`, `_opcodeAddress`,
+// `_trailingFetched`, `_queueShort`, `_freePop` — the pipeline's position itself is derived, `FetchPosition`),
+// which is the queue's software bookkeeping, not latches the patents name; and `_own`/`_eaCharged`, which are durations and "has happened"
 // bits and die with `M68000.Timing.cs` (#90). `PC` *is* here: it is one of the register file's own cells
 // (§5.2), and the queue's positions are expressions over it, not counters beside it.
 // ============================================================================================

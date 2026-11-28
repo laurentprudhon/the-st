@@ -1528,9 +1528,10 @@ public sealed partial class M68000
                         short displacement = (short)await JumpWordAsync(0);
                         if (_busFaulted) return;
                         // `dbcc3` moves `m_pc` past the displacement before it reads the target, so a
-                        // fault there saves that word (`_fetchPointer - 2`): the pop consumes the word
-                        // without a read, and the counter moves with it — 632 faulting records measured it
-                        _fetchPointer = _au + 2;
+                        // fault there saves that word — the adder's own value, which is why this shape
+                        // declares its frame where the refill's default would save `PC` (632 faulting
+                        // records measured it)
+                        FrameSavesOnFetch(_au);
                         uint target = ConsumedAddress + (uint)displacement;
                         await RefillAsync(target);
                         if (_busFaulted)
@@ -2466,8 +2467,8 @@ public sealed partial class M68000
 
         // where MAME's `m_pc` stands when the operand's read faults: `asr_adr16`'s first state and
         // `asr_adr32`'s second are `m_pc = m_au` (so the absolute classes frame the slot past their
-        // extension words — `_fetchPointer - 2`, one word behind the queue, which is where our own
-        // fetch of that word left it), `asr_dais`'s `aixl1` never moves it (so the indexed class
+        // extension words — the adder's own value, which is where our own fetch of that word left
+        // it), `asr_dais`'s `aixl1` never moves it (so the indexed class
         // frames the extension word's own address, `opcode + 2`), and the predecrement block moves it
         // the way `EaAddressAsync`'s prefetch already does. Measured: 83 records of `ASR.w` were 2
         // off in exactly these three classes and correct in the other five.

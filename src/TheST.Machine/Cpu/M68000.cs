@@ -30,9 +30,9 @@ public sealed partial class M68000 : Chip
 
     // ---- the prefetch queue's position (ADR 0009 §4) --------------------------------------
     // An instruction's extension words come out of the queue and what it fetches is its own word
-    // count, so the queue's head trails the fetch pointer by a word. `_fetchPointer` is the address
-    // of the next read; `_at` (Registers) is the address of the word in IR.
-    uint _fetchPointer;
+    // count, so the queue's head trails the pipeline's position by a word. The position is **derived**
+    // (`FetchPosition`/`BoundaryPosition`, M68000.ControlStores.cs) from the word the instruction
+    // consumes next and the queue's fill; `_at` (Registers) is the address of the word in IR.
 
     /// <summary>
     /// The fetch pointer when the current instruction began: `_fetchPointer` still being this value says
@@ -61,6 +61,10 @@ public sealed partial class M68000 : Chip
     // per-opcode placement): IRD/IR hold the address's own two words, so the closing steps read the
     // next opcode's pair instead of shifting what is there
     bool _queueShort;
+
+    // a control transfer's first extension word came out of the queue with no read behind it (a jump
+    // abandons the stream it would refill), so the pipeline's position no longer trails `_au` by a word
+    bool _freePop;
 
     bool _halted;
     bool _stopped;
@@ -652,8 +656,8 @@ public sealed partial class M68000 : Chip
     /// clock of the instruction's own body — instead of when the instruction next consumes a word.
     /// One read, and the queue's slot is then full, so the instruction's later fetch takes the word
     /// without a bus cycle of its own: the count per instruction is unchanged, the <em>placement</em>
-    /// is the hardware's, and it is what a MAME-true exception frame saves (the address of the last word
-    /// fetched, `_fetchPointer − 2`).
+    /// is the hardware's, and it is what a MAME-true exception frame saves (the position the fetch
+    /// moved to, `FetchPosition`).
     /// </summary>
     async ValueTask PrefetchAsync()
     {
@@ -662,12 +666,13 @@ public sealed partial class M68000 : Chip
             return;
         }
 
-        uint address = _fetchPointer;
-        // `roml1` says `m_pc = m_au`, and it is written as the address it reads: the adder does not
-        // hold that address on this tree (measured — writing `CopyAuToPc()` here costs 4 277 records),
-        // because AU still carries the program counter's own arithmetic between states. Positioning the
-        // adder at the access is the rest of #87's split, and this line becomes the atom then.
-        _pc = address;
+        uint address = FetchPosition;
+        // `roml1` says `m_pc = m_au`: the die's adder holds the address it is about to read. On this
+        // tree the adder is the consumption counter (it names the word the instruction takes next),
+        // so the position is the derivation — `FetchPosition` — and the copy is `CopyAuToPc()`'s
+        // statement with that value. Leaving the adder itself at the access is what the AU/PC split
+        // still owes (#87's last step, bounded by the two measurements in the plan's §8).
+        CopyAuToPc(address);
         BusResult result = await Cycle(address, 1, false, 0, AccessClass.Program);
         if (result.Faulted)
         {
@@ -677,7 +682,6 @@ public sealed partial class M68000 : Chip
             return;
         }
 
-        _fetchPointer = address + 2;
         _irc = result.Data;
         _ircValid = true;
     }
@@ -704,7 +708,6 @@ public sealed partial class M68000 : Chip
             return 0;
         }
 
-        _fetchPointer = address + 2;
         return result.Data;
     }
 
@@ -726,7 +729,7 @@ public sealed partial class M68000 : Chip
         // (#62's rule, which #70 re-paid for once: two hops here cost 0.95 ms of the frame)
         if (!_ircValid)
         {
-            uint address = _fetchPointer;
+            uint address = FetchPosition;
             _at = address - 2;
 
             BusResult result = await Cycle(address, 1, false, 0, AccessClass.Program);
@@ -738,7 +741,6 @@ public sealed partial class M68000 : Chip
                 return 0;
             }
 
-            _fetchPointer = address + 2;
             _irc = result.Data;
             _ircValid = true;
         }
@@ -795,15 +797,17 @@ public sealed partial class M68000 : Chip
             return;
         }
 
-        // the pair's prefetch-first, when the class ran it, has already paid one of the two
-        ushort first = _ircValid ? _irc : await ReadQueueWordAsync();
+        // the pair's prefetch-first, when the class ran it, has already paid one of the two. What the
+        // closing steps read are the stream's own next two words: the class consumed two words with one
+        // read (`_queueShort`), so the queue is a word short and `_au` names the next opcode itself.
+        ushort first = _ircValid ? _irc : await ReadQueueWordAsync(_au);
         _ircValid = false;
         if (_busFaulted)
         {
             return;
         }
 
-        ushort second = await ReadQueueWordAsync();
+        ushort second = await ReadQueueWordAsync(_au + 2);
         if (_busFaulted)
         {
             return;
@@ -856,9 +860,9 @@ public sealed partial class M68000 : Chip
             return;
         }
 
-        uint address = _fetchPointer;
+        uint address = FetchPosition;
         _at = address - 2;
-        _pc = address;                            // m_pc = m_au, with AU not at the access — see PrefetchAsync
+        CopyAuToPc(address);                      // m_pc = m_au, the adder's position derived — see PrefetchAsync
 
         BusResult result = await Cycle(address, 1, false, 0, AccessClass.Program);
         if (result.Faulted)
@@ -869,7 +873,6 @@ public sealed partial class M68000 : Chip
             return;
         }
 
-        _fetchPointer = address + 2;
         _irc = result.Data;
         _ircValid = true;
     }
@@ -884,6 +887,16 @@ public sealed partial class M68000 : Chip
     async ValueTask RefillAsync(uint target)
     {
         _flowTransferred = true;
+
+        // `b`/`mmrw3` copy the adder into `m_pc` only after the refill's two reads have landed, so a
+        // fault inside one saves the counter as it stood — the register's value, not the position.
+        // A script whose own state is `m_pc = m_au` (`dbcc3`) has already said where it stood, and its
+        // statement wins (RTS/RTR/RTE's odd return address: 3 066 records; DBcc's 632 the other way).
+        if (!_frameFetchPcDeclared)
+        {
+            FrameSavesOnFetch(_pc);
+        }
+
         _ird = await ReadProgramAsync(target);
         if (_busFaulted)
         {
@@ -932,13 +945,13 @@ public sealed partial class M68000 : Chip
     }
 
     /// <summary>
-    /// One read of the instruction stream at the fetch pointer, returned rather than queued: the
-    /// closing steps use it when the queue holds an instruction's own consumed words (the
-    /// absolute-long pair), so there is nothing to shift.
+    /// One read of the instruction stream at <paramref name="address"/>, returned rather than queued: a
+    /// control transfer's later extension words (<c>jmal2</c>, read at the position) and the closing steps
+    /// of an instruction whose queue holds its own consumed words (the absolute-long pair, read at the
+    /// stream's own next two addresses) use it, so there is nothing to shift.
     /// </summary>
-    async ValueTask<ushort> ReadQueueWordAsync()
+    async ValueTask<ushort> ReadQueueWordAsync(uint address)
     {
-        uint address = _fetchPointer;
         _at = address - 2;
 
         BusResult result = await Cycle(address, 1, false, 0, AccessClass.Program);
@@ -950,7 +963,6 @@ public sealed partial class M68000 : Chip
             return 0;
         }
 
-        _fetchPointer = address + 2;
         return result.Data;
     }
 
@@ -986,7 +998,6 @@ public sealed partial class M68000 : Chip
         }
 
         _ircValid = false;
-        _fetchPointer = _au + 4;
         _pc = _au + 2;
         _busFaulted = false;
     }
@@ -1019,10 +1030,11 @@ public sealed partial class M68000 : Chip
             ushort opcode = _ird;
             AuPlusTwo();
             _opcodeAddress = _au - 2;
-            _streamStart = _fetchPointer;
+            _streamStart = FetchPosition;
             _flowTransferred = false;
             _trailingFetched = false;
             _queueShort = false;
+            _freePop = false;
             _frameInstructionWordDeclared = false;
             _own = 0;
             _eaCharged = false;
@@ -1062,15 +1074,14 @@ public sealed partial class M68000 : Chip
             }
 
             // the boundary's own sample of the queue: `_au` is the next opcode's address and
-            // `_fetchPointer` the word behind it, so the two name the pipeline's depth for *every*
-            // record, not only the faulting ones (#87's derivation reads it — a fetch state can only
-            // say `m_pc = m_au` once this difference is known per shape)
+            // `BoundaryPosition` the word past the one behind it, so the two name the pipeline's depth
+            // for *every* record, not only the faulting ones (#87's derivation reads it)
 #if DEBUG
             Emulator.LastFramePcCounter = _au;
-            Emulator.LastFrameFetchPointer = _fetchPointer;
+            Emulator.LastFrameFetchPointer = BoundaryPosition;
             Emulator.LastFrameIrAddress = _at;
             Emulator.LastFrameTrailing = _trailingFetched;
-            Emulator.LastFrameRefetched = _fetchPointer != _streamStart;
+            Emulator.LastFrameRefetched = BoundaryPosition != _streamStart;
             Emulator.LastFrameVector = 0;
 #endif
 
@@ -1206,7 +1217,7 @@ public sealed partial class M68000 : Chip
         // (`FrameSavesOnFetch`: a jump's target, or the boundary's word)
         uint returnPc = group0
             ? _faultIsFetch
-                ? _frameFetchPcDeclared ? _frameFetchPc : _fetchPointer - 2
+                ? _frameFetchPcDeclared ? _frameFetchPc : _au
                 : _pc
             : SavesInstructionAddress(vector) ? _opcodeAddress : _au;
 
@@ -1214,10 +1225,10 @@ public sealed partial class M68000 : Chip
         // the frame's program counter, measured rather than assumed (#76): the MAME corpus decides it,
         // and these three quantities are the candidates a session tests it against — see cpu-tests --clocks
         Emulator.LastFramePc = returnPc;
-        Emulator.LastFrameFetchPointer = _fetchPointer;
+        Emulator.LastFrameFetchPointer = FetchPosition;
         Emulator.LastFramePcCounter = _au;
         Emulator.LastFrameIrAddress = _at;
-        Emulator.LastFrameRefetched = _fetchPointer != _streamStart;
+        Emulator.LastFrameRefetched = FetchPosition != _streamStart;
         Emulator.LastFrameTrailing = _trailingFetched;
         Emulator.LastFrameVector = vector;
 #endif

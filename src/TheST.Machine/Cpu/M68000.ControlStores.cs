@@ -217,11 +217,17 @@ public sealed partial class M68000
 
     /// <summary>
     /// `m_pc ← m_au` — the die's copy of the address adder into the program counter register: the states
-    /// that issue a fetch (`roml1`'s refill, a jump's <c>m_pc = m_au</c>) do it, and nothing else writes
-    /// `PC`. The adder is the *address being accessed* at that instant, which is the whole rule: an
-    /// extension word the queue already holds is not an access, so it does not move the register.
+    /// that issue a fetch (`roml1`'s refill, an instruction's closing fetch, a jump's <c>m_pc = m_au</c>)
+    /// do it, and nothing else writes `PC`. The adder is the *address being accessed* at that instant,
+    /// which is the whole rule: an extension word the queue already holds is not an access, so it does
+    /// not move the register.
+    /// <para>
+    /// The address is handed in because on this tree the adder is the consumption counter rather than the
+    /// access's address: `FetchPosition` derives the position from it and the queue's fill, and the value
+    /// copied is the die's — the address the access will read (#87).
+    /// </para>
     /// </summary>
-    void CopyAuToPc() => _pc = _au;
+    void CopyAuToPc(uint position) => _pc = position;
 
     /// <summary>
     /// A state that begins a prefetch — the microcode's <c>m_pc = m_au</c> (<c>roml1</c>, <c>abww1</c>,
@@ -229,13 +235,13 @@ public sealed partial class M68000
     /// counter, which is why a group-0 frame's depth is decided per script and not by an expression on
     /// the queue: a state that merely pops a word (<c>adsl1</c>, <c>aixw2</c>) does not move it.
     /// <para>
-    /// It reads the queue's fetch position rather than the adder for the reason above: on this tree the
-    /// adder still carries the program counter's own arithmetic between states, so the position the die
-    /// would have in `AU` is <see cref="_fetchPointer"/>. The atom is here so that the day the adder's
-    /// position is the access's, this method is `CopyAuToPc()` and nothing else changes (#87).
+    /// The position handed over is <see cref="FetchPosition"/> — the derivation — because on this tree
+    /// the adder is the consumption counter between states rather than the access's address. The atom is
+    /// here so that every script state which begins a prefetch says so in one place, and so that the day
+    /// the adder itself holds the access (#87's AU/PC split) this method is the die's bare copy.
     /// </para>
     /// </summary>
-    void BeginFetchState() => _pc = _fetchPointer;
+    void BeginFetchState() => CopyAuToPc(FetchPosition);
 
     /// <summary>
     /// Where MAME's <c>m_pc</c> stands when the fetch that is about to happen faults, for the group-0 frame
@@ -272,21 +278,23 @@ public sealed partial class M68000
     {
         if (index > 0)
         {
-            return await ReadQueueWordAsync();
+            return await ReadQueueWordAsync(FetchPosition);
         }
 
         ushort word = _ir;
         _ir = _irc;
         _ircValid = false;
         _au += 2;
+        _freePop = true;
         return word;
     }
 
     /// <summary>
     /// MAME's <c>bbci3</c>: a jump's target read, in program space and <b>not</b> in a fetch state — the
-    /// address is not committed to the queue's counter until the <c>b</c> state follows. An odd target
-    /// therefore faults with the boundary's word still in <c>m_pc</c> (see <see cref="FrameSavesOnFetch"/>)
-    /// and costs the aborted read's own 4 (<see cref="ChargeAbortedReadAsync"/>).
+    /// address is not committed to the queue's counter until the <c>b</c> state follows, so the pipeline's
+    /// position is untouched and the script sets the counter itself. An odd target therefore faults with
+    /// the value the script declared (see <see cref="FrameSavesOnFetch"/>) and costs the aborted read's
+    /// own 4 (<see cref="ChargeAbortedReadAsync"/>).
     /// </summary>
     async ValueTask<ushort> ReadTargetAsync(uint address)
     {
@@ -299,7 +307,6 @@ public sealed partial class M68000
             return 0;
         }
 
-        _fetchPointer = address + 2;
         return result.Data;
     }
 
@@ -410,6 +417,32 @@ public sealed partial class M68000
     /// whole of #87's remaining split: replacing this body is its last step.
     /// </summary>
     uint ConsumedAddress => _au - 2;
+
+    /// <summary>
+    /// The pipeline's next read address — the derivation that replaces the old `_fetchPointer` field
+    /// (#87). Two cells hold it: `_au`, which names the word the instruction consumes next, and the
+    /// queue's fill, which the access itself moves. A read fills the slot <em>behind</em> the head, so
+    /// the address is two bytes past `_au` — four once a prefetch has filled that slot (`_ircValid`).
+    /// Two states consumed a queue word with no read behind it and leave the position on `_au` itself: a
+    /// control transfer's free pop (`_freePop`, the fetch a transfer abandons) and the absolute-long
+    /// pair's second word (`_queueShort`, two words taken from one read).
+    /// <para>
+    /// Measured on MAME's 317 500-record corpus at every site that used to read the field: exact on
+    /// 104 527 prefetches, 88 177 pops, 135 864 trailing fetches and 29 075 fetch states.
+    /// </para>
+    /// </summary>
+    uint FetchPosition => _queueShort || _freePop ? _au : _au + (_ircValid ? 4u : 2u);
+
+    /// <summary>
+    /// The position **at a boundary**, where the closing shift has moved `_irc` into the queue's head
+    /// without moving `_au`: the head is at `_au + 2` and the word past it — the next read — is `_au + 4`.
+    /// This is the one state in which `_au` still names the word in `IRD`, and it is what the `--clocks`
+    /// frame columns report (4 words past the boundary's counter on 260 664 clean records, 6 on the
+    /// 1 230 `STOP` records whose seam rolls the counter back to the opcode's own address — the
+    /// machine's loop keeps the successor, so the rollback is two bytes and the position reads
+    /// `_au + 6` there).
+    /// </summary>
+    uint BoundaryPosition => _au + (_stopped ? 6u : 4u);
 
     // ---- NanoStore: PREN, the encoder that walks MOVEM's list --------------------------------
     // MOVEM is not a loop over a counter: the **list is the loop's state**. PREN holds the mask, its

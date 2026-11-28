@@ -75,12 +75,12 @@ public sealed partial class M68000
             cpu._ir = state.Prefetch1;
             cpu._ircValid = false;
             cpu._at = state.Pc;
-            cpu._fetchPointer = state.Pc + 4;
             cpu._pc = state.Pc + 2;
-            cpu._streamStart = cpu._fetchPointer;
+            cpu._streamStart = cpu.BoundaryPosition;
             cpu._flowTransferred = false;
             cpu._trailingFetched = false;
             cpu._queueShort = false;
+            cpu._freePop = false;
             cpu._own = 0;
             cpu._eaCharged = false;
             cpu._frameFetchPcDeclared = false;
@@ -122,9 +122,10 @@ public sealed partial class M68000
             cpu.Emulator.InInstruction = true;
             cpu._au += 2;
             cpu._opcodeAddress = cpu._au - 2;
-            cpu._streamStart = cpu._fetchPointer;
+            cpu._streamStart = cpu.FetchPosition;
             cpu._flowTransferred = false;
             cpu._trailingFetched = false;
+            cpu._freePop = false;
             cpu._own = 0;
             cpu._eaCharged = false;
             cpu._faultProgram = false;
@@ -169,10 +170,10 @@ public sealed partial class M68000
             // nothing but the previous record's leftovers
 #if DEBUG
             cpu.Emulator.LastFramePcCounter = cpu._au;
-            cpu.Emulator.LastFrameFetchPointer = cpu._fetchPointer;
+            cpu.Emulator.LastFrameFetchPointer = cpu.BoundaryPosition;
             cpu.Emulator.LastFrameIrAddress = cpu._at;
             cpu.Emulator.LastFrameTrailing = cpu._trailingFetched;
-            cpu.Emulator.LastFrameRefetched = cpu._fetchPointer != cpu._streamStart;
+            cpu.Emulator.LastFrameRefetched = cpu.BoundaryPosition != cpu._streamStart;
             cpu.Emulator.LastFrameVector = 0;
 #endif
 

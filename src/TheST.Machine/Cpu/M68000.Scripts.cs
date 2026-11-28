@@ -884,7 +884,7 @@ public sealed partial class M68000
                 _pc = _opcodeAddress + 2;
                 break;
             case 7 when reg <= 1:                              // adr16/adr32 — `m_pc = m_au` twice
-                _pc = _fetchPointer - 2;
+                _pc = _au;                                     // the position the shape's own reads left
                 break;
             case 7:                                            // dpc/axpc — `m_pc` is the operand's own base
                 _pc = _opcodeAddress + 2;
