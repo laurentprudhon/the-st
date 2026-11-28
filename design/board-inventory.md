@@ -267,40 +267,47 @@ The 68000's `A1…A20` run is pins 46–67 with gaps at 55 and 60 (VCC and GND),
 Sheet 1. Discrete blitter, present on this board revision; on later CA4003290 boards the
 same function is inside U400 and U101 is not fitted (see §6).
 
-| Pin | Signal | Dir | Active | Tag |
+**Read from the drawing, 2026-11-28.** The service manual's sheet 1 is a *vector* page whose text layer
+carries the symbol's own pin numbers and names, and the owner read the arbitration block off a 600 dpi crop to
+confirm the alignment (`design/emulator-limitations.md` B4). The table above was a 68000-shaped transcription
+and is replaced by this one; every row here is `V`.
+
+| Pin | Signal | Dir | Active | Note |
 |---|---|---|---|---|
-| 1–5 | D4, D3, D2, D1, D0 | I/O | H | V |
-| 58–68 | D15 … D5 | I/O | H | V |
-| 32–51, 53–55 | A1 … A23 (gap at pin 52) | in | H | V |
-| 10 | DTACK | out | L | V |
-| 28, 29, 30 | FC2, FC1, FC0 | in | H | V |
-| 14, 52 | VCC | pwr | — | V |
-| 16, 17, 56, 57 | GND | pwr | — | V |
-| 13 | BR | out | L | V |
-| 11 | BG | in | L | V |
-| 15 | CLK | in | ↑ | V |
-| 19 | HALT | out | L | V |
-| 21 | VMA | out | L | V |
-| 23 | VPA | out | L | V |
-| 24 | BERR | out | L | V |
-| 25, 26, 27 | IPL2, IPL1, IPL0 | out | L | V |
-| 12, 20, 22 | BLIT-INT-related / bus control (names partly illegible) | — | — | U |
+| 46–54, 56–59, 61–67, 2, 3, 4 | `A1` … `A23` (in that order) | in | H | the *CPU* address bus, not MAD |
+| 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6 | `D0` … `D15` (in that order) | I/O | H | |
+| 45, 44, 43 | `FC0`, `FC1`, `FC2` | in | H | the register decode uses these; as a master it also drives them |
+| 23, 24, 25, 26 | `AS`, `UDS`, `LDS`, `R/W` | I/O | L | |
+| 27 | `DTACK` | I/O | L | |
+| 28 | `BGI` — bus grant **in** | in | L | from the CPU, on net `XCPUBG` |
+| 37 | `BGO` — bus grant **out** | out | L | to the GSTMCU, on net `XBLTBG` |
+| 29 | `BGACK` | out | L | to the CPU |
+| 40 | `BGKI` — bus acknowledge **in** | in | L | from the GSTMCU, the other end of `BGO` |
+| 30 | `BR` | out | L | wired-OR with the GSTMCU's |
+| 38 | `BERR` | in | L | the state sheet consumes it |
+| 39 | `RESET` | in | L | |
+| 41 | `INT` | out | L | net `XBLTINT`, pull-up `R118` 1 k, into U400 pin 60 `BINT` |
+| 34 | `CLK` | in | ↑ | 8 MHz |
+| 1, 33 | `VCC` | pwr | — | 33 also appears as `VSS` in the DOIT_ST table; unconfirmed |
+| 5, 35 | `GND` | pwr | — | |
+| 22, 31, 32, 36, 42, 55, 60, 68 | not named on the symbol | — | — | eight pins carry no name — 60 named + 8 unnamed = 68, and the published pinout calls the same eight `N/C` |
+
+`derived` Sixty names on a 68-pin part leaves **eight unnamed pins**, which is exactly what the published
+DOIT_ST pinout calls `N/C` — two independent readings agreeing on the arithmetic. There is **no `CS` and no
+`DS`** pin on the symbol: the design's pad ring has `XCS` and `XIDS`, so one of the two is wrong or those pads
+are tied off, and that conflict is recorded in `design/emulator-limitations.md` B9 rather than guessed here.
 
 `A1…A23` on the blitter are the *CPU* address bus, not the MAD bus: the blitter is a bus
 master that drives addresses onto the system bus through the GSTMCU.
 
-> **Correction — 2026-11-28** (U101 study, `research/blitter-implementation.md` §3.4). The recovered design's
-> pad ring (sheet 11 of `TA-4021` / `ST-4051`) carries **no `HALT`, `VMA`, `VPA` or `IPL*` pad at all**, so the
-> rows above for pins 19, 21, 23, 25, 26 and 27 name signals this part does not have: it does not halt the CPU
-> (it takes the bus from it) and it has no interrupt-priority encoder. What the design does have, and the table
-> above is missing, is the **grant relay** — `BGI`/`XBGI` in, `BGO`/`XBGO` out, `BGACKI` in and `BGACK` out —
-> plus one `INT` pad, `XCS`, `XDTACK`, `XBERR`, `XAS`, `XUDS`, `XLDS`, `XIDS` and `FC0–FC2`. `BERR` is an
-> **input** to this chip (its state sheet consumes it) and `FC0–FC2` are **outputs** (it is a bus master), so
-> the directions on rows 24 and 28–30 are also wrong. The six pins this table could not read — **6, 7, 8, 9, 18
-> and 31** — are the only remaining candidates for `AS`, `UDS`, `LDS`, `R/W` (the §4.1 rows list those nets for
-> U101 with no pin numbers), the relay's other two pins and `INT`; that assignment is `inferred`, and a re-read
-> of the 600 dpi sheet settles it. The pins named `BLIT-INT-related / bus control` on row 12/20/22 are almost
-> certainly three of those.
+> **Correction — 2026-11-28** (U101 study, `research/blitter-implementation.md` §3.4). The rows this table used
+> to carry for pins 19, 21, 23, 24, 25, 26 and 27 — `HALT`, `VMA`, `VPA`, `BERR`, `IPL2`, `IPL1`, `IPL0` — named
+> signals this part does not have, and the power, clock and data pins were a 68000 layout. The chip has no
+> `HALT`, `VMA`, `VPA` or `IPL*` at all: it does not halt the CPU (it takes the bus from it) and it has no
+> interrupt-priority encoder — one `INT`, into the GSTMCU. `BERR` is an **input** and `FC0–FC2` are **inputs**
+> the decode uses (driven only while it is master), which is why the old "out" on pin 24 and "in" on 28–30 were
+> wrong. The grant relay the old table missed is rows 28/37/29/40 above, and the board's two grant nets —
+> `XCPUBG` (CPU → blitter) and `XBLTBG` (blitter → GSTMCU) — are the two segments of that chain.
 
 ### 3.3 U102 / U103 — TOS ROM 27C010, 32-pin DIP
 

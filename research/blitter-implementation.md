@@ -255,27 +255,40 @@ four; the fourth exists only if the part is a **station in the grant daisy chain
 to the next device and receives its acknowledge back — and Atari's own sentence is written for exactly this
 logic: "In either case the BLiTTER will yield to other DMA devices."[31]
 
-`inferred` Which station is first is **not** in the net list — `design/board-inventory.md` §4.1 lists the
-three nets with six endpoints (U400.26–29 and U101.11, .13) and no order — but three sources agree on the
-answer, and it is CPU → **U101** → U400.[33][6] Cwik's model names its two ports for what they are —
-`iBGACKn  // GLUE output, or optionally additional bus masters` — and drives `BGOn` onward, so the CPU grants
-the blitter first and the blitter passes the grant to the GLUE.[33] Info-Coach says the same from the board's side
-("the Blitter has also these signals and thus does not need the GST MCU to make the request to the 68000"), and
-the design's four pads are the two segments of exactly that chain.[33][6][2] What the arrangement still leaves
-open is the *share* when both want the bus at once.[2] The coder's answer is published, though: "if a disk transfer
-is in progress, the DMA has priority over the blitter" — politeness on a busy `BR`, which Cwik implements as
+`documented` Which station is first is **now read off the board's own schematic**, which settles it without a
+scope. The service manual's sheet 1 is a vector page whose text layer carries the symbol's pin numbers and
+names, and the owner confirmed the arbitration block off a 600 dpi crop on 2026-11-28: **`BGI` (pin 28) in,
+`BGO` (37) out, `BGACK` (29) out, `BGKI` (40) in** — and the two grant nets on the sheet are `XCPUBG` (CPU →
+blitter) and `XBLTBG` (blitter → GSTMCU).[37] So the order is CPU → **U101** → U400, and the blitter passes the
+grant on, exactly as Cwik's port names say (`iBGACKn  // GLUE output, or optionally additional bus masters`,
+with `BGOn` driven onward) and as Info-Coach says from the board ("the Blitter has also these signals and thus
+does not need the GST MCU to make the request to the 68000").[33][6] What the arrangement still leaves open is
+the *share* when both want the bus at once.[2] The coder's answer is published, though: "if a disk transfer is
+in progress, the DMA has priority over the blitter" — politeness on a busy `BR`, which Cwik implements as
 `canRequest` waiting while `BR` is asserted and no `BGACK` is outstanding.[33]
 
-`derived` Three rows of `design/board-inventory.md` §3.2 do not survive this study and are corrected there with
-a dated note, as follows.[2] (a) Pins 19/21/23/24/25/26/27 are transcribed as `HALT`, `VMA`, `VPA`, `BERR`,
-`IPL2`, `IPL1`, `IPL0`, **none of which exists on the design's pad ring**: the chip has `BERR` (an input — the
-state sheet consumes it) and one `INT` pin, and it has no `HALT`, `VMA`, `VPA` or `IPL*` at all, because it does
-not halt the CPU, it takes the bus from it, and it has no interrupt-priority encoder to drive.[2] (b) `FC0–2`
-are transcribed as inputs; as a bus master the chip must drive them, and the pad nets are written
-`FC0`/`FC1`/`FC2` beside output drivers.[2] (c) The six pins the transcription could not read (6, 7, 8, 9, 18,
-31) are the natural home of `AS`, `UDS`, `LDS`, `R/W` — which §4.1 lists for U101 without pin numbers — plus
-the grant relay and `INT`.[2] `derived` That last assignment is `inferred`, not read; §7.7 and a re-read of the
-600 dpi sheet settle it.
+`documented` **The pin list is now read, not inferred** — the service manual's sheet-1 symbol, its text layer,
+and the owner's confirmation of the arbitration block on 2026-11-28.[37] `design/board-inventory.md` §3.2 has
+the corrected table, and what it shows is worth stating here because three of this study's claims turn on it:
+
+| pins | signal | what it settles |
+|---|---|---|
+| 46–54, 56–59, 61–67, 2, 3, 4 | `A1`…`A23` in order | the address bus is 23 bits wide on the symbol, though the simulation deck lists `c-a0` |
+| 21…6 | `D0`…`D15` in order | the same corner assignment as the 68000's PLCC — the part was laid out to sit in a CPU-shaped socket |
+| 45, 44, 43 | `FC0`, `FC1`, `FC2` | three function-code pins, so the decode is its own and there is no `CS` on the symbol |
+| 23, 24, 25, 26, 27 | `AS`, `UDS`, `LDS`, `R/W`, `DTACK` | the five bus strobes, in the 68000's own numbering |
+| 28, 37, 29, 40 | `BGI` in, `BGO` out, `BGACK` out, `BGKI` in | **the relay**, and with `XCPUBG`/`XBLTBG` the chain's two segments |
+| 30, 38, 39, 41 | `BR`, `BERR` in, `RESET` in, `INT` out | the request is direct; the abort, the reset and the interrupt are inputs/outputs as the design's pads say |
+| 34 | `CLK` | |
+| 1, 33 / 5, 35 | `VCC`, `VCC` / `GND`, `GND` | 33 is `VSS` in the published DOIT_ST table — the one pin where the two readings disagree |
+| 22, 31, 32, 36, 42, 55, 60, 68 | unnamed | 60 named + 8 unnamed = 68, and DOIT_ST calls the same eight `N/C` |
+
+`derived` Three corrections follow for `design/board-inventory.md`, all landed with the dated note: the rows
+that named `HALT`, `VMA`, `VPA`, `BERR`, `IPL2`, `IPL1`, `IPL0` on pins 19/21/23/24/25/26/27 named signals this
+part does not have; `BERR` is an **input**; and `FC0–2` are inputs the decode reads rather than outputs.[2][37] `derived`
+And one new conflict, recorded rather than guessed: the design's pad ring has `XCS` and `XIDS`, and the symbol
+has **no `CS` and no `DS`** — so either those pads are tied off on this board or the symbol omits them, which is
+`design/emulator-limitations.md` B9.
 
 ### 3.5 No table of any kind
 
@@ -556,9 +569,11 @@ working hardware; the corrected criterion is a level that rises at start and fal
 (§4.5).[2][33] `derived` The U400 study's "not modelled by ruling" stands and is now explained rather than
 merely recorded.
 
-**5. `U101`'s pin list.** `HALT`, `VMA`, `VPA` and `IPL0–2` are not on this chip, `BERR` is an input and
-`FC0–2` are outputs (§3.4).[2] `derived` The inventory's rows 19, 21, 23, 25, 26, 27 are therefore not those
-signals, and the six unread pins are where the bus strobes must be.
+**5. `U101`'s pin list.** The inventory's table was a 68000-shaped transcription: `HALT`, `VMA`, `VPA` and
+`IPL0–2` are not on this chip, `BERR` is an input, and the data, power and clock pins were another part's.[2]
+`documented` **Settled by reading the drawing, 2026-11-28** (§3.4): the service manual's sheet-1 symbol gives
+the whole table, the owner confirmed the arbitration block off a 600 dpi crop, and `design/board-inventory.md`
+§3.2 now carries it — 60 named pins, 8 `N/C`, and the relay on 28/37/29/40.[37]
 
 **6. "A bus master" — true, and more.** The pad ring has both ends of the grant and of the acknowledge (§3.4), so
 the blitter is a **relay station** in the arbitration chain, not just a requester.[2] `derived` That sharpens
@@ -665,7 +680,9 @@ from a disputed reading into a measured one, which is the one place where the ve
 - **Which chip is first in the grant chain, on the board** — the relay exists in the design and three sources
   put the blitter first (§3.4); the net list still does not *order* it, so this is an inference a scope trace
   would confirm rather than a fact.[2][33]
-- **The directions of `FC0–2`, `BERR` and the six unread pins** — `inferred` from function, not read (§3.4).[2]
+- **One pin, and one pad that is not on the symbol** — pin 33 reads `VCC` in the manual's text layer and `VSS`
+  in the published DOIT_ST table; and the design's `XCS`/`XIDS` pads have no counterpart on the board's symbol,
+  so one of the two is wrong (§3.4, `design/emulator-limitations.md` B9).[37][2]
 - **Atari's right-end-mask table against its own prose** — one pixel, and both readings are defensible (§4.7).[31]
 - **What `XIDS` is** — a `DS`-style strobe on the pad ring that no document mentions; either a 6800-cycle input
   or an internal `DS` formed from `UDS`/`LDS`.[2]
@@ -706,3 +723,4 @@ publishes, the quotations stay and the design files are described rather than dr
 [34] https://github.com/hatari/hatari/tree/master/tests/blitter — Hatari — tests/blitter (blitemu.c)
 [35] https://github.com/neost/neost — NeoST — src/core/Blitter.cpp
 [36] https://www.atari-forum.com/viewtopic.php?t=38994 — Atari-Forum — "STE Blitter" (Cyprian's real-STE measurement of the non-HOG split; npomarede's and ijor's mechanism)
+[37] https://www.meezenest.nl/mees/manuals/atari/520ste_service_manual.pdf — Atari — 520/1040 STE Field Service Manual, sheet 1 "CPU, BLITTER, ROM and Cartridge" (the blitter symbol's own pin numbers and names; owner-confirmed 2026-11-28)

@@ -26,8 +26,13 @@
 >   §1 (B8 the `BERR` abort path, B9 the `XIDS` pad, B10 the shipped mask, B7 the `xcount=1` coverage sweep);
 >   the six unread pins are a **reading** task (B4) with a published pinout that disagrees with our own
 >   transcription, not a measurement.
-> - [ ] **Still the owner's, and only by choice**: a 600 dpi crop of U101's symbol so six names can be put on
->   six pins (B4) — the route is on the study's §7 list, and the original Rev A drawing set is downloadable.
+> - [x] **The pin list, read off the drawing and confirmed by the owner (2026-11-28)**: the service manual's
+>   sheet 1 is a vector page whose text layer carries the symbol's pin numbers and names, so the table came out
+>   by aligning the blocks by count and the owner checked the arbitration block on a crop — `BGI` 28 in, `BGO` 37
+>   out, `BGACK` 29 out, `BGKI` 40 in, `BERR` 38 in, `RESET` 39, `INT` 41, `AS/UDS/LDS/R/W` 23/24/25/26,
+>   `DTACK` 27, `BR` 30, `FC0–2` 45/44/43, `CLK` 34, eight `N/C`. `design/board-inventory.md` §3.2 now carries
+>   it, and the board's two grant nets (`XCPUBG`, `XBLTBG`) make the relay a documented fact rather than an
+>   inference. A vision read of the same crop shifted it by one pin — the owner's eyes were the instrument.
 
 **Goal of the next session.** Write `research/blitter-implementation.md`: the STE's blitter studied to the
 standard the GSTMCU, Shifter and DMA studies reached — what it *is*, how it operates (one word, one line of
