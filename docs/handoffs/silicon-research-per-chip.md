@@ -328,6 +328,15 @@ nomenclature section (only if the part has internal names worth fixing), drawing
 `unknown` with the experiment that would settle it. Do not chase transistor-level detail for a part whose
 emulation is already T1-verified.
 
+**Where a question only a board can settle — owner's ruling, 2026-11-28.** The owner has no 1040STE and no
+logic analyser, so the experiment that would settle such a question is not work anybody can start. **Search
+first**: the STE has a small, obsessive, publishing community, and the odds that nobody has measured a given
+wire are worse than they look — the blitter's non-HOG split turned out to be measured on a real STE,
+explained by Hatari's author and confirmed by the RTL's author, all inside one forum thread. Anything still
+unpublished goes into [`design/emulator-limitations.md`](../../design/emulator-limitations.md) with what the
+record gives, what our model does instead, and the one measurement that would close it — **not** into a
+ticket. A ticket is a promise of work; "nobody can do this yet" is not work.
+
 ---
 
 ## 7. Decisions needed from the owner — **answered 2026-11-21**

@@ -344,6 +344,15 @@ The name is the programmer's, not the silicon's — and this study quotes the co
 `derived` The MiSTer **code** hardwires `1'b1` on that bit and its comment is the odd one out — which makes the split 5–2 with the two dissenters being a comment and a magazine-era article.
 Adjudicated: **bit 0 = 1 is "no error"**, and the pass criterion is §7.2.
 
+`documented` **The wording, quoted, 2026-11-28.** The document above is already this study's source [23], and
+it prints the register table in as many words: *"$FF8606 R (16 bits) DMA Status word: Bit 0: DMA error status:
+1 = no error; 0 = error. Bit 1: Sector count status: 0 if count has reached zero; 1 otherwise."*[23] So the
+conflict was never a hardware question, and the study's adjudication was right for the right reason — the camp
+that said "1 = no error" was following documentation, and the camp that disagreed was following the other camp.
+The same document settles §5.4's select bit: `$FF8606` bit 3 chooses `HDCS*` or `FDCS*`.[23] §7's tests 1 and 2
+therefore drop from *measurements* to *implementation checks*, and `design/emulator-limitations.md` §4 records
+the change.
+
 **4. `RDY`'s duty: a sector or a block?** `derived` The brief says "a level, not an edge… asserted for milliseconds while the FDC dribbles bytes"; the RTL asserts its request only while a block is draining (`ram_br = fifo_read_in_progress || fifo_write_in_progress`), Steem says "the CPU must free the bus for each 16-byte transfer", and DrCoolZic says the request follows a full FIFO [26][30][23].
 Adjudicated: a level **per block**, four microseconds long, about 39 times a frame.
 The brief's shape is right and its scale is wrong; §4.2's table replaces it.

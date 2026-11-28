@@ -18,7 +18,8 @@ with the models as a checklist of what must be explained.*
 *Labels: `documented`, `derived`, `inferred`, `unknown`; T1 hardware-captured, T2 hardware-corrected, T3
 emulator-derived. Companion pages: `research/gstmcu-silicon-implementation.md` (the other side of `BINT` and of
 the bus cycle), `research/dma-controller-implementation.md` §4.3, `design/subsystems-spec.md` §3,
-`design/board-inventory.md` §3.2 and §4.1. The four sheets drawn from this study are in
+`design/board-inventory.md` §3.2 and §4.1. The questions that only a board could settle — and what the search of 2026-11-28 found
+about each — live in `design/emulator-limitations.md` §1. The four sheets drawn from this study are in
 `research/blitter-silicon/schematics/` — functional diagrams, and **no floorplan**, since no die photograph of
 this part exists.*
 
@@ -37,7 +38,7 @@ this part exists.*
 | What does a full-screen blit cost? | **16,000 words = 32,000 accesses = 128,000 clocks = 16 ms** in HOG mode; about twice that non-HOG, so **a full-screen 320×200×4 copy does not fit in one 20 ms frame**. | 4.2, 5.10 |
 | Does a "line mode" exist? | **No.** No line bit, no octant, no accumulator: what exists is `SMUDGE` + the halftone line number, driven with `X COUNT = 1`. | 4.6, 5.2 |
 | Where does the interrupt go? | U101's `INT` → U400 → **`BINT` (U400.60) → MFP `GPIP3`**; the manual says the line *is* BUSY, so it is a **level**, not a pulse. | 4.5 |
-| What is still open? | The 63-or-64 window, the grant-chain order between U400 and U101, and the shipped mask. | 8 |
+| What is still open? | The bus-error abort path, what one pad (`XIDS`) is, and the shipped mask. The 63-or-64 window and the grant-chain order were settled afterwards by other people's published measurements (§4.3, §5.1). | 8 |
 
 `derived` The one-sentence machine, assembled from §3 and §4 below: *a bus master with one 16-bit data path and one 23-bit address adder takes
 the bus from the CPU, reads a source word, shifts it right by 0–15 bits against a 32-bit remainder, merges it
@@ -254,10 +255,16 @@ four; the fourth exists only if the part is a **station in the grant daisy chain
 to the next device and receives its acknowledge back — and Atari's own sentence is written for exactly this
 logic: "In either case the BLiTTER will yield to other DMA devices."[31]
 
-`unknown` Which station is first on this board is settled by no document: `design/board-inventory.md` §4.1
-lists the three nets with six endpoints (U400.26–29 and U101.11, .13) but not their order. Both are
-electrically possible — CPU → U101 → U400, or CPU → U400 → U101 — and they differ in what "the blitter takes
-the bus directly" means; §7.7 is the scope test.
+`inferred` Which station is first is **not** in the net list — `design/board-inventory.md` §4.1 lists the
+three nets with six endpoints (U400.26–29 and U101.11, .13) and no order — but three sources agree on the
+answer, and it is CPU → **U101** → U400.[33][6] Cwik's model names its two ports for what they are —
+`iBGACKn  // GLUE output, or optionally additional bus masters` — and drives `BGOn` onward, so the CPU grants
+the blitter first and the blitter passes the grant to the GLUE.[33] Info-Coach says the same from the board's side
+("the Blitter has also these signals and thus does not need the GST MCU to make the request to the 68000"), and
+the design's four pads are the two segments of exactly that chain.[33][6][2] What the arrangement still leaves
+open is the *share* when both want the bus at once.[2] The coder's answer is published, though: "if a disk transfer
+is in progress, the DMA has priority over the blitter" — politeness on a busy `BR`, which Cwik implements as
+`canRequest` waiting while `BR` is asserted and no `BGACK` is outstanding.[33]
 
 `derived` Three rows of `design/board-inventory.md` §3.2 do not survive this study and are corrected there with
 a dated note, as follows.[2] (a) Pins 19/21/23/24/25/26/27 are transcribed as `HALT`, `VMA`, `VPA`, `BERR`,
@@ -407,8 +414,17 @@ state-machine sheet, and the standalone revisions (`TA-4021`, `ST-4051`) have **
 string `TMOUT` does not appear in either — while the combo revision has `TMOUT` on sheet 1 beside `WANTDMA`,
 `-DISK$`, `DMARQ` and `HOG`.[2] `derived` Two readings are consistent with what is visible: the discrete part
 counts nothing and releases the bus on another condition, or the count exists as a `UDC2` chain that carries no
-name of its own, as sheet 10's counters carry none.[2] `unknown`, therefore, with §7.1's scope test as the only
-route — which is what the archive's own follow-up predicted.[2]
+name of its own, as sheet 10's counters carry none.[2] `derived` **And the answer is published, by people who did have the board** — found in this study's
+2026-11-28 pass and recorded in `design/emulator-limitations.md` §1, B1.[36] Cyprian measured a real STE: *"the
+outcome from my tests on the real STe is that split is isn't stiff. CPU part can takes more bus cycles than 64
+and the BLiTTER takes 65 on STE and 66 on Mega STE. And in two last cases, only 63 bus cycles are for data the
+rest are for bus mastering."*[36] npomarede (Hatari) names the mechanism — the blitter *"will sometimes
+wrongly count 1 cpu bus access for prefetch as if it was 1 blitter bus access"*, so *"in the end the blitter
+will only do 63 bus accesses itself, processing one word less than expected"*[36] — and Cwik confirms it from the RTL, which is where the mechanism becomes arithmetic: a 7-bit
+counter incremented on **every falling edge of `AS` from the moment `BUSY` is set**, timing out at 64, so a
+CPU access inside the 4-clock latency is one of the blitter's own.[36][33] So: 64 counted accesses, at least
+one of which buys the transfer's own bus-mastering, and 63 of data when the misattribution bites — and the
+design's silence on `TMOUT` is just the direction the archive was built in.[2][36]
 
 ### 4.4 One register write
 
@@ -519,9 +535,12 @@ published table is wrong — and nothing in the archive decides it; §7.4 measur
 
 **1. The non-HOG window: 63 or 64?** `documented` Atari says **64** ("each will get 64 bus cycles while the other
 is halted").[31] Hatari models 64 with a documented 63 on real hardware and a mechanism for it.[33] Cwik counts
-64 from BUSY and calls the difference a buglet.[32] `derived` The design cannot arbitrate it (§4.3), so the
-ruling is: **64 is the documented rule and the model's default; 63 is a measured anomaly with a named
-mechanism**, and the study records both rather than choosing.[31][33]
+64 from BUSY and calls the difference a buglet.[32] `derived` **Settled since, on hardware and in RTL** — Cyprian's measurement, npomarede's mechanism, Cwik's RTL —
+see §4.3 and `design/emulator-limitations.md` B1: the
+counter counts `AS` edges *from the instant `BUSY` is set*, so the window is 64 counted accesses of which at
+least one pays for the transfer's own bus mastering, and a CPU access inside the 4-cycle latency is
+misattributed to the blitter — which is why hardware shows 63 data accesses, 65 total on an STE and 66 on a
+Mega STE.[36][33] The model must count every `AS` edge the bus sees, not only the blitter's own.[33]
 
 **2. "Line mode".** There is none (§4.6). `derived` The brief's premise came from the Amiga's blitter, which has
 `BLTCON1` bit 1 as `LINE` with octant bits; this part has no equivalent and no free register bit for one.[31]
@@ -602,9 +621,10 @@ scope on a named pin or a read-back through a named register.[34] Tests 1, 2, 4 
 ("U101's four open measurements"), which is where a result is recorded; nothing in this study changes without
 one.
 
-1. **The window.** Start a non-HOG blit with a known word count and scope U101's `AS` (one of pins 6–9) or
-   `BGACK`; count blitter-held accesses between releases.
-   *Pass:* 64; a run of 63 confirms Hatari's mechanism and falsifies "64 from BUSY is the design".[33]
+1. **The window — now a confirmation, not a discovery.** Start a non-HOG blit with a known word count and
+   scope U101's `AS` (one of pins 6–9) or `BGACK`; count blitter-held accesses between releases.
+   *Pass:* the published result (§4.3): 63 data accesses between turns, 65 on an STE and 66 on a Mega STE
+   counting the mastering cycles. A clean 64 of data would contradict Cyprian and npomarede.[36]
 2. **The 4-clock latency.** A `MULU`/`DIVU` immediately after the start write, `BGACK` on the scope and the
    instruction's own timing read from an MFP timer.
    *Pass:* part of the instruction runs before the grant; a grant on the write's own cycle falsifies §4.2.[33]
@@ -620,10 +640,11 @@ one.
    *Pass:* the destination written and `AS` active for exactly `X COUNT × Y COUNT` cycles — no reads at all.[31]
 6. **Stop and resume.** Write 0 to bit 7 mid-blit, then 1, and read the register.
    *Pass:* the blit resumes at the same word and BUSY reads 1 throughout.[31][33]
-7. **The grant chain's order.** Scope U101's grant-in, grant-out and U400's two grant pins during a blit, and
-   again during a disk DMA transfer with the blitter idle.
-   *Pass:* the order reads off three traces — whichever chip's grant-out precedes the other's grant-in is first,
-   and if the blitter is upstream the DMA's grant passes through both.[2]
+7. **The grant chain's order — a confirmation of an inference.** Scope U101's grant-in, grant-out and U400's
+   two grant pins during a blit, and again during a disk DMA transfer with the blitter idle.
+   *Pass:* U101's grant-in is the CPU's grant and its grant-out feeds U400, i.e. the blitter is first (§3.4);
+   a disk transfer with the blitter idle passes its grant *through* U101, which is the trace that would
+   falsify the inference.[2][33]
 8. **The window's phase under a busy CPU.** Repeat test 1 with the CPU in a loop of `MOVE.W` bus cycles.
    *Pass:* the CPU's 64 accesses count from the release, so the alternation is a phase and not an average — and
    if the first blitter window is one access short, Hatari's 63 is confirmed as a *counting* error rather than
@@ -637,10 +658,13 @@ from a disputed reading into a measured one, which is the one place where the ve
 ## 8. What is still unknown
 
 - **The shipped mask** — `TA-4021`, `ST-4051` or `ST-4082`; no decap of any STE custom exists (§5.12).[2]
-- **The 63-or-64 window's mechanism in the design** — `TMOUT` exists only in the combo revision, and the
-  standalone revisions' state sheet carries no named bus counter (§4.3).[2]
-- **Which chip is first in the grant chain** — the design proves the relay exists, the net list does not order
-  it (§3.4, test 7).[2]
+- **The 63-or-64 window's mechanism *in the design*** — the behaviour is now settled by published
+  measurement (§4.3): a counter of `AS` edges from `BUSY`, timing out at 64, misattributing a CPU access in
+  the latency window. What remains unknown is only *which* stack it lives in on the standalone part, since
+  `TMOUT` exists solely in the combo revision (§4.3).[2]
+- **Which chip is first in the grant chain, on the board** — the relay exists in the design and three sources
+  put the blitter first (§3.4); the net list still does not *order* it, so this is an inference a scope trace
+  would confirm rather than a fact.[2][33]
 - **The directions of `FC0–2`, `BERR` and the six unread pins** — `inferred` from function, not read (§3.4).[2]
 - **Atari's right-end-mask table against its own prose** — one pixel, and both readings are defensible (§4.7).[31]
 - **What `XIDS` is** — a `DS`-style strobe on the pad ring that no document mentions; either a 6800-cycle input
@@ -681,3 +705,4 @@ publishes, the quotations stay and the design files are described rather than dr
 [33] https://github.com/hatari/hatari/blob/master/src/blitter.c — Hatari — src/blitter.c, and src/mfp.c for GPIP3
 [34] https://github.com/hatari/hatari/tree/master/tests/blitter — Hatari — tests/blitter (blitemu.c)
 [35] https://github.com/neost/neost — NeoST — src/core/Blitter.cpp
+[36] https://www.atari-forum.com/viewtopic.php?t=38994 — Atari-Forum — "STE Blitter" (Cyprian's real-STE measurement of the non-HOG split; npomarede's and ijor's mechanism)

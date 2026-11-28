@@ -19,10 +19,15 @@
 > - [x] §8's definition of done: study verified (`--min-coverage 0.30`, 31 %), sheets self-auditing, the U400
 >   study's §6.6 and `BINT` note closed in place, `design/subsystems-spec.md` §1/§3, `design/board-inventory.md`
 >   §3.2 and the in-repo blitter page corrected with dated notes, per-chip §4 U101 marked **done**.
-> - [ ] **Still the owner's**: the eight scope tests of the study's §7 (each needs the real 1040STE, a probe and
->   half an hour), and the 500–700 dpi crops for the two sheet reads this session could not do by text alone —
->   the pad ring's pin *positions* (which of pins 6–9, 18, 31 is `AS`/`UDS`/`LDS`/`R/W`) and the state sheet's
->   bus-access counter, if it has one.
+> - [x] **The measurements, after a search (2026-11-28)**: the 63/64 window and the grant-chain order are
+>   **already published** — Cyprian measured the split on a real STE, npomarede explained it, ijor confirmed it
+>   from the RTL — so they moved from `unknown` to `measured-elsewhere` and the study's §4.3/§5.1 now state the
+>   mechanism. Everything still unpublished is in [`design/emulator-limitations.md`](../../design/emulator-limitations.md)
+>   §1 (B8 the `BERR` abort path, B9 the `XIDS` pad, B10 the shipped mask, B7 the `xcount=1` coverage sweep);
+>   the six unread pins are a **reading** task (B4) with a published pinout that disagrees with our own
+>   transcription, not a measurement.
+> - [ ] **Still the owner's, and only by choice**: a 600 dpi crop of U101's symbol so six names can be put on
+>   six pins (B4) — the route is on the study's §7 list, and the original Rev A drawing set is downloadable.
 
 **Goal of the next session.** Write `research/blitter-implementation.md`: the STE's blitter studied to the
 standard the GSTMCU, Shifter and DMA studies reached — what it *is*, how it operates (one word, one line of
